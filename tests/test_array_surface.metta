@@ -4,7 +4,17 @@
 !(assertEqual (array:rank (array:from-list (a b c))) 1)
 !(assertEqual (array:size (array:from-list (a b c))) 3)
 !(assertEqual (array:to-list (array:from-list (a b c))) (a b c))
+!(assertEqual (array:dtype (array:from-list (a b c))) Any)
+!(assertEqual (array:device (array:from-list (a b c))) cpu)
+!(assertEqual (array:layout (array:from-list (a b c))) c)
+!(assertEqual (array:strides (array:from-list (a b c))) (1))
+!(assertEqual (array:owned? (array:from-list (a b c))) True)
+!(assertEqual (array:view? (array:from-list (a b c))) False)
+!(assertEqual (array:writeable? (array:from-list (a b c))) True)
+!(assertEqual (array:readonly? (array:from-list (a b c))) False)
+!(assertEqual (array:contiguous? (array:from-list (a b c))) True)
 !(assertEqual (array:get (array:from-list (a b c)) (1)) b)
+!(assertEqual (array:strides (array:from-flat (2 2) (1 2 3 4))) (2 1))
 !(assertEqual (array:get (array:from-flat (2 2) (1 2 3 4)) (1 0)) 3)
 !(assertEqual (array:zeros 3) (array:from-flat (3) (0 0 0)))
 !(assertEqual (array:ones 3) (array:from-flat (3) (1 1 1)))
@@ -15,3 +25,31 @@
 !(assertEqual
   (array:set (array:from-flat (2 2) (1 2 3 4)) (0 1) 9)
   (array:from-flat (2 2) (1 9 3 4)))
+!(assertEqual
+  (array:view? (array:wrap (2 2) (2 1) f32 cpu c view readonly (1 2 3 4)))
+  True)
+!(assertEqual
+  (array:readonly? (array:wrap (2 2) (2 1) f32 cpu c view readonly (1 2 3 4)))
+  True)
+!(assertEqual
+  (array:builder:len (array:builder:new))
+  0)
+!(assertEqual
+  (array:builder:finish1
+    (array:builder:push
+      (array:builder:push
+        (array:builder:push (array:builder:new-typed f32 cpu) 1)
+        2)
+      3))
+  (array:from-flat-meta (3) f32 cpu c owned writeable (1 2 3)))
+!(assertEqual
+  (array:builder:finish
+    (array:builder:push
+      (array:builder:push
+        (array:builder:push
+          (array:builder:push (array:builder:new-typed f64 cpu) 1)
+          2)
+        3)
+      4)
+    (2 2))
+  (array:from-flat-meta (2 2) f64 cpu c owned writeable (1 2 3 4)))
