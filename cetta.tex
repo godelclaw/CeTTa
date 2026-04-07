@@ -1,0 +1,85 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{geometry}
+\usepackage{hyperref}
+\geometry{margin=1in}
+
+\title{CeTTa Workplan and Design Log}
+\author{CeTTa contributors}
+\date{2026-04-07}
+
+\begin{document}
+\maketitle
+
+\section{Purpose}
+This document is the canonical technical worklog for CeTTa design progress, work in flight, and planned next steps. It exists to keep the project legible across humans and agents, and to preserve design continuity while the runtime and libraries evolve.
+
+\section{Strategic Direction}
+CeTTa should provide a clean and efficient substrate for symbolic reasoning, agent cognition, and eventually serious numerical work. The current container direction is:
+\begin{itemize}
+  \item \texttt{list}: the default symbolic sequence lane, backed by native expression operations.
+  \item \texttt{clist}: the explicit constructor-list lane, used when inductive list structure matters semantically.
+  \item \texttt{array}: the serious indexed and numerical lane, with explicit metadata and future native-storage/runtime support.
+\end{itemize}
+The public API should stay small and legible. Internal implementation details should remain hidden unless exposing them clearly improves reasoning or performance.
+
+\section{Completed Work To Date}
+\subsection{List and Clist Prototype}
+The list prototype work established a clear split between expression-backed lists and explicit constructor lists.
+\begin{itemize}
+  \item \texttt{lib/list.metta}: normal list API over native expression primitives.
+  \item \texttt{lib/clist.metta}: explicit cons-list API for inductive semantics.
+  \item Benchmarks showed that expression-backed \texttt{list} is the correct default hot-path lane, while \texttt{clist} remains useful as a semantic and proof-facing structure.
+  \item Public naming was simplified from intermediate prototype names to the cleaner \texttt{list}/\texttt{clist} split.
+\end{itemize}
+
+\subsection{Array Foundation Prototype}
+The array branch established the first serious array semantics in library form.
+\begin{itemize}
+  \item \texttt{lib/array.metta} now carries explicit metadata: shape, strides, offset, dtype, device, layout, ownership, and writeability.
+  \item \texttt{array:view}, \texttt{array:reshape}, \texttt{array:transpose2}, and \texttt{array:slice1} provide view semantics over flat storage.
+  \item \texttt{array:copy} and logical materialization make ownership transitions explicit.
+  \item \texttt{array:set} currently works by copy-on-write over logical array contents.
+  \item \texttt{array:builder:*} introduces a separate construction path, rather than conflating immutable array values with incremental builders.
+  \item The test suite now covers ordinary arrays, transposed views, sliced views, copy, and copy-on-write updates.
+\end{itemize}
+
+\section{Current Work In Flight}
+The current priority is to turn the array surface from a library-level semantic prototype into a clean runtime-oriented contract.
+\begin{itemize}
+  \item Preserve the present public array contract while moving storage concerns downward.
+  \item Keep CPU-first implementation semantics for now.
+  \item Preserve future device and interop hooks from day one so the design does not need to be torn apart later.
+  \item Keep array introspectable enough for future CeTTaClaw and AGI-facing self-inspection.
+\end{itemize}
+
+\section{Immediate Next Steps}
+\begin{enumerate}
+  \item Add a native storage-handle seam under \texttt{array} without collapsing the current metadata contract.
+  \item Separate immutable array values from builder/buffer mechanics more cleanly at the runtime level.
+  \item Define explicit copy/view/materialize rules for future non-contiguous and device-backed arrays.
+  \item Add more benchmark coverage for array operations once a native-storage path exists.
+  \item Keep \texttt{list}, \texttt{clist}, and \texttt{array} distinct, with smooth conversions but no semantic collapse.
+\end{enumerate}
+
+\section{External Library Posture}
+The current design stance is to keep CeTTa's core array object and semantics native, while importing proven external libraries at the right seams.
+\begin{itemize}
+  \item BLIS or OpenBLAS for dense CPU kernels.
+  \item DLPack as a future interop layer, not as the public CeTTa array abstraction.
+  \item Possible later experiments with ggml or ArrayFire, but not as the defining semantic core of CeTTa arrays.
+\end{itemize}
+
+\section{Documentation Discipline}
+This file should be updated whenever one of the following changes:
+\begin{itemize}
+  \item a major design choice is made,
+  \item a workstream changes status from planned to active or active to completed,
+  \item the public container or runtime story changes,
+  \item an important benchmark or integration result changes the architecture.
+\end{itemize}
+The goal is to keep a faithful, compact, durable record of what has been done, what is being done, and what is intended next.
+
+\end{document}
