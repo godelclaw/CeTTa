@@ -6,7 +6,7 @@
 \usepackage{hyperref}
 \geometry{margin=1in}
 
-\title{CeTTa Workplan and Design Log}
+\title{CeTTa Development Workplan and Design Log}
 \author{CeTTa contributors}
 \date{2026-04-07}
 
@@ -14,7 +14,10 @@
 \maketitle
 
 \section{Purpose}
-This document is the canonical technical worklog for CeTTa design progress, work in flight, and planned next steps. It exists to keep the project legible across humans and agents, and to preserve design continuity while the runtime and libraries evolve.
+This document is the canonical in-repo technical worklog for CeTTa design progress, work in flight, and planned next steps. It exists to keep the project legible across humans and agents, and to preserve design continuity while the runtime and libraries evolve. Publication-facing papers may live elsewhere, but this file records the live development state.
+
+\section{Existing Paper Context}
+The closest existing paper context currently lives outside this repo, in \texttt{MeTTaIL.tex} under \texttt{mettapedia/papers}. That paper already records one important CeTTa-specific distinction: in metaprogramming and dialect-translation experiments, CeTTa and HE tend to produce beta-reduced or inlined rewrites, while PeTTa preserves more syntactically faithful source structure through Prolog-level term handling. That observation matters for future CeTTa design because it clarifies that CeTTa should prioritize a clean, efficient semantic runtime, while exact source-to-source structural rewriting may require explicit quoting, meta-level separation, or separate translator machinery.
 
 \section{Strategic Direction}
 CeTTa should provide a clean and efficient substrate for symbolic reasoning, agent cognition, and eventually serious numerical work. The current container direction is:
