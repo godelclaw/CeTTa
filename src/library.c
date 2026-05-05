@@ -11,21 +11,36 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
+#ifndef _WIN32
+#include <pwd.h>
+#endif
+#include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
+extern char **environ;
+
 enum {
     CETTA_LIBRARY_SYSTEM = 1u << 0,
     CETTA_LIBRARY_FS = 1u << 1,
     CETTA_LIBRARY_STR = 1u << 2,
-    CETTA_LIBRARY_MORK = 1u << 3
+    CETTA_LIBRARY_MORK = 1u << 3,
+    CETTA_LIBRARY_PROCESS = 1u << 4,
+    CETTA_LIBRARY_JSON = 1u << 5,
+    CETTA_LIBRARY_PATCH = 1u << 6,
+    CETTA_LIBRARY_GIT = 1u << 7,
+    CETTA_LIBRARY_SHELL = 1u << 8
 };
 
 typedef struct {
@@ -38,6 +53,11 @@ static const CettaLibrarySpec CETTA_LIBRARIES[] = {
     {"fs", CETTA_LIBRARY_FS},
     {"str", CETTA_LIBRARY_STR},
     {"mork", CETTA_LIBRARY_MORK},
+    {"process", CETTA_LIBRARY_PROCESS},
+    {"json", CETTA_LIBRARY_JSON},
+    {"patch", CETTA_LIBRARY_PATCH},
+    {"git", CETTA_LIBRARY_GIT},
+    {"shell", CETTA_LIBRARY_SHELL},
 };
 
 static const char *CETTA_MM2_PROGRAM_HANDLE_KIND = "mork-program";
@@ -1641,6 +1661,23 @@ static bool library_int_arg(Atom *arg, int *out) {
     return false;
 }
 
+static bool library_bool_arg(Atom *arg, bool *out) {
+    if (!arg || !out) return false;
+    if (arg->kind == ATOM_GROUNDED && arg->ground.gkind == GV_BOOL) {
+        *out = arg->ground.bval;
+        return true;
+    }
+    if (atom_is_symbol_id(arg, g_builtin_syms.true_text)) {
+        *out = true;
+        return true;
+    }
+    if (atom_is_symbol_id(arg, g_builtin_syms.false_text)) {
+        *out = false;
+        return true;
+    }
+    return false;
+}
+
 static bool library_expr_of_texts(Atom *arg) {
     if (!arg || arg->kind != ATOM_EXPR) return false;
     for (uint32_t i = 0; i < arg->expr.len; i++) {
@@ -2002,6 +2039,3911 @@ static Atom *cetta_library_dispatch_system(const CettaLibraryContext *ctx,
     }
     if (head_id == g_builtin_syms.lib_system_cwd) {
         return system_cwd(a, head, args, nargs);
+    }
+    return NULL;
+}
+
+static bool process_set_nonblocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0) return false;
+    return fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
+}
+
+static void process_close_fd(int *fd) {
+    if (*fd >= 0) {
+        close(*fd);
+        *fd = -1;
+    }
+}
+
+static int process_exit_code_from_status(int status) {
+    if (WIFEXITED(status)) return WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+    return -1;
+}
+
+static uint64_t process_duration_ms(uint64_t start_ns, uint64_t end_ns) {
+    if (end_ns < start_ns) return 0;
+    return (end_ns - start_ns) / 1000000ull;
+}
+
+static Atom *process_result_atom(Arena *a,
+                                 int exit_code,
+                                 const CettaStringBuf *stdout_buf,
+                                 const CettaStringBuf *stderr_buf,
+                                 const CettaStringBuf *aggregated_buf,
+                                 uint64_t duration_ms,
+                                 bool timed_out) {
+    if (duration_ms > (uint64_t)INT64_MAX) duration_ms = (uint64_t)INT64_MAX;
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "ProcessResult"),
+        atom_int(a, exit_code),
+        atom_string(a, stdout_buf->buf ? stdout_buf->buf : ""),
+        atom_string(a, stderr_buf->buf ? stderr_buf->buf : ""),
+        atom_string(a, aggregated_buf->buf ? aggregated_buf->buf : ""),
+        atom_int(a, (int64_t)duration_ms),
+        timed_out ? atom_true(a) : atom_false(a),
+    }, 7);
+}
+
+static void process_append_capped(CettaStringBuf *sb, const char *data, size_t len,
+                                  size_t max_bytes);
+
+static void process_append_read(int fd,
+                                CettaStringBuf *stream_buf,
+                                CettaStringBuf *aggregated_buf,
+                                bool *open_flag,
+                                size_t max_bytes) {
+    char chunk[4096];
+    for (;;) {
+        ssize_t nread = read(fd, chunk, sizeof(chunk));
+        if (nread > 0) {
+            process_append_capped(stream_buf, chunk, (size_t)nread, max_bytes);
+            if (aggregated_buf) {
+                process_append_capped(aggregated_buf, chunk, (size_t)nread, max_bytes);
+            }
+            continue;
+        }
+        if (nread == 0) {
+            *open_flag = false;
+            return;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+            return;
+        }
+        *open_flag = false;
+        return;
+    }
+}
+
+static void process_kill_group(pid_t pid) {
+    if (pid <= 0) return;
+    if (kill(-pid, SIGTERM) != 0 && errno == ESRCH) return;
+    usleep(100000);
+    kill(-pid, SIGKILL);
+}
+
+static void process_append_capped(CettaStringBuf *sb, const char *data, size_t len,
+                                  size_t max_bytes) {
+    if (max_bytes > 0) {
+        if (sb->len >= max_bytes) return;
+        size_t remaining = max_bytes - sb->len;
+        if (len > remaining) len = remaining;
+    }
+    if (len > 0) cetta_sb_append_n(sb, data, len);
+}
+
+static void process_aggregate_output(CettaStringBuf *out,
+                                     const CettaStringBuf *stdout_buf,
+                                     const CettaStringBuf *stderr_buf,
+                                     size_t max_bytes) {
+    size_t stdout_len = stdout_buf->len;
+    size_t stderr_len = stderr_buf->len;
+    size_t total_len = stdout_len + stderr_len;
+
+    if (max_bytes == 0 || total_len <= max_bytes) {
+        if (stdout_len > 0) cetta_sb_append_n(out, stdout_buf->buf, stdout_len);
+        if (stderr_len > 0) cetta_sb_append_n(out, stderr_buf->buf, stderr_len);
+        return;
+    }
+
+    size_t want_stdout = stdout_len < (max_bytes / 3u) ? stdout_len : (max_bytes / 3u);
+    size_t stderr_take = stderr_len < (max_bytes - want_stdout)
+                         ? stderr_len
+                         : (max_bytes - want_stdout);
+    size_t remaining = max_bytes - want_stdout - stderr_take;
+    size_t stdout_extra = stdout_len > want_stdout ? stdout_len - want_stdout : 0;
+    size_t stdout_take = want_stdout + (remaining < stdout_extra ? remaining : stdout_extra);
+
+    if (stdout_take > 0) cetta_sb_append_n(out, stdout_buf->buf, stdout_take);
+    if (stderr_take > 0) cetta_sb_append_n(out, stderr_buf->buf, stderr_take);
+}
+
+typedef struct {
+    const char *key;
+    const char *value;
+} ProcessEnvPair;
+
+static char *process_strdup_cstr(const char *text);
+
+static bool process_expr_head_name(Atom *atom, const char *name) {
+    return atom && atom->kind == ATOM_EXPR && atom->expr.len > 0 &&
+           atom->expr.elems[0]->kind == ATOM_SYMBOL &&
+           strcmp(atom_name_cstr(atom->expr.elems[0]), name) == 0;
+}
+
+static bool process_valid_env_key(const char *key) {
+    return key && key[0] != '\0' && strchr(key, '=') == NULL;
+}
+
+static bool process_parse_argv(Arena *a, Atom *arg, char ***argv_out) {
+    char **argv;
+    if (!arg || arg->kind != ATOM_EXPR || arg->expr.len == 0) return false;
+    argv = arena_alloc(a, sizeof(char *) * ((size_t)arg->expr.len + 1u));
+    for (uint32_t i = 0; i < arg->expr.len; i++) {
+        const char *item = library_text_arg(arg->expr.elems[i]);
+        if (!item || item[0] == '\0') return false;
+        argv[i] = (char *)item;
+    }
+    argv[arg->expr.len] = NULL;
+    *argv_out = argv;
+    return true;
+}
+
+static bool process_parse_env_pairs(Arena *a, Atom *arg,
+                                    ProcessEnvPair **pairs_out,
+                                    uint32_t *count_out) {
+    ProcessEnvPair *pairs;
+    if (!arg || arg->kind != ATOM_EXPR) return false;
+    pairs = arena_alloc(a, sizeof(ProcessEnvPair) *
+                           (arg->expr.len ? arg->expr.len : 1u));
+    for (uint32_t i = 0; i < arg->expr.len; i++) {
+        Atom *pair = arg->expr.elems[i];
+        const char *key;
+        const char *value;
+        if (!process_expr_head_name(pair, "Env") || pair->expr.len != 3 ||
+            !(key = library_text_arg(pair->expr.elems[1])) ||
+            !(value = library_text_arg(pair->expr.elems[2])) ||
+            !process_valid_env_key(key)) {
+            return false;
+        }
+        pairs[i].key = key;
+        pairs[i].value = value;
+    }
+    *pairs_out = pairs;
+    *count_out = arg->expr.len;
+    return true;
+}
+
+typedef enum {
+    PROCESS_SHELL_ZSH,
+    PROCESS_SHELL_BASH,
+    PROCESS_SHELL_POWERSHELL,
+    PROCESS_SHELL_SH,
+    PROCESS_SHELL_CMD,
+    PROCESS_SHELL_UNKNOWN
+} ProcessShellType;
+
+typedef struct {
+    ProcessShellType type;
+    const char *path;
+} ProcessShell;
+
+static const char *process_shell_type_text(ProcessShellType type) {
+    switch (type) {
+        case PROCESS_SHELL_ZSH: return "zsh";
+        case PROCESS_SHELL_BASH: return "bash";
+        case PROCESS_SHELL_POWERSHELL: return "powershell";
+        case PROCESS_SHELL_SH: return "sh";
+        case PROCESS_SHELL_CMD: return "cmd";
+        case PROCESS_SHELL_UNKNOWN: return "unknown";
+    }
+    return "unknown";
+}
+
+static bool process_parse_shell_type(const char *text, ProcessShellType *out) {
+    if (!text || !out) return false;
+    if (strcasecmp(text, "zsh") == 0) {
+        *out = PROCESS_SHELL_ZSH;
+        return true;
+    }
+    if (strcasecmp(text, "bash") == 0) {
+        *out = PROCESS_SHELL_BASH;
+        return true;
+    }
+    if (strcasecmp(text, "powershell") == 0 || strcasecmp(text, "pwsh") == 0) {
+        *out = PROCESS_SHELL_POWERSHELL;
+        return true;
+    }
+    if (strcasecmp(text, "sh") == 0) {
+        *out = PROCESS_SHELL_SH;
+        return true;
+    }
+    if (strcasecmp(text, "cmd") == 0) {
+        *out = PROCESS_SHELL_CMD;
+        return true;
+    }
+    return false;
+}
+
+static const char *process_path_basename(const char *path) {
+    const char *slash;
+    const char *backslash;
+    const char *base;
+    if (!path) return "";
+    slash = strrchr(path, '/');
+    backslash = strrchr(path, '\\');
+    if (slash && (!backslash || slash > backslash)) {
+        base = slash;
+    } else {
+        base = backslash;
+    }
+    return base ? base + 1 : path;
+}
+
+static void process_path_file_stem(const char *path, char *out, size_t out_sz) {
+    const char *base = process_path_basename(path);
+    const char *dot = NULL;
+    size_t len;
+    if (!out || out_sz == 0) return;
+    len = strlen(base);
+    for (const char *p = base + len; p > base; p--) {
+        if (p[-1] == '.') {
+            dot = p - 1;
+            break;
+        }
+    }
+    if (dot && dot != base) len = (size_t)(dot - base);
+    if (len >= out_sz) len = out_sz - 1u;
+    memcpy(out, base, len);
+    out[len] = '\0';
+}
+
+static ProcessShellType process_detect_shell_type(const char *path) {
+    char current[PATH_MAX];
+    char stem[PATH_MAX];
+    ProcessShellType type;
+    if (!path || path[0] == '\0') return PROCESS_SHELL_UNKNOWN;
+    snprintf(current, sizeof(current), "%s", path);
+    for (int i = 0; i < 8; i++) {
+        if (process_parse_shell_type(current, &type)) return type;
+        process_path_file_stem(current, stem, sizeof(stem));
+        if (stem[0] == '\0' || strcmp(stem, current) == 0) break;
+        snprintf(current, sizeof(current), "%s", stem);
+    }
+    return PROCESS_SHELL_UNKNOWN;
+}
+
+static bool process_file_is_regular(const char *path) {
+    struct stat st;
+    return path && stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static bool process_copy_path(char *out, size_t out_sz, const char *path) {
+    if (!out || out_sz == 0 || !path || path[0] == '\0') return false;
+    snprintf(out, out_sz, "%s", path);
+    return true;
+}
+
+static bool process_find_on_path(const char *binary, char *out, size_t out_sz) {
+    const char *path_env = getenv("PATH");
+    char *paths;
+    char *saveptr = NULL;
+    char *part;
+    if (!binary || !out || out_sz == 0 || !path_env) return false;
+    paths = process_strdup_cstr(path_env);
+    part = strtok_r(paths, ":", &saveptr);
+    while (part) {
+        char candidate[PATH_MAX];
+        if (part[0] != '\0') {
+            snprintf(candidate, sizeof(candidate), "%s/%s", part, binary);
+            if (process_file_is_regular(candidate) && access(candidate, X_OK) == 0) {
+                bool ok = process_copy_path(out, out_sz, candidate);
+                free(paths);
+                return ok;
+            }
+        }
+        part = strtok_r(NULL, ":", &saveptr);
+    }
+    free(paths);
+    return false;
+}
+
+static bool process_get_user_shell_path(char *out, size_t out_sz) {
+#ifdef _WIN32
+    (void)out;
+    (void)out_sz;
+    return false;
+#else
+    uid_t uid = getuid();
+    struct passwd passwd_buf;
+    struct passwd *result = NULL;
+    long suggested = sysconf(_SC_GETPW_R_SIZE_MAX);
+    size_t buf_len = suggested > 0 ? (size_t)suggested : 1024u;
+    char *buf = cetta_malloc(buf_len);
+    for (;;) {
+        int status = getpwuid_r(uid, &passwd_buf, buf, buf_len, &result);
+        if (status == 0) {
+            bool ok = result && passwd_buf.pw_shell && passwd_buf.pw_shell[0] != '\0' &&
+                      process_copy_path(out, out_sz, passwd_buf.pw_shell);
+            free(buf);
+            return ok;
+        }
+        if (status != ERANGE || buf_len >= 1024u * 1024u) {
+            free(buf);
+            return false;
+        }
+        buf_len *= 2u;
+        buf = cetta_realloc(buf, buf_len);
+    }
+#endif
+}
+
+static bool process_shell_path_for_type(ProcessShellType type,
+                                        const char *provided_path,
+                                        char *out,
+                                        size_t out_sz) {
+    char user_path[PATH_MAX];
+    static const char *zsh_fallbacks[] = {"/bin/zsh"};
+    static const char *bash_fallbacks[] = {"/bin/bash"};
+    static const char *sh_fallbacks[] = {"/bin/sh"};
+    static const char *pwsh_fallbacks[] = {"/usr/local/bin/pwsh"};
+    const char *binary = NULL;
+    const char **fallbacks = NULL;
+    size_t fallback_count = 0;
+
+    if (provided_path && process_file_is_regular(provided_path)) {
+        return process_copy_path(out, out_sz, provided_path);
+    }
+
+    if (process_get_user_shell_path(user_path, sizeof(user_path)) &&
+        process_detect_shell_type(user_path) == type &&
+        process_file_is_regular(user_path)) {
+        return process_copy_path(out, out_sz, user_path);
+    }
+
+    if (type == PROCESS_SHELL_POWERSHELL) {
+        if (process_find_on_path("pwsh", out, out_sz)) return true;
+        for (size_t i = 0; i < sizeof(pwsh_fallbacks) / sizeof(pwsh_fallbacks[0]); i++) {
+            if (process_file_is_regular(pwsh_fallbacks[i])) {
+                return process_copy_path(out, out_sz, pwsh_fallbacks[i]);
+            }
+        }
+        return process_find_on_path("powershell", out, out_sz);
+    }
+
+    switch (type) {
+        case PROCESS_SHELL_ZSH:
+            binary = "zsh";
+            fallbacks = zsh_fallbacks;
+            fallback_count = sizeof(zsh_fallbacks) / sizeof(zsh_fallbacks[0]);
+            break;
+        case PROCESS_SHELL_BASH:
+            binary = "bash";
+            fallbacks = bash_fallbacks;
+            fallback_count = sizeof(bash_fallbacks) / sizeof(bash_fallbacks[0]);
+            break;
+        case PROCESS_SHELL_SH:
+            binary = "sh";
+            fallbacks = sh_fallbacks;
+            fallback_count = sizeof(sh_fallbacks) / sizeof(sh_fallbacks[0]);
+            break;
+        case PROCESS_SHELL_CMD:
+            binary = "cmd";
+            break;
+        case PROCESS_SHELL_POWERSHELL:
+        case PROCESS_SHELL_UNKNOWN:
+            break;
+    }
+
+    if (binary && process_find_on_path(binary, out, out_sz)) return true;
+    for (size_t i = 0; i < fallback_count; i++) {
+        if (process_file_is_regular(fallbacks[i])) {
+            return process_copy_path(out, out_sz, fallbacks[i]);
+        }
+    }
+    return false;
+}
+
+static void process_default_shell_value(ProcessShell *shell,
+                                        char *path,
+                                        size_t path_sz) {
+    char user_path[PATH_MAX];
+    ProcessShellType user_type = PROCESS_SHELL_UNKNOWN;
+    if (process_get_user_shell_path(user_path, sizeof(user_path))) {
+        user_type = process_detect_shell_type(user_path);
+    }
+
+    if (user_type != PROCESS_SHELL_UNKNOWN &&
+        process_shell_path_for_type(user_type, NULL, path, path_sz)) {
+        shell->type = user_type;
+        shell->path = path;
+        return;
+    }
+
+#ifdef _WIN32
+    if (process_shell_path_for_type(PROCESS_SHELL_POWERSHELL, NULL, path, path_sz)) {
+        shell->type = PROCESS_SHELL_POWERSHELL;
+        shell->path = path;
+        return;
+    }
+#elif defined(__APPLE__)
+    if (process_shell_path_for_type(PROCESS_SHELL_ZSH, NULL, path, path_sz)) {
+        shell->type = PROCESS_SHELL_ZSH;
+        shell->path = path;
+        return;
+    }
+    if (process_shell_path_for_type(PROCESS_SHELL_BASH, NULL, path, path_sz)) {
+        shell->type = PROCESS_SHELL_BASH;
+        shell->path = path;
+        return;
+    }
+#else
+    if (process_shell_path_for_type(PROCESS_SHELL_BASH, NULL, path, path_sz)) {
+        shell->type = PROCESS_SHELL_BASH;
+        shell->path = path;
+        return;
+    }
+    if (process_shell_path_for_type(PROCESS_SHELL_ZSH, NULL, path, path_sz)) {
+        shell->type = PROCESS_SHELL_ZSH;
+        shell->path = path;
+        return;
+    }
+#endif
+
+    shell->type = PROCESS_SHELL_SH;
+    if (!process_copy_path(path, path_sz, "/bin/sh")) {
+        path[0] = '\0';
+    }
+    shell->path = path;
+}
+
+static Atom *process_shell_atom(Arena *a, const ProcessShell *shell) {
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "ProcessShell"),
+        atom_string(a, process_shell_type_text(shell->type)),
+        atom_string(a, shell->path ? shell->path : ""),
+    }, 3);
+}
+
+static bool process_parse_shell_atom(Atom *arg, ProcessShell *shell) {
+    const char *type_text;
+    const char *path;
+    if (!shell || !process_expr_head_name(arg, "ProcessShell") ||
+        arg->expr.len != 3 ||
+        !(type_text = library_text_arg(arg->expr.elems[1])) ||
+        !(path = library_text_arg(arg->expr.elems[2])) ||
+        !process_parse_shell_type(type_text, &shell->type) ||
+        path[0] == '\0') {
+        return false;
+    }
+    shell->path = path;
+    return true;
+}
+
+static void process_apply_child_env(const ProcessEnvPair *env_pairs,
+                                    uint32_t env_count) {
+    if (clearenv() != 0) {
+        dprintf(STDERR_FILENO, "clearenv: %s\n", strerror(errno));
+        _exit(125);
+    }
+    for (uint32_t i = 0; i < env_count; i++) {
+        if (setenv(env_pairs[i].key, env_pairs[i].value, 1) != 0) {
+            dprintf(STDERR_FILENO, "setenv(%s): %s\n",
+                    env_pairs[i].key, strerror(errno));
+            _exit(125);
+        }
+    }
+}
+
+typedef enum {
+    PROCESS_ENV_INHERIT_ALL,
+    PROCESS_ENV_INHERIT_NONE,
+    PROCESS_ENV_INHERIT_CORE
+} ProcessEnvInherit;
+
+typedef struct {
+    ProcessEnvInherit inherit;
+    bool ignore_default_excludes;
+    Atom *exclude_patterns;
+    ProcessEnvPair *set_pairs;
+    uint32_t set_count;
+    Atom *include_only_patterns;
+} ProcessShellEnvPolicy;
+
+typedef struct {
+    char *key;
+    char *value;
+} ProcessOwnedEnvPair;
+
+typedef struct {
+    ProcessOwnedEnvPair *items;
+    uint32_t len;
+    uint32_t cap;
+} ProcessEnvMap;
+
+static char *process_strdup_len(const char *text, size_t len) {
+    char *out = cetta_malloc(len + 1u);
+    memcpy(out, text, len);
+    out[len] = '\0';
+    return out;
+}
+
+static char *process_strdup_cstr(const char *text) {
+    return process_strdup_len(text ? text : "", strlen(text ? text : ""));
+}
+
+static void process_env_map_init(ProcessEnvMap *map) {
+    map->items = NULL;
+    map->len = 0;
+    map->cap = 0;
+}
+
+static void process_env_map_free(ProcessEnvMap *map) {
+    for (uint32_t i = 0; i < map->len; i++) {
+        free(map->items[i].key);
+        free(map->items[i].value);
+    }
+    free(map->items);
+    map->items = NULL;
+    map->len = 0;
+    map->cap = 0;
+}
+
+static int process_env_map_find(ProcessEnvMap *map, const char *key) {
+    for (uint32_t i = 0; i < map->len; i++) {
+        if (strcmp(map->items[i].key, key) == 0) return (int)i;
+    }
+    return -1;
+}
+
+static void process_env_map_set(ProcessEnvMap *map,
+                                const char *key,
+                                const char *value) {
+    int idx = process_env_map_find(map, key);
+    if (idx >= 0) {
+        free(map->items[idx].value);
+        map->items[idx].value = process_strdup_cstr(value);
+        return;
+    }
+    if (map->len >= map->cap) {
+        map->cap = map->cap ? map->cap * 2u : 32u;
+        map->items = cetta_realloc(map->items,
+                                   sizeof(ProcessOwnedEnvPair) * map->cap);
+    }
+    map->items[map->len].key = process_strdup_cstr(key);
+    map->items[map->len].value = process_strdup_cstr(value);
+    map->len++;
+}
+
+static void process_env_map_remove_at(ProcessEnvMap *map, uint32_t index) {
+    if (index >= map->len) return;
+    free(map->items[index].key);
+    free(map->items[index].value);
+    if (index + 1u < map->len) {
+        memmove(&map->items[index],
+                &map->items[index + 1u],
+                sizeof(ProcessOwnedEnvPair) * (map->len - index - 1u));
+    }
+    map->len--;
+}
+
+static void process_env_map_add_current(ProcessEnvMap *map) {
+    for (char **entry = environ; entry && *entry; entry++) {
+        const char *eq = strchr(*entry, '=');
+        char *key;
+        if (!eq || eq == *entry) continue;
+        key = process_strdup_len(*entry, (size_t)(eq - *entry));
+        process_env_map_set(map, key, eq + 1);
+        free(key);
+    }
+}
+
+static bool process_parse_env_inherit(const char *text,
+                                      ProcessEnvInherit *out) {
+    if (!text || !out) return false;
+    if (strcasecmp(text, "all") == 0) {
+        *out = PROCESS_ENV_INHERIT_ALL;
+        return true;
+    }
+    if (strcasecmp(text, "none") == 0) {
+        *out = PROCESS_ENV_INHERIT_NONE;
+        return true;
+    }
+    if (strcasecmp(text, "core") == 0) {
+        *out = PROCESS_ENV_INHERIT_CORE;
+        return true;
+    }
+    return false;
+}
+
+static bool process_text_expr(Atom *arg) {
+    if (!arg || arg->kind != ATOM_EXPR) return false;
+    for (uint32_t i = 0; i < arg->expr.len; i++) {
+        if (!library_text_arg(arg->expr.elems[i])) return false;
+    }
+    return true;
+}
+
+static bool process_parse_shell_env_policy(Arena *a,
+                                           Atom *arg,
+                                           ProcessShellEnvPolicy *out) {
+    const char *inherit_text;
+    if (!out || !process_expr_head_name(arg, "ShellEnvPolicy") ||
+        arg->expr.len != 6 ||
+        !(inherit_text = library_text_arg(arg->expr.elems[1])) ||
+        !process_parse_env_inherit(inherit_text, &out->inherit) ||
+        !library_bool_arg(arg->expr.elems[2], &out->ignore_default_excludes) ||
+        !process_text_expr(arg->expr.elems[3]) ||
+        !process_parse_env_pairs(a, arg->expr.elems[4],
+                                 &out->set_pairs, &out->set_count) ||
+        !process_text_expr(arg->expr.elems[5])) {
+        return false;
+    }
+    out->exclude_patterns = arg->expr.elems[3];
+    out->include_only_patterns = arg->expr.elems[5];
+    return true;
+}
+
+static bool process_env_name_is_core(const char *name) {
+    static const char *core_names[] = {
+        "PATH", "SHELL", "TMPDIR", "TEMP", "TMP",
+        "HOME", "LANG", "LC_ALL", "LC_CTYPE", "LOGNAME", "USER",
+    };
+    for (size_t i = 0; i < sizeof(core_names) / sizeof(core_names[0]); i++) {
+        if (strcmp(name, core_names[i]) == 0) return true;
+    }
+    return false;
+}
+
+static bool process_wildmatch_ci(const char *pattern, const char *text) {
+    const char *star = NULL;
+    const char *retry = NULL;
+    while (*text) {
+        if (*pattern == '?' ||
+            (tolower((unsigned char)*pattern) ==
+             tolower((unsigned char)*text))) {
+            pattern++;
+            text++;
+        } else if (*pattern == '*') {
+            star = pattern++;
+            retry = text;
+        } else if (star) {
+            pattern = star + 1;
+            text = ++retry;
+        } else {
+            return false;
+        }
+    }
+    while (*pattern == '*') pattern++;
+    return *pattern == '\0';
+}
+
+static bool process_env_name_matches_patterns(const char *name,
+                                              Atom *patterns) {
+    if (!patterns || patterns->kind != ATOM_EXPR) return false;
+    for (uint32_t i = 0; i < patterns->expr.len; i++) {
+        const char *pattern = library_text_arg(patterns->expr.elems[i]);
+        if (pattern && process_wildmatch_ci(pattern, name)) return true;
+    }
+    return false;
+}
+
+static void process_env_map_filter_core(ProcessEnvMap *map) {
+    uint32_t i = 0;
+    while (i < map->len) {
+        if (!process_env_name_is_core(map->items[i].key)) {
+            process_env_map_remove_at(map, i);
+        } else {
+            i++;
+        }
+    }
+}
+
+static void process_env_map_filter_excluding(ProcessEnvMap *map, Atom *patterns) {
+    uint32_t i = 0;
+    while (i < map->len) {
+        if (process_env_name_matches_patterns(map->items[i].key, patterns)) {
+            process_env_map_remove_at(map, i);
+        } else {
+            i++;
+        }
+    }
+}
+
+static void process_env_map_filter_including(ProcessEnvMap *map, Atom *patterns) {
+    uint32_t i = 0;
+    if (!patterns || patterns->kind != ATOM_EXPR || patterns->expr.len == 0) return;
+    while (i < map->len) {
+        if (!process_env_name_matches_patterns(map->items[i].key, patterns)) {
+            process_env_map_remove_at(map, i);
+        } else {
+            i++;
+        }
+    }
+}
+
+static Atom *process_env_map_atom(Arena *a, ProcessEnvMap *map) {
+    Atom **items = map->len
+        ? arena_alloc(a, sizeof(Atom *) * map->len)
+        : NULL;
+    for (uint32_t i = 0; i < map->len; i++) {
+        items[i] = atom_expr(a, (Atom *[]){
+            atom_symbol(a, "Env"),
+            atom_string(a, map->items[i].key),
+            atom_string(a, map->items[i].value),
+        }, 3);
+    }
+    return atom_expr(a, items, map->len);
+}
+
+static Atom *process_create_shell_env_impl(Arena *a,
+                                           Atom *head,
+                                           Atom **args,
+                                           uint32_t nargs,
+                                           Atom *policy_arg,
+                                           const char *thread_id,
+                                           bool has_thread_id) {
+    ProcessShellEnvPolicy policy;
+    ProcessEnvMap map;
+    Atom *result;
+    if (!process_parse_shell_env_policy(a, policy_arg, &policy)) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected ShellEnvPolicy");
+    }
+
+    process_env_map_init(&map);
+    if (policy.inherit != PROCESS_ENV_INHERIT_NONE) {
+        process_env_map_add_current(&map);
+        if (policy.inherit == PROCESS_ENV_INHERIT_CORE) {
+            process_env_map_filter_core(&map);
+        }
+    }
+    if (!policy.ignore_default_excludes) {
+        Atom *defaults = atom_expr(a, (Atom *[]){
+            atom_string(a, "*KEY*"),
+            atom_string(a, "*SECRET*"),
+            atom_string(a, "*TOKEN*"),
+        }, 3);
+        process_env_map_filter_excluding(&map, defaults);
+    }
+    process_env_map_filter_excluding(&map, policy.exclude_patterns);
+    for (uint32_t i = 0; i < policy.set_count; i++) {
+        process_env_map_set(&map, policy.set_pairs[i].key,
+                            policy.set_pairs[i].value);
+    }
+    process_env_map_filter_including(&map, policy.include_only_patterns);
+    if (has_thread_id) {
+        process_env_map_set(&map, "CODEX_THREAD_ID", thread_id);
+    }
+
+    result = process_env_map_atom(a, &map);
+    process_env_map_free(&map);
+    return result;
+}
+
+static Atom *process_create_shell_env(Arena *a,
+                                      Atom *head,
+                                      Atom **args,
+                                      uint32_t nargs) {
+    const char *thread_id;
+    if (nargs != 2 || !(thread_id = library_text_arg(args[1]))) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected ShellEnvPolicy and thread id");
+    }
+    return process_create_shell_env_impl(a, head, args, nargs,
+                                         args[0], thread_id, true);
+}
+
+static Atom *process_create_shell_env_no_thread(Arena *a,
+                                                Atom *head,
+                                                Atom **args,
+                                                uint32_t nargs) {
+    if (nargs != 1) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected ShellEnvPolicy");
+    }
+    return process_create_shell_env_impl(a, head, args, nargs,
+                                         args[0], NULL, false);
+}
+
+static Atom *process_run_exec_impl(Arena *a,
+                                   Atom *head,
+                                   Atom **args,
+                                   uint32_t nargs,
+                                   char *const argv[],
+                                   const char *cwd,
+                                   const ProcessEnvPair *env_pairs,
+                                   uint32_t env_count,
+                                   bool use_explicit_env,
+                                   int timeout_ms,
+                                   int max_bytes) {
+    int stdout_pipe[2] = {-1, -1};
+    int stderr_pipe[2] = {-1, -1};
+    CettaStringBuf stdout_buf;
+    CettaStringBuf stderr_buf;
+    CettaStringBuf aggregated_buf;
+    Atom *result = NULL;
+    pid_t pid;
+    bool stdout_open = true;
+    bool stderr_open = true;
+    bool timed_out = false;
+    int status = 0;
+    int exit_code = -1;
+    uint64_t start_ns = 0;
+    uint64_t end_ns = 0;
+    uint64_t timeout_ns = timeout_ms > 0 ? (uint64_t)timeout_ms * 1000000ull : 0;
+    size_t output_cap = max_bytes > 0 ? (size_t)max_bytes : 0;
+
+    cetta_sb_init(&stdout_buf);
+    cetta_sb_init(&stderr_buf);
+    cetta_sb_init(&aggregated_buf);
+
+    if (pipe(stdout_pipe) != 0 || pipe(stderr_pipe) != 0) {
+        process_close_fd(&stdout_pipe[0]);
+        process_close_fd(&stdout_pipe[1]);
+        process_close_fd(&stderr_pipe[0]);
+        process_close_fd(&stderr_pipe[1]);
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, strerror(errno)));
+    }
+
+    start_ns = library_monotonic_ns();
+    pid = fork();
+    if (pid < 0) {
+        process_close_fd(&stdout_pipe[0]);
+        process_close_fd(&stdout_pipe[1]);
+        process_close_fd(&stderr_pipe[0]);
+        process_close_fd(&stderr_pipe[1]);
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, strerror(errno)));
+    }
+
+    if (pid == 0) {
+        setpgid(0, 0);
+        close(stdout_pipe[0]);
+        close(stderr_pipe[0]);
+        if (dup2(stdout_pipe[1], STDOUT_FILENO) < 0 ||
+            dup2(stderr_pipe[1], STDERR_FILENO) < 0) {
+            _exit(126);
+        }
+        close(stdout_pipe[1]);
+        close(stderr_pipe[1]);
+        if (cwd && cwd[0] != '\0' && chdir(cwd) != 0) {
+            dprintf(STDERR_FILENO, "chdir(%s): %s\n", cwd, strerror(errno));
+            _exit(125);
+        }
+        if (use_explicit_env) {
+            process_apply_child_env(env_pairs, env_count);
+        }
+        execvp(argv[0], argv);
+        _exit(127);
+    }
+
+    setpgid(pid, pid);
+    process_close_fd(&stdout_pipe[1]);
+    process_close_fd(&stderr_pipe[1]);
+    if (!process_set_nonblocking(stdout_pipe[0]) ||
+        !process_set_nonblocking(stderr_pipe[0])) {
+        process_kill_group(pid);
+        process_close_fd(&stdout_pipe[0]);
+        process_close_fd(&stderr_pipe[0]);
+        waitpid(pid, &status, 0);
+        result = atom_error(a, library_call_expr(a, head, args, nargs),
+                            atom_string(a, strerror(errno)));
+        goto cleanup;
+    }
+
+    while (stdout_open || stderr_open) {
+        fd_set readfds;
+        int max_fd = -1;
+        int ready;
+        struct timeval tv;
+        struct timeval *tv_ptr = NULL;
+
+        if (timeout_ns > 0 && !timed_out) {
+            uint64_t now_ns = library_monotonic_ns();
+            uint64_t elapsed_ns = now_ns >= start_ns ? now_ns - start_ns : 0;
+            if (elapsed_ns >= timeout_ns) {
+                timed_out = true;
+                process_kill_group(pid);
+            } else {
+                uint64_t remaining_ns = timeout_ns - elapsed_ns;
+                tv.tv_sec = (time_t)(remaining_ns / 1000000000ull);
+                tv.tv_usec = (suseconds_t)((remaining_ns % 1000000000ull) / 1000ull);
+                tv_ptr = &tv;
+            }
+        }
+
+        FD_ZERO(&readfds);
+        if (stdout_open) {
+            FD_SET(stdout_pipe[0], &readfds);
+            if (stdout_pipe[0] > max_fd) max_fd = stdout_pipe[0];
+        }
+        if (stderr_open) {
+            FD_SET(stderr_pipe[0], &readfds);
+            if (stderr_pipe[0] > max_fd) max_fd = stderr_pipe[0];
+        }
+        if (max_fd < 0) break;
+
+        ready = select(max_fd + 1, &readfds, NULL, NULL, tv_ptr);
+        if (ready < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        if (ready == 0) continue;
+
+        if (stdout_open && FD_ISSET(stdout_pipe[0], &readfds)) {
+            process_append_read(stdout_pipe[0], &stdout_buf, NULL,
+                                &stdout_open, output_cap);
+        }
+        if (stderr_open && FD_ISSET(stderr_pipe[0], &readfds)) {
+            process_append_read(stderr_pipe[0], &stderr_buf, NULL,
+                                &stderr_open, output_cap);
+        }
+    }
+
+    process_close_fd(&stdout_pipe[0]);
+    process_close_fd(&stderr_pipe[0]);
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno == EINTR) continue;
+        status = -1;
+        break;
+    }
+    end_ns = library_monotonic_ns();
+    exit_code = status >= 0 ? process_exit_code_from_status(status) : -1;
+    process_aggregate_output(&aggregated_buf, &stdout_buf, &stderr_buf, output_cap);
+    result = process_result_atom(a, exit_code, &stdout_buf, &stderr_buf,
+                                 &aggregated_buf,
+                                 process_duration_ms(start_ns, end_ns),
+                                 timed_out);
+
+cleanup:
+    cetta_sb_free(&stdout_buf);
+    cetta_sb_free(&stderr_buf);
+    cetta_sb_free(&aggregated_buf);
+    return result;
+}
+
+static Atom *process_run_shell(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *command;
+    char *shell_argv[4];
+    if (nargs != 1 || !(command = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected shell command");
+    }
+    shell_argv[0] = (char *)"/bin/sh";
+    shell_argv[1] = (char *)"-lc";
+    shell_argv[2] = (char *)command;
+    shell_argv[3] = NULL;
+    return process_run_exec_impl(a, head, args, nargs, shell_argv, NULL,
+                                 NULL, 0, false, 0, 0);
+}
+
+static Atom *process_run_shell_timeout_ms(Arena *a,
+                                          Atom *head,
+                                          Atom **args,
+                                          uint32_t nargs) {
+    const char *command;
+    char *shell_argv[4];
+    int timeout_ms = 0;
+    if (nargs != 2 || !(command = library_text_arg(args[0])) ||
+        !library_int_arg(args[1], &timeout_ms) || timeout_ms < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected shell command and non-negative timeout ms");
+    }
+    shell_argv[0] = (char *)"/bin/sh";
+    shell_argv[1] = (char *)"-lc";
+    shell_argv[2] = (char *)command;
+    shell_argv[3] = NULL;
+    return process_run_exec_impl(a, head, args, nargs, shell_argv, NULL,
+                                 NULL, 0, false, timeout_ms, 0);
+}
+
+static Atom *process_run_shell_cwd_timeout_ms(Arena *a,
+                                              Atom *head,
+                                              Atom **args,
+                                              uint32_t nargs) {
+    const char *command;
+    const char *cwd;
+    char *shell_argv[4];
+    int timeout_ms = 0;
+    if (nargs != 3 || !(command = library_text_arg(args[0])) ||
+        !(cwd = library_text_arg(args[1])) ||
+        !library_int_arg(args[2], &timeout_ms) || timeout_ms < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected shell command, cwd, and non-negative timeout ms");
+    }
+    shell_argv[0] = (char *)"/bin/sh";
+    shell_argv[1] = (char *)"-lc";
+    shell_argv[2] = (char *)command;
+    shell_argv[3] = NULL;
+    return process_run_exec_impl(a, head, args, nargs, shell_argv, cwd,
+                                 NULL, 0, false, timeout_ms, 0);
+}
+
+static Atom *process_run_shell_cwd_timeout_cap_bytes(Arena *a,
+                                                     Atom *head,
+                                                     Atom **args,
+                                                     uint32_t nargs) {
+    const char *command;
+    const char *cwd;
+    char *shell_argv[4];
+    int timeout_ms = 0;
+    int max_bytes = 0;
+    if (nargs != 4 || !(command = library_text_arg(args[0])) ||
+        !(cwd = library_text_arg(args[1])) ||
+        !library_int_arg(args[2], &timeout_ms) ||
+        !library_int_arg(args[3], &max_bytes) ||
+        timeout_ms < 0 || max_bytes < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected shell command, cwd, non-negative timeout ms, and non-negative max bytes");
+    }
+    shell_argv[0] = (char *)"/bin/sh";
+    shell_argv[1] = (char *)"-lc";
+    shell_argv[2] = (char *)command;
+    shell_argv[3] = NULL;
+    return process_run_exec_impl(a, head, args, nargs, shell_argv, cwd,
+                                 NULL, 0, false, timeout_ms, max_bytes);
+}
+
+static Atom *process_run_cmd_cwd_env_timeout_cap_bytes(Arena *a,
+                                                       Atom *head,
+                                                       Atom **args,
+                                                       uint32_t nargs) {
+    char **argv;
+    const char *cwd;
+    ProcessEnvPair *env_pairs;
+    uint32_t env_count = 0;
+    int timeout_ms = 0;
+    int max_bytes = 0;
+    if (nargs != 5 || !process_parse_argv(a, args[0], &argv) ||
+        !(cwd = library_text_arg(args[1])) ||
+        !process_parse_env_pairs(a, args[2], &env_pairs, &env_count) ||
+        !library_int_arg(args[3], &timeout_ms) ||
+        !library_int_arg(args[4], &max_bytes) ||
+        timeout_ms < 0 || max_bytes < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected command argv, cwd, env pairs, non-negative timeout ms, and non-negative max bytes");
+    }
+    return process_run_exec_impl(a, head, args, nargs, argv, cwd,
+                                 env_pairs, env_count, true, timeout_ms,
+                                 max_bytes);
+}
+
+static Atom *process_default_shell(Arena *a,
+                                   Atom *head,
+                                   Atom **args,
+                                   uint32_t nargs) {
+    char path[PATH_MAX];
+    ProcessShell shell;
+    if (!system_zero_arg_ok(args, nargs)) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected: (process-default-shell)");
+    }
+    process_default_shell_value(&shell, path, sizeof(path));
+    return process_shell_atom(a, &shell);
+}
+
+static Atom *process_shell_argv(Arena *a,
+                                Atom *head,
+                                Atom **args,
+                                uint32_t nargs) {
+    ProcessShell shell;
+    const char *command;
+    bool use_login_shell = false;
+    Atom **items;
+    uint32_t nitems;
+
+    if (nargs != 3 ||
+        !process_parse_shell_atom(args[0], &shell) ||
+        !(command = library_text_arg(args[1])) ||
+        !library_bool_arg(args[2], &use_login_shell)) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected ProcessShell, command, and login-shell bool");
+    }
+
+    switch (shell.type) {
+        case PROCESS_SHELL_ZSH:
+        case PROCESS_SHELL_BASH:
+        case PROCESS_SHELL_SH:
+            items = arena_alloc(a, sizeof(Atom *) * 3u);
+            items[0] = atom_string(a, shell.path);
+            items[1] = atom_string(a, use_login_shell ? "-lc" : "-c");
+            items[2] = atom_string(a, command);
+            return atom_expr(a, items, 3);
+        case PROCESS_SHELL_POWERSHELL:
+            nitems = use_login_shell ? 3u : 4u;
+            items = arena_alloc(a, sizeof(Atom *) * nitems);
+            items[0] = atom_string(a, shell.path);
+            if (use_login_shell) {
+                items[1] = atom_string(a, "-Command");
+                items[2] = atom_string(a, command);
+            } else {
+                items[1] = atom_string(a, "-NoProfile");
+                items[2] = atom_string(a, "-Command");
+                items[3] = atom_string(a, command);
+            }
+            return atom_expr(a, items, nitems);
+        case PROCESS_SHELL_CMD:
+            items = arena_alloc(a, sizeof(Atom *) * 3u);
+            items[0] = atom_string(a, shell.path);
+            items[1] = atom_string(a, "/c");
+            items[2] = atom_string(a, command);
+            return atom_expr(a, items, 3);
+        case PROCESS_SHELL_UNKNOWN:
+            break;
+    }
+
+    return library_signature_error(a, head, args, nargs,
+                                   "unknown shell type");
+}
+
+static Atom *cetta_library_dispatch_process(Arena *a, Atom *head,
+                                            Atom **args, uint32_t nargs) {
+    if (head->kind != ATOM_SYMBOL) return NULL;
+    SymbolId head_id = head->sym_id;
+    if (head_id == g_builtin_syms.lib_process_run_shell) {
+        return process_run_shell(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_run_shell_timeout_ms) {
+        return process_run_shell_timeout_ms(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_run_shell_cwd_timeout_ms) {
+        return process_run_shell_cwd_timeout_ms(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_run_shell_cwd_timeout_cap_bytes) {
+        return process_run_shell_cwd_timeout_cap_bytes(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_run_cmd_cwd_env_timeout_cap_bytes) {
+        return process_run_cmd_cwd_env_timeout_cap_bytes(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_default_shell) {
+        return process_default_shell(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_shell_argv) {
+        return process_shell_argv(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_create_shell_env) {
+        return process_create_shell_env(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_create_shell_env_no_thread) {
+        return process_create_shell_env_no_thread(a, head, args, nargs);
+    }
+    return NULL;
+}
+
+typedef struct {
+    const char *text;
+    size_t len;
+    size_t pos;
+    const char *error;
+} CettaJsonParser;
+
+static void json_skip_ws(CettaJsonParser *p) {
+    while (p->pos < p->len &&
+           (p->text[p->pos] == ' ' || p->text[p->pos] == '\n' ||
+            p->text[p->pos] == '\r' || p->text[p->pos] == '\t')) {
+        p->pos++;
+    }
+}
+
+static bool json_match(CettaJsonParser *p, const char *literal) {
+    size_t n = strlen(literal);
+    if (p->pos + n > p->len) return false;
+    if (memcmp(p->text + p->pos, literal, n) != 0) return false;
+    p->pos += n;
+    return true;
+}
+
+static int json_hex_digit(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+static bool json_parse_hex4(CettaJsonParser *p, uint32_t *out) {
+    uint32_t value = 0;
+    if (p->pos + 4 > p->len) return false;
+    for (int i = 0; i < 4; i++) {
+        int digit = json_hex_digit(p->text[p->pos + (size_t)i]);
+        if (digit < 0) return false;
+        value = (value << 4) | (uint32_t)digit;
+    }
+    p->pos += 4;
+    *out = value;
+    return true;
+}
+
+static void json_append_utf8(CettaStringBuf *out, uint32_t cp) {
+    char bytes[4];
+    if (cp <= 0x7fu) {
+        bytes[0] = (char)cp;
+        cetta_sb_append_n(out, bytes, 1);
+    } else if (cp <= 0x7ffu) {
+        bytes[0] = (char)(0xc0u | (cp >> 6));
+        bytes[1] = (char)(0x80u | (cp & 0x3fu));
+        cetta_sb_append_n(out, bytes, 2);
+    } else if (cp <= 0xffffu) {
+        bytes[0] = (char)(0xe0u | (cp >> 12));
+        bytes[1] = (char)(0x80u | ((cp >> 6) & 0x3fu));
+        bytes[2] = (char)(0x80u | (cp & 0x3fu));
+        cetta_sb_append_n(out, bytes, 3);
+    } else {
+        bytes[0] = (char)(0xf0u | (cp >> 18));
+        bytes[1] = (char)(0x80u | ((cp >> 12) & 0x3fu));
+        bytes[2] = (char)(0x80u | ((cp >> 6) & 0x3fu));
+        bytes[3] = (char)(0x80u | (cp & 0x3fu));
+        cetta_sb_append_n(out, bytes, 4);
+    }
+}
+
+static bool json_parse_string_buf(CettaJsonParser *p, CettaStringBuf *out) {
+    if (p->pos >= p->len || p->text[p->pos] != '"') {
+        p->error = "expected JSON string";
+        return false;
+    }
+    p->pos++;
+    while (p->pos < p->len) {
+        unsigned char c = (unsigned char)p->text[p->pos++];
+        if (c == '"') return true;
+        if (c < 0x20u) {
+            p->error = "control character in JSON string";
+            return false;
+        }
+        if (c != '\\') {
+            cetta_sb_append_n(out, (const char *)&c, 1);
+            continue;
+        }
+        if (p->pos >= p->len) {
+            p->error = "unterminated JSON escape";
+            return false;
+        }
+        c = (unsigned char)p->text[p->pos++];
+        switch (c) {
+        case '"': cetta_sb_append(out, "\""); break;
+        case '\\': cetta_sb_append(out, "\\"); break;
+        case '/': cetta_sb_append(out, "/"); break;
+        case 'b': cetta_sb_append_n(out, "\b", 1); break;
+        case 'f': cetta_sb_append_n(out, "\f", 1); break;
+        case 'n': cetta_sb_append(out, "\n"); break;
+        case 'r': cetta_sb_append(out, "\r"); break;
+        case 't': cetta_sb_append(out, "\t"); break;
+        case 'u': {
+            uint32_t cp;
+            if (!json_parse_hex4(p, &cp)) {
+                p->error = "invalid JSON unicode escape";
+                return false;
+            }
+            if (cp >= 0xd800u && cp <= 0xdbffu) {
+                uint32_t low;
+                if (p->pos + 6 > p->len || p->text[p->pos] != '\\' ||
+                    p->text[p->pos + 1] != 'u') {
+                    p->error = "missing JSON low surrogate";
+                    return false;
+                }
+                p->pos += 2;
+                if (!json_parse_hex4(p, &low) || low < 0xdc00u || low > 0xdfffu) {
+                    p->error = "invalid JSON low surrogate";
+                    return false;
+                }
+                cp = 0x10000u + (((cp - 0xd800u) << 10) | (low - 0xdc00u));
+            } else if (cp >= 0xdc00u && cp <= 0xdfffu) {
+                p->error = "unpaired JSON low surrogate";
+                return false;
+            }
+            json_append_utf8(out, cp);
+            break;
+        }
+        default:
+            p->error = "invalid JSON escape";
+            return false;
+        }
+    }
+    p->error = "unterminated JSON string";
+    return false;
+}
+
+static Atom *json_parse_value(CettaJsonParser *p, Arena *a, int depth);
+
+static Atom *json_wrap1(Arena *a, const char *head, Atom *value) {
+    return atom_expr(a, (Atom *[]){atom_symbol(a, head), value}, 2);
+}
+
+static Atom *json_parse_number(CettaJsonParser *p, Arena *a) {
+    size_t start = p->pos;
+    char *raw;
+    Atom *result;
+    if (p->pos < p->len && p->text[p->pos] == '-') p->pos++;
+    if (p->pos >= p->len) {
+        p->error = "invalid JSON number";
+        return NULL;
+    }
+    if (p->text[p->pos] == '0') {
+        p->pos++;
+    } else if (p->text[p->pos] >= '1' && p->text[p->pos] <= '9') {
+        while (p->pos < p->len && isdigit((unsigned char)p->text[p->pos])) p->pos++;
+    } else {
+        p->error = "invalid JSON number";
+        return NULL;
+    }
+    if (p->pos < p->len && p->text[p->pos] == '.') {
+        p->pos++;
+        if (p->pos >= p->len || !isdigit((unsigned char)p->text[p->pos])) {
+            p->error = "invalid JSON number fraction";
+            return NULL;
+        }
+        while (p->pos < p->len && isdigit((unsigned char)p->text[p->pos])) p->pos++;
+    }
+    if (p->pos < p->len && (p->text[p->pos] == 'e' || p->text[p->pos] == 'E')) {
+        p->pos++;
+        if (p->pos < p->len && (p->text[p->pos] == '+' || p->text[p->pos] == '-')) p->pos++;
+        if (p->pos >= p->len || !isdigit((unsigned char)p->text[p->pos])) {
+            p->error = "invalid JSON number exponent";
+            return NULL;
+        }
+        while (p->pos < p->len && isdigit((unsigned char)p->text[p->pos])) p->pos++;
+    }
+    raw = cetta_malloc(p->pos - start + 1);
+    memcpy(raw, p->text + start, p->pos - start);
+    raw[p->pos - start] = '\0';
+    result = json_wrap1(a, "JsonNumber", atom_string(a, raw));
+    free(raw);
+    return result;
+}
+
+static Atom *json_parse_array(CettaJsonParser *p, Arena *a, int depth) {
+    Atom **items = NULL;
+    uint32_t nitems = 0;
+    uint32_t cap = 0;
+    Atom *list;
+    Atom *result;
+    p->pos++;
+    json_skip_ws(p);
+    if (p->pos < p->len && p->text[p->pos] == ']') {
+        p->pos++;
+        return json_wrap1(a, "JsonArray", atom_expr(a, NULL, 0));
+    }
+    for (;;) {
+        Atom *item = json_parse_value(p, a, depth + 1);
+        if (!item) {
+            free(items);
+            return NULL;
+        }
+        if (nitems >= cap) {
+            cap = cap ? cap * 2 : 8;
+            items = cetta_realloc(items, sizeof(Atom *) * cap);
+        }
+        items[nitems++] = item;
+        json_skip_ws(p);
+        if (p->pos >= p->len) {
+            free(items);
+            p->error = "unterminated JSON array";
+            return NULL;
+        }
+        if (p->text[p->pos] == ']') {
+            p->pos++;
+            break;
+        }
+        if (p->text[p->pos] != ',') {
+            free(items);
+            p->error = "expected comma in JSON array";
+            return NULL;
+        }
+        p->pos++;
+        json_skip_ws(p);
+    }
+    list = atom_expr(a, items, nitems);
+    result = json_wrap1(a, "JsonArray", list);
+    free(items);
+    return result;
+}
+
+static Atom *json_parse_object(CettaJsonParser *p, Arena *a, int depth) {
+    Atom **pairs = NULL;
+    uint32_t npairs = 0;
+    uint32_t cap = 0;
+    Atom *list;
+    Atom *result;
+    p->pos++;
+    json_skip_ws(p);
+    if (p->pos < p->len && p->text[p->pos] == '}') {
+        p->pos++;
+        return json_wrap1(a, "JsonObject", atom_expr(a, NULL, 0));
+    }
+    for (;;) {
+        CettaStringBuf key;
+        Atom *value;
+        Atom *pair;
+        cetta_sb_init(&key);
+        if (!json_parse_string_buf(p, &key)) {
+            cetta_sb_free(&key);
+            free(pairs);
+            return NULL;
+        }
+        json_skip_ws(p);
+        if (p->pos >= p->len || p->text[p->pos] != ':') {
+            cetta_sb_free(&key);
+            free(pairs);
+            p->error = "expected colon in JSON object";
+            return NULL;
+        }
+        p->pos++;
+        value = json_parse_value(p, a, depth + 1);
+        if (!value) {
+            cetta_sb_free(&key);
+            free(pairs);
+            return NULL;
+        }
+        pair = atom_expr(a, (Atom *[]){
+            atom_symbol(a, "JsonPair"),
+            atom_string(a, key.buf ? key.buf : ""),
+            value,
+        }, 3);
+        cetta_sb_free(&key);
+        if (npairs >= cap) {
+            cap = cap ? cap * 2 : 8;
+            pairs = cetta_realloc(pairs, sizeof(Atom *) * cap);
+        }
+        pairs[npairs++] = pair;
+        json_skip_ws(p);
+        if (p->pos >= p->len) {
+            free(pairs);
+            p->error = "unterminated JSON object";
+            return NULL;
+        }
+        if (p->text[p->pos] == '}') {
+            p->pos++;
+            break;
+        }
+        if (p->text[p->pos] != ',') {
+            free(pairs);
+            p->error = "expected comma in JSON object";
+            return NULL;
+        }
+        p->pos++;
+        json_skip_ws(p);
+    }
+    list = atom_expr(a, pairs, npairs);
+    result = json_wrap1(a, "JsonObject", list);
+    free(pairs);
+    return result;
+}
+
+static Atom *json_parse_value(CettaJsonParser *p, Arena *a, int depth) {
+    if (depth > 512) {
+        p->error = "JSON nesting too deep";
+        return NULL;
+    }
+    json_skip_ws(p);
+    if (p->pos >= p->len) {
+        p->error = "expected JSON value";
+        return NULL;
+    }
+    if (p->text[p->pos] == '"') {
+        CettaStringBuf text;
+        Atom *result;
+        cetta_sb_init(&text);
+        if (!json_parse_string_buf(p, &text)) {
+            cetta_sb_free(&text);
+            return NULL;
+        }
+        result = json_wrap1(a, "JsonString", atom_string(a, text.buf ? text.buf : ""));
+        cetta_sb_free(&text);
+        return result;
+    }
+    if (p->text[p->pos] == '[') return json_parse_array(p, a, depth);
+    if (p->text[p->pos] == '{') return json_parse_object(p, a, depth);
+    if (p->text[p->pos] == '-' || isdigit((unsigned char)p->text[p->pos])) {
+        return json_parse_number(p, a);
+    }
+    if (json_match(p, "true")) return json_wrap1(a, "JsonBool", atom_true(a));
+    if (json_match(p, "false")) return json_wrap1(a, "JsonBool", atom_false(a));
+    if (json_match(p, "null")) return atom_symbol(a, "JsonNull");
+    p->error = "invalid JSON value";
+    return NULL;
+}
+
+static Atom *json_parse(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *text;
+    CettaJsonParser p;
+    Atom *result;
+    if (nargs != 1 || !(text = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected JSON text");
+    }
+    p.text = text;
+    p.len = strlen(text);
+    p.pos = 0;
+    p.error = NULL;
+    result = json_parse_value(&p, a, 0);
+    if (!result) {
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, p.error ? p.error : "invalid JSON"));
+    }
+    json_skip_ws(&p);
+    if (p.pos != p.len) {
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, "trailing data after JSON value"));
+    }
+    return result;
+}
+
+static bool json_bool_atom(Atom *atom, bool *out) {
+    if (!atom || !out) return false;
+    if (atom->kind == ATOM_GROUNDED && atom->ground.gkind == GV_BOOL) {
+        *out = atom->ground.bval;
+        return true;
+    }
+    if (atom_is_symbol_id(atom, g_builtin_syms.true_text)) {
+        *out = true;
+        return true;
+    }
+    if (atom_is_symbol_id(atom, g_builtin_syms.false_text)) {
+        *out = false;
+        return true;
+    }
+    return false;
+}
+
+static bool json_expr_head(Atom *atom, const char *head_name) {
+    return atom && atom->kind == ATOM_EXPR && atom->expr.len > 0 &&
+           atom->expr.elems[0]->kind == ATOM_SYMBOL &&
+           atom_is_symbol(atom->expr.elems[0], head_name);
+}
+
+static void json_append_escaped_string(CettaStringBuf *out, const char *text) {
+    static const char hex[] = "0123456789abcdef";
+    cetta_sb_append(out, "\"");
+    for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
+        unsigned char c = *p;
+        switch (c) {
+        case '"': cetta_sb_append(out, "\\\""); break;
+        case '\\': cetta_sb_append(out, "\\\\"); break;
+        case '\b': cetta_sb_append(out, "\\b"); break;
+        case '\f': cetta_sb_append(out, "\\f"); break;
+        case '\n': cetta_sb_append(out, "\\n"); break;
+        case '\r': cetta_sb_append(out, "\\r"); break;
+        case '\t': cetta_sb_append(out, "\\t"); break;
+        default:
+            if (c < 0x20u) {
+                char esc[6] = {'\\', 'u', '0', '0', hex[c >> 4], hex[c & 0xfu]};
+                cetta_sb_append_n(out, esc, sizeof(esc));
+            } else {
+                cetta_sb_append_n(out, (const char *)&c, 1);
+            }
+            break;
+        }
+    }
+    cetta_sb_append(out, "\"");
+}
+
+static bool json_stringify_atom(Atom *atom, CettaStringBuf *out,
+                                const char **error_out, int depth);
+
+static bool json_stringify_number_atom(Atom *atom, CettaStringBuf *out) {
+    char buf[64];
+    const char *text = library_text_arg(atom);
+    if (text) {
+        cetta_sb_append(out, text);
+        return true;
+    }
+    if (atom && atom->kind == ATOM_GROUNDED && atom->ground.gkind == GV_INT) {
+        snprintf(buf, sizeof(buf), "%lld", (long long)atom->ground.ival);
+        cetta_sb_append(out, buf);
+        return true;
+    }
+    if (atom && atom->kind == ATOM_GROUNDED && atom->ground.gkind == GV_FLOAT) {
+        snprintf(buf, sizeof(buf), "%.17g", atom->ground.fval);
+        cetta_sb_append(out, buf);
+        return true;
+    }
+    return false;
+}
+
+static bool json_stringify_array_items(Atom *items, CettaStringBuf *out,
+                                       const char **error_out, int depth) {
+    if (!items || items->kind != ATOM_EXPR) {
+        *error_out = "JsonArray expects an expression of items";
+        return false;
+    }
+    cetta_sb_append(out, "[");
+    for (uint32_t i = 0; i < items->expr.len; i++) {
+        if (i) cetta_sb_append(out, ",");
+        if (!json_stringify_atom(items->expr.elems[i], out, error_out, depth + 1)) {
+            return false;
+        }
+    }
+    cetta_sb_append(out, "]");
+    return true;
+}
+
+static bool json_stringify_object_pairs(Atom *pairs, CettaStringBuf *out,
+                                        const char **error_out, int depth) {
+    if (!pairs || pairs->kind != ATOM_EXPR) {
+        *error_out = "JsonObject expects an expression of JsonPair entries";
+        return false;
+    }
+    cetta_sb_append(out, "{");
+    for (uint32_t i = 0; i < pairs->expr.len; i++) {
+        Atom *pair = pairs->expr.elems[i];
+        const char *key;
+        if (!json_expr_head(pair, "JsonPair") || pair->expr.len != 3 ||
+            !(key = library_text_arg(pair->expr.elems[1]))) {
+            *error_out = "JsonObject entry must be (JsonPair key value)";
+            return false;
+        }
+        if (i) cetta_sb_append(out, ",");
+        json_append_escaped_string(out, key);
+        cetta_sb_append(out, ":");
+        if (!json_stringify_atom(pair->expr.elems[2], out, error_out, depth + 1)) {
+            return false;
+        }
+    }
+    cetta_sb_append(out, "}");
+    return true;
+}
+
+static bool json_stringify_atom(Atom *atom, CettaStringBuf *out,
+                                const char **error_out, int depth) {
+    bool bool_value;
+    if (depth > 512) {
+        *error_out = "JSON nesting too deep";
+        return false;
+    }
+    if (!atom) {
+        *error_out = "missing JSON value";
+        return false;
+    }
+    if (atom_is_symbol(atom, "JsonNull")) {
+        cetta_sb_append(out, "null");
+        return true;
+    }
+    if (json_expr_head(atom, "JsonString") && atom->expr.len == 2) {
+        const char *text = library_text_arg(atom->expr.elems[1]);
+        if (!text) {
+            *error_out = "JsonString expects text";
+            return false;
+        }
+        json_append_escaped_string(out, text);
+        return true;
+    }
+    if (json_expr_head(atom, "JsonNumber") && atom->expr.len == 2) {
+        if (!json_stringify_number_atom(atom->expr.elems[1], out)) {
+            *error_out = "JsonNumber expects number text or numeric atom";
+            return false;
+        }
+        return true;
+    }
+    if (json_expr_head(atom, "JsonBool") && atom->expr.len == 2) {
+        if (!json_bool_atom(atom->expr.elems[1], &bool_value)) {
+            *error_out = "JsonBool expects True or False";
+            return false;
+        }
+        cetta_sb_append(out, bool_value ? "true" : "false");
+        return true;
+    }
+    if (json_expr_head(atom, "JsonArray") && atom->expr.len == 2) {
+        return json_stringify_array_items(atom->expr.elems[1], out, error_out, depth);
+    }
+    if (json_expr_head(atom, "JsonObject") && atom->expr.len == 2) {
+        return json_stringify_object_pairs(atom->expr.elems[1], out, error_out, depth);
+    }
+    if (atom->kind == ATOM_GROUNDED) {
+        switch (atom->ground.gkind) {
+        case GV_STRING:
+            json_append_escaped_string(out, atom->ground.sval ? atom->ground.sval : "");
+            return true;
+        case GV_INT:
+        case GV_FLOAT:
+            return json_stringify_number_atom(atom, out);
+        case GV_BOOL:
+            cetta_sb_append(out, atom->ground.bval ? "true" : "false");
+            return true;
+        default:
+            break;
+        }
+    }
+    if (json_bool_atom(atom, &bool_value)) {
+        cetta_sb_append(out, bool_value ? "true" : "false");
+        return true;
+    }
+    if (atom->kind == ATOM_SYMBOL) {
+        json_append_escaped_string(out, atom_name_cstr(atom));
+        return true;
+    }
+    if (atom->kind == ATOM_EXPR) {
+        return json_stringify_array_items(atom, out, error_out, depth);
+    }
+    *error_out = "unsupported JSON atom";
+    return false;
+}
+
+static Atom *json_stringify(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    CettaStringBuf out;
+    const char *error = NULL;
+    Atom *result;
+    if (nargs != 1) {
+        return library_signature_error(a, head, args, nargs, "expected JSON value");
+    }
+    cetta_sb_init(&out);
+    if (!json_stringify_atom(args[0], &out, &error, 0)) {
+        cetta_sb_free(&out);
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, error ? error : "cannot stringify JSON"));
+    }
+    result = atom_string(a, out.buf ? out.buf : "");
+    cetta_sb_free(&out);
+    return result;
+}
+
+static Atom *json_object_get(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    Atom *pairs;
+    const char *key;
+    if (nargs != 2 || !json_expr_head(args[0], "JsonObject") ||
+        args[0]->expr.len != 2 || args[0]->expr.elems[1]->kind != ATOM_EXPR ||
+        !(key = library_text_arg(args[1]))) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected JsonObject and key");
+    }
+    pairs = args[0]->expr.elems[1];
+    for (uint32_t i = 0; i < pairs->expr.len; i++) {
+        Atom *pair = pairs->expr.elems[i];
+        const char *pair_key;
+        if (!json_expr_head(pair, "JsonPair") || pair->expr.len != 3 ||
+            !(pair_key = library_text_arg(pair->expr.elems[1]))) {
+            continue;
+        }
+        if (strcmp(pair_key, key) == 0) {
+            return atom_deep_copy(a, pair->expr.elems[2]);
+        }
+    }
+    return atom_symbol(a, "JsonNull");
+}
+
+static Atom *cetta_library_dispatch_json(Arena *a, Atom *head,
+                                         Atom **args, uint32_t nargs) {
+    if (head->kind != ATOM_SYMBOL) return NULL;
+    SymbolId head_id = head->sym_id;
+    if (head_id == g_builtin_syms.lib_json_parse) {
+        return json_parse(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_json_stringify) {
+        return json_stringify(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_json_object_get) {
+        return json_object_get(a, head, args, nargs);
+    }
+    return NULL;
+}
+
+typedef struct {
+    char **items;
+    uint32_t len;
+    uint32_t cap;
+} PatchLineVec;
+
+typedef struct {
+    char *change_context;
+    PatchLineVec old_lines;
+    PatchLineVec new_lines;
+    bool is_end_of_file;
+} PatchChunk;
+
+typedef enum {
+    PATCH_HUNK_ADD,
+    PATCH_HUNK_DELETE,
+    PATCH_HUNK_UPDATE
+} PatchHunkKind;
+
+typedef struct {
+    PatchHunkKind kind;
+    char *path;
+    char *move_path;
+    char *contents;
+    PatchChunk *chunks;
+    uint32_t chunk_len;
+    uint32_t chunk_cap;
+} PatchHunk;
+
+typedef struct {
+    PatchHunk *hunks;
+    uint32_t len;
+    uint32_t cap;
+    char error[512];
+} PatchDoc;
+
+typedef struct {
+    size_t start;
+    size_t old_len;
+    uint32_t order;
+    PatchLineVec new_lines;
+} PatchReplacement;
+
+typedef struct {
+    PatchReplacement *items;
+    uint32_t len;
+    uint32_t cap;
+} PatchReplacementVec;
+
+typedef struct {
+    char *path;
+    char op;
+} PatchAffected;
+
+typedef struct {
+    PatchAffected *items;
+    uint32_t len;
+    uint32_t cap;
+} PatchAffectedVec;
+
+static void patch_set_error(PatchDoc *doc, const char *fmt, ...) {
+    va_list ap;
+    if (!doc || doc->error[0] != '\0') return;
+    va_start(ap, fmt);
+    vsnprintf(doc->error, sizeof(doc->error), fmt, ap);
+    va_end(ap);
+}
+
+static void patch_line_vec_init(PatchLineVec *vec) {
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void patch_line_vec_push_len(PatchLineVec *vec, const char *text, size_t len) {
+    if (vec->len >= vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2u : 8u;
+        vec->items = cetta_realloc(vec->items, sizeof(char *) * vec->cap);
+    }
+    vec->items[vec->len++] = process_strdup_len(text ? text : "", len);
+}
+
+static void patch_line_vec_push(PatchLineVec *vec, const char *text) {
+    patch_line_vec_push_len(vec, text ? text : "", strlen(text ? text : ""));
+}
+
+static void patch_line_vec_free(PatchLineVec *vec) {
+    if (!vec) return;
+    for (uint32_t i = 0; i < vec->len; i++) free(vec->items[i]);
+    free(vec->items);
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void patch_chunk_init(PatchChunk *chunk) {
+    chunk->change_context = NULL;
+    patch_line_vec_init(&chunk->old_lines);
+    patch_line_vec_init(&chunk->new_lines);
+    chunk->is_end_of_file = false;
+}
+
+static void patch_chunk_free(PatchChunk *chunk) {
+    if (!chunk) return;
+    free(chunk->change_context);
+    patch_line_vec_free(&chunk->old_lines);
+    patch_line_vec_free(&chunk->new_lines);
+}
+
+static void patch_hunk_init(PatchHunk *hunk, PatchHunkKind kind, const char *path) {
+    hunk->kind = kind;
+    hunk->path = process_strdup_cstr(path);
+    hunk->move_path = NULL;
+    hunk->contents = NULL;
+    hunk->chunks = NULL;
+    hunk->chunk_len = 0;
+    hunk->chunk_cap = 0;
+}
+
+static void patch_hunk_add_chunk(PatchHunk *hunk, PatchChunk *chunk) {
+    if (hunk->chunk_len >= hunk->chunk_cap) {
+        hunk->chunk_cap = hunk->chunk_cap ? hunk->chunk_cap * 2u : 4u;
+        hunk->chunks = cetta_realloc(hunk->chunks,
+                                     sizeof(PatchChunk) * hunk->chunk_cap);
+    }
+    hunk->chunks[hunk->chunk_len++] = *chunk;
+}
+
+static void patch_hunk_free(PatchHunk *hunk) {
+    if (!hunk) return;
+    free(hunk->path);
+    free(hunk->move_path);
+    free(hunk->contents);
+    for (uint32_t i = 0; i < hunk->chunk_len; i++) {
+        patch_chunk_free(&hunk->chunks[i]);
+    }
+    free(hunk->chunks);
+}
+
+static void patch_doc_init(PatchDoc *doc) {
+    doc->hunks = NULL;
+    doc->len = 0;
+    doc->cap = 0;
+    doc->error[0] = '\0';
+}
+
+static void patch_doc_add_hunk(PatchDoc *doc, PatchHunk *hunk) {
+    if (doc->len >= doc->cap) {
+        doc->cap = doc->cap ? doc->cap * 2u : 4u;
+        doc->hunks = cetta_realloc(doc->hunks, sizeof(PatchHunk) * doc->cap);
+    }
+    doc->hunks[doc->len++] = *hunk;
+}
+
+static void patch_doc_free(PatchDoc *doc) {
+    if (!doc) return;
+    for (uint32_t i = 0; i < doc->len; i++) patch_hunk_free(&doc->hunks[i]);
+    free(doc->hunks);
+    doc->hunks = NULL;
+    doc->len = 0;
+    doc->cap = 0;
+}
+
+static const char *patch_trim_view(const char *line, size_t *len_out) {
+    const char *start = line ? line : "";
+    const char *end = start + strlen(start);
+    while (*start && isspace((unsigned char)*start)) start++;
+    while (end > start && isspace((unsigned char)end[-1])) end--;
+    if (len_out) *len_out = (size_t)(end - start);
+    return start;
+}
+
+static bool patch_trim_eq(const char *line, const char *expected) {
+    size_t len;
+    const char *trim = patch_trim_view(line, &len);
+    size_t expected_len = strlen(expected);
+    return len == expected_len && strncmp(trim, expected, len) == 0;
+}
+
+static bool patch_trim_prefix(const char *line,
+                              const char *prefix,
+                              char **rest_out) {
+    size_t len;
+    const char *trim = patch_trim_view(line, &len);
+    size_t prefix_len = strlen(prefix);
+    if (len < prefix_len || strncmp(trim, prefix, prefix_len) != 0) return false;
+    if (rest_out) *rest_out = process_strdup_len(trim + prefix_len, len - prefix_len);
+    return true;
+}
+
+static bool patch_line_starts_hunk_marker(const char *line) {
+    size_t len;
+    const char *trim = patch_trim_view(line, &len);
+    return len > 0 && trim[0] == '*';
+}
+
+static void patch_split_patch_lines(char *text, char ***lines_out, uint32_t *count_out) {
+    char **lines = NULL;
+    uint32_t len = 0;
+    uint32_t cap = 0;
+    char *start = text;
+    for (char *p = text;; p++) {
+        if (*p != '\n' && *p != '\0') continue;
+        char saved = *p;
+        if (len >= cap) {
+            cap = cap ? cap * 2u : 16u;
+            lines = cetta_realloc(lines, sizeof(char *) * cap);
+        }
+        *p = '\0';
+        size_t line_len = strlen(start);
+        if (line_len > 0 && start[line_len - 1] == '\r') start[line_len - 1] = '\0';
+        lines[len++] = start;
+        if (saved == '\0') break;
+        start = p + 1;
+    }
+    if (len > 0 && lines[len - 1][0] == '\0') len--;
+    *lines_out = lines;
+    *count_out = len;
+}
+
+static char *patch_trimmed_copy(const char *text) {
+    size_t len = strlen(text ? text : "");
+    const char *start = text ? text : "";
+    const char *end = start + len;
+    while (*start && isspace((unsigned char)*start)) start++;
+    while (end > start && isspace((unsigned char)end[-1])) end--;
+    return process_strdup_len(start, (size_t)(end - start));
+}
+
+static bool patch_parse_chunk(char **lines,
+                              uint32_t count,
+                              uint32_t start,
+                              bool allow_missing_context,
+                              PatchChunk *chunk,
+                              uint32_t *consumed,
+                              PatchDoc *doc) {
+    uint32_t i = start;
+    uint32_t parsed = 0;
+    patch_chunk_init(chunk);
+    if (i >= count) {
+        patch_set_error(doc, "Update hunk does not contain any lines");
+        return false;
+    }
+    if (patch_trim_eq(lines[i], "@@")) {
+        i++;
+    } else {
+        char *context = NULL;
+        if (patch_trim_prefix(lines[i], "@@ ", &context)) {
+            chunk->change_context = context;
+            i++;
+        } else if (!allow_missing_context) {
+            patch_set_error(doc, "Expected update hunk to start with a @@ context marker");
+            return false;
+        }
+    }
+
+    for (; i < count; i++) {
+        if (patch_trim_eq(lines[i], "*** End of File")) {
+            if (parsed == 0) {
+                patch_set_error(doc, "Update hunk does not contain any lines");
+                return false;
+            }
+            chunk->is_end_of_file = true;
+            i++;
+            break;
+        }
+        if (lines[i][0] == '\0') {
+            patch_line_vec_push(&chunk->old_lines, "");
+            patch_line_vec_push(&chunk->new_lines, "");
+            parsed++;
+            continue;
+        }
+        if (lines[i][0] == ' ') {
+            patch_line_vec_push(&chunk->old_lines, lines[i] + 1);
+            patch_line_vec_push(&chunk->new_lines, lines[i] + 1);
+            parsed++;
+            continue;
+        }
+        if (lines[i][0] == '+') {
+            patch_line_vec_push(&chunk->new_lines, lines[i] + 1);
+            parsed++;
+            continue;
+        }
+        if (lines[i][0] == '-') {
+            patch_line_vec_push(&chunk->old_lines, lines[i] + 1);
+            parsed++;
+            continue;
+        }
+        if (parsed == 0) {
+            patch_set_error(doc,
+                            "Unexpected line found in update hunk: every line should start with space, '+', or '-'");
+            return false;
+        }
+        break;
+    }
+
+    if (parsed == 0) {
+        patch_set_error(doc, "Update hunk does not contain any lines");
+        return false;
+    }
+    *consumed = i - start;
+    return true;
+}
+
+static bool patch_parse_text(const char *patch_text, PatchDoc *doc) {
+    char *copy = patch_trimmed_copy(patch_text);
+    char **lines = NULL;
+    uint32_t count = 0;
+    patch_split_patch_lines(copy, &lines, &count);
+    if (count < 2 || !patch_trim_eq(lines[0], "*** Begin Patch") ||
+        !patch_trim_eq(lines[count - 1], "*** End Patch")) {
+        patch_set_error(doc, "Invalid patch boundaries");
+        free(lines);
+        free(copy);
+        return false;
+    }
+
+    uint32_t i = 1;
+    while (i + 1 < count) {
+        char *path = NULL;
+        if (patch_trim_prefix(lines[i], "*** Add File: ", &path)) {
+            PatchHunk hunk;
+            CettaStringBuf contents;
+            patch_hunk_init(&hunk, PATCH_HUNK_ADD, path);
+            free(path);
+            cetta_sb_init(&contents);
+            i++;
+            uint32_t added = 0;
+            while (i + 1 < count && lines[i][0] == '+') {
+                cetta_sb_append(&contents, lines[i] + 1);
+                cetta_sb_append(&contents, "\n");
+                added++;
+                i++;
+            }
+            if (added == 0) {
+                patch_set_error(doc, "Add file hunk is empty");
+                cetta_sb_free(&contents);
+                patch_hunk_free(&hunk);
+                break;
+            }
+            hunk.contents = process_strdup_cstr(contents.buf ? contents.buf : "");
+            cetta_sb_free(&contents);
+            patch_doc_add_hunk(doc, &hunk);
+            continue;
+        }
+        if (patch_trim_prefix(lines[i], "*** Delete File: ", &path)) {
+            PatchHunk hunk;
+            patch_hunk_init(&hunk, PATCH_HUNK_DELETE, path);
+            free(path);
+            patch_doc_add_hunk(doc, &hunk);
+            i++;
+            continue;
+        }
+        if (patch_trim_prefix(lines[i], "*** Update File: ", &path)) {
+            PatchHunk hunk;
+            patch_hunk_init(&hunk, PATCH_HUNK_UPDATE, path);
+            free(path);
+            i++;
+            if (i + 1 < count && patch_trim_prefix(lines[i], "*** Move to: ", &path)) {
+                hunk.move_path = path;
+                i++;
+            }
+            while (i + 1 < count) {
+                if (patch_trim_view(lines[i], NULL)[0] == '\0') {
+                    i++;
+                    continue;
+                }
+                if (patch_line_starts_hunk_marker(lines[i])) break;
+                PatchChunk chunk;
+                uint32_t consumed = 0;
+                if (!patch_parse_chunk(lines, count - 1, i, hunk.chunk_len == 0,
+                                       &chunk, &consumed, doc)) {
+                    patch_hunk_free(&hunk);
+                    goto done;
+                }
+                patch_hunk_add_chunk(&hunk, &chunk);
+                i += consumed;
+            }
+            if (hunk.chunk_len == 0) {
+                patch_set_error(doc, "Update file hunk is empty");
+                patch_hunk_free(&hunk);
+                break;
+            }
+            patch_doc_add_hunk(doc, &hunk);
+            continue;
+        }
+        patch_set_error(doc, "'%s' is not a valid hunk header", lines[i]);
+        break;
+    }
+
+done:
+    free(lines);
+    free(copy);
+    return doc->error[0] == '\0' && doc->len > 0;
+}
+
+static bool patch_path_safe_relative(const char *path) {
+    if (!path || path[0] == '\0' || path[0] == '/' || strchr(path, '\\')) return false;
+    if (isalpha((unsigned char)path[0]) && path[1] == ':') return false;
+    const char *p = path;
+    while (*p) {
+        const char *slash = strchr(p, '/');
+        size_t len = slash ? (size_t)(slash - p) : strlen(p);
+        if (len == 0 || (len == 1 && p[0] == '.') ||
+            (len == 2 && p[0] == '.' && p[1] == '.')) {
+            return false;
+        }
+        if (!slash) break;
+        p = slash + 1;
+    }
+    return true;
+}
+
+static bool patch_join_path(const char *cwd,
+                            const char *rel,
+                            char *out,
+                            size_t out_sz,
+                            char *errbuf,
+                            size_t errbuf_sz) {
+    if (!patch_path_safe_relative(rel)) {
+        snprintf(errbuf, errbuf_sz, "unsafe patch path: %s", rel ? rel : "");
+        return false;
+    }
+    size_t cwd_len = strlen(cwd);
+    int n = snprintf(out, out_sz, "%s%s%s", cwd,
+                     (cwd_len > 0 && cwd[cwd_len - 1] == '/') ? "" : "/", rel);
+    if (n < 0 || (size_t)n >= out_sz) {
+        snprintf(errbuf, errbuf_sz, "patch path is too long");
+        return false;
+    }
+    return true;
+}
+
+static bool patch_mkdirs_for_file(const char *path, char *errbuf, size_t errbuf_sz) {
+    char tmp[PATH_MAX];
+    snprintf(tmp, sizeof(tmp), "%s", path);
+    for (char *p = tmp + 1; *p; p++) {
+        if (*p != '/') continue;
+        *p = '\0';
+        if (mkdir(tmp, 0777) != 0 && errno != EEXIST) {
+            snprintf(errbuf, errbuf_sz, "cannot create directory %.200s: %s",
+                     tmp, strerror(errno));
+            return false;
+        }
+        *p = '/';
+    }
+    return true;
+}
+
+static bool patch_write_text_creating_parents(const char *path,
+                                              const char *text,
+                                              char *errbuf,
+                                              size_t errbuf_sz) {
+    if (!patch_mkdirs_for_file(path, errbuf, errbuf_sz)) return false;
+    return library_write_text_file(path, text, false, errbuf, errbuf_sz);
+}
+
+static void patch_split_content_lines(const char *text, PatchLineVec *out) {
+    const char *start = text ? text : "";
+    patch_line_vec_init(out);
+    for (const char *p = start;; p++) {
+        if (*p != '\n' && *p != '\0') continue;
+        const char *stop = p;
+        if (stop > start && stop[-1] == '\r') stop--;
+        patch_line_vec_push_len(out, start, (size_t)(stop - start));
+        if (*p == '\0') break;
+        start = p + 1;
+    }
+    if (out->len > 0 && out->items[out->len - 1][0] == '\0' &&
+        text && text[0] != '\0' && text[strlen(text) - 1] == '\n') {
+        free(out->items[out->len - 1]);
+        out->len--;
+    }
+}
+
+static int patch_rstrip_cmp(const char *a, const char *b) {
+    size_t alen = strlen(a);
+    size_t blen = strlen(b);
+    while (alen > 0 && isspace((unsigned char)a[alen - 1])) alen--;
+    while (blen > 0 && isspace((unsigned char)b[blen - 1])) blen--;
+    return alen == blen ? strncmp(a, b, alen) : 1;
+}
+
+static bool patch_trimmed_equal(const char *a, const char *b) {
+    size_t alen;
+    size_t blen;
+    const char *atrim = patch_trim_view(a, &alen);
+    const char *btrim = patch_trim_view(b, &blen);
+    return alen == blen && strncmp(atrim, btrim, alen) == 0;
+}
+
+static bool patch_lines_match(PatchLineVec *lines,
+                              PatchLineVec *pattern,
+                              size_t index,
+                              int mode) {
+    for (uint32_t j = 0; j < pattern->len; j++) {
+        const char *lhs = lines->items[index + j];
+        const char *rhs = pattern->items[j];
+        if (mode == 0 && strcmp(lhs, rhs) != 0) return false;
+        if (mode == 1 && patch_rstrip_cmp(lhs, rhs) != 0) return false;
+        if (mode == 2 && !patch_trimmed_equal(lhs, rhs)) return false;
+    }
+    return true;
+}
+
+static bool patch_seek_sequence(PatchLineVec *lines,
+                                PatchLineVec *pattern,
+                                size_t start,
+                                bool eof,
+                                size_t *found_out) {
+    if (pattern->len == 0) {
+        *found_out = start;
+        return true;
+    }
+    if (pattern->len > lines->len) return false;
+    size_t search_start = eof && lines->len >= pattern->len
+                          ? lines->len - pattern->len
+                          : start;
+    if (search_start > lines->len - pattern->len) return false;
+    for (int mode = 0; mode < 3; mode++) {
+        for (size_t i = search_start; i <= lines->len - pattern->len; i++) {
+            if (patch_lines_match(lines, pattern, i, mode)) {
+                *found_out = i;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void patch_replacement_vec_init(PatchReplacementVec *vec) {
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void patch_replacement_vec_push(PatchReplacementVec *vec,
+                                       size_t start,
+                                       size_t old_len,
+                                       PatchLineVec *new_lines) {
+    if (vec->len >= vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2u : 4u;
+        vec->items = cetta_realloc(vec->items, sizeof(PatchReplacement) * vec->cap);
+    }
+    vec->items[vec->len].start = start;
+    vec->items[vec->len].old_len = old_len;
+    vec->items[vec->len].order = vec->len;
+    patch_line_vec_init(&vec->items[vec->len].new_lines);
+    for (uint32_t i = 0; i < new_lines->len; i++) {
+        patch_line_vec_push(&vec->items[vec->len].new_lines, new_lines->items[i]);
+    }
+    vec->len++;
+}
+
+static void patch_replacement_vec_free(PatchReplacementVec *vec) {
+    for (uint32_t i = 0; i < vec->len; i++) {
+        patch_line_vec_free(&vec->items[i].new_lines);
+    }
+    free(vec->items);
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static int patch_replacement_cmp(const void *lhs, const void *rhs) {
+    const PatchReplacement *a = lhs;
+    const PatchReplacement *b = rhs;
+    if (a->start < b->start) return -1;
+    if (a->start > b->start) return 1;
+    if (a->order < b->order) return -1;
+    if (a->order > b->order) return 1;
+    return 0;
+}
+
+static bool patch_compute_replacements(PatchLineVec *original,
+                                       const char *display_path,
+                                       PatchHunk *hunk,
+                                       PatchReplacementVec *replacements,
+                                       char *errbuf,
+                                       size_t errbuf_sz) {
+    size_t line_index = 0;
+    for (uint32_t i = 0; i < hunk->chunk_len; i++) {
+        PatchChunk *chunk = &hunk->chunks[i];
+        if (chunk->change_context) {
+            PatchLineVec context;
+            size_t found;
+            patch_line_vec_init(&context);
+            patch_line_vec_push(&context, chunk->change_context);
+            bool ok = patch_seek_sequence(original, &context, line_index, false, &found);
+            patch_line_vec_free(&context);
+            if (!ok) {
+                snprintf(errbuf, errbuf_sz, "Failed to find context '%s' in %s",
+                         chunk->change_context, display_path);
+                return false;
+            }
+            line_index = found + 1;
+        }
+        if (chunk->old_lines.len == 0) {
+            patch_replacement_vec_push(replacements, original->len, 0, &chunk->new_lines);
+            continue;
+        }
+
+        PatchLineVec pattern = chunk->old_lines;
+        PatchLineVec new_slice = chunk->new_lines;
+        size_t found;
+        bool ok = patch_seek_sequence(original, &pattern, line_index,
+                                      chunk->is_end_of_file, &found);
+        if (!ok && pattern.len > 0 && pattern.items[pattern.len - 1][0] == '\0') {
+            pattern.len--;
+            if (new_slice.len > 0 && new_slice.items[new_slice.len - 1][0] == '\0') {
+                new_slice.len--;
+            }
+            ok = patch_seek_sequence(original, &pattern, line_index,
+                                     chunk->is_end_of_file, &found);
+        }
+        if (!ok) {
+            snprintf(errbuf, errbuf_sz, "Failed to find expected lines in %s", display_path);
+            return false;
+        }
+        patch_replacement_vec_push(replacements, found, pattern.len, &new_slice);
+        line_index = found + pattern.len;
+    }
+    qsort(replacements->items, replacements->len, sizeof(PatchReplacement),
+          patch_replacement_cmp);
+    return true;
+}
+
+static void patch_apply_replacements(PatchLineVec *original,
+                                     PatchReplacementVec *replacements,
+                                     PatchLineVec *out) {
+    size_t pos = 0;
+    patch_line_vec_init(out);
+    for (uint32_t i = 0; i < replacements->len; i++) {
+        PatchReplacement *r = &replacements->items[i];
+        while (pos < r->start && pos < original->len) {
+            patch_line_vec_push(out, original->items[pos++]);
+        }
+        for (uint32_t j = 0; j < r->new_lines.len; j++) {
+            patch_line_vec_push(out, r->new_lines.items[j]);
+        }
+        pos = r->start + r->old_len;
+    }
+    while (pos < original->len) {
+        patch_line_vec_push(out, original->items[pos++]);
+    }
+}
+
+static char *patch_join_content(PatchLineVec *lines) {
+    CettaStringBuf out;
+    cetta_sb_init(&out);
+    for (uint32_t i = 0; i < lines->len; i++) {
+        if (i > 0) cetta_sb_append(&out, "\n");
+        cetta_sb_append(&out, lines->items[i]);
+    }
+    if (lines->len > 0 && lines->items[lines->len - 1][0] != '\0') {
+        cetta_sb_append(&out, "\n");
+    }
+    char *result = process_strdup_cstr(out.buf ? out.buf : "");
+    cetta_sb_free(&out);
+    return result;
+}
+
+static void patch_affected_vec_init(PatchAffectedVec *vec) {
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void patch_affected_vec_push(PatchAffectedVec *vec, char op, const char *path) {
+    if (vec->len >= vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2u : 4u;
+        vec->items = cetta_realloc(vec->items, sizeof(PatchAffected) * vec->cap);
+    }
+    vec->items[vec->len].op = op;
+    vec->items[vec->len].path = process_strdup_cstr(path);
+    vec->len++;
+}
+
+static void patch_affected_vec_free(PatchAffectedVec *vec) {
+    for (uint32_t i = 0; i < vec->len; i++) free(vec->items[i].path);
+    free(vec->items);
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static bool patch_apply_doc(const char *cwd,
+                            PatchDoc *doc,
+                            PatchAffectedVec *affected,
+                            char *errbuf,
+                            size_t errbuf_sz) {
+    for (uint32_t i = 0; i < doc->len; i++) {
+        PatchHunk *hunk = &doc->hunks[i];
+        char path_abs[PATH_MAX];
+        if (!patch_join_path(cwd, hunk->path, path_abs, sizeof(path_abs),
+                             errbuf, errbuf_sz)) {
+            return false;
+        }
+        if (hunk->kind == PATCH_HUNK_ADD) {
+            if (!patch_write_text_creating_parents(path_abs, hunk->contents,
+                                                   errbuf, errbuf_sz)) {
+                return false;
+            }
+            patch_affected_vec_push(affected, 'A', hunk->path);
+            continue;
+        }
+        if (hunk->kind == PATCH_HUNK_DELETE) {
+            struct stat st;
+            if (stat(path_abs, &st) != 0) {
+                snprintf(errbuf, errbuf_sz, "Failed to delete file %.200s: %s",
+                         path_abs, strerror(errno));
+                return false;
+            }
+            if (S_ISDIR(st.st_mode)) {
+                snprintf(errbuf, errbuf_sz,
+                         "Failed to delete file %.200s: path is a directory",
+                         path_abs);
+                return false;
+            }
+            if (unlink(path_abs) != 0) {
+                snprintf(errbuf, errbuf_sz, "Failed to delete file %.200s: %s",
+                         path_abs, strerror(errno));
+                return false;
+            }
+            patch_affected_vec_push(affected, 'D', hunk->path);
+            continue;
+        }
+
+        CettaStringBuf original_text;
+        PatchLineVec original_lines;
+        PatchReplacementVec replacements;
+        PatchLineVec new_lines;
+        char *new_text = NULL;
+        if (!library_read_text_file(path_abs, &original_text, errbuf, errbuf_sz)) {
+            return false;
+        }
+        patch_split_content_lines(original_text.buf ? original_text.buf : "", &original_lines);
+        patch_replacement_vec_init(&replacements);
+        if (!patch_compute_replacements(&original_lines, hunk->path, hunk,
+                                        &replacements, errbuf, errbuf_sz)) {
+            patch_replacement_vec_free(&replacements);
+            patch_line_vec_free(&original_lines);
+            cetta_sb_free(&original_text);
+            return false;
+        }
+        patch_apply_replacements(&original_lines, &replacements, &new_lines);
+        new_text = patch_join_content(&new_lines);
+
+        if (hunk->move_path) {
+            char dest_abs[PATH_MAX];
+            if (!patch_join_path(cwd, hunk->move_path, dest_abs, sizeof(dest_abs),
+                                 errbuf, errbuf_sz) ||
+                !patch_write_text_creating_parents(dest_abs, new_text,
+                                                   errbuf, errbuf_sz)) {
+                free(new_text);
+                patch_line_vec_free(&new_lines);
+                patch_replacement_vec_free(&replacements);
+                patch_line_vec_free(&original_lines);
+                cetta_sb_free(&original_text);
+                return false;
+            }
+            if (unlink(path_abs) != 0) {
+                snprintf(errbuf, errbuf_sz, "Failed to remove original %.200s: %s",
+                         path_abs, strerror(errno));
+                free(new_text);
+                patch_line_vec_free(&new_lines);
+                patch_replacement_vec_free(&replacements);
+                patch_line_vec_free(&original_lines);
+                cetta_sb_free(&original_text);
+                return false;
+            }
+            patch_affected_vec_push(affected, 'M', hunk->path);
+        } else {
+            if (!library_write_text_file(path_abs, new_text, false, errbuf, errbuf_sz)) {
+                free(new_text);
+                patch_line_vec_free(&new_lines);
+                patch_replacement_vec_free(&replacements);
+                patch_line_vec_free(&original_lines);
+                cetta_sb_free(&original_text);
+                return false;
+            }
+            patch_affected_vec_push(affected, 'M', hunk->path);
+        }
+        free(new_text);
+        patch_line_vec_free(&new_lines);
+        patch_replacement_vec_free(&replacements);
+        patch_line_vec_free(&original_lines);
+        cetta_sb_free(&original_text);
+    }
+    return true;
+}
+
+static Atom *patch_result_atom(Arena *a, bool ok, const char *stdout_text,
+                               const char *stderr_text, PatchAffectedVec *affected) {
+    Atom **changes = affected->len
+        ? arena_alloc(a, sizeof(Atom *) * affected->len)
+        : NULL;
+    for (uint32_t i = 0; i < affected->len; i++) {
+        char op[2] = {affected->items[i].op, '\0'};
+        changes[i] = atom_expr(a, (Atom *[]){
+            atom_symbol(a, "PatchChange"),
+            atom_string(a, op),
+            atom_string(a, affected->items[i].path),
+        }, 3);
+    }
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "PatchResult"),
+        ok ? atom_true(a) : atom_false(a),
+        atom_string(a, stdout_text ? stdout_text : ""),
+        atom_string(a, stderr_text ? stderr_text : ""),
+        atom_expr(a, changes, affected->len),
+    }, 5);
+}
+
+static Atom *patch_apply(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *cwd;
+    const char *patch_text;
+    PatchDoc doc;
+    PatchAffectedVec affected;
+    CettaStringBuf stdout_buf;
+    char errbuf[512] = {0};
+    Atom *result;
+    if (nargs != 2 || !(cwd = library_text_arg(args[0])) ||
+        !(patch_text = library_text_arg(args[1]))) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected cwd and patch text");
+    }
+    patch_doc_init(&doc);
+    patch_affected_vec_init(&affected);
+    cetta_sb_init(&stdout_buf);
+    if (!patch_parse_text(patch_text, &doc)) {
+        snprintf(errbuf, sizeof(errbuf), "%s",
+                 doc.error[0] ? doc.error : "Invalid patch");
+        result = patch_result_atom(a, false, "", errbuf, &affected);
+        goto cleanup;
+    }
+    if (!patch_apply_doc(cwd, &doc, &affected, errbuf, sizeof(errbuf))) {
+        result = patch_result_atom(a, false, "", errbuf, &affected);
+        goto cleanup;
+    }
+    cetta_sb_append(&stdout_buf, "Success. Updated the following files:\n");
+    for (uint32_t i = 0; i < affected.len; i++) {
+        char line[PATH_MAX + 8];
+        snprintf(line, sizeof(line), "%c %s\n", affected.items[i].op,
+                 affected.items[i].path);
+        cetta_sb_append(&stdout_buf, line);
+    }
+    result = patch_result_atom(a, true, stdout_buf.buf ? stdout_buf.buf : "",
+                               "", &affected);
+
+cleanup:
+    cetta_sb_free(&stdout_buf);
+    patch_affected_vec_free(&affected);
+    patch_doc_free(&doc);
+    return result;
+}
+
+static const char *patch_skip_spaces(const char *p) {
+    while (*p == ' ' || *p == '\t') p++;
+    return p;
+}
+
+static bool patch_is_command_boundary(char c) {
+    return c == '\0' || c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+static char *patch_parse_shell_word(const char **p_in) {
+    const char *p = patch_skip_spaces(*p_in);
+    char quote = '\0';
+    CettaStringBuf out;
+    cetta_sb_init(&out);
+    if (*p == '\'' || *p == '"') {
+        quote = *p++;
+        while (*p && *p != quote) {
+            cetta_sb_append_n(&out, p, 1);
+            p++;
+        }
+        if (*p != quote) {
+            cetta_sb_free(&out);
+            return NULL;
+        }
+        p++;
+    } else {
+        while (*p && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r') {
+            cetta_sb_append_n(&out, p, 1);
+            p++;
+        }
+    }
+    *p_in = p;
+    return process_strdup_cstr(out.buf ? out.buf : "");
+}
+
+static bool patch_extract_shell_heredoc(const char *command,
+                                        char **patch_out,
+                                        char **workdir_out) {
+    char *trimmed = patch_trimmed_copy(command);
+    const char *p = trimmed;
+    char *cd_path = NULL;
+    char *delim = NULL;
+    char *patch_body = NULL;
+    bool matched = false;
+
+    p = patch_skip_spaces(p);
+    if (strncmp(p, "cd", 2) == 0 && patch_is_command_boundary(p[2])) {
+        p += 2;
+        cd_path = patch_parse_shell_word(&p);
+        if (!cd_path || cd_path[0] == '\0') goto done;
+        p = patch_skip_spaces(p);
+        if (strncmp(p, "&&", 2) != 0) goto done;
+        p += 2;
+        p = patch_skip_spaces(p);
+    }
+
+    if (strncmp(p, "apply_patch", 11) == 0 && patch_is_command_boundary(p[11])) {
+        p += 11;
+    } else if (strncmp(p, "applypatch", 10) == 0 && patch_is_command_boundary(p[10])) {
+        p += 10;
+    } else {
+        goto done;
+    }
+
+    p = patch_skip_spaces(p);
+    if (strncmp(p, "<<", 2) != 0) goto done;
+    p += 2;
+    if (*p == '-') p++;
+    delim = patch_parse_shell_word(&p);
+    if (!delim || delim[0] == '\0') goto done;
+    p = patch_skip_spaces(p);
+    if (*p != '\n' && *p != '\r') goto done;
+    if (*p == '\r') p++;
+    if (*p != '\n') goto done;
+    p++;
+
+    const char *body_start = p;
+    size_t delim_len = strlen(delim);
+    while (*p) {
+        const char *line_start = p;
+        const char *line_end = strchr(p, '\n');
+        const char *content_end = line_end ? line_end : p + strlen(p);
+        if (content_end > line_start && content_end[-1] == '\r') content_end--;
+        if ((size_t)(content_end - line_start) == delim_len &&
+            strncmp(line_start, delim, delim_len) == 0) {
+            const char *tail = line_end ? line_end + 1 : content_end;
+            while (*tail == ' ' || *tail == '\t' || *tail == '\n' || *tail == '\r') {
+                tail++;
+            }
+            if (*tail != '\0') goto done;
+            const char *body_end = line_start;
+            if (body_end > body_start && body_end[-1] == '\n') body_end--;
+            if (body_end > body_start && body_end[-1] == '\r') body_end--;
+            patch_body = process_strdup_len(body_start, (size_t)(body_end - body_start));
+            matched = true;
+            break;
+        }
+        if (!line_end) break;
+        p = line_end + 1;
+    }
+
+done:
+    if (matched) {
+        *patch_out = patch_body;
+        *workdir_out = cd_path;
+        patch_body = NULL;
+        cd_path = NULL;
+    }
+    free(trimmed);
+    free(cd_path);
+    free(delim);
+    free(patch_body);
+    return matched;
+}
+
+static bool patch_join_workdir(const char *cwd,
+                               const char *cd_path,
+                               char *out,
+                               size_t out_sz,
+                               char *errbuf,
+                               size_t errbuf_sz) {
+    if (!cd_path || cd_path[0] == '\0' || strcmp(cd_path, ".") == 0) {
+        snprintf(out, out_sz, "%s", cwd);
+        return true;
+    }
+    return patch_join_path(cwd, cd_path, out, out_sz, errbuf, errbuf_sz);
+}
+
+static Atom *patch_shell_intercept_atom(Arena *a, bool matched, Atom *result) {
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "PatchShellIntercept"),
+        matched ? atom_true(a) : atom_false(a),
+        result ? result : atom_symbol(a, "PatchNoResult"),
+    }, 3);
+}
+
+static Atom *patch_intercept_shell_command(Arena *a,
+                                           Atom *head,
+                                           Atom **args,
+                                           uint32_t nargs) {
+    const char *cwd;
+    const char *command;
+    char *patch_text = NULL;
+    char *cd_path = NULL;
+    char effective_cwd[PATH_MAX];
+    char errbuf[512] = {0};
+    PatchDoc doc;
+    PatchAffectedVec affected;
+    CettaStringBuf stdout_buf;
+    Atom *patch_result;
+    Atom *intercept_result;
+
+    if (nargs != 2 || !(cwd = library_text_arg(args[0])) ||
+        !(command = library_text_arg(args[1]))) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected cwd and shell command");
+    }
+
+    if (!patch_extract_shell_heredoc(command, &patch_text, &cd_path)) {
+        return patch_shell_intercept_atom(a, false, NULL);
+    }
+
+    patch_doc_init(&doc);
+    patch_affected_vec_init(&affected);
+    cetta_sb_init(&stdout_buf);
+
+    if (!patch_join_workdir(cwd, cd_path, effective_cwd, sizeof(effective_cwd),
+                            errbuf, sizeof(errbuf))) {
+        patch_result = patch_result_atom(a, false, "", errbuf, &affected);
+        intercept_result = patch_shell_intercept_atom(a, true, patch_result);
+        goto cleanup;
+    }
+    if (!patch_parse_text(patch_text, &doc)) {
+        snprintf(errbuf, sizeof(errbuf), "%s",
+                 doc.error[0] ? doc.error : "Invalid patch");
+        patch_result = patch_result_atom(a, false, "", errbuf, &affected);
+        intercept_result = patch_shell_intercept_atom(a, true, patch_result);
+        goto cleanup;
+    }
+    if (!patch_apply_doc(effective_cwd, &doc, &affected, errbuf, sizeof(errbuf))) {
+        patch_result = patch_result_atom(a, false, "", errbuf, &affected);
+        intercept_result = patch_shell_intercept_atom(a, true, patch_result);
+        goto cleanup;
+    }
+
+    cetta_sb_append(&stdout_buf, "Success. Updated the following files:\n");
+    for (uint32_t i = 0; i < affected.len; i++) {
+        char line[PATH_MAX + 8];
+        snprintf(line, sizeof(line), "%c %s\n", affected.items[i].op,
+                 affected.items[i].path);
+        cetta_sb_append(&stdout_buf, line);
+    }
+    patch_result = patch_result_atom(a, true, stdout_buf.buf ? stdout_buf.buf : "",
+                                     "", &affected);
+    intercept_result = patch_shell_intercept_atom(a, true, patch_result);
+
+cleanup:
+    cetta_sb_free(&stdout_buf);
+    patch_affected_vec_free(&affected);
+    patch_doc_free(&doc);
+    free(patch_text);
+    free(cd_path);
+    return intercept_result;
+}
+
+static Atom *cetta_library_dispatch_patch(Arena *a, Atom *head,
+                                          Atom **args, uint32_t nargs) {
+    if (head->kind != ATOM_SYMBOL) return NULL;
+    SymbolId head_id = head->sym_id;
+    if (head_id == g_builtin_syms.lib_patch_apply) {
+        return patch_apply(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_patch_intercept_shell_command) {
+        return patch_intercept_shell_command(a, head, args, nargs);
+    }
+    return NULL;
+}
+
+static Atom *git_repo_root_atom(Arena *a, bool ok, const char *root) {
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "GitRepoRoot"),
+        ok ? atom_true(a) : atom_false(a),
+        atom_string(a, root ? root : ""),
+    }, 3);
+}
+
+static Atom *git_value_atom(Arena *a, bool ok, const char *value,
+                            const char *stderr_text) {
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "GitValue"),
+        ok ? atom_true(a) : atom_false(a),
+        atom_string(a, value ? value : ""),
+        atom_string(a, stderr_text ? stderr_text : ""),
+    }, 4);
+}
+
+static Atom *git_commit_atom(Arena *a, const char *sha, int64_t timestamp,
+                             const char *subject) {
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "GitCommit"),
+        atom_string(a, sha ? sha : ""),
+        atom_int(a, timestamp),
+        atom_string(a, subject ? subject : ""),
+    }, 4);
+}
+
+static Atom *git_bool_atom(Arena *a, bool ok, bool value,
+                           const char *stderr_text) {
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "GitBool"),
+        ok ? atom_true(a) : atom_false(a),
+        value ? atom_true(a) : atom_false(a),
+        atom_string(a, stderr_text ? stderr_text : ""),
+    }, 4);
+}
+
+static Atom *git_command_result_atom(Arena *a, bool ok, int exit_code,
+                                     const char *stdout_text,
+                                     const char *stderr_text,
+                                     bool timed_out) {
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "GitCommandResult"),
+        ok ? atom_true(a) : atom_false(a),
+        atom_int(a, exit_code),
+        atom_string(a, stdout_text ? stdout_text : ""),
+        atom_string(a, stderr_text ? stderr_text : ""),
+        timed_out ? atom_true(a) : atom_false(a),
+    }, 6);
+}
+
+static Atom *git_info_atom(Arena *a, bool ok, const char *repo_root,
+                           const char *head_commit, const char *branch,
+                           const char *remote_url, bool has_changes) {
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "GitInfo"),
+        ok ? atom_true(a) : atom_false(a),
+        atom_string(a, repo_root ? repo_root : ""),
+        atom_string(a, head_commit ? head_commit : ""),
+        atom_string(a, branch ? branch : ""),
+        atom_string(a, remote_url ? remote_url : ""),
+        has_changes ? atom_true(a) : atom_false(a),
+    }, 7);
+}
+
+typedef struct {
+    char **items;
+    uint32_t len;
+    uint32_t cap;
+} GitStringVec;
+
+static void git_string_vec_init(GitStringVec *vec) {
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void git_string_vec_free(GitStringVec *vec) {
+    for (uint32_t i = 0; i < vec->len; i++) {
+        free(vec->items[i]);
+    }
+    free(vec->items);
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void git_string_vec_push(GitStringVec *vec, const char *text) {
+    if (vec->len >= vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2u : 8u;
+        vec->items = cetta_realloc(vec->items, sizeof(char *) * vec->cap);
+    }
+    vec->items[vec->len++] = process_strdup_cstr(text ? text : "");
+}
+
+static int git_string_ptr_cmp(const void *lhs, const void *rhs) {
+    const char *const *a = (const char *const *)lhs;
+    const char *const *b = (const char *const *)rhs;
+    return strcmp(*a, *b);
+}
+
+static Atom *git_string_vec_atom(Arena *a, const GitStringVec *vec) {
+    Atom **items = vec->len ? arena_alloc(a, sizeof(Atom *) * vec->len) : NULL;
+    for (uint32_t i = 0; i < vec->len; i++) {
+        items[i] = atom_string(a, vec->items[i]);
+    }
+    return atom_expr(a, items, vec->len);
+}
+
+static bool git_find_repo_root_path(const char *base,
+                                    char *out,
+                                    size_t out_sz) {
+    char current[PATH_MAX];
+    struct stat st;
+    if (!base || base[0] == '\0' || !out || out_sz == 0)
+        return false;
+    if (!realpath(base, current))
+        return false;
+    if (stat(current, &st) != 0)
+        return false;
+    if (!S_ISDIR(st.st_mode)) {
+        char *slash = strrchr(current, '/');
+        if (!slash)
+            return false;
+        if (slash == current) {
+            slash[1] = '\0';
+        } else {
+            *slash = '\0';
+        }
+    }
+
+    for (;;) {
+        char git_entry[PATH_MAX];
+        int n = snprintf(git_entry, sizeof(git_entry), "%s/.git", current);
+        if (n > 0 && (size_t)n < sizeof(git_entry) &&
+            stat(git_entry, &st) == 0 &&
+            (S_ISDIR(st.st_mode) || S_ISREG(st.st_mode))) {
+            snprintf(out, out_sz, "%s", current);
+            return true;
+        }
+        if (strcmp(current, "/") == 0 || current[0] == '\0')
+            break;
+        char *slash = strrchr(current, '/');
+        if (!slash)
+            break;
+        if (slash == current) {
+            current[1] = '\0';
+        } else {
+            *slash = '\0';
+        }
+    }
+    return false;
+}
+
+static Atom *git_run_process(Arena *a,
+                             Atom *head,
+                             Atom **args,
+                             uint32_t nargs,
+                             const char *cwd,
+                             const char **git_args,
+                             uint32_t git_argc,
+                             int max_bytes) {
+    char **argv = arena_alloc(a, sizeof(char *) * ((size_t)git_argc + 2u));
+    const char *old_optional_locks = getenv("GIT_OPTIONAL_LOCKS");
+    char *old_copy = old_optional_locks
+        ? process_strdup_cstr(old_optional_locks)
+        : NULL;
+    Atom *result;
+    argv[0] = (char *)"git";
+    for (uint32_t i = 0; i < git_argc; i++) {
+        argv[i + 1] = (char *)git_args[i];
+    }
+    argv[git_argc + 1] = NULL;
+
+    setenv("GIT_OPTIONAL_LOCKS", "0", 1);
+    result = process_run_exec_impl(a, head, args, nargs, argv, cwd,
+                                   NULL, 0, false, 5000, max_bytes);
+    if (old_copy) {
+        setenv("GIT_OPTIONAL_LOCKS", old_copy, 1);
+        free(old_copy);
+    } else {
+        unsetenv("GIT_OPTIONAL_LOCKS");
+    }
+    return result;
+}
+
+static bool git_process_result_fields(Atom *process_result,
+                                      int *exit_code,
+                                      const char **stdout_text,
+                                      const char **stderr_text,
+                                      bool *timed_out) {
+    if (!process_result || process_result->kind != ATOM_EXPR ||
+        process_result->expr.len != 7 ||
+        !atom_is_symbol(process_result->expr.elems[0], "ProcessResult")) {
+        return false;
+    }
+    if (!library_int_arg(process_result->expr.elems[1], exit_code))
+        return false;
+    *stdout_text = library_text_arg(process_result->expr.elems[2]);
+    *stderr_text = library_text_arg(process_result->expr.elems[3]);
+    if (!*stdout_text || !*stderr_text ||
+        !library_bool_arg(process_result->expr.elems[6], timed_out)) {
+        return false;
+    }
+    return true;
+}
+
+static char *git_trimmed_copy(const char *text) {
+    const char *start = text ? text : "";
+    const char *end = start + strlen(start);
+    while (*start && isspace((unsigned char)*start)) start++;
+    while (end > start && isspace((unsigned char)end[-1])) end--;
+    return process_strdup_len(start, (size_t)(end - start));
+}
+
+static bool git_string_nonempty_non_option(const char *text) {
+    return text && text[0] != '\0' && text[0] != '-';
+}
+
+static Atom *git_command_result_from_process(Arena *a,
+                                             Atom *process_result) {
+    int exit_code = -1;
+    const char *stdout_text = "";
+    const char *stderr_text = "";
+    bool timed_out = false;
+    if (!git_process_result_fields(process_result, &exit_code, &stdout_text,
+                                   &stderr_text, &timed_out)) {
+        return process_result;
+    }
+    return git_command_result_atom(a, exit_code == 0 && !timed_out, exit_code,
+                                   stdout_text, stderr_text, timed_out);
+}
+
+static bool git_run_trimmed_value(Arena *a,
+                                  Atom *head,
+                                  Atom **args,
+                                  uint32_t nargs,
+                                  const char *cwd,
+                                  const char **git_args,
+                                  uint32_t git_argc,
+                                  char **value_out,
+                                  char **stderr_out) {
+    Atom *process_result = git_run_process(a, head, args, nargs, cwd,
+                                           git_args, git_argc, 1048576);
+    int exit_code = -1;
+    const char *stdout_text = "";
+    const char *stderr_text = "";
+    bool timed_out = false;
+    *value_out = process_strdup_cstr("");
+    *stderr_out = process_strdup_cstr("");
+    if (!git_process_result_fields(process_result, &exit_code, &stdout_text,
+                                   &stderr_text, &timed_out)) {
+        free(*stderr_out);
+        *stderr_out = process_strdup_cstr("git command did not return ProcessResult");
+        return false;
+    }
+    free(*stderr_out);
+    *stderr_out = git_trimmed_copy(stderr_text);
+    if (exit_code != 0 || timed_out)
+        return false;
+    free(*value_out);
+    *value_out = git_trimmed_copy(stdout_text);
+    return true;
+}
+
+static bool git_run_text(Arena *a,
+                         Atom *head,
+                         Atom **args,
+                         uint32_t nargs,
+                         const char *cwd,
+                         const char **git_args,
+                         uint32_t git_argc,
+                         int max_bytes,
+                         bool allow_diff_exit,
+                         char **stdout_out,
+                         char **stderr_out,
+                         int *exit_code_out) {
+    Atom *process_result = git_run_process(a, head, args, nargs, cwd,
+                                           git_args, git_argc, max_bytes);
+    int exit_code = -1;
+    const char *stdout_text = "";
+    const char *stderr_text = "";
+    bool timed_out = false;
+    *stdout_out = process_strdup_cstr("");
+    *stderr_out = process_strdup_cstr("");
+    if (!git_process_result_fields(process_result, &exit_code, &stdout_text,
+                                   &stderr_text, &timed_out)) {
+        free(*stderr_out);
+        *stderr_out = process_strdup_cstr("git command did not return ProcessResult");
+        if (exit_code_out) *exit_code_out = -1;
+        return false;
+    }
+    free(*stdout_out);
+    free(*stderr_out);
+    *stdout_out = process_strdup_cstr(stdout_text);
+    *stderr_out = process_strdup_cstr(stderr_text);
+    if (exit_code_out) *exit_code_out = exit_code;
+    if (timed_out) return false;
+    return allow_diff_exit ? (exit_code == 0 || exit_code == 1) : (exit_code == 0);
+}
+
+static void git_parse_lines_into_vec(const char *text, GitStringVec *vec) {
+    const char *p = text ? text : "";
+    while (*p) {
+        const char *line_start = p;
+        const char *line_end = strchr(p, '\n');
+        const char *content_end = line_end ? line_end : p + strlen(p);
+        while (content_end > line_start &&
+               (content_end[-1] == '\r' || content_end[-1] == '\n')) {
+            content_end--;
+        }
+        const char *trim_start = line_start;
+        const char *trim_end = content_end;
+        while (trim_start < trim_end && isspace((unsigned char)*trim_start)) {
+            trim_start++;
+        }
+        while (trim_end > trim_start && isspace((unsigned char)trim_end[-1])) {
+            trim_end--;
+        }
+        if (trim_end > trim_start) {
+            char *line = process_strdup_len(trim_start, (size_t)(trim_end - trim_start));
+            git_string_vec_push(vec, line);
+            free(line);
+        }
+        if (!line_end) break;
+        p = line_end + 1;
+    }
+}
+
+static bool git_get_remotes(Arena *a,
+                            Atom *head,
+                            Atom **args,
+                            uint32_t nargs,
+                            const char *cwd,
+                            GitStringVec *remotes) {
+    const char *git_args[] = {"remote"};
+    char *stdout_text = NULL;
+    char *stderr_text = NULL;
+    int exit_code = -1;
+    bool ok = git_run_text(a, head, args, nargs, cwd, git_args, 1, 1048576,
+                           false, &stdout_text, &stderr_text, &exit_code);
+    if (ok) {
+        git_parse_lines_into_vec(stdout_text, remotes);
+        for (uint32_t i = 0; i < remotes->len; i++) {
+            if (strcmp(remotes->items[i], "origin") == 0) {
+                char *origin = remotes->items[i];
+                memmove(&remotes->items[1], &remotes->items[0], sizeof(char *) * i);
+                remotes->items[0] = origin;
+                break;
+            }
+        }
+    }
+    free(stdout_text);
+    free(stderr_text);
+    return ok;
+}
+
+static bool git_local_default_branch(Arena *a,
+                                     Atom *head,
+                                     Atom **args,
+                                     uint32_t nargs,
+                                     const char *cwd,
+                                     char **branch_out) {
+    const char *candidates[] = {"main", "master"};
+    *branch_out = process_strdup_cstr("");
+    for (uint32_t i = 0; i < 2; i++) {
+        char ref[64];
+        snprintf(ref, sizeof(ref), "refs/heads/%s", candidates[i]);
+        const char *verify_args[] = {"rev-parse", "--verify", "--quiet", ref};
+        char *value = NULL;
+        char *stderr_text = NULL;
+        bool ok = git_run_trimmed_value(a, head, args, nargs, cwd, verify_args, 4,
+                                        &value, &stderr_text);
+        free(value);
+        free(stderr_text);
+        if (ok) {
+            free(*branch_out);
+            *branch_out = process_strdup_cstr(candidates[i]);
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool git_default_branch_name_value(Arena *a,
+                                          Atom *head,
+                                          Atom **args,
+                                          uint32_t nargs,
+                                          const char *cwd,
+                                          char **branch_out,
+                                          char **stderr_out) {
+    GitStringVec remotes;
+    git_string_vec_init(&remotes);
+    *branch_out = process_strdup_cstr("");
+    *stderr_out = process_strdup_cstr("");
+
+    if (git_get_remotes(a, head, args, nargs, cwd, &remotes)) {
+        for (uint32_t i = 0; i < remotes.len; i++) {
+            char symref[PATH_MAX];
+            snprintf(symref, sizeof(symref), "refs/remotes/%s/HEAD", remotes.items[i]);
+            const char *sym_args[] = {"symbolic-ref", "--quiet", symref};
+            char *sym = NULL;
+            char *stderr_text = NULL;
+            bool ok = git_run_trimmed_value(a, head, args, nargs, cwd, sym_args, 3,
+                                            &sym, &stderr_text);
+            if (ok) {
+                const char *slash = strrchr(sym, '/');
+                const char *name = slash ? slash + 1 : sym;
+                if (name[0] != '\0') {
+                    free(*branch_out);
+                    *branch_out = process_strdup_cstr(name);
+                    free(*stderr_out);
+                    *stderr_out = stderr_text;
+                    free(sym);
+                    git_string_vec_free(&remotes);
+                    return true;
+                }
+            }
+            free(sym);
+            free(stderr_text);
+
+            const char *show_args[] = {"remote", "show", remotes.items[i]};
+            char *stdout_text = NULL;
+            char *show_stderr = NULL;
+            int exit_code = -1;
+            ok = git_run_text(a, head, args, nargs, cwd, show_args, 3, 1048576,
+                              false, &stdout_text, &show_stderr, &exit_code);
+            if (ok) {
+                const char *needle = "HEAD branch:";
+                const char *line = stdout_text;
+                while (line && *line) {
+                    const char *line_end = strchr(line, '\n');
+                    size_t line_len = line_end ? (size_t)(line_end - line) : strlen(line);
+                    while (line_len > 0 && isspace((unsigned char)*line)) {
+                        line++;
+                        line_len--;
+                    }
+                    if (line_len >= strlen(needle) &&
+                        strncmp(line, needle, strlen(needle)) == 0) {
+                        const char *name_start = line + strlen(needle);
+                        const char *name_end = line + line_len;
+                        while (name_start < name_end &&
+                               isspace((unsigned char)*name_start)) {
+                            name_start++;
+                        }
+                        while (name_end > name_start &&
+                               isspace((unsigned char)name_end[-1])) {
+                            name_end--;
+                        }
+                        if (name_end > name_start) {
+                            free(*branch_out);
+                            *branch_out = process_strdup_len(
+                                name_start, (size_t)(name_end - name_start));
+                            free(*stderr_out);
+                            *stderr_out = show_stderr;
+                            free(stdout_text);
+                            git_string_vec_free(&remotes);
+                            return true;
+                        }
+                    }
+                    line = line_end ? line_end + 1 : NULL;
+                }
+            }
+            free(stdout_text);
+            free(show_stderr);
+        }
+    }
+    git_string_vec_free(&remotes);
+
+    char *local_branch = NULL;
+    bool local_ok = git_local_default_branch(a, head, args, nargs, cwd, &local_branch);
+    if (local_ok) {
+        free(*branch_out);
+        *branch_out = local_branch;
+        return true;
+    }
+    free(local_branch);
+    return false;
+}
+
+static Atom *git_repo_root(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *cwd;
+    char root[PATH_MAX];
+    if (nargs != 1 || !(cwd = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected cwd");
+    }
+    if (!git_find_repo_root_path(cwd, root, sizeof(root))) {
+        return git_repo_root_atom(a, false, "");
+    }
+    return git_repo_root_atom(a, true, root);
+}
+
+static Atom *git_value_command(Arena *a, Atom *head, Atom **args, uint32_t nargs,
+                               const char **git_args, uint32_t git_argc,
+                               bool drop_detached_head) {
+    const char *cwd;
+    char *value = NULL;
+    char *stderr_text = NULL;
+    bool ok;
+    Atom *result;
+    if (nargs != 1 || !(cwd = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected cwd");
+    }
+    ok = git_run_trimmed_value(a, head, args, nargs, cwd, git_args, git_argc,
+                               &value, &stderr_text);
+    if (ok && drop_detached_head && strcmp(value, "HEAD") == 0) {
+        ok = false;
+        value[0] = '\0';
+    }
+    result = git_value_atom(a, ok, value, stderr_text);
+    free(value);
+    free(stderr_text);
+    return result;
+}
+
+static Atom *git_current_branch(Arena *a, Atom *head,
+                                Atom **args, uint32_t nargs) {
+    const char *git_args[] = {"rev-parse", "--abbrev-ref", "HEAD"};
+    return git_value_command(a, head, args, nargs, git_args, 3, true);
+}
+
+static Atom *git_default_branch(Arena *a, Atom *head,
+                                Atom **args, uint32_t nargs) {
+    const char *cwd;
+    char *branch = NULL;
+    char *stderr_text = NULL;
+    bool ok;
+    Atom *result;
+    if (nargs != 1 || !(cwd = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected cwd");
+    }
+    ok = git_default_branch_name_value(a, head, args, nargs, cwd,
+                                       &branch, &stderr_text);
+    result = git_value_atom(a, ok, branch, stderr_text);
+    free(branch);
+    free(stderr_text);
+    return result;
+}
+
+static Atom *git_head_commit(Arena *a, Atom *head,
+                             Atom **args, uint32_t nargs) {
+    const char *git_args[] = {"rev-parse", "HEAD"};
+    return git_value_command(a, head, args, nargs, git_args, 2, false);
+}
+
+static Atom *git_remote_url(Arena *a, Atom *head,
+                            Atom **args, uint32_t nargs) {
+    const char *cwd;
+    const char *remote;
+    char *value = NULL;
+    char *stderr_text = NULL;
+    bool ok;
+    Atom *result;
+    if (nargs != 2 || !(cwd = library_text_arg(args[0])) ||
+        !(remote = library_text_arg(args[1])) || remote[0] == '\0' ||
+        remote[0] == '-') {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected cwd and remote name");
+    }
+    const char *git_args[] = {"remote", "get-url", remote};
+    ok = git_run_trimmed_value(a, head, args, nargs, cwd, git_args, 3,
+                               &value, &stderr_text);
+    result = git_value_atom(a, ok, value, stderr_text);
+    free(value);
+    free(stderr_text);
+    return result;
+}
+
+static Atom *git_has_changes(Arena *a, Atom *head,
+                             Atom **args, uint32_t nargs) {
+    const char *cwd;
+    char *status_text = NULL;
+    char *stderr_text = NULL;
+    bool ok;
+    Atom *result;
+    if (nargs != 1 || !(cwd = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected cwd");
+    }
+    const char *git_args[] = {"status", "--porcelain"};
+    ok = git_run_trimmed_value(a, head, args, nargs, cwd, git_args, 2,
+                               &status_text, &stderr_text);
+    result = git_bool_atom(a, ok, ok && status_text[0] != '\0', stderr_text);
+    free(status_text);
+    free(stderr_text);
+    return result;
+}
+
+static Atom *git_status_porcelain(Arena *a, Atom *head,
+                                  Atom **args, uint32_t nargs) {
+    const char *cwd;
+    const char *git_args[] = {"status", "--porcelain"};
+    if (nargs != 1 || !(cwd = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected cwd");
+    }
+    return git_command_result_from_process(
+        a, git_run_process(a, head, args, nargs, cwd, git_args, 2, 1048576));
+}
+
+static Atom *git_diff(Arena *a, Atom *head,
+                      Atom **args, uint32_t nargs) {
+    const char *cwd;
+    const char *git_args[] = {"diff", "--no-textconv", "--no-ext-diff", "--no-color"};
+    if (nargs != 1 || !(cwd = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected cwd");
+    }
+    return git_command_result_from_process(
+        a, git_run_process(a, head, args, nargs, cwd, git_args, 4, 4194304));
+}
+
+static Atom *git_diff_against(Arena *a, Atom *head,
+                              Atom **args, uint32_t nargs) {
+    const char *cwd;
+    const char *revspec;
+    char *diff_stdout = NULL;
+    char *diff_stderr = NULL;
+    int exit_code = -1;
+    CettaStringBuf out;
+    Atom *result;
+    if (nargs != 2 || !(cwd = library_text_arg(args[0])) ||
+        !(revspec = library_text_arg(args[1])) ||
+        !git_string_nonempty_non_option(revspec)) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected cwd and non-option revspec");
+    }
+    const char *diff_args[] = {"diff", "--no-textconv", "--no-ext-diff",
+                               "--no-color", revspec};
+    bool ok = git_run_text(a, head, args, nargs, cwd, diff_args, 5, 4194304,
+                           true, &diff_stdout, &diff_stderr, &exit_code);
+    if (!ok) {
+        result = git_command_result_atom(a, false, exit_code,
+                                         diff_stdout, diff_stderr, false);
+        free(diff_stdout);
+        free(diff_stderr);
+        return result;
+    }
+
+    cetta_sb_init(&out);
+    cetta_sb_append(&out, diff_stdout);
+
+    const char *ls_args[] = {"ls-files", "--others", "--exclude-standard"};
+    char *ls_stdout = NULL;
+    char *ls_stderr = NULL;
+    int ls_exit_code = -1;
+    if (git_run_text(a, head, args, nargs, cwd, ls_args, 3, 1048576, false,
+                     &ls_stdout, &ls_stderr, &ls_exit_code)) {
+        const char *p = ls_stdout;
+        while (p && *p) {
+            const char *line_start = p;
+            const char *line_end = strchr(p, '\n');
+            const char *content_end = line_end ? line_end : p + strlen(p);
+            while (content_end > line_start &&
+                   (content_end[-1] == '\r' || content_end[-1] == '\n')) {
+                content_end--;
+            }
+            if (content_end > line_start) {
+                char *file = process_strdup_len(line_start,
+                                                (size_t)(content_end - line_start));
+                const char *extra_args[] = {
+                    "diff", "--no-textconv", "--no-ext-diff", "--binary",
+                    "--no-color", "--no-index", "--", "/dev/null", file
+                };
+                char *extra_stdout = NULL;
+                char *extra_stderr = NULL;
+                int extra_exit_code = -1;
+                if (git_run_text(a, head, args, nargs, cwd, extra_args, 9,
+                                 4194304, true, &extra_stdout, &extra_stderr,
+                                 &extra_exit_code)) {
+                    cetta_sb_append(&out, extra_stdout);
+                }
+                free(extra_stdout);
+                free(extra_stderr);
+                free(file);
+            }
+            if (!line_end) break;
+            p = line_end + 1;
+        }
+    }
+    free(ls_stdout);
+    free(ls_stderr);
+
+    result = git_command_result_atom(a, true, exit_code,
+                                     out.buf ? out.buf : "", diff_stderr, false);
+    cetta_sb_free(&out);
+    free(diff_stdout);
+    free(diff_stderr);
+    return result;
+}
+
+static Atom *git_show(Arena *a, Atom *head,
+                      Atom **args, uint32_t nargs) {
+    const char *cwd;
+    const char *revspec;
+    if (nargs != 2 || !(cwd = library_text_arg(args[0])) ||
+        !(revspec = library_text_arg(args[1])) ||
+        !git_string_nonempty_non_option(revspec)) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected cwd and non-option revspec");
+    }
+    const char *git_args[] = {"show", "--no-textconv", "--no-ext-diff", "--no-color", revspec};
+    return git_command_result_from_process(
+        a, git_run_process(a, head, args, nargs, cwd, git_args, 5, 4194304));
+}
+
+static Atom *git_recent_commits(Arena *a, Atom *head,
+                                Atom **args, uint32_t nargs) {
+    const char *cwd;
+    int limit = 0;
+    char limit_arg[32];
+    const char *git_dir_args[] = {"rev-parse", "--git-dir"};
+    char *check_stdout = NULL;
+    char *check_stderr = NULL;
+    int check_exit = -1;
+    Atom **items = NULL;
+    uint32_t nitems = 0;
+    uint32_t cap = 0;
+    if (nargs != 2 || !(cwd = library_text_arg(args[0])) ||
+        !library_int_arg(args[1], &limit) || limit < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected cwd and non-negative limit");
+    }
+    if (!git_run_text(a, head, args, nargs, cwd, git_dir_args, 2, 1048576,
+                      false, &check_stdout, &check_stderr, &check_exit)) {
+        free(check_stdout);
+        free(check_stderr);
+        return atom_expr(a, NULL, 0);
+    }
+    free(check_stdout);
+    free(check_stderr);
+
+    snprintf(limit_arg, sizeof(limit_arg), "%d", limit);
+    const char *log_args_with_limit[] = {
+        "log", "-n", limit_arg, "--pretty=format:%H\x1f%ct\x1f%s"
+    };
+    const char *log_args_all[] = {
+        "log", "--pretty=format:%H\x1f%ct\x1f%s"
+    };
+    char *stdout_text = NULL;
+    char *stderr_text = NULL;
+    int exit_code = -1;
+    bool ok = limit > 0
+        ? git_run_text(a, head, args, nargs, cwd, log_args_with_limit, 4,
+                       1048576, false, &stdout_text, &stderr_text, &exit_code)
+        : git_run_text(a, head, args, nargs, cwd, log_args_all, 2,
+                       1048576, false, &stdout_text, &stderr_text, &exit_code);
+    if (!ok) {
+        free(stdout_text);
+        free(stderr_text);
+        return atom_expr(a, NULL, 0);
+    }
+
+    const char *p = stdout_text;
+    while (p && *p) {
+        const char *line_end = strchr(p, '\n');
+        const char *content_end = line_end ? line_end : p + strlen(p);
+        const char *sep1 = memchr(p, '\x1f', (size_t)(content_end - p));
+        const char *sep2 = sep1
+            ? memchr(sep1 + 1, '\x1f', (size_t)(content_end - sep1 - 1))
+            : NULL;
+        if (sep1 && sep2 && sep1 > p && sep2 > sep1 + 1) {
+            char *sha = process_strdup_len(p, (size_t)(sep1 - p));
+            char *ts_text = process_strdup_len(sep1 + 1, (size_t)(sep2 - sep1 - 1));
+            char *subject = process_strdup_len(sep2 + 1, (size_t)(content_end - sep2 - 1));
+            int64_t timestamp = (int64_t)strtoll(ts_text, NULL, 10);
+            if (nitems >= cap) {
+                cap = cap ? cap * 2u : 8u;
+                items = cetta_realloc(items, sizeof(Atom *) * cap);
+            }
+            items[nitems++] = git_commit_atom(a, sha, timestamp, subject);
+            free(sha);
+            free(ts_text);
+            free(subject);
+        }
+        if (!line_end) break;
+        p = line_end + 1;
+    }
+    Atom **out_items = nitems ? arena_alloc(a, sizeof(Atom *) * nitems) : NULL;
+    for (uint32_t i = 0; i < nitems; i++) out_items[i] = items[i];
+    free(items);
+    free(stdout_text);
+    free(stderr_text);
+    return atom_expr(a, out_items, nitems);
+}
+
+static Atom *git_local_branches(Arena *a, Atom *head,
+                                Atom **args, uint32_t nargs) {
+    const char *cwd;
+    char *stdout_text = NULL;
+    char *stderr_text = NULL;
+    int exit_code = -1;
+    GitStringVec branches;
+    Atom *result;
+    if (nargs != 1 || !(cwd = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected cwd");
+    }
+    git_string_vec_init(&branches);
+    const char *branch_args[] = {"branch", "--format=%(refname:short)"};
+    if (git_run_text(a, head, args, nargs, cwd, branch_args, 2, 1048576,
+                     false, &stdout_text, &stderr_text, &exit_code)) {
+        git_parse_lines_into_vec(stdout_text, &branches);
+        if (branches.len > 1) {
+            qsort(branches.items, branches.len, sizeof(char *), git_string_ptr_cmp);
+        }
+        char *base = NULL;
+        if (git_local_default_branch(a, head, args, nargs, cwd, &base)) {
+            for (uint32_t i = 0; i < branches.len; i++) {
+                if (strcmp(branches.items[i], base) == 0) {
+                    char *base_item = branches.items[i];
+                    memmove(&branches.items[1], &branches.items[0], sizeof(char *) * i);
+                    branches.items[0] = base_item;
+                    break;
+                }
+            }
+        }
+        free(base);
+    }
+    result = git_string_vec_atom(a, &branches);
+    git_string_vec_free(&branches);
+    free(stdout_text);
+    free(stderr_text);
+    return result;
+}
+
+static bool git_resolve_branch_ref(Arena *a,
+                                   Atom *head,
+                                   Atom **args,
+                                   uint32_t nargs,
+                                   const char *cwd,
+                                   const char *branch,
+                                   char **resolved_out) {
+    const char *verify_args[] = {"rev-parse", "--verify", branch};
+    char *stderr_text = NULL;
+    bool ok = git_run_trimmed_value(a, head, args, nargs, cwd, verify_args, 3,
+                                    resolved_out, &stderr_text);
+    free(stderr_text);
+    return ok;
+}
+
+static bool git_resolve_upstream_if_remote_ahead(Arena *a,
+                                                 Atom *head,
+                                                 Atom **args,
+                                                 uint32_t nargs,
+                                                 const char *cwd,
+                                                 const char *branch,
+                                                 char **upstream_out) {
+    char upstream_ref[PATH_MAX];
+    snprintf(upstream_ref, sizeof(upstream_ref), "%s@{upstream}", branch);
+    const char *upstream_args[] = {
+        "rev-parse", "--abbrev-ref", "--symbolic-full-name", upstream_ref
+    };
+    char *upstream = NULL;
+    char *stderr_text = NULL;
+    bool ok = git_run_trimmed_value(a, head, args, nargs, cwd, upstream_args, 4,
+                                    &upstream, &stderr_text);
+    free(stderr_text);
+    if (!ok || upstream[0] == '\0') {
+        free(upstream);
+        return false;
+    }
+
+    char range[PATH_MAX * 2];
+    snprintf(range, sizeof(range), "%s...%s", branch, upstream);
+    const char *count_args[] = {"rev-list", "--left-right", "--count", range};
+    char *counts = NULL;
+    char *count_stderr = NULL;
+    ok = git_run_trimmed_value(a, head, args, nargs, cwd, count_args, 4,
+                               &counts, &count_stderr);
+    free(count_stderr);
+    if (!ok) {
+        free(upstream);
+        free(counts);
+        return false;
+    }
+    char *endptr = NULL;
+    (void)strtoll(counts, &endptr, 10);
+    int64_t right = 0;
+    if (endptr) {
+        while (*endptr && isspace((unsigned char)*endptr)) endptr++;
+        right = strtoll(endptr, NULL, 10);
+    }
+    free(counts);
+    if (right > 0) {
+        *upstream_out = upstream;
+        return true;
+    }
+    free(upstream);
+    return false;
+}
+
+static Atom *git_merge_base_with_head(Arena *a, Atom *head,
+                                      Atom **args, uint32_t nargs) {
+    const char *cwd;
+    const char *branch;
+    char root[PATH_MAX];
+    char *head_sha = NULL;
+    char *branch_ref = NULL;
+    char *upstream = NULL;
+    char *preferred_ref = NULL;
+    char *merge_base = NULL;
+    char *stderr_text = NULL;
+    Atom *result;
+    if (nargs != 2 || !(cwd = library_text_arg(args[0])) ||
+        !(branch = library_text_arg(args[1])) ||
+        !git_string_nonempty_non_option(branch)) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected cwd and non-option branch");
+    }
+    if (!git_find_repo_root_path(cwd, root, sizeof(root))) {
+        return git_value_atom(a, false, "", "not a git repository");
+    }
+    const char *head_args[] = {"rev-parse", "--verify", "HEAD"};
+    if (!git_run_trimmed_value(a, head, args, nargs, root, head_args, 3,
+                               &head_sha, &stderr_text)) {
+        result = git_value_atom(a, false, "", stderr_text);
+        goto cleanup;
+    }
+    free(stderr_text);
+    stderr_text = NULL;
+    if (!git_resolve_branch_ref(a, head, args, nargs, root, branch, &branch_ref)) {
+        result = git_value_atom(a, false, "", "");
+        goto cleanup;
+    }
+    preferred_ref = branch_ref;
+    if (git_resolve_upstream_if_remote_ahead(a, head, args, nargs, root,
+                                             branch, &upstream)) {
+        char *upstream_ref = NULL;
+        if (git_resolve_branch_ref(a, head, args, nargs, root, upstream,
+                                   &upstream_ref)) {
+            preferred_ref = upstream_ref;
+        } else {
+            free(upstream_ref);
+        }
+    }
+    const char *merge_args[] = {"merge-base", head_sha, preferred_ref};
+    bool ok = git_run_trimmed_value(a, head, args, nargs, root, merge_args, 3,
+                                    &merge_base, &stderr_text);
+    result = git_value_atom(a, ok, ok ? merge_base : "", stderr_text);
+    if (preferred_ref != branch_ref) free(preferred_ref);
+
+cleanup:
+    free(head_sha);
+    free(branch_ref);
+    free(upstream);
+    free(merge_base);
+    free(stderr_text);
+    return result;
+}
+
+static Atom *git_collect_info(Arena *a, Atom *head,
+                              Atom **args, uint32_t nargs) {
+    const char *cwd;
+    char root[PATH_MAX];
+    char *head_commit = NULL;
+    char *branch = NULL;
+    char *remote_url = NULL;
+    char *status_text = NULL;
+    char *stderr_text = NULL;
+    bool ok_head;
+    bool ok_branch;
+    bool ok_remote;
+    bool ok_status;
+    Atom *result;
+    if (nargs != 1 || !(cwd = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected cwd");
+    }
+    if (!git_find_repo_root_path(cwd, root, sizeof(root))) {
+        return git_info_atom(a, false, "", "", "", "", false);
+    }
+
+    const char *head_args[] = {"rev-parse", "HEAD"};
+    ok_head = git_run_trimmed_value(a, head, args, nargs, cwd, head_args, 2,
+                                    &head_commit, &stderr_text);
+    free(stderr_text);
+    stderr_text = NULL;
+
+    const char *branch_args[] = {"rev-parse", "--abbrev-ref", "HEAD"};
+    ok_branch = git_run_trimmed_value(a, head, args, nargs, cwd, branch_args, 3,
+                                      &branch, &stderr_text);
+    free(stderr_text);
+    stderr_text = NULL;
+    if (ok_branch && strcmp(branch, "HEAD") == 0) {
+        ok_branch = false;
+        branch[0] = '\0';
+    }
+
+    const char *remote_args[] = {"remote", "get-url", "origin"};
+    ok_remote = git_run_trimmed_value(a, head, args, nargs, cwd, remote_args, 3,
+                                      &remote_url, &stderr_text);
+    free(stderr_text);
+    stderr_text = NULL;
+
+    const char *status_args[] = {"status", "--porcelain"};
+    ok_status = git_run_trimmed_value(a, head, args, nargs, cwd, status_args, 2,
+                                      &status_text, &stderr_text);
+    free(stderr_text);
+
+    result = git_info_atom(a, true, root,
+                           ok_head ? head_commit : "",
+                           ok_branch ? branch : "",
+                           ok_remote ? remote_url : "",
+                           ok_status && status_text[0] != '\0');
+    free(head_commit);
+    free(branch);
+    free(remote_url);
+    free(status_text);
+    return result;
+}
+
+static Atom *cetta_library_dispatch_git(Arena *a, Atom *head,
+                                        Atom **args, uint32_t nargs) {
+    if (head->kind != ATOM_SYMBOL) return NULL;
+    SymbolId head_id = head->sym_id;
+    if (head_id == g_builtin_syms.lib_git_repo_root) {
+        return git_repo_root(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_current_branch) {
+        return git_current_branch(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_default_branch) {
+        return git_default_branch(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_head_commit) {
+        return git_head_commit(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_remote_url) {
+        return git_remote_url(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_has_changes) {
+        return git_has_changes(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_status_porcelain) {
+        return git_status_porcelain(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_diff) {
+        return git_diff(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_diff_against) {
+        return git_diff_against(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_show) {
+        return git_show(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_recent_commits) {
+        return git_recent_commits(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_local_branches) {
+        return git_local_branches(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_merge_base_with_head) {
+        return git_merge_base_with_head(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_git_collect_info) {
+        return git_collect_info(a, head, args, nargs);
     }
     return NULL;
 }
@@ -2378,6 +6320,265 @@ static Atom *cetta_library_dispatch_str(Arena *a, Atom *head,
     }
     if (head_id == g_builtin_syms.lib_str_trim) {
         return str_trim(a, head, args, nargs);
+    }
+    return NULL;
+}
+
+typedef struct {
+    char **items;
+    uint32_t len;
+    uint32_t cap;
+} ShellTextVec;
+
+typedef struct {
+    ShellTextVec *items;
+    uint32_t len;
+    uint32_t cap;
+} ShellCommandVec;
+
+static void shell_text_vec_init(ShellTextVec *vec) {
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void shell_text_vec_free(ShellTextVec *vec) {
+    if (!vec) return;
+    for (uint32_t i = 0; i < vec->len; i++) {
+        free(vec->items[i]);
+    }
+    free(vec->items);
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void shell_text_vec_push_owned(ShellTextVec *vec, char *text) {
+    if (vec->len >= vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 8;
+        vec->items = cetta_realloc(vec->items, sizeof(char *) * vec->cap);
+    }
+    vec->items[vec->len++] = text;
+}
+
+static void shell_command_vec_init(ShellCommandVec *vec) {
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void shell_command_vec_free(ShellCommandVec *vec) {
+    if (!vec) return;
+    for (uint32_t i = 0; i < vec->len; i++) {
+        shell_text_vec_free(&vec->items[i]);
+    }
+    free(vec->items);
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void shell_command_vec_push_take(ShellCommandVec *vec, ShellTextVec *cmd) {
+    if (vec->len >= vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 8;
+        vec->items = cetta_realloc(vec->items, sizeof(ShellTextVec) * vec->cap);
+    }
+    vec->items[vec->len++] = *cmd;
+    shell_text_vec_init(cmd);
+}
+
+static bool shell_operator_start(char c) {
+    return c == '&' || c == '|' || c == ';';
+}
+
+static bool shell_disallowed_bare_char(char c) {
+    return c == '<' || c == '>' || c == '(' || c == ')' ||
+           c == '{' || c == '}' || c == '`' || c == '$' ||
+           c == '\\';
+}
+
+static const char *shell_skip_space(const char *p) {
+    while (*p && isspace((unsigned char)*p)) p++;
+    return p;
+}
+
+static bool shell_parse_word(const char **p_in, char **word_out) {
+    const char *p = shell_skip_space(*p_in);
+    CettaStringBuf out;
+    bool saw = false;
+    cetta_sb_init(&out);
+
+    while (*p && !isspace((unsigned char)*p) && !shell_operator_start(*p)) {
+        if (*p == '\'') {
+            p++;
+            while (*p && *p != '\'') {
+                cetta_sb_append_n(&out, p, 1);
+                saw = true;
+                p++;
+            }
+            if (*p != '\'') {
+                cetta_sb_free(&out);
+                return false;
+            }
+            p++;
+            continue;
+        }
+        if (*p == '"') {
+            p++;
+            while (*p && *p != '"') {
+                if (*p == '$' || *p == '`' || *p == '\\') {
+                    cetta_sb_free(&out);
+                    return false;
+                }
+                cetta_sb_append_n(&out, p, 1);
+                saw = true;
+                p++;
+            }
+            if (*p != '"') {
+                cetta_sb_free(&out);
+                return false;
+            }
+            p++;
+            continue;
+        }
+        if (shell_disallowed_bare_char(*p)) {
+            cetta_sb_free(&out);
+            return false;
+        }
+        cetta_sb_append_n(&out, p, 1);
+        saw = true;
+        p++;
+    }
+
+    if (!saw) {
+        cetta_sb_free(&out);
+        return false;
+    }
+    *word_out = process_strdup_cstr(out.buf ? out.buf : "");
+    *p_in = p;
+    cetta_sb_free(&out);
+    return true;
+}
+
+static bool shell_consume_operator(const char **p_in) {
+    const char *p = shell_skip_space(*p_in);
+    if (p[0] == '&' && p[1] == '&') {
+        *p_in = p + 2;
+        return true;
+    }
+    if (p[0] == '|' && p[1] == '|') {
+        *p_in = p + 2;
+        return true;
+    }
+    if (p[0] == '|' || p[0] == ';') {
+        *p_in = p + 1;
+        return true;
+    }
+    return false;
+}
+
+static bool shell_split_outer_argv(const char *command, ShellTextVec *argv) {
+    const char *p = command;
+    shell_text_vec_init(argv);
+    while (1) {
+        char *word = NULL;
+        p = shell_skip_space(p);
+        if (*p == '\0') return argv->len > 0;
+        if (shell_operator_start(*p)) goto fail;
+        if (!shell_parse_word(&p, &word)) goto fail;
+        shell_text_vec_push_owned(argv, word);
+    }
+
+fail:
+    shell_text_vec_free(argv);
+    return false;
+}
+
+static const char *shell_basename(const char *path) {
+    const char *slash = strrchr(path, '/');
+    return slash ? slash + 1 : path;
+}
+
+static bool shell_supported_shell_name(const char *path) {
+    const char *name = shell_basename(path);
+    return strcmp(name, "bash") == 0 || strcmp(name, "zsh") == 0 ||
+           strcmp(name, "sh") == 0;
+}
+
+static bool shell_parse_plain_script(const char *script, ShellCommandVec *commands) {
+    const char *p = script;
+    ShellTextVec current;
+    shell_command_vec_init(commands);
+    shell_text_vec_init(&current);
+
+    while (1) {
+        p = shell_skip_space(p);
+        if (*p == '\0') {
+            if (current.len == 0) goto fail;
+            shell_command_vec_push_take(commands, &current);
+            return commands->len > 0;
+        }
+        if (shell_operator_start(*p)) {
+            if (current.len == 0) goto fail;
+            if (!shell_consume_operator(&p)) goto fail;
+            shell_command_vec_push_take(commands, &current);
+            continue;
+        }
+        {
+            char *word = NULL;
+            if (!shell_parse_word(&p, &word)) goto fail;
+            shell_text_vec_push_owned(&current, word);
+        }
+    }
+
+fail:
+    shell_text_vec_free(&current);
+    shell_command_vec_free(commands);
+    return false;
+}
+
+static Atom *shell_commands_atom(Arena *a, const ShellCommandVec *commands) {
+    Atom **items = arena_alloc(a, sizeof(Atom *) * (commands->len ? commands->len : 1));
+    for (uint32_t i = 0; i < commands->len; i++) {
+        items[i] = library_string_list(a, commands->items[i].items,
+                                       commands->items[i].len);
+    }
+    return atom_expr(a, items, commands->len);
+}
+
+static Atom *shell_plain_commands(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *command;
+    ShellTextVec argv;
+    ShellCommandVec commands;
+    Atom *result;
+
+    if (nargs != 1 || !(command = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected shell command text");
+    }
+    if (!shell_split_outer_argv(command, &argv)) {
+        return atom_empty(a);
+    }
+    if (argv.len != 3 || !shell_supported_shell_name(argv.items[0]) ||
+        !(strcmp(argv.items[1], "-lc") == 0 || strcmp(argv.items[1], "-c") == 0)) {
+        shell_text_vec_free(&argv);
+        return atom_empty(a);
+    }
+    if (!shell_parse_plain_script(argv.items[2], &commands)) {
+        shell_text_vec_free(&argv);
+        return atom_empty(a);
+    }
+    result = shell_commands_atom(a, &commands);
+    shell_command_vec_free(&commands);
+    shell_text_vec_free(&argv);
+    return result;
+}
+
+static Atom *cetta_library_dispatch_shell(Arena *a, Atom *head,
+                                          Atom **args, uint32_t nargs) {
+    if (head->kind != ATOM_SYMBOL) return NULL;
+    SymbolId head_id = head->sym_id;
+    if (head_id == g_builtin_syms.lib_shell_plain_commands) {
+        return shell_plain_commands(a, head, args, nargs);
     }
     return NULL;
 }
@@ -6383,6 +10584,26 @@ Atom *cetta_library_dispatch_native(CettaLibraryContext *ctx, Space *space,
     }
     if (ctx->active_mask & CETTA_LIBRARY_STR) {
         Atom *result = cetta_library_dispatch_str(a, head, args, nargs);
+        if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_SHELL) {
+        Atom *result = cetta_library_dispatch_shell(a, head, args, nargs);
+        if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_PROCESS) {
+        Atom *result = cetta_library_dispatch_process(a, head, args, nargs);
+        if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_JSON) {
+        Atom *result = cetta_library_dispatch_json(a, head, args, nargs);
+        if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_PATCH) {
+        Atom *result = cetta_library_dispatch_patch(a, head, args, nargs);
+        if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_GIT) {
+        Atom *result = cetta_library_dispatch_git(a, head, args, nargs);
         if (result) return result;
     }
     {

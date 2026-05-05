@@ -235,6 +235,35 @@ typedef struct {
     X(lib_str_starts_with, "__cetta_lib_str_starts_with") \
     X(lib_str_ends_with, "__cetta_lib_str_ends_with") \
     X(lib_str_trim, "__cetta_lib_str_trim") \
+    X(lib_shell_plain_commands, "__cetta_lib_shell_plain_commands") \
+    X(lib_process_run_shell, "__cetta_lib_process_run_shell") \
+    X(lib_process_run_shell_timeout_ms, "__cetta_lib_process_run_shell_timeout_ms") \
+    X(lib_process_run_shell_cwd_timeout_ms, "__cetta_lib_process_run_shell_cwd_timeout_ms") \
+    X(lib_process_run_shell_cwd_timeout_cap_bytes, "__cetta_lib_process_run_shell_cwd_timeout_cap_bytes") \
+    X(lib_process_run_cmd_cwd_env_timeout_cap_bytes, "__cetta_lib_process_run_cmd_cwd_env_timeout_cap_bytes") \
+    X(lib_process_create_shell_env, "__cetta_lib_process_create_shell_env") \
+    X(lib_process_create_shell_env_no_thread, "__cetta_lib_process_create_shell_env_no_thread") \
+    X(lib_process_default_shell, "__cetta_lib_process_default_shell") \
+    X(lib_process_shell_argv, "__cetta_lib_process_shell_argv") \
+    X(lib_json_parse, "__cetta_lib_json_parse") \
+    X(lib_json_stringify, "__cetta_lib_json_stringify") \
+    X(lib_json_object_get, "__cetta_lib_json_object_get") \
+    X(lib_patch_apply, "__cetta_lib_patch_apply") \
+    X(lib_patch_intercept_shell_command, "__cetta_lib_patch_intercept_shell_command") \
+    X(lib_git_repo_root, "__cetta_lib_git_repo_root") \
+    X(lib_git_current_branch, "__cetta_lib_git_current_branch") \
+    X(lib_git_default_branch, "__cetta_lib_git_default_branch") \
+    X(lib_git_head_commit, "__cetta_lib_git_head_commit") \
+    X(lib_git_remote_url, "__cetta_lib_git_remote_url") \
+    X(lib_git_has_changes, "__cetta_lib_git_has_changes") \
+    X(lib_git_status_porcelain, "__cetta_lib_git_status_porcelain") \
+    X(lib_git_diff, "__cetta_lib_git_diff") \
+    X(lib_git_diff_against, "__cetta_lib_git_diff_against") \
+    X(lib_git_show, "__cetta_lib_git_show") \
+    X(lib_git_recent_commits, "__cetta_lib_git_recent_commits") \
+    X(lib_git_local_branches, "__cetta_lib_git_local_branches") \
+    X(lib_git_merge_base_with_head, "__cetta_lib_git_merge_base_with_head") \
+    X(lib_git_collect_info, "__cetta_lib_git_collect_info") \
     X(lib_mork_space_new, "__cetta_lib_mork_space_new") \
     X(lib_mork_space_include, "__cetta_lib_mork_space_include") \
     X(lib_mork_space_open_act, "__cetta_lib_mork_space_open_act") \
