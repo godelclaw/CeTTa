@@ -2498,5 +2498,25 @@ bool space_equations_may_match_known_head(Space *s, SymbolId head) {
     ensure_eq_index(s);
     if (s->native.eq_idx.wildcard.len > 0)
         return true;
-    return s->native.eq_idx.buckets[symbol_hash(head)].len > 0;
+    EqBucket *bucket = &s->native.eq_idx.buckets[symbol_hash(head)];
+    for (uint32_t i = 0; i < bucket->len; i++) {
+        uint32_t atom_idx = bucket->atom_indices[i];
+        AtomId equation_id = space_get_atom_id_at(s, atom_idx);
+        AtomId lhs_id = CETTA_ATOM_ID_NONE;
+        AtomId rhs_id = CETTA_ATOM_ID_NONE;
+        if (space_equation_child_ids_at_id(s, equation_id, &lhs_id, &rhs_id)) {
+            if (eq_head_symbol_id(s, lhs_id) == head)
+                return true;
+            continue;
+        }
+        Atom *lhs = NULL;
+        Atom *rhs = NULL;
+        if (space_equation_children_at_id(s, equation_id, &lhs, &rhs)) {
+            if (eq_head_symbol(lhs) == head)
+                return true;
+            continue;
+        }
+        return true;
+    }
+    return false;
 }
