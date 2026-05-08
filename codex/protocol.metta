@@ -21,6 +21,9 @@
 (= (codex:assistant-message $text)
    (CodexResponseItemMessage "assistant" ((CodexOutputText $text)) CodexAbsent))
 
+(= (codex:commentary-message $text)
+   (CodexResponseItemMessage "assistant" ((CodexOutputText $text)) "commentary"))
+
 (= (codex:final-response $text)
    (CodexResponseItemMessage "assistant" ((CodexOutputText $text)) "final_answer"))
 
@@ -57,6 +60,14 @@
 
 (= (codex:tool-call-name (CodexResponseItemCustomToolCall $call_id $name $input))
    $name)
+
+(= (codex:message-text
+      (CodexResponseItemMessage $role ((CodexInputText $text)) $phase))
+   $text)
+
+(= (codex:message-text
+      (CodexResponseItemMessage $role ((CodexOutputText $text)) $phase))
+   $text)
 
 (= (codex:tool-result-output-text
       (CodexResponseItemCustomToolCallOutput
