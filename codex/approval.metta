@@ -34,6 +34,22 @@
 (= (codex:ask-for-approval-unless-trusted)
    "unless_trusted")
 
+(= (codex:ask-for-approval-granular $sandbox-approval)
+   (CodexAskForApprovalGranular $sandbox-approval))
+
+(= (codex:ask-for-approval-granular-config
+      $sandbox-approval
+      $rules
+      $skill-approval
+      $request-permissions
+      $mcp-elicitations)
+   (CodexAskForApprovalGranularConfig
+     $sandbox-approval
+     $rules
+     $skill-approval
+     $request-permissions
+     $mcp-elicitations))
+
 (= (codex:file-system-sandbox-restricted)
    "restricted")
 

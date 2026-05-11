@@ -9,6 +9,7 @@
 !(import! &self json)
 !(import! &self list)
 !(import! &self protocol)
+!(import! &self request_user_input)
 
 (= (codex:fixture-user-step $text)
    (CodexFixtureUserStep $text))
@@ -28,28 +29,44 @@
 (= (codex:fixture-tool-result-step $call_id $output)
    (CodexFixtureToolResultStep $call_id $output))
 
-(= (codex:fixture-step-item (CodexFixtureUserStep $text))
-   (codex:user-message $text))
+(= (codex:fixture-request-user-input-step $call_id $input $context)
+   (CodexFixtureRequestUserInputStep $call_id $input $context))
 
-(= (codex:fixture-step-item (CodexFixtureAssistantStep $text))
-   (codex:assistant-message $text))
+(= (codex:fixture-step-items (CodexFixtureUserStep $text))
+   ((codex:user-message $text)))
 
-(= (codex:fixture-step-item (CodexFixtureCommentaryStep $text))
-   (codex:commentary-message $text))
+(= (codex:fixture-step-items (CodexFixtureAssistantStep $text))
+   ((codex:assistant-message $text)))
 
-(= (codex:fixture-step-item (CodexFixtureFinalStep $text))
-   (codex:final-response $text))
+(= (codex:fixture-step-items (CodexFixtureCommentaryStep $text))
+   ((codex:commentary-message $text)))
 
-(= (codex:fixture-step-item (CodexFixtureToolCallStep $call_id $name $input))
-   (codex:tool-call $call_id $name $input))
+(= (codex:fixture-step-items (CodexFixtureFinalStep $text))
+   ((codex:final-response $text)))
 
-(= (codex:fixture-step-item (CodexFixtureToolResultStep $call_id $output))
-   (codex:tool-result $call_id $output))
+(= (codex:fixture-step-items
+      (CodexFixtureToolCallStep $call_id $name $input))
+   ((codex:tool-call $call_id $name $input)))
+
+(= (codex:fixture-step-items (CodexFixtureToolResultStep $call_id $output))
+   ((codex:tool-result $call_id $output)))
+
+(= (codex:fixture-step-items
+      (CodexFixtureRequestUserInputStep $call_id $input $context))
+   ((codex:tool-call $call_id "request_user_input" $input)
+    (codex:run-request-user-input-tool-call-with-context
+      $context
+      $call_id
+      $input)))
+
+(= (codex:fixture-steps-items ())
+   ())
 
 (= (codex:fixture-steps-items $steps)
-   (function
-     (let $items (eval (map-atom $steps $step (codex:fixture-step-item $step)))
-       (return $items))))
+   (let ($head $tail) (decons-atom $steps)
+     (list:append
+       (codex:fixture-step-items $head)
+       (codex:fixture-steps-items $tail))))
 
 (= (codex:final-response-candidate $item)
    (case $item

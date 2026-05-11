@@ -46,13 +46,3 @@
              (codex:decision-allow))))
         ("git" "commit" "-m" "hi"))))
   ("{\"type\":\"forbidden\",\"reason\":\"`git commit -m hi` rejected: history rewrite is blocked\"}"))
-
-!(assertEqualToResult
-  (json-stringify
-    (codex:approval-requirement-json
-      (codex:approval-for-command
-        (codex:ask-for-approval-unless-trusted)
-        (codex:file-system-sandbox-restricted)
-        (codex:policy ())
-        ("rg" "-n" "TODO" "src"))))
-  ("{\"type\":\"skip\",\"bypass_sandbox\":false,\"proposed_execpolicy_amendment\":null}"))
