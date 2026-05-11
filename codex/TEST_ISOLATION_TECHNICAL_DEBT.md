@@ -28,12 +28,21 @@ Repeated cases currently split for stability:
   mixed computed item list even when the final-answer item is present.
 - `tests/test_codex_request_permissions_surface.metta`
   `tests/test_codex_request_permissions_cancel_surface.metta`
+  `tests/test_codex_request_permissions_apply_patch_runtime_shape_surface.metta`
+  `tests/test_codex_request_permissions_apply_patch_runtime_apply_surface.metta`
+  `tests/test_codex_request_permissions_apply_patch_strict_shape_surface.metta`
+  `tests/test_codex_request_permissions_apply_patch_strict_apply_surface.metta`
   Handler event/output/state assertions were rewritten to stable constructor and
   response-result checks because direct handler binding/extraction can collapse
   to `Empty` in combined evaluator runs.
   The cancellation-message assertion also has to live in its own file and read
   through the tool-call-result wrapper; direct handler-message extraction can
   still collapse to `Empty` in combined runs.
+  The request_permissions + apply_patch lane hit the same pattern again:
+  one combined surface file could pass in isolation but fail in the full sweep
+  after a neighboring mutating check changed the file baseline. The stable
+  coverage now resets the target files explicitly and keeps runtime-shape vs
+  runtime-apply / strict-shape vs strict-apply in separate files.
 - `tests/test_codex_tools_surface.metta`
   `tests/test_codex_tools_exec_exit_surface.metta`
   `tests/test_codex_tools_exec_stdout_surface.metta`
@@ -44,6 +53,8 @@ Repeated cases currently split for stability:
   `tests/test_codex_tools_permissions_exec_surface.metta`
   `tests/test_codex_tools_write_stdin_error_surface.metta`
   `tests/test_codex_tools_live_background_surface.metta`
+  `tests/test_codex_tools_exec_events_surface.metta`
+  `tests/test_codex_tools_write_stdin_events_surface.metta`
   Repeated session-backed `exec_command` / tool-call assertions do not stay
   stable in one combined surface file; the evaluator can re-materialize the
   session-backed term and intermittently observe the still-running branch
@@ -61,6 +72,13 @@ Repeated cases currently split for stability:
   coverage remains in the background-drain surface and the write_stdin error
   surface; happy-path resumed-helper metadata checks are deferred until the
   helper/runtime timing can be stabilized again.
+  The same evaluator behavior currently makes live multi-item event lowering
+  from a real `exec_command` tool call brittle: direct tool-call -> event-list
+  helper wrappers collapsed to `Empty` even though the underlying
+  `CodexExecCommandRun` value was present and printable. The committed green
+  event coverage therefore stays at the deterministic run/result-composition
+  layer plus protocol JSON surfaces instead of a live tool-call event-list
+  surface.
 
 Current workaround:
 - Keep high-risk assertion clusters in separate surface files.

@@ -22,15 +22,21 @@
 
 !(assertEqual
   (once
-    (codex:tool-result-output-text
-      (codex:request-permissions-tool-call-result-item
-        (codex:run-request-permissions-tool-call-with-context-state
-          (codex:request-permissions-handler-context
-            (codex:ask-for-approval-on-request)
-            "turn-rp"
-            (codex-rp-root)
-            (codex:request-permissions-response-behavior-cancel))
-          (codex:empty-request-permissions-state)
-          "call-rp"
-          (codex-rp-input-json)))))
+    (case
+      (codex:run-request-permissions-tool-call-with-context-state
+        (codex:request-permissions-handler-context
+          (codex:ask-for-approval-on-request)
+          "turn-rp"
+          (codex-rp-root)
+          (codex:request-permissions-response-behavior-cancel))
+        (codex:empty-request-permissions-state)
+        "call-rp"
+        (codex-rp-input-json))
+      (((CodexRequestPermissionsToolCallResult
+          (CodexResponseItemCustomToolCallOutput
+            $call-id
+            $name
+            (CodexFunctionCallOutputText $text))
+          $state)
+        $text))))
   "request_permissions was cancelled before receiving a response")
