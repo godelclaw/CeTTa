@@ -17,14 +17,14 @@
     (codex:is-exec-command-run-running
       (codex:run-exec-command
         "call_live_demo"
-        "{\"cmd\":\"sleep 1; printf live-demo\",\"login\":false,\"yield_time_ms\":250}"))))
+        "{\"cmd\":\"sleep 0.4; printf live-demo\",\"login\":false,\"yield_time_ms\":250}"))))
 
 !(println!
   (once
     (codex:exec-command-run-session-id
       (codex:run-exec-command
         "call_live_demo_sid"
-        "{\"cmd\":\"sleep 1; printf live-demo\",\"login\":false,\"yield_time_ms\":250}"))))
+        "{\"cmd\":\"sleep 0.4; printf live-demo\",\"login\":false,\"yield_time_ms\":250}"))))
 
 !(println!
   (once
