@@ -38,6 +38,10 @@ Repeated cases currently split for stability:
   The cancellation-message assertion also has to live in its own file and read
   through the tool-call-result wrapper; direct handler-message extraction can
   still collapse to `Empty` in combined runs.
+  The granular-approval short-circuit branch now also asserts through the
+  stable `handle-request-permissions-payload` output instead of the smaller
+  tool-call wrapper, because that wrapper can collapse to `Empty` even when the
+  underlying handler output is present.
   The request_permissions + apply_patch lane hit the same pattern again:
   one combined surface file could pass in isolation but fail in the full sweep
   after a neighboring mutating check changed the file baseline. The stable
@@ -60,6 +64,16 @@ Repeated cases currently split for stability:
   session-backed term and intermittently observe the still-running branch
   instead of the settled one-shot result. These checks now live in one-purpose
   files and still keep a single `once` around the live expression.
+  Two smaller selectors are currently brittle even in one-purpose files:
+  the direct `run-write-stdin-output-text` assertion path and the direct
+  `parse-exec-command-args` -> `exec-command-additional-permissions` relative
+  path normalization assertion. The committed green surfaces therefore pin
+  those checks at the stable lowered boundaries instead:
+  constructor/result-text lowering for the write_stdin error lane, and stable
+  permission-profile JSON construction plus the separate sandbox-permission
+  resolver assertion for the additional-permissions lane. The runtime behavior
+  itself remains covered by the public demos and the broader green
+  permission/exec surfaces.
   The permission-aware exec surfaces hit the same pattern: structural state and
   parse checks are stable in their own small files, while the live branch needs
   `once` around the exec wrapper before any output extraction. Exact output

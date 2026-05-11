@@ -9,6 +9,7 @@
 ; - write_stdin JSON decoding and lowering
 ; - custom-tool-call -> custom-tool-call-output lowering for exec_command and
 ;   write_stdin
+; - unified-exec pre/post hook payload helpers
 ;
 ; Required slice-local deviations from Rust, documented for later audit:
 ; - Rust generates random six-hex chunk IDs. This slice derives a stable chunk
@@ -52,6 +53,9 @@
 ;   also not preserved through the current text atom surface, so event chunks
 ;   remain faithful for ordinary text output but not yet for arbitrary binary
 ;   output.
+; - Rust threads unified-exec hook payloads through the registry/runtime layer.
+;   The restarted CeTTa slice exposes deterministic helper constructors for the
+;   same pre/post payload decisions instead of a full hook runtime.
 ; - Direct `apply_patch` execution and exec_command interception therefore use
 ;   the current local CLI assumptions from `codex:apply_patch`.
 
@@ -219,7 +223,13 @@
        (system-cwd)
        (if (path-is-absolute? $workdir)
            (path-normalize $workdir)
-           (path-join (system-cwd) $workdir))))
+           ; This keeps the same lexical normalization as `path-join`, but
+           ; avoids the current evaluator sensitivity we repeatedly hit when a
+           ; relative workdir is consumed through nested surface assertions.
+           (path-normalize
+             (str-concat
+               (str-concat (system-cwd) "/")
+               $workdir)))))
 
 (= (codex:shell-path-name $shell-path)
    (let $parts (path-parts $shell-path)
@@ -249,6 +259,107 @@
    (if (== $shell-path CodexAbsent)
        (process-default-shell)
        (codex:resolve-shell-from-path $shell-path)))
+
+(= (codex:hook-tool-name $name $matcher-aliases)
+   (CodexHookToolName $name $matcher-aliases))
+
+(= (codex:hook-tool-name-bash)
+   (codex:hook-tool-name "Bash" ()))
+
+(= (codex:pre-tool-use-payload $tool-name $tool-input)
+   (CodexPreToolUsePayload $tool-name $tool-input))
+
+(= (codex:post-tool-use-payload
+      $tool-name
+      $tool-use-id
+      $tool-input
+      $tool-response)
+   (CodexPostToolUsePayload
+     $tool-name
+     $tool-use-id
+     $tool-input
+     $tool-response))
+
+(= (codex:hook-tool-name-name
+      (CodexHookToolName $name $matcher-aliases))
+   $name)
+
+(= (codex:hook-tool-name-matcher-aliases
+      (CodexHookToolName $name $matcher-aliases))
+   $matcher-aliases)
+
+(= (codex:pre-tool-use-payload-tool-name
+      (CodexPreToolUsePayload $tool-name $tool-input))
+   $tool-name)
+
+(= (codex:pre-tool-use-payload-tool-input
+      (CodexPreToolUsePayload $tool-name $tool-input))
+   $tool-input)
+
+(= (codex:post-tool-use-payload-tool-name
+      (CodexPostToolUsePayload
+        $tool-name
+        $tool-use-id
+        $tool-input
+        $tool-response))
+   $tool-name)
+
+(= (codex:post-tool-use-payload-tool-use-id
+      (CodexPostToolUsePayload
+        $tool-name
+        $tool-use-id
+        $tool-input
+        $tool-response))
+   $tool-use-id)
+
+(= (codex:post-tool-use-payload-tool-input
+      (CodexPostToolUsePayload
+        $tool-name
+        $tool-use-id
+        $tool-input
+        $tool-response))
+   $tool-input)
+
+(= (codex:post-tool-use-payload-tool-response
+      (CodexPostToolUsePayload
+        $tool-name
+        $tool-use-id
+        $tool-input
+        $tool-response))
+   $tool-response)
+
+(= (codex:hook-command-input-json $command)
+   (JsonObject
+     ((JsonPair "command" (JsonString $command)))))
+
+(= (codex:hook-tool-name-json (CodexHookToolName $name $matcher-aliases))
+   (JsonObject
+     ((JsonPair "name" (JsonString $name))
+      (JsonPair "matcher_aliases"
+        (JsonArray
+          (eval
+            (map-atom
+              $matcher-aliases
+              $alias
+              (JsonString $alias))))))))
+
+(= (codex:pre-tool-use-payload-json
+      (CodexPreToolUsePayload $tool-name $tool-input))
+   (JsonObject
+     ((JsonPair "tool_name" (codex:hook-tool-name-json $tool-name))
+      (JsonPair "tool_input" $tool-input))))
+
+(= (codex:post-tool-use-payload-json
+      (CodexPostToolUsePayload
+        $tool-name
+        $tool-use-id
+        $tool-input
+        $tool-response))
+   (JsonObject
+     ((JsonPair "tool_name" (codex:hook-tool-name-json $tool-name))
+      (JsonPair "tool_use_id" (JsonString $tool-use-id))
+      (JsonPair "tool_input" $tool-input)
+      (JsonPair "tool_response" $tool-response))))
 
 (= (codex:parse-exec-command-args $input)
    (let $json (json-parse $input)
@@ -1306,6 +1417,114 @@
         $text))
    (codex:tool-result $call-id $text))
 
+(= (codex:exec-command-run-truncated-output
+      (CodexExecCommandRun
+        $call-id
+        $chunk-id
+        $hook-command
+        $max-output-tokens
+        $is-running
+        $session-id
+        $has-exit-code
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $original-token-count
+        $text))
+   (codex:format-truncated-output
+     $aggregated-output
+     $max-output-tokens))
+
+(= (codex:is-exec-command-run-completed
+      (CodexExecCommandRun
+        $call-id
+        $chunk-id
+        $hook-command
+        $max-output-tokens
+        False
+        $session-id
+        $has-exit-code
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $original-token-count
+        $text))
+   True)
+
+(= (codex:is-exec-command-run-completed
+      (CodexExecCommandRun
+        $call-id
+        $chunk-id
+        $hook-command
+        $max-output-tokens
+        True
+        $session-id
+        $has-exit-code
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $original-token-count
+        $text))
+   False)
+
+(= (codex:exec-command-post-tool-use-id $tool-call-id $run)
+   (let $event-call-id (codex:exec-command-run-event-call-id $run)
+     (if (== $event-call-id "")
+         $tool-call-id
+         $event-call-id)))
+
+(= (codex:exec-command-post-tool-use-response-json $run)
+   (if (codex:is-exec-command-run-completed $run)
+       (JsonString (codex:exec-command-run-truncated-output $run))
+       CodexAbsent))
+
+(= (codex:exec-command-pre-tool-use-payload-from-input $input)
+   (let $args (once (codex:parse-exec-command-args $input))
+     (codex:pre-tool-use-payload
+       (codex:hook-tool-name-bash)
+       (codex:hook-command-input-json
+         (codex:exec-command-text $args)))))
+
+(= (codex:exec-command-pre-tool-use-payload
+      (CodexResponseItemCustomToolCall $call-id $name $input))
+   (if (== $name "exec_command")
+       (codex:exec-command-pre-tool-use-payload-from-input $input)
+       Empty))
+
+(= (codex:exec-command-post-tool-use-payload
+      $tool-call-id
+      $input
+      $run)
+   (let $hook-command (codex:exec-command-run-hook-command $run)
+     (let $tool-response (codex:exec-command-post-tool-use-response-json $run)
+       (if (or (== $hook-command "") (== $tool-response CodexAbsent))
+           Empty
+           (codex:post-tool-use-payload
+             (codex:hook-tool-name-bash)
+             (codex:exec-command-post-tool-use-id $tool-call-id $run)
+             (codex:hook-command-input-json $hook-command)
+             $tool-response)))))
+
+(= (codex:write-stdin-post-tool-use-payload
+      $tool-call-id
+      $input
+      $run)
+   (let $hook-command (codex:exec-command-run-hook-command $run)
+     (let $tool-response (codex:exec-command-post-tool-use-response-json $run)
+       (if (or (== $hook-command "") (== $tool-response CodexAbsent))
+           Empty
+           (codex:post-tool-use-payload
+             (codex:hook-tool-name-bash)
+             (codex:exec-command-post-tool-use-id $tool-call-id $run)
+             (codex:hook-command-input-json $hook-command)
+             $tool-response)))))
+
 (= (codex:single-exec-command-output-delta-items $call-id $stream $chunk)
    (if (== $chunk "")
        ()
@@ -1404,8 +1623,12 @@
            (format-args "write_stdin failed: {}" ($error))))))))
 
 (= (codex:run-write-stdin-output-text $call-id $input)
-   (codex:write-stdin-result-text
-     (codex:run-write-stdin $call-id $input)))
+   (case
+     (codex:run-write-stdin $call-id $input)
+     (((CodexWriteStdinResultSuccess $run)
+       (codex:exec-command-run-text $run))
+      ((CodexWriteStdinResultError $text)
+       $text))))
 
 (= (codex:run-exec-command-then-write-stdin-result
       $open-call-id
@@ -1495,10 +1718,14 @@
        $yield-time-ms)))
 
 (= (codex:run-write-stdin-tool-call $call-id $input)
-   (let $result (codex:run-write-stdin $call-id $input)
-     (codex:tool-result
-       $call-id
-       (codex:write-stdin-result-text $result))))
+   (case
+     (codex:run-write-stdin $call-id $input)
+     (((CodexWriteStdinResultSuccess $run)
+       (codex:tool-result
+         $call-id
+         (codex:exec-command-run-text $run)))
+      ((CodexWriteStdinResultError $text)
+       (codex:tool-result $call-id $text)))))
 
 (= (codex:write-stdin-result-event-items
       $args

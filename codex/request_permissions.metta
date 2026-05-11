@@ -498,11 +498,10 @@
        (eval (map-atom $items $item (json-string-value $item)))
        (return $strings))))
 
-(= (codex:request-permissions-string-array-from-optional-json CodexAbsent)
-   ())
-
 (= (codex:request-permissions-string-array-from-optional-json $items)
-   (codex:request-permissions-string-array-from-json-items $items))
+   (if (== $items CodexAbsent)
+       ()
+       (codex:request-permissions-string-array-from-json-items $items)))
 
 (= (codex:request-permissions-network-json
       (CodexRequestPermissionsNetwork $enabled))
@@ -596,22 +595,20 @@
             (codex:request-permission-profile-json $permissions))
           (JsonPair "cwd" (JsonString $cwd))))))
 
-(= (codex:request-permissions-network-from-json CodexAbsent)
-   CodexAbsent)
-
 (= (codex:request-permissions-network-from-json $json)
-   (codex:request-permissions-network
-     (codex:request-permissions-json-object-optional-bool $json "enabled")))
-
-(= (codex:request-permissions-file-system-from-json CodexAbsent)
-   CodexAbsent)
+   (if (== $json CodexAbsent)
+       CodexAbsent
+       (codex:request-permissions-network
+         (codex:request-permissions-json-object-optional-bool $json "enabled"))))
 
 (= (codex:request-permissions-file-system-from-json $json)
-   (codex:request-permissions-file-system
-     (codex:request-permissions-string-array-from-optional-json
-       (codex:request-permissions-json-object-optional-array $json "read"))
-     (codex:request-permissions-string-array-from-optional-json
-       (codex:request-permissions-json-object-optional-array $json "write"))))
+   (if (== $json CodexAbsent)
+       CodexAbsent
+       (codex:request-permissions-file-system
+         (codex:request-permissions-string-array-from-optional-json
+           (codex:request-permissions-json-object-optional-array $json "read"))
+         (codex:request-permissions-string-array-from-optional-json
+           (codex:request-permissions-json-object-optional-array $json "write")))))
 
 (= (codex:request-permission-profile-from-json $json)
    (codex:request-permission-profile
