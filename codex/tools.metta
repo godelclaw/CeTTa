@@ -25,7 +25,11 @@
 ;   deterministic local surface coverage, because the current evaluator is
 ;   still brittle when a single `.metta` file tries to rebuild follow-on JSON
 ;   from a prior result. The public `write_stdin` tool path remains unchanged,
-;   but the helper keeps the resumed-session metadata lane auditable.
+;   but the helper keeps the resumed-session metadata lane auditable. When the
+;   initial open already settles before the synthetic follow-up poll, the
+;   helper now returns that settled run directly instead of fabricating a
+;   write_stdin error, because the watcher-backed session runtime can now
+;   complete that fast.
 ; - Rust applies `apply_patch` interception inside unified_exec. The restarted
 ;   CeTTa tool layer does not yet have the full unified_exec/orchestrator
 ;   stack, so the visible interception is wired at the custom-tool-call
@@ -34,9 +38,15 @@
 ; - Rust threads login-shell allowance from session config. This slice assumes
 ;   login shells are allowed and therefore matches the public `exec_command`
 ;   default of `login = true`.
-; - The restarted tool surface does not yet expose turn/session approval
-;   config. Direct `apply_patch` execution and exec_command interception
-;   therefore use the current local CLI assumptions from `codex:apply_patch`.
+; - The restarted tool surface does not yet expose the full unified-exec
+;   approval/session config. This slice now ports Rust-shaped
+;   `sandbox_permissions` / `additional_permissions` parsing, validation, and
+;   request_permissions grant carry-over through explicit visible state, but
+;   the native process runtime is still unsandboxed. The merged permission
+;   profile therefore gates execution and feeds the visible `apply_patch`
+;   intercept lane, but it cannot yet constrain arbitrary spawned processes.
+; - Direct `apply_patch` execution and exec_command interception therefore use
+;   the current local CLI assumptions from `codex:apply_patch`.
 
 !(import! &self apply_patch)
 !(import! &self command)
@@ -68,6 +78,15 @@
 (= (codex:maximum-raw-output-bytes)
    1048576)
 
+(= (codex:sandbox-permissions-use-default)
+   "use_default")
+
+(= (codex:sandbox-permissions-with-additional-permissions)
+   "with_additional_permissions")
+
+(= (codex:sandbox-permissions-require-escalated)
+   "require_escalated")
+
 (= (codex:json-object-optional-value $object $key)
    (case (json-object-get $object $key)
      ((Empty CodexAbsent)
@@ -95,6 +114,12 @@
    (case (codex:json-object-optional-value $object $key)
      ((CodexAbsent CodexAbsent)
       ((JsonNumber $text) (codex:decimal-string-to-number $text)))))
+
+(= (codex:json-object-optional-object $object $key)
+   (codex:request-permissions-json-object-optional-object $object $key))
+
+(= (codex:json-object-optional-array $object $key)
+   (codex:request-permissions-json-object-optional-array $object $key))
 
 (= (codex:decimal-digit-value "0")
    0)
@@ -162,6 +187,16 @@
        (codex:default-max-output-tokens)
        $value))
 
+(= (codex:resolve-sandbox-permissions CodexAbsent)
+   (codex:sandbox-permissions-use-default))
+
+(= (codex:resolve-sandbox-permissions $value)
+   (if (== $value (codex:sandbox-permissions-with-additional-permissions))
+       (codex:sandbox-permissions-with-additional-permissions)
+       (if (== $value (codex:sandbox-permissions-require-escalated))
+           (codex:sandbox-permissions-require-escalated)
+           (codex:sandbox-permissions-use-default))))
+
 (= (codex:resolve-yield-time-ms $value)
    (if (== $value CodexAbsent)
        (codex:default-exec-yield-time-ms)
@@ -212,20 +247,48 @@
    (let $json (json-parse $input)
      (let $cmd (codex:json-object-required-string $json "cmd")
        (let $workdir (codex:json-object-optional-string $json "workdir")
-         (let $shell (codex:json-object-optional-string $json "shell")
-           (let $login (codex:json-object-optional-bool $json "login")
-             (let $tty (codex:json-object-optional-bool $json "tty")
-               (let $yield-time-ms (codex:json-object-optional-int $json "yield_time_ms")
-                 (let $max-output-tokens
-                   (codex:json-object-optional-int $json "max_output_tokens")
-                   (CodexExecCommandArgs
-                     $cmd
-                     (codex:resolve-workdir $workdir)
-                     (codex:resolve-shell $shell)
-                     (codex:resolve-login-shell $login)
-                     (codex:resolve-tty $tty)
-                     (codex:resolve-yield-time-ms $yield-time-ms)
-                     (codex:resolve-max-output-tokens $max-output-tokens)))))))))))
+         (let $resolved-workdir (codex:resolve-workdir $workdir)
+           (let $shell (codex:json-object-optional-string $json "shell")
+             (let $login (codex:json-object-optional-bool $json "login")
+               (let $tty (codex:json-object-optional-bool $json "tty")
+                 (let $yield-time-ms (codex:json-object-optional-int $json "yield_time_ms")
+                   (let $max-output-tokens
+                     (codex:json-object-optional-int $json "max_output_tokens")
+                     (let $sandbox-permissions
+                       (codex:resolve-sandbox-permissions
+                         (codex:json-object-optional-string
+                           $json
+                           "sandbox_permissions"))
+                       (let $additional-permissions-json
+                         (codex:json-object-optional-object
+                           $json
+                           "additional_permissions")
+                         (let $prefix-rule-json
+                           (codex:json-object-optional-array
+                             $json
+                             "prefix_rule")
+                           (CodexExecCommandArgs
+                             $cmd
+                             $resolved-workdir
+                             (codex:resolve-shell $shell)
+                             (codex:resolve-login-shell $login)
+                             (codex:resolve-tty $tty)
+                             (codex:resolve-yield-time-ms $yield-time-ms)
+                             (codex:resolve-max-output-tokens $max-output-tokens)
+                             $sandbox-permissions
+                             (if (== $additional-permissions-json CodexAbsent)
+                                 CodexAbsent
+                                 (codex:normalize-request-permission-profile
+                                   $resolved-workdir
+                                   (codex:request-permission-profile-from-json
+                                     $additional-permissions-json)))
+                             (codex:json-object-optional-string
+                               $json
+                               "justification")
+                             (if (== $prefix-rule-json CodexAbsent)
+                                 CodexAbsent
+                                 (codex:request-permissions-string-array-from-optional-json
+                                   $prefix-rule-json))))))))))))))))
 
 (= (codex:parse-write-stdin-args $input)
    (let $json (json-parse $input)
@@ -247,7 +310,11 @@
         $use-login-shell
         $tty
         $yield-time-ms
-        $max-output-tokens))
+        $max-output-tokens
+        $sandbox-permissions
+        $additional-permissions
+        $justification
+        $prefix-rule))
    $cmd)
 
 (= (codex:exec-command-cwd
@@ -258,7 +325,11 @@
         $use-login-shell
         $tty
         $yield-time-ms
-        $max-output-tokens))
+        $max-output-tokens
+        $sandbox-permissions
+        $additional-permissions
+        $justification
+        $prefix-rule))
    $workdir)
 
 (= (codex:exec-command-shell
@@ -269,7 +340,11 @@
         $use-login-shell
         $tty
         $yield-time-ms
-        $max-output-tokens))
+        $max-output-tokens
+        $sandbox-permissions
+        $additional-permissions
+        $justification
+        $prefix-rule))
    $shell)
 
 (= (codex:exec-command-login-shell
@@ -280,7 +355,11 @@
         $use-login-shell
         $tty
         $yield-time-ms
-        $max-output-tokens))
+        $max-output-tokens
+        $sandbox-permissions
+        $additional-permissions
+        $justification
+        $prefix-rule))
    $use-login-shell)
 
 (= (codex:exec-command-tty
@@ -291,7 +370,11 @@
         $use-login-shell
         $tty
         $yield-time-ms
-        $max-output-tokens))
+        $max-output-tokens
+        $sandbox-permissions
+        $additional-permissions
+        $justification
+        $prefix-rule))
    $tty)
 
 (= (codex:exec-command-yield-time-ms
@@ -302,7 +385,11 @@
         $use-login-shell
         $tty
         $yield-time-ms
-        $max-output-tokens))
+        $max-output-tokens
+        $sandbox-permissions
+        $additional-permissions
+        $justification
+        $prefix-rule))
    $yield-time-ms)
 
 (= (codex:exec-command-max-output-tokens
@@ -313,8 +400,295 @@
         $use-login-shell
         $tty
         $yield-time-ms
-        $max-output-tokens))
+        $max-output-tokens
+        $sandbox-permissions
+        $additional-permissions
+        $justification
+        $prefix-rule))
    $max-output-tokens)
+
+(= (codex:exec-command-sandbox-permissions
+      (CodexExecCommandArgs
+        $cmd
+        $workdir
+        $shell
+        $use-login-shell
+        $tty
+        $yield-time-ms
+        $max-output-tokens
+        $sandbox-permissions
+        $additional-permissions
+        $justification
+        $prefix-rule))
+   $sandbox-permissions)
+
+(= (codex:exec-command-additional-permissions
+      (CodexExecCommandArgs
+        $cmd
+        $workdir
+        $shell
+        $use-login-shell
+        $tty
+        $yield-time-ms
+        $max-output-tokens
+        $sandbox-permissions
+        $additional-permissions
+        $justification
+        $prefix-rule))
+   $additional-permissions)
+
+(= (codex:exec-command-justification
+      (CodexExecCommandArgs
+        $cmd
+        $workdir
+        $shell
+        $use-login-shell
+        $tty
+        $yield-time-ms
+        $max-output-tokens
+        $sandbox-permissions
+        $additional-permissions
+        $justification
+        $prefix-rule))
+   $justification)
+
+(= (codex:exec-command-prefix-rule
+      (CodexExecCommandArgs
+        $cmd
+        $workdir
+        $shell
+        $use-login-shell
+        $tty
+        $yield-time-ms
+        $max-output-tokens
+        $sandbox-permissions
+        $additional-permissions
+        $justification
+        $prefix-rule))
+   $prefix-rule)
+
+(= (codex:exec-command-context $approval-policy $additional-permissions-allowed)
+   (CodexExecCommandContext $approval-policy $additional-permissions-allowed))
+
+(= (codex:default-exec-command-context)
+   (codex:exec-command-context
+     (codex:ask-for-approval-never)
+     False))
+
+(= (codex:exec-command-context-approval-policy
+      (CodexExecCommandContext $approval-policy $additional-permissions-allowed))
+   $approval-policy)
+
+(= (codex:exec-command-context-additional-permissions-allowed
+      (CodexExecCommandContext $approval-policy $additional-permissions-allowed))
+   $additional-permissions-allowed)
+
+(= (codex:exec-command-permission-plan-type
+      (CodexExecCommandPermissionPlanOk
+        $sandbox-permissions
+        $additional-permissions
+        $permissions-preapproved))
+   "ok")
+
+(= (codex:exec-command-permission-plan-type
+      (CodexExecCommandPermissionPlanError $message))
+   "error")
+
+(= (codex:exec-command-permission-plan-message
+      (CodexExecCommandPermissionPlanError $message))
+   $message)
+
+(= (codex:exec-command-permission-plan-sandbox-permissions
+      (CodexExecCommandPermissionPlanOk
+        $sandbox-permissions
+        $additional-permissions
+        $permissions-preapproved))
+   $sandbox-permissions)
+
+(= (codex:exec-command-permission-plan-additional-permissions
+      (CodexExecCommandPermissionPlanOk
+        $sandbox-permissions
+        $additional-permissions
+        $permissions-preapproved))
+   $additional-permissions)
+
+(= (codex:exec-command-permission-plan-permissions-preapproved
+      (CodexExecCommandPermissionPlanOk
+        $sandbox-permissions
+        $additional-permissions
+        $permissions-preapproved))
+   $permissions-preapproved)
+
+(= (codex:exec-command-permission-plan-json
+      (CodexExecCommandPermissionPlanOk
+        $sandbox-permissions
+        $additional-permissions
+        $permissions-preapproved))
+   (JsonObject
+     ((JsonPair "type" (JsonString "ok"))
+      (JsonPair "sandbox_permissions" (JsonString $sandbox-permissions))
+      (JsonPair "additional_permissions"
+        (codex:request-permission-profile-json $additional-permissions))
+      (JsonPair "permissions_preapproved"
+        (JsonBool $permissions-preapproved)))))
+
+(= (codex:exec-command-permission-plan-json
+      (CodexExecCommandPermissionPlanError $message))
+   (JsonObject
+     ((JsonPair "type" (JsonString "error"))
+      (JsonPair "message" (JsonString $message)))))
+
+(= (codex:is-sandbox-permissions-with-additional-permissions? $value)
+   (== $value (codex:sandbox-permissions-with-additional-permissions)))
+
+(= (codex:is-sandbox-permissions-require-escalated? $value)
+   (== $value (codex:sandbox-permissions-require-escalated)))
+
+(= (codex:resolve-effective-exec-command-permissions
+      $state
+      $sandbox-permissions
+      $additional-permissions
+      $cwd)
+   (if (codex:is-sandbox-permissions-require-escalated? $sandbox-permissions)
+       (CodexExecEffectiveAdditionalPermissions
+         $sandbox-permissions
+         $additional-permissions
+         False)
+       (let $granted-permissions
+         (codex:request-permissions-granted-permissions $state)
+         (let $effective-permissions
+           (codex:merge-request-permission-profiles
+             $additional-permissions
+             $granted-permissions)
+           (CodexExecEffectiveAdditionalPermissions
+             (if (and
+                   (not (== $effective-permissions CodexAbsent))
+                   (not
+                     (codex:is-sandbox-permissions-with-additional-permissions?
+                       $sandbox-permissions)))
+                 (codex:sandbox-permissions-with-additional-permissions)
+                 $sandbox-permissions)
+             $effective-permissions
+             (codex:is-request-permissions-preapproved
+               $effective-permissions
+               $granted-permissions
+               $cwd))))))
+
+(= (codex:exec-effective-additional-permissions-sandbox-permissions
+      (CodexExecEffectiveAdditionalPermissions
+        $sandbox-permissions
+        $additional-permissions
+        $permissions-preapproved))
+   $sandbox-permissions)
+
+(= (codex:exec-effective-additional-permissions-additional-permissions
+      (CodexExecEffectiveAdditionalPermissions
+        $sandbox-permissions
+        $additional-permissions
+        $permissions-preapproved))
+   $additional-permissions)
+
+(= (codex:exec-effective-additional-permissions-permissions-preapproved
+      (CodexExecEffectiveAdditionalPermissions
+        $sandbox-permissions
+        $additional-permissions
+        $permissions-preapproved))
+   $permissions-preapproved)
+
+(= (codex:normalize-and-validate-exec-command-permissions
+      $additional-permissions-allowed
+      $approval-policy
+      $sandbox-permissions
+      $additional-permissions
+      $permissions-preapproved
+      $cwd)
+   (if (and
+         (and
+           (not $permissions-preapproved)
+           (not $additional-permissions-allowed))
+         (or
+           (codex:is-sandbox-permissions-with-additional-permissions?
+             $sandbox-permissions)
+           (not (== $additional-permissions CodexAbsent))))
+       (CodexExecCommandPermissionPlanError
+         "additional permissions are disabled; enable `features.exec_permission_approvals` before using `with_additional_permissions`")
+       (if (codex:is-sandbox-permissions-with-additional-permissions?
+             $sandbox-permissions)
+           (if (and
+                 (not $permissions-preapproved)
+                 (not (== $approval-policy (codex:ask-for-approval-on-request))))
+               (CodexExecCommandPermissionPlanError
+                 (format-args
+                   "approval policy is {}; reject command — you cannot request additional permissions unless the approval policy is OnRequest"
+                   ($approval-policy)))
+               (if (== $additional-permissions CodexAbsent)
+                   (CodexExecCommandPermissionPlanError
+                     "missing `additional_permissions`; provide at least one of `network` or `file_system` when using `with_additional_permissions`")
+                   (let $normalized
+                     (codex:normalize-request-permission-profile
+                       $cwd
+                       $additional-permissions)
+                     (if (codex:is-request-permission-profile-empty? $normalized)
+                         (CodexExecCommandPermissionPlanError
+                           "`additional_permissions` must include at least one requested permission in `network` or `file_system`")
+                         (CodexExecCommandPermissionPlanOk
+                           $sandbox-permissions
+                           $normalized
+                           $permissions-preapproved)))))
+           (if (not (== $additional-permissions CodexAbsent))
+               (CodexExecCommandPermissionPlanError
+                 "`additional_permissions` requires `sandbox_permissions` set to `with_additional_permissions`")
+               (CodexExecCommandPermissionPlanOk
+                 $sandbox-permissions
+                 CodexAbsent
+                 $permissions-preapproved)))))
+
+(= (codex:resolve-exec-command-permission-plan $context $state $args)
+   (let $effective
+     (codex:resolve-effective-exec-command-permissions
+       $state
+       (codex:exec-command-sandbox-permissions $args)
+       (codex:exec-command-additional-permissions $args)
+       (codex:exec-command-cwd $args))
+     (if (and
+           (and
+             (codex:is-sandbox-permissions-require-escalated?
+               (codex:exec-effective-additional-permissions-sandbox-permissions
+                 $effective))
+             (not
+               (codex:exec-effective-additional-permissions-permissions-preapproved
+                 $effective)))
+           (not
+             (==
+               (codex:exec-command-context-approval-policy $context)
+               (codex:ask-for-approval-on-request))))
+         (CodexExecCommandPermissionPlanError
+           (format-args
+             "approval policy is {}; reject command — you cannot ask for escalated permissions if the approval policy is {}"
+             ((codex:exec-command-context-approval-policy $context)
+              (codex:exec-command-context-approval-policy $context))))
+         (codex:normalize-and-validate-exec-command-permissions
+           (codex:exec-command-context-additional-permissions-allowed
+             $context)
+           (codex:exec-command-context-approval-policy $context)
+           (codex:exec-effective-additional-permissions-sandbox-permissions
+             $effective)
+           (codex:exec-effective-additional-permissions-additional-permissions
+             $effective)
+           (codex:exec-effective-additional-permissions-permissions-preapproved
+             $effective)
+           (codex:exec-command-cwd $args)))))
+
+(= (codex:exec-command-permission-plan-json-with-context-state
+      $context
+      $state
+      $input)
+   (json-stringify
+     (codex:exec-command-permission-plan-json
+       (codex:resolve-exec-command-permission-plan
+         $context
+         $state
+         (codex:parse-exec-command-args $input)))))
 
 (= (codex:write-stdin-session-id
       (CodexWriteStdinArgs
@@ -574,30 +948,49 @@
          $original-token-count
          $aggregated-output))))
 
-(= (codex:run-exec-command $call-id $input)
+(= (codex:run-exec-command-with-context-state $context $state $call-id $input)
    (let $args (codex:parse-exec-command-args $input)
      (case
-       (process-open-session-cmd-cwd-env-tty-event-call-id-hook-command-yield-cap-bytes
-         (codex:exec-command-argv $args)
-         (codex:exec-command-cwd $args)
-         (process-create-shell-env-no-thread
-           (process-default-shell-env-policy))
-         (codex:exec-command-tty $args)
-         $call-id
-         (codex:exec-command-text $args)
-         (codex:exec-command-yield-time-ms $args)
-         (codex:maximum-raw-output-bytes))
-       (((ProcessSessionCallResult True $error $snapshot)
-         (codex:make-exec-command-run-from-snapshot
-           (codex:chunk-id-from-call-id $call-id)
-           (codex:exec-command-max-output-tokens $args)
-           $snapshot))
-        ((ProcessSessionCallResult False $error $snapshot)
+       (codex:resolve-exec-command-permission-plan $context $state $args)
+       (((CodexExecCommandPermissionPlanOk
+           $sandbox-permissions
+           $additional-permissions
+           $permissions-preapproved)
+         (case
+           (process-open-session-cmd-cwd-env-tty-event-call-id-hook-command-yield-cap-bytes
+             (codex:exec-command-argv $args)
+             (codex:exec-command-cwd $args)
+             (process-create-shell-env-no-thread
+               (process-default-shell-env-policy))
+             (codex:exec-command-tty $args)
+             $call-id
+             (codex:exec-command-text $args)
+             (codex:exec-command-yield-time-ms $args)
+             (codex:maximum-raw-output-bytes))
+           (((ProcessSessionCallResult True $error $snapshot)
+             (codex:make-exec-command-run-from-snapshot
+               (codex:chunk-id-from-call-id $call-id)
+               (codex:exec-command-max-output-tokens $args)
+               $snapshot))
+            ((ProcessSessionCallResult False $error $snapshot)
+             (codex:make-exec-command-error-run
+               $call-id
+               (codex:exec-command-text $args)
+               (codex:exec-command-max-output-tokens $args)
+               $error)))))
+        ((CodexExecCommandPermissionPlanError $message)
          (codex:make-exec-command-error-run
            $call-id
            (codex:exec-command-text $args)
            (codex:exec-command-max-output-tokens $args)
-           $error))))))
+           $message))))))
+
+(= (codex:run-exec-command $call-id $input)
+   (codex:run-exec-command-with-context-state
+     (codex:default-exec-command-context)
+     (codex:empty-request-permissions-state)
+     $call-id
+     $input))
 
 (= (codex:exec-command-run-event-call-id
       (CodexExecCommandRun
@@ -1003,6 +1396,37 @@
           ((ProcessSessionCallResult False $error $snapshot)
            (CodexWriteStdinResultError
              (format-args "write_stdin failed: {}" ($error)))))))
+      ((CodexExecCommandRun
+         $prior-call-id
+         $prior-chunk-id
+         $prior-hook-command
+         $max-output-tokens
+         False
+         $session-id
+         $has-exit-code
+         $exit-code
+         $stdout
+         $stderr
+         $aggregated-output
+         $duration-ms
+         $original-token-count
+         $text)
+       (CodexWriteStdinResultSuccess
+         (CodexExecCommandRun
+           $prior-call-id
+           $prior-chunk-id
+           $prior-hook-command
+           $max-output-tokens
+           False
+           $session-id
+           $has-exit-code
+           $exit-code
+           $stdout
+           $stderr
+           $aggregated-output
+           $duration-ms
+           $original-token-count
+           $text)))
       ($other
        (CodexWriteStdinResultError
          "write_stdin helper requires a running exec_command result")))))
@@ -1027,19 +1451,72 @@
        $call-id
        (codex:write-stdin-result-text $result))))
 
-(= (codex:run-exec-command-tool-call $call-id $input)
+(= (codex:run-apply-patch-shell-command-with-request-permissions-state
+      $state
+      $cwd
+      $command)
+   (case (codex:maybe-parse-apply-patch-shell-command $cwd $command)
+     (((CodexMaybeApplyPatchNotApplyPatch)
+       (CodexApplyPatchInterceptNotMatched))
+      ((CodexMaybeApplyPatchCorrectnessError $message)
+       (CodexApplyPatchInterceptMatched
+         (str-concat "apply_patch verification failed: " $message)))
+      ((CodexMaybeApplyPatchBody $patch-text $action)
+       (case
+         (codex:apply-patch-with-request-permissions-state
+           $state
+           (codex:local-apply-patch-approval-policy)
+           (codex:local-apply-patch-sandbox-policy)
+           (codex:local-apply-patch-file-system-sandbox-policy)
+           $patch-text
+           $action
+           (codex:local-apply-patch-has-platform-sandbox))
+         (((CodexInternalApplyPatchOutput $text)
+           (CodexApplyPatchInterceptMatched $text))
+          ((CodexInternalApplyPatchDelegateToRuntime $runtime)
+           (CodexApplyPatchInterceptMatched
+             (codex:execute-apply-patch-runtime $runtime)))))))))
+
+(= (codex:run-exec-command-tool-call-with-context-state
+      $context
+      $state
+      $call-id
+      $input)
    (let $args (codex:parse-exec-command-args $input)
      (case
-       (codex:run-apply-patch-shell-command-local
-         (codex:exec-command-cwd $args)
-         (codex:exec-command-text $args))
-       (((CodexApplyPatchInterceptNotMatched)
-         (let $run (codex:run-exec-command $call-id $input)
-           (codex:exec-command-run-output-item
-             $call-id
-             $run)))
-        ((CodexApplyPatchInterceptMatched $text)
-         (codex:tool-result $call-id $text)))))
+       (codex:resolve-exec-command-permission-plan $context $state $args)
+       (((CodexExecCommandPermissionPlanOk
+           $sandbox-permissions
+           $additional-permissions
+           $permissions-preapproved)
+         (case
+           (codex:run-apply-patch-shell-command-with-request-permissions-state
+             $state
+             (codex:exec-command-cwd $args)
+             (codex:exec-command-text $args))
+           (((CodexApplyPatchInterceptNotMatched)
+             (let $run
+               (codex:run-exec-command-with-context-state
+                 $context
+                 $state
+                 $call-id
+                 $input)
+               (codex:exec-command-run-output-item
+                 $call-id
+                 $run)))
+            ((CodexApplyPatchInterceptMatched $text)
+             (codex:tool-result $call-id $text)))))
+        ((CodexExecCommandPermissionPlanError $message)
+         (codex:tool-result
+           $call-id
+           (str-concat "exec_command failed: " $message))))))
+
+(= (codex:run-exec-command-tool-call $call-id $input)
+   (codex:run-exec-command-tool-call-with-context-state
+     (codex:default-exec-command-context)
+     (codex:empty-request-permissions-state)
+     $call-id
+     $input))
 
 (= (codex:run-apply-patch-tool-call $call-id $input)
    (codex:tool-result $call-id (codex:run-apply-patch-local $input)))

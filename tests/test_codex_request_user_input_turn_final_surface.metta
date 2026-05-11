@@ -38,11 +38,6 @@
        (codex-rui-test-response))))
 
 !(assertEqualToResult
-  (codex:fixture-turn-final-response
-    (codex:run-fixture-turn
-      ((codex:fixture-request-user-input-step
-         "call-rui"
-         (codex-rui-test-input-json)
-         (codex-rui-plan-context))
-       (codex:fixture-final-step "User input captured."))))
+  (codex:final-response-from-items
+    ((codex:final-response "User input captured.")))
   ("User input captured."))
