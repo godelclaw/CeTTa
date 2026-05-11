@@ -18,10 +18,6 @@
 ;   `str-slice` surface is byte-indexed, so the truncation helper is
 ;   byte-oriented in this slice. The demo/tests keep ASCII output until a
 ;   scalar-aware string helper lands.
-; - Rust's process manager drains PTY output continuously in the background.
-;   CeTTa's current native session store only drains output during the visible
-;   exec_command / write_stdin calls, so a very chatty background process can
-;   still backpressure between polls until a later async watcher slice lands.
 ; - Rust does not need a helper to resume a prior exec result object because
 ;   its async handler layer can naturally thread `session_id` into a later
 ;   write_stdin tool call. This slice adds an internal

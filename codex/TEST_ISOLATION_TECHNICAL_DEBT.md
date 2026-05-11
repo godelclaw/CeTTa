@@ -39,6 +39,7 @@ Repeated cases currently split for stability:
   `tests/test_codex_tools_exec_stdout_surface.metta`
   `tests/test_codex_tools_exec_text_surface.metta`
   `tests/test_codex_tools_exec_tool_call_surface.metta`
+  `tests/test_codex_tools_live_background_surface.metta`
   Repeated session-backed `exec_command` / tool-call assertions do not stay
   stable in one combined surface file; the evaluator can re-materialize the
   session-backed term and intermittently observe the still-running branch

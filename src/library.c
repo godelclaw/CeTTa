@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #ifndef _WIN32
+#include <pthread.h>
 #include <pty.h>
 #include <pwd.h>
 #endif
@@ -2182,6 +2183,34 @@ typedef struct {
     size_t omitted_bytes;
 } ProcessHeadTailBuffer;
 
+typedef struct ProcessSessionShared {
+    pid_t pid;
+    bool tty;
+    bool exit_observed;
+    bool watcher_done;
+    bool stdin_open;
+    int exit_code;
+    int tty_fd;
+    int stdout_fd;
+    int stderr_fd;
+    uint64_t started_ns;
+    uint64_t exit_observed_ns;
+    uint64_t finished_ns;
+#ifndef _WIN32
+    pthread_t watcher_thread;
+    bool watcher_thread_started;
+    bool stop_requested;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+#endif
+    ProcessHeadTailBuffer unread_stdout;
+    ProcessHeadTailBuffer unread_stderr;
+    ProcessHeadTailBuffer unread_aggregated;
+    ProcessHeadTailBuffer transcript_stdout;
+    ProcessHeadTailBuffer transcript_stderr;
+    ProcessHeadTailBuffer transcript_aggregated;
+} ProcessSessionShared;
+
 typedef struct {
     int session_id;
     pid_t pid;
@@ -2195,6 +2224,7 @@ typedef struct {
     uint64_t last_used_ns;
     char *event_call_id;
     char *hook_command;
+    ProcessSessionShared *shared;
 } ProcessSession;
 
 typedef struct {
@@ -2220,11 +2250,21 @@ static void process_head_tail_buffer_to_stringbuf(ProcessHeadTailBuffer *buffer,
 static void process_head_tail_buffer_init(ProcessHeadTailBuffer *buffer,
                                           size_t max_bytes);
 static void process_head_tail_buffer_free(ProcessHeadTailBuffer *buffer);
+static void process_head_tail_buffer_clear(ProcessHeadTailBuffer *buffer);
+static bool process_head_tail_buffer_has_content(
+    const ProcessHeadTailBuffer *buffer);
+static void process_head_tail_buffer_append_buffer(
+    ProcessHeadTailBuffer *buffer,
+    const ProcessHeadTailBuffer *other);
 static void process_session_close(ProcessSession *session);
 static void process_session_clear_metadata(ProcessSession *session);
 static int process_session_store_find_index(int session_id);
 static void process_session_store_remove_at(uint32_t index);
 static int process_session_generate_id(void);
+static void process_session_destroy(ProcessSession *session);
+static bool process_session_is_finished(ProcessSession *session);
+static void process_session_update_exit_status(ProcessSession *session);
+static int process_session_select(ProcessSession *session, int timeout_ms);
 
 enum {
     PROCESS_SESSION_MAX = 64,
@@ -2233,6 +2273,8 @@ enum {
     PROCESS_SESSION_MIN_EMPTY_WRITE_YIELD_MS = 5000,
     PROCESS_SESSION_MAX_YIELD_MS = 30000,
     PROCESS_SESSION_MAX_BACKGROUND_YIELD_MS = 300000,
+    PROCESS_SESSION_BACKGROUND_SELECT_MS = 50,
+    PROCESS_SESSION_TRAILING_OUTPUT_GRACE_MS = 100,
 };
 
 static const char *PROCESS_STDIN_CLOSED_MESSAGE =
@@ -2240,60 +2282,322 @@ static const char *PROCESS_STDIN_CLOSED_MESSAGE =
 static const char *PROCESS_WRITE_STDIN_FAILED_MESSAGE =
     "failed to write to stdin";
 
-static void process_head_tail_append_read(int fd,
-                                          ProcessHeadTailBuffer *stream_buf,
-                                          ProcessHeadTailBuffer *aggregated_buf,
-                                          bool *open_flag,
+static bool process_session_shared_has_open_fds(ProcessSessionShared *shared) {
+    return shared && (shared->tty_fd >= 0 ||
+                      shared->stdout_fd >= 0 ||
+                      shared->stderr_fd >= 0);
+}
+
+static void process_head_tail_buffer_clear(ProcessHeadTailBuffer *buffer) {
+    buffer->head.len = 0;
+    if (buffer->head.buf) buffer->head.buf[0] = '\0';
+    buffer->tail.len = 0;
+    if (buffer->tail.buf) buffer->tail.buf[0] = '\0';
+    buffer->omitted_bytes = 0;
+}
+
+static bool process_head_tail_buffer_has_content(
+    const ProcessHeadTailBuffer *buffer) {
+    return buffer->head.len > 0 || buffer->tail.len > 0 || buffer->omitted_bytes > 0;
+}
+
+static void process_head_tail_buffer_append_buffer(
+    ProcessHeadTailBuffer *buffer,
+    const ProcessHeadTailBuffer *other) {
+    if (other->head.len > 0) {
+        process_head_tail_buffer_append(buffer, other->head.buf, other->head.len);
+    }
+    if (other->tail.len > 0) {
+        process_head_tail_buffer_append(buffer, other->tail.buf, other->tail.len);
+    }
+}
+
+#ifndef _WIN32
+static void process_timespec_add_ns(struct timespec *ts, uint64_t add_ns) {
+    ts->tv_sec += (time_t)(add_ns / 1000000000ull);
+    ts->tv_nsec += (long)(add_ns % 1000000000ull);
+    if (ts->tv_nsec >= 1000000000L) {
+        ts->tv_sec += 1;
+        ts->tv_nsec -= 1000000000L;
+    }
+}
+
+static void process_session_shared_note_exit_locked(ProcessSessionShared *shared,
+                                                    int exit_code) {
+    if (shared->exit_observed) return;
+    shared->exit_observed = true;
+    shared->exit_code = exit_code;
+    shared->stdin_open = false;
+    shared->exit_observed_ns = library_monotonic_ns();
+    pthread_cond_broadcast(&shared->cond);
+}
+
+static void process_session_shared_append_locked(ProcessSessionShared *shared,
+                                                 bool is_stdout,
+                                                 const char *data,
+                                                 size_t len) {
+    ProcessHeadTailBuffer *unread_stream = is_stdout
+        ? &shared->unread_stdout
+        : &shared->unread_stderr;
+    ProcessHeadTailBuffer *transcript_stream = is_stdout
+        ? &shared->transcript_stdout
+        : &shared->transcript_stderr;
+    process_head_tail_buffer_append(unread_stream, data, len);
+    process_head_tail_buffer_append(&shared->unread_aggregated, data, len);
+    process_head_tail_buffer_append(transcript_stream, data, len);
+    process_head_tail_buffer_append(&shared->transcript_aggregated, data, len);
+    pthread_cond_broadcast(&shared->cond);
+}
+
+static void process_session_shared_close_fd_locked(ProcessSessionShared *shared,
+                                                   int *fd) {
+    if (*fd >= 0) {
+        close(*fd);
+        *fd = -1;
+    }
+    if (shared->tty) {
+        shared->stdin_open = shared->tty_fd >= 0;
+    }
+}
+
+static void process_session_shared_finish_locked(ProcessSessionShared *shared,
+                                                 uint64_t finished_ns) {
+    process_session_shared_close_fd_locked(shared, &shared->tty_fd);
+    process_session_shared_close_fd_locked(shared, &shared->stdout_fd);
+    process_session_shared_close_fd_locked(shared, &shared->stderr_fd);
+    shared->stdin_open = false;
+    shared->watcher_done = true;
+    if (shared->finished_ns == 0) shared->finished_ns = finished_ns;
+    pthread_cond_broadcast(&shared->cond);
+}
+
+static void process_session_shared_poll_exit(ProcessSessionShared *shared) {
+    int status = 0;
+    pid_t wait_result;
+    pthread_mutex_lock(&shared->mutex);
+    if (shared->exit_observed) {
+        pthread_mutex_unlock(&shared->mutex);
+        return;
+    }
+    pthread_mutex_unlock(&shared->mutex);
+    for (;;) {
+        wait_result = waitpid(shared->pid, &status, WNOHANG);
+        if (wait_result == 0) return;
+        pthread_mutex_lock(&shared->mutex);
+        if (wait_result < 0) {
+            if (errno == EINTR) {
+                pthread_mutex_unlock(&shared->mutex);
+                continue;
+            }
+            process_session_shared_note_exit_locked(shared, -1);
+        } else {
+            process_session_shared_note_exit_locked(
+                shared, process_exit_code_from_status(status));
+        }
+        pthread_mutex_unlock(&shared->mutex);
+        return;
+    }
+}
+
+static void process_session_update_exit_status(ProcessSession *session) {
+    ProcessSessionShared *shared;
+    if (!session || !(shared = session->shared)) return;
+    pthread_mutex_lock(&shared->mutex);
+    session->exited = shared->watcher_done;
+    session->stdin_open = shared->stdin_open;
+    session->exit_code = shared->exit_code;
+    session->tty_fd = shared->tty_fd;
+    session->stdout_fd = shared->stdout_fd;
+    session->stderr_fd = shared->stderr_fd;
+    session->pid = shared->pid;
+    session->tty = shared->tty;
+    pthread_mutex_unlock(&shared->mutex);
+}
+
+static bool process_session_shared_drain_unread_locked(
+    ProcessSessionShared *shared,
+    ProcessHeadTailBuffer *stdout_buf,
+    ProcessHeadTailBuffer *stderr_buf,
+    ProcessHeadTailBuffer *aggregated_buf) {
+    bool had_output = false;
+    if (process_head_tail_buffer_has_content(&shared->unread_stdout)) {
+        process_head_tail_buffer_append_buffer(stdout_buf, &shared->unread_stdout);
+        process_head_tail_buffer_clear(&shared->unread_stdout);
+        had_output = true;
+    }
+    if (process_head_tail_buffer_has_content(&shared->unread_stderr)) {
+        process_head_tail_buffer_append_buffer(stderr_buf, &shared->unread_stderr);
+        process_head_tail_buffer_clear(&shared->unread_stderr);
+        had_output = true;
+    }
+    if (process_head_tail_buffer_has_content(&shared->unread_aggregated)) {
+        process_head_tail_buffer_append_buffer(aggregated_buf, &shared->unread_aggregated);
+        process_head_tail_buffer_clear(&shared->unread_aggregated);
+        had_output = true;
+    }
+    return had_output;
+}
+
+static int process_session_shared_fd_select(ProcessSessionShared *shared,
+                                            int timeout_ms) {
+    fd_set readfds;
+    struct timeval tv;
+    int max_fd = -1;
+    int tty_fd;
+    int stdout_fd;
+    int stderr_fd;
+
+    pthread_mutex_lock(&shared->mutex);
+    tty_fd = shared->tty_fd;
+    stdout_fd = shared->stdout_fd;
+    stderr_fd = shared->stderr_fd;
+    pthread_mutex_unlock(&shared->mutex);
+
+    FD_ZERO(&readfds);
+    if (tty_fd >= 0) {
+        FD_SET(tty_fd, &readfds);
+        max_fd = tty_fd;
+    }
+    if (stdout_fd >= 0) {
+        FD_SET(stdout_fd, &readfds);
+        if (stdout_fd > max_fd) max_fd = stdout_fd;
+    }
+    if (stderr_fd >= 0) {
+        FD_SET(stderr_fd, &readfds);
+        if (stderr_fd > max_fd) max_fd = stderr_fd;
+    }
+    if (max_fd < 0) return 0;
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    return select(max_fd + 1, &readfds, NULL, NULL, &tv);
+}
+
+static void process_head_tail_append_read(ProcessSessionShared *shared,
+                                          int fd,
+                                          bool is_stdout,
                                           bool *did_read) {
     char chunk[4096];
     for (;;) {
+        bool treat_as_eof = false;
         ssize_t nread = read(fd, chunk, sizeof(chunk));
         if (nread > 0) {
             if (did_read) *did_read = true;
-            process_head_tail_buffer_append(stream_buf, chunk, (size_t)nread);
-            if (aggregated_buf) {
-                process_head_tail_buffer_append(aggregated_buf, chunk, (size_t)nread);
-            }
+            pthread_mutex_lock(&shared->mutex);
+            process_session_shared_append_locked(
+                shared, is_stdout, chunk, (size_t)nread);
+            pthread_mutex_unlock(&shared->mutex);
             continue;
         }
+        if (nread < 0 && errno == EIO) {
+            pthread_mutex_lock(&shared->mutex);
+            treat_as_eof = shared->exit_observed;
+            pthread_mutex_unlock(&shared->mutex);
+            if (!treat_as_eof) return;
+            nread = 0;
+        }
         if (nread == 0) {
-            *open_flag = false;
+            pthread_mutex_lock(&shared->mutex);
+            if (shared->tty && shared->tty_fd == fd) {
+                process_session_shared_close_fd_locked(shared, &shared->tty_fd);
+            } else if (is_stdout && shared->stdout_fd == fd) {
+                process_session_shared_close_fd_locked(shared, &shared->stdout_fd);
+            } else if (!is_stdout && shared->stderr_fd == fd) {
+                process_session_shared_close_fd_locked(shared, &shared->stderr_fd);
+            }
+            pthread_cond_broadcast(&shared->cond);
+            pthread_mutex_unlock(&shared->mutex);
             return;
         }
         if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
             return;
         }
-        *open_flag = false;
+        pthread_mutex_lock(&shared->mutex);
+        if (shared->tty && shared->tty_fd == fd) {
+            process_session_shared_close_fd_locked(shared, &shared->tty_fd);
+        } else if (is_stdout && shared->stdout_fd == fd) {
+            process_session_shared_close_fd_locked(shared, &shared->stdout_fd);
+        } else if (!is_stdout && shared->stderr_fd == fd) {
+            process_session_shared_close_fd_locked(shared, &shared->stderr_fd);
+        }
+        pthread_cond_broadcast(&shared->cond);
+        pthread_mutex_unlock(&shared->mutex);
         return;
+    }
+}
+
+static void *process_session_watcher_main(void *arg) {
+    ProcessSessionShared *shared = arg;
+    for (;;) {
+        bool did_read = false;
+        int select_result;
+        int timeout_ms = PROCESS_SESSION_BACKGROUND_SELECT_MS;
+        uint64_t now_ns;
+
+        process_session_shared_poll_exit(shared);
+
+        pthread_mutex_lock(&shared->mutex);
+        if (shared->tty_fd >= 0) {
+            int tty_fd = shared->tty_fd;
+            pthread_mutex_unlock(&shared->mutex);
+            process_head_tail_append_read(shared, tty_fd, true, &did_read);
+        } else {
+            int stdout_fd = shared->stdout_fd;
+            int stderr_fd = shared->stderr_fd;
+            pthread_mutex_unlock(&shared->mutex);
+            if (stdout_fd >= 0) {
+                process_head_tail_append_read(shared, stdout_fd, true, &did_read);
+            }
+            if (stderr_fd >= 0) {
+                process_head_tail_append_read(shared, stderr_fd, false, &did_read);
+            }
+        }
+
+        process_session_shared_poll_exit(shared);
+
+        pthread_mutex_lock(&shared->mutex);
+        now_ns = library_monotonic_ns();
+        if (shared->exit_observed && !process_session_shared_has_open_fds(shared)) {
+            process_session_shared_finish_locked(shared, now_ns);
+            pthread_mutex_unlock(&shared->mutex);
+            return NULL;
+        }
+        if (shared->exit_observed && shared->exit_observed_ns > 0) {
+            uint64_t grace_deadline_ns =
+                shared->exit_observed_ns +
+                ((uint64_t)PROCESS_SESSION_TRAILING_OUTPUT_GRACE_MS * 1000000ull);
+            if (now_ns >= grace_deadline_ns) {
+                process_session_shared_finish_locked(shared, now_ns);
+                pthread_mutex_unlock(&shared->mutex);
+                return NULL;
+            }
+            {
+                uint64_t remaining_ms = (grace_deadline_ns - now_ns + 999999ull) / 1000000ull;
+                if ((int)remaining_ms < timeout_ms) timeout_ms = (int)remaining_ms;
+            }
+        }
+        pthread_mutex_unlock(&shared->mutex);
+        if (did_read) continue;
+
+        select_result = process_session_shared_fd_select(shared, timeout_ms);
+        if (select_result < 0) {
+            if (errno == EINTR) continue;
+            pthread_mutex_lock(&shared->mutex);
+            process_session_shared_note_exit_locked(shared, -1);
+            process_session_shared_finish_locked(shared, library_monotonic_ns());
+            pthread_mutex_unlock(&shared->mutex);
+            return NULL;
+        }
     }
 }
 
 static bool process_session_has_open_fds(ProcessSession *session) {
-    if (session->tty) {
-        return session->tty_fd >= 0;
-    }
-    return session->stdout_fd >= 0 || session->stderr_fd >= 0;
-}
-
-static void process_session_update_exit_status(ProcessSession *session) {
-    int status = 0;
-    pid_t wait_result;
-    if (!session || session->exited) return;
-    for (;;) {
-        wait_result = waitpid(session->pid, &status, WNOHANG);
-        if (wait_result == 0) return;
-        if (wait_result < 0) {
-            if (errno == EINTR) continue;
-            session->exited = true;
-            session->exit_code = -1;
-            session->stdin_open = false;
-            return;
-        }
-        session->exited = true;
-        session->exit_code = process_exit_code_from_status(status);
-        session->stdin_open = false;
-        return;
-    }
+    ProcessSessionShared *shared;
+    bool has_open_fds;
+    if (!session || !(shared = session->shared)) return false;
+    pthread_mutex_lock(&shared->mutex);
+    has_open_fds = process_session_shared_has_open_fds(shared);
+    pthread_mutex_unlock(&shared->mutex);
+    return has_open_fds;
 }
 
 static void process_session_read_available(ProcessSession *session,
@@ -2301,72 +2605,79 @@ static void process_session_read_available(ProcessSession *session,
                                            ProcessHeadTailBuffer *stderr_buf,
                                            ProcessHeadTailBuffer *aggregated_buf,
                                            bool *did_read) {
-    bool open_flag;
-    if (!session) return;
-    if (session->tty) {
-        if (session->tty_fd >= 0) {
-            open_flag = true;
-            process_head_tail_append_read(session->tty_fd,
-                                          stdout_buf,
-                                          aggregated_buf,
-                                          &open_flag,
-                                          did_read);
-            if (!open_flag) {
-                process_close_fd(&session->tty_fd);
-                session->stdin_open = false;
-            }
-        }
-        return;
-    }
-    if (session->stdout_fd >= 0) {
-        open_flag = true;
-        process_head_tail_append_read(session->stdout_fd,
-                                      stdout_buf,
-                                      aggregated_buf,
-                                      &open_flag,
-                                      did_read);
-        if (!open_flag) {
-            process_close_fd(&session->stdout_fd);
-        }
-    }
-    if (session->stderr_fd >= 0) {
-        open_flag = true;
-        process_head_tail_append_read(session->stderr_fd,
-                                      stderr_buf,
-                                      aggregated_buf,
-                                      &open_flag,
-                                      did_read);
-        if (!open_flag) {
-            process_close_fd(&session->stderr_fd);
-        }
-    }
+    ProcessSessionShared *shared;
+    bool had_output;
+    if (!session || !(shared = session->shared)) return;
+    pthread_mutex_lock(&shared->mutex);
+    had_output = process_session_shared_drain_unread_locked(
+        shared, stdout_buf, stderr_buf, aggregated_buf);
+    session->exited = shared->watcher_done;
+    session->stdin_open = shared->stdin_open;
+    session->exit_code = shared->exit_code;
+    session->tty_fd = shared->tty_fd;
+    session->stdout_fd = shared->stdout_fd;
+    session->stderr_fd = shared->stderr_fd;
+    session->pid = shared->pid;
+    session->tty = shared->tty;
+    pthread_mutex_unlock(&shared->mutex);
+    if (did_read) *did_read = had_output;
 }
 
 static int process_session_select(ProcessSession *session, int timeout_ms) {
-    fd_set readfds;
-    struct timeval tv;
-    int max_fd = -1;
-    FD_ZERO(&readfds);
-    if (session->tty) {
-        if (session->tty_fd >= 0) {
-            FD_SET(session->tty_fd, &readfds);
-            max_fd = session->tty_fd;
-        }
-    } else {
-        if (session->stdout_fd >= 0) {
-            FD_SET(session->stdout_fd, &readfds);
-            if (session->stdout_fd > max_fd) max_fd = session->stdout_fd;
-        }
-        if (session->stderr_fd >= 0) {
-            FD_SET(session->stderr_fd, &readfds);
-            if (session->stderr_fd > max_fd) max_fd = session->stderr_fd;
-        }
+    ProcessSessionShared *shared;
+    struct timespec ts;
+    int wait_result;
+    if (!session || !(shared = session->shared)) return 0;
+    pthread_mutex_lock(&shared->mutex);
+    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
+        pthread_mutex_unlock(&shared->mutex);
+        return 0;
     }
-    if (max_fd < 0) return 0;
-    tv.tv_sec = timeout_ms / 1000;
-    tv.tv_usec = (timeout_ms % 1000) * 1000;
-    return select(max_fd + 1, &readfds, NULL, NULL, &tv);
+    process_timespec_add_ns(&ts, (uint64_t)timeout_ms * 1000000ull);
+    wait_result = pthread_cond_timedwait(&shared->cond, &shared->mutex, &ts);
+    pthread_mutex_unlock(&shared->mutex);
+    if (wait_result == ETIMEDOUT) return 0;
+    if (wait_result == 0) return 1;
+    return -1;
 }
+#else
+static void process_session_update_exit_status(ProcessSession *session) {
+    (void)session;
+}
+
+static void process_head_tail_append_read(ProcessSessionShared *shared,
+                                          int fd,
+                                          bool is_stdout,
+                                          bool *did_read) {
+    (void)shared;
+    (void)fd;
+    (void)is_stdout;
+    (void)did_read;
+}
+
+static bool process_session_has_open_fds(ProcessSession *session) {
+    (void)session;
+    return false;
+}
+
+static void process_session_read_available(ProcessSession *session,
+                                           ProcessHeadTailBuffer *stdout_buf,
+                                           ProcessHeadTailBuffer *stderr_buf,
+                                           ProcessHeadTailBuffer *aggregated_buf,
+                                           bool *did_read) {
+    (void)session;
+    (void)stdout_buf;
+    (void)stderr_buf;
+    (void)aggregated_buf;
+    if (did_read) *did_read = false;
+}
+
+static int process_session_select(ProcessSession *session, int timeout_ms) {
+    (void)session;
+    (void)timeout_ms;
+    return 0;
+}
+#endif
 
 static bool process_write_all_fd(int fd, const char *data, size_t len) {
     size_t offset = 0;
@@ -2404,6 +2715,19 @@ static void process_session_store_ensure_cap(uint32_t want) {
         sizeof(ProcessSession) * g_process_session_store.cap);
 }
 
+static bool process_session_is_finished(ProcessSession *session) {
+#ifndef _WIN32
+    if (session && session->shared) {
+        bool finished;
+        pthread_mutex_lock(&session->shared->mutex);
+        finished = session->shared->watcher_done;
+        pthread_mutex_unlock(&session->shared->mutex);
+        return finished;
+    }
+#endif
+    return session ? session->exited : true;
+}
+
 static uint32_t process_session_store_find_prune_candidate(void) {
     bool protected_flags[PROCESS_SESSION_MAX];
     uint64_t chosen_recency;
@@ -2432,7 +2756,7 @@ static uint32_t process_session_store_find_prune_candidate(void) {
         ProcessSession *session = &g_process_session_store.items[i];
         if (!protected_flags[i] &&
             (oldest_exited < 0 || session->last_used_ns < oldest_ns) &&
-            session->exited) {
+            process_session_is_finished(session)) {
             oldest_exited = (int)i;
             oldest_ns = session->last_used_ns;
         }
@@ -2502,9 +2826,11 @@ static bool process_spawn_session(char **argv,
                                   uint32_t env_count,
                                   ProcessSession *session,
                                   bool tty,
+                                  int max_bytes,
                                   char *errbuf,
                                   size_t errbuf_sz) {
     pid_t pid;
+    ProcessSessionShared *shared = NULL;
     session->tty = tty;
     session->exited = false;
     session->stdin_open = tty;
@@ -2513,14 +2839,67 @@ static bool process_spawn_session(char **argv,
     session->stdout_fd = -1;
     session->stderr_fd = -1;
     session->last_used_ns = library_monotonic_ns();
+    session->shared = NULL;
 #ifdef _WIN32
+    (void)max_bytes;
     snprintf(errbuf, errbuf_sz, "persistent process sessions are not implemented on Windows");
     return false;
 #else
+    shared = calloc(1, sizeof(*shared));
+    if (!shared) {
+        snprintf(errbuf, errbuf_sz, "out of memory");
+        return false;
+    }
+    shared->pid = -1;
+    shared->tty = tty;
+    shared->stdin_open = tty;
+    shared->exit_code = -1;
+    shared->tty_fd = -1;
+    shared->stdout_fd = -1;
+    shared->stderr_fd = -1;
+    shared->started_ns = library_monotonic_ns();
+    process_head_tail_buffer_init(&shared->unread_stdout, (size_t)max_bytes);
+    process_head_tail_buffer_init(&shared->unread_stderr, (size_t)max_bytes);
+    process_head_tail_buffer_init(&shared->unread_aggregated, (size_t)max_bytes);
+    process_head_tail_buffer_init(&shared->transcript_stdout, (size_t)max_bytes);
+    process_head_tail_buffer_init(&shared->transcript_stderr, (size_t)max_bytes);
+    process_head_tail_buffer_init(&shared->transcript_aggregated, (size_t)max_bytes);
+    if (pthread_mutex_init(&shared->mutex, NULL) != 0) {
+        process_head_tail_buffer_free(&shared->unread_stdout);
+        process_head_tail_buffer_free(&shared->unread_stderr);
+        process_head_tail_buffer_free(&shared->unread_aggregated);
+        process_head_tail_buffer_free(&shared->transcript_stdout);
+        process_head_tail_buffer_free(&shared->transcript_stderr);
+        process_head_tail_buffer_free(&shared->transcript_aggregated);
+        free(shared);
+        snprintf(errbuf, errbuf_sz, "failed to initialize process session state");
+        return false;
+    }
+    if (pthread_cond_init(&shared->cond, NULL) != 0) {
+        pthread_mutex_destroy(&shared->mutex);
+        process_head_tail_buffer_free(&shared->unread_stdout);
+        process_head_tail_buffer_free(&shared->unread_stderr);
+        process_head_tail_buffer_free(&shared->unread_aggregated);
+        process_head_tail_buffer_free(&shared->transcript_stdout);
+        process_head_tail_buffer_free(&shared->transcript_stderr);
+        process_head_tail_buffer_free(&shared->transcript_aggregated);
+        free(shared);
+        snprintf(errbuf, errbuf_sz, "failed to initialize process session state");
+        return false;
+    }
     if (tty) {
         int master_fd = -1;
         pid = forkpty(&master_fd, NULL, NULL, NULL);
         if (pid < 0) {
+            pthread_cond_destroy(&shared->cond);
+            pthread_mutex_destroy(&shared->mutex);
+            process_head_tail_buffer_free(&shared->unread_stdout);
+            process_head_tail_buffer_free(&shared->unread_stderr);
+            process_head_tail_buffer_free(&shared->unread_aggregated);
+            process_head_tail_buffer_free(&shared->transcript_stdout);
+            process_head_tail_buffer_free(&shared->transcript_stderr);
+            process_head_tail_buffer_free(&shared->transcript_aggregated);
+            free(shared);
             snprintf(errbuf, errbuf_sz, "%s", strerror(errno));
             return false;
         }
@@ -2539,12 +2918,22 @@ static bool process_spawn_session(char **argv,
             process_kill_group(pid);
             close(master_fd);
             waitpid(pid, NULL, 0);
+            pthread_cond_destroy(&shared->cond);
+            pthread_mutex_destroy(&shared->mutex);
+            process_head_tail_buffer_free(&shared->unread_stdout);
+            process_head_tail_buffer_free(&shared->unread_stderr);
+            process_head_tail_buffer_free(&shared->unread_aggregated);
+            process_head_tail_buffer_free(&shared->transcript_stdout);
+            process_head_tail_buffer_free(&shared->transcript_stderr);
+            process_head_tail_buffer_free(&shared->transcript_aggregated);
+            free(shared);
             snprintf(errbuf, errbuf_sz, "%s", strerror(errno));
             return false;
         }
         session->pid = pid;
         session->tty_fd = master_fd;
-        return true;
+        shared->pid = pid;
+        shared->tty_fd = master_fd;
     } else {
         int stdout_pipe[2] = {-1, -1};
         int stderr_pipe[2] = {-1, -1};
@@ -2554,6 +2943,15 @@ static bool process_spawn_session(char **argv,
             process_close_fd(&stdout_pipe[1]);
             process_close_fd(&stderr_pipe[0]);
             process_close_fd(&stderr_pipe[1]);
+            pthread_cond_destroy(&shared->cond);
+            pthread_mutex_destroy(&shared->mutex);
+            process_head_tail_buffer_free(&shared->unread_stdout);
+            process_head_tail_buffer_free(&shared->unread_stderr);
+            process_head_tail_buffer_free(&shared->unread_aggregated);
+            process_head_tail_buffer_free(&shared->transcript_stdout);
+            process_head_tail_buffer_free(&shared->transcript_stderr);
+            process_head_tail_buffer_free(&shared->transcript_aggregated);
+            free(shared);
             snprintf(errbuf, errbuf_sz, "%s", strerror(errno));
             return false;
         }
@@ -2563,6 +2961,15 @@ static bool process_spawn_session(char **argv,
             process_close_fd(&stdout_pipe[1]);
             process_close_fd(&stderr_pipe[0]);
             process_close_fd(&stderr_pipe[1]);
+            pthread_cond_destroy(&shared->cond);
+            pthread_mutex_destroy(&shared->mutex);
+            process_head_tail_buffer_free(&shared->unread_stdout);
+            process_head_tail_buffer_free(&shared->unread_stderr);
+            process_head_tail_buffer_free(&shared->unread_aggregated);
+            process_head_tail_buffer_free(&shared->transcript_stdout);
+            process_head_tail_buffer_free(&shared->transcript_stderr);
+            process_head_tail_buffer_free(&shared->transcript_aggregated);
+            free(shared);
             snprintf(errbuf, errbuf_sz, "%s", strerror(errno));
             return false;
         }
@@ -2598,6 +3005,15 @@ static bool process_spawn_session(char **argv,
             process_close_fd(&stdout_pipe[0]);
             process_close_fd(&stderr_pipe[0]);
             waitpid(pid, NULL, 0);
+            pthread_cond_destroy(&shared->cond);
+            pthread_mutex_destroy(&shared->mutex);
+            process_head_tail_buffer_free(&shared->unread_stdout);
+            process_head_tail_buffer_free(&shared->unread_stderr);
+            process_head_tail_buffer_free(&shared->unread_aggregated);
+            process_head_tail_buffer_free(&shared->transcript_stdout);
+            process_head_tail_buffer_free(&shared->transcript_stderr);
+            process_head_tail_buffer_free(&shared->transcript_aggregated);
+            free(shared);
             snprintf(errbuf, errbuf_sz, "%s", strerror(errno));
             return false;
         }
@@ -2605,8 +3021,32 @@ static bool process_spawn_session(char **argv,
         session->stdout_fd = stdout_pipe[0];
         session->stderr_fd = stderr_pipe[0];
         session->stdin_open = false;
-        return true;
+        shared->pid = pid;
+        shared->stdout_fd = stdout_pipe[0];
+        shared->stderr_fd = stderr_pipe[0];
+        shared->stdin_open = false;
     }
+    if (pthread_create(&shared->watcher_thread, NULL, process_session_watcher_main, shared) != 0) {
+        process_kill_group(pid);
+        waitpid(pid, NULL, 0);
+        process_close_fd(&session->tty_fd);
+        process_close_fd(&session->stdout_fd);
+        process_close_fd(&session->stderr_fd);
+        pthread_cond_destroy(&shared->cond);
+        pthread_mutex_destroy(&shared->mutex);
+        process_head_tail_buffer_free(&shared->unread_stdout);
+        process_head_tail_buffer_free(&shared->unread_stderr);
+        process_head_tail_buffer_free(&shared->unread_aggregated);
+        process_head_tail_buffer_free(&shared->transcript_stdout);
+        process_head_tail_buffer_free(&shared->transcript_stderr);
+        process_head_tail_buffer_free(&shared->transcript_aggregated);
+        free(shared);
+        snprintf(errbuf, errbuf_sz, "failed to start process watcher thread");
+        return false;
+    }
+    shared->watcher_thread_started = true;
+    session->shared = shared;
+    return true;
 #endif
 }
 
@@ -2617,6 +3057,7 @@ static Atom *process_session_collect_atom(Arena *a,
     ProcessHeadTailBuffer stdout_buf;
     ProcessHeadTailBuffer stderr_buf;
     ProcessHeadTailBuffer aggregated_buf;
+    uint64_t duration_ms;
     uint64_t start_ns = library_monotonic_ns();
     uint64_t deadline_ns = start_ns + ((uint64_t)yield_ms * 1000000ull);
     uint64_t end_ns = start_ns;
@@ -2672,9 +3113,17 @@ static Atom *process_session_collect_atom(Arena *a,
                                    &aggregated_buf,
                                    NULL);
     end_ns = library_monotonic_ns();
-    if (session->exited) {
-        process_session_close(session);
+    duration_ms = process_duration_ms(start_ns, end_ns);
+#ifndef _WIN32
+    if (session->shared) {
+        ProcessSessionShared *shared = session->shared;
+        pthread_mutex_lock(&shared->mutex);
+        if (shared->watcher_done && shared->finished_ns >= shared->started_ns) {
+            duration_ms = process_duration_ms(shared->started_ns, shared->finished_ns);
+        }
+        pthread_mutex_unlock(&shared->mutex);
     }
+#endif
     session->last_used_ns = end_ns;
     is_running = !session->exited;
 
@@ -2697,12 +3146,9 @@ static Atom *process_session_collect_atom(Arena *a,
                                                &stdout_text,
                                                &stderr_text,
                                                &aggregated_text,
-                                               process_duration_ms(start_ns, end_ns),
+                                               duration_ms,
                                                session->event_call_id,
                                                session->hook_command);
-        if (session->exited) {
-            process_session_clear_metadata(session);
-        }
         cetta_sb_free(&stdout_text);
         cetta_sb_free(&stderr_text);
         cetta_sb_free(&aggregated_text);
@@ -2751,7 +3197,7 @@ static Atom *process_open_session_cmd_cwd_env_tty_yield_cap_bytes(
     session.event_call_id = process_strdup_cstr(event_call_id);
     session.hook_command = process_strdup_cstr(hook_command);
     if (!process_spawn_session(argv, cwd, env_pairs, env_count, &session, tty,
-                               errbuf, sizeof(errbuf))) {
+                               max_bytes, errbuf, sizeof(errbuf))) {
         process_session_clear_metadata(&session);
         return process_session_call_result_atom(a, false, errbuf, NULL);
     }
@@ -2760,6 +3206,8 @@ static Atom *process_open_session_cmd_cwd_env_tty_yield_cap_bytes(
         process_session_store_prune_if_needed();
         process_session_store_ensure_cap(g_process_session_store.len + 1u);
         g_process_session_store.items[g_process_session_store.len++] = session;
+    } else {
+        process_session_destroy(&session);
     }
     return process_session_call_result_atom(a, true, "", snapshot);
 }
@@ -2814,11 +3262,25 @@ static Atom *process_write_session_stdin_yield_cap_bytes(Arena *a,
 
     session = &g_process_session_store.items[index];
     if (input[0] != '\0') {
-        if (!session->tty || !session->stdin_open || session->tty_fd < 0) {
+#ifdef _WIN32
+        return process_session_call_result_atom(
+            a, false, PROCESS_STDIN_CLOSED_MESSAGE, NULL);
+#else
+        int tty_fd = -1;
+        if (session->shared) {
+            pthread_mutex_lock(&session->shared->mutex);
+            if (session->shared->tty &&
+                session->shared->stdin_open &&
+                session->shared->tty_fd >= 0) {
+                tty_fd = session->shared->tty_fd;
+            }
+            pthread_mutex_unlock(&session->shared->mutex);
+        }
+        if (tty_fd < 0) {
             return process_session_call_result_atom(
                 a, false, PROCESS_STDIN_CLOSED_MESSAGE, NULL);
         }
-        if (!process_write_all_fd(session->tty_fd, input, strlen(input))) {
+        if (!process_write_all_fd(tty_fd, input, strlen(input))) {
             process_session_update_exit_status(session);
             if (!session->exited) {
                 return process_session_call_result_atom(
@@ -2827,6 +3289,7 @@ static Atom *process_write_session_stdin_yield_cap_bytes(Arena *a,
         } else {
             usleep(100000);
         }
+#endif
     }
 
     snapshot = process_session_collect_atom(
@@ -2990,6 +3453,38 @@ static int process_session_store_find_index(int session_id) {
 
 static void process_session_close(ProcessSession *session) {
     if (!session) return;
+#ifndef _WIN32
+    if (session->shared) {
+        ProcessSessionShared *shared = session->shared;
+        pid_t pid_to_kill = -1;
+        pthread_mutex_lock(&shared->mutex);
+        if (!shared->watcher_done && !shared->exit_observed) {
+            pid_to_kill = shared->pid;
+        }
+        shared->stop_requested = true;
+        pthread_cond_broadcast(&shared->cond);
+        pthread_mutex_unlock(&shared->mutex);
+        if (pid_to_kill > 0) {
+            process_kill_group(pid_to_kill);
+        }
+        if (shared->watcher_thread_started) {
+            pthread_join(shared->watcher_thread, NULL);
+        }
+        process_close_fd(&shared->tty_fd);
+        process_close_fd(&shared->stdout_fd);
+        process_close_fd(&shared->stderr_fd);
+        process_head_tail_buffer_free(&shared->unread_stdout);
+        process_head_tail_buffer_free(&shared->unread_stderr);
+        process_head_tail_buffer_free(&shared->unread_aggregated);
+        process_head_tail_buffer_free(&shared->transcript_stdout);
+        process_head_tail_buffer_free(&shared->transcript_stderr);
+        process_head_tail_buffer_free(&shared->transcript_aggregated);
+        pthread_cond_destroy(&shared->cond);
+        pthread_mutex_destroy(&shared->mutex);
+        free(shared);
+        session->shared = NULL;
+    }
+#endif
     process_close_fd(&session->tty_fd);
     process_close_fd(&session->stdout_fd);
     process_close_fd(&session->stderr_fd);
@@ -3008,10 +3503,15 @@ static void process_session_clear_metadata(ProcessSession *session) {
     }
 }
 
+static void process_session_destroy(ProcessSession *session) {
+    if (!session) return;
+    process_session_close(session);
+    process_session_clear_metadata(session);
+}
+
 static void process_session_store_remove_at(uint32_t index) {
     if (index >= g_process_session_store.len) return;
-    process_session_close(&g_process_session_store.items[index]);
-    process_session_clear_metadata(&g_process_session_store.items[index]);
+    process_session_destroy(&g_process_session_store.items[index]);
     if (index + 1u < g_process_session_store.len) {
         memmove(&g_process_session_store.items[index],
                 &g_process_session_store.items[index + 1u],
