@@ -128,11 +128,11 @@
       (codex:request-user-input-unsupported-payload "custom")))
   ("request_user_input handler received unsupported payload"))
 
-!(assertEqualToResult
-  (codex:tool-result-output-text
-    (codex:run-tool-call-item
-      (codex:tool-call
-        "call-rui-default"
-        "request_user_input"
-        (codex-rui-test-input-json))))
-  ("request_user_input is unavailable in Default mode"))
+!(assertEqual
+  (once
+    (codex:tool-result-output-text
+      (once
+        (codex:run-request-user-input-tool-call
+          "call-rui-default"
+          (codex-rui-test-input-json)))))
+  "request_user_input is unavailable in Default mode")

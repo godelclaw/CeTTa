@@ -11,16 +11,31 @@ Repeated cases currently split for stability:
 - `tests/test_codex_approval_surface.metta`
   `tests/test_codex_approval_unless_trusted_surface.metta`
 - `tests/test_codex_apply_patch_surface.metta`
+  `tests/test_codex_apply_patch_output_direct_surface.metta`
+  `tests/test_codex_apply_patch_output_shell_surface.metta`
   `tests/test_codex_apply_patch_struct_surface.metta`
   `tests/test_codex_apply_patch_reject_surface.metta`
 - `tests/test_codex_request_user_input_surface.metta`
   `tests/test_codex_request_user_input_turn_final_surface.metta`
   `tests/test_codex_request_user_input_turn_output_surface.metta`
   `tests/test_codex_request_user_input_turn_phase_surface.metta`
+  Default-mode tool-call output extraction is also evaluator-sensitive; use a
+  single `once` around the tool wrapper before reading the output text.
+- `tests/test_codex_request_permissions_surface.metta`
+  `tests/test_codex_request_permissions_cancel_surface.metta`
+  Handler event/output/state assertions were rewritten to stable constructor and
+  response-result checks because direct handler binding/extraction can collapse
+  to `Empty` in combined evaluator runs.
+  The cancellation-message assertion also has to live in its own file and read
+  through the tool-call-result wrapper; direct handler-message extraction can
+  still collapse to `Empty` in combined runs.
 
 Current workaround:
 - Keep high-risk assertion clusters in separate surface files.
 - Prefer smaller structural assertions over one giant full-turn JSON equality.
+- For mutating patch/exec assertions, keep the side effect in the smallest
+  possible file and avoid re-evaluating the same expression through multiple
+  accessors inside one assertion group.
 
 Desired fix:
 - Identify and fix the evaluator/output-capture behavior so these cases can be

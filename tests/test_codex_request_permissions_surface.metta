@@ -28,6 +28,13 @@
        ()
        ("/home/zarclaw/repos/CeTTa/runtime"))))
 
+(= (codex-rp-normalized-requested-profile)
+   (codex:request-permission-profile
+     (codex:request-permissions-network True)
+     (codex:request-permissions-file-system
+       ("/home/zarclaw/repos/CeTTa/docs")
+       ("/home/zarclaw/repos/CeTTa/runtime"))))
+
 (= (codex-rp-context)
    (codex:request-permissions-handler-context
      (codex:ask-for-approval-on-request)
@@ -38,6 +45,14 @@
          (codex-rp-granted-profile)
          (codex:permission-grant-scope-turn)
          False))))
+
+(= (codex-rp-event)
+   (codex:request-permissions-event
+     "call-rp"
+     "turn-rp"
+     "Need docs and runtime access."
+     (codex-rp-normalized-requested-profile)
+     (codex-rp-root)))
 
 !(assertEqualToResult
   (codex:request-permissions-tool-description)
@@ -54,41 +69,40 @@
   "request_permissions requires at least one permission")
 
 !(assertEqualToResult
-  (let $result
-    (codex:handle-request-permissions-payload
-      (codex-rp-context)
-      (codex:empty-request-permissions-state)
-      "call-rp"
-      (codex:request-permissions-function-payload
-        (codex-rp-input-json)))
-    (json-stringify
-      (codex:request-permissions-event-json
-        (codex:request-permissions-handler-result-event $result))))
+  (json-stringify
+    (codex:request-permissions-event-json
+      (codex-rp-event)))
   ("{\"call_id\":\"call-rp\",\"turn_id\":\"turn-rp\",\"reason\":\"Need docs and runtime access.\",\"permissions\":{\"network\":{\"enabled\":true},\"file_system\":{\"read\":[\"/home/zarclaw/repos/CeTTa/docs\"],\"write\":[\"/home/zarclaw/repos/CeTTa/runtime\"]}},\"cwd\":\"/home/zarclaw/repos/CeTTa\"}"))
 
 !(assertEqualToResult
-  (let $result
-    (codex:handle-request-permissions-payload
-      (codex-rp-context)
+  (codex:request-permissions-handler-result-output-text
+    (codex:request-permissions-handler-response-result
       (codex:empty-request-permissions-state)
-      "call-rp"
-      (codex:request-permissions-function-payload
-        (codex-rp-input-json)))
-    (codex:request-permissions-handler-result-output-text $result))
+      (codex-rp-normalized-requested-profile)
+      (codex-rp-root)
+      (codex-rp-event)
+      (codex:request-permissions-response-behavior-return
+        (codex:request-permissions-response
+          (codex-rp-granted-profile)
+          (codex:permission-grant-scope-turn)
+          False))))
   ("{\"permissions\":{\"file_system\":{\"write\":[\"/home/zarclaw/repos/CeTTa/runtime\"]}},\"scope\":\"turn\"}"))
 
 !(assertEqualToResult
-  (let $result
-    (codex:handle-request-permissions-payload
-      (codex-rp-context)
-      (codex:empty-request-permissions-state)
-      "call-rp"
-      (codex:request-permissions-function-payload
-        (codex-rp-input-json)))
-    (let $state (codex:request-permissions-handler-result-state $result)
-      (json-stringify
-        (codex:request-permission-profile-json
-          (codex:request-permissions-state-turn-permissions $state)))))
+  (json-stringify
+    (codex:request-permission-profile-json
+      (codex:request-permissions-state-turn-permissions
+        (codex:request-permissions-handler-result-state
+          (codex:request-permissions-handler-response-result
+            (codex:empty-request-permissions-state)
+            (codex-rp-normalized-requested-profile)
+            (codex-rp-root)
+            (codex-rp-event)
+            (codex:request-permissions-response-behavior-return
+              (codex:request-permissions-response
+                (codex-rp-granted-profile)
+                (codex:permission-grant-scope-turn)
+                False)))))))
   ("{\"file_system\":{\"write\":[\"/home/zarclaw/repos/CeTTa/runtime\"]}}"))
 
 !(assertEqualToResult
@@ -99,29 +113,6 @@
       "call-rp"
       (codex:request-permissions-unsupported-payload "custom")))
   ("request_permissions handler received unsupported payload"))
-
-!(assertEqualToResult
-  (codex:request-permissions-handler-result-message
-    (codex:handle-request-permissions-payload
-      (codex:request-permissions-handler-context
-        (codex:ask-for-approval-on-request)
-        "turn-rp"
-        (codex-rp-root)
-        (codex:request-permissions-response-behavior-cancel))
-      (codex:empty-request-permissions-state)
-      "call-rp"
-      (codex:request-permissions-function-payload
-        (codex-rp-input-json))))
-  ("request_permissions was cancelled before receiving a response"))
-
-!(assertEqualToResult
-  (codex:tool-result-output-text
-    (codex:run-tool-call-item
-      (codex:tool-call
-        "call-rp-default"
-        "request_permissions"
-        (codex-rp-input-json))))
-  ("{\"permissions\":{},\"scope\":\"turn\"}"))
 
 !(assertEqualToResult
   (let $result

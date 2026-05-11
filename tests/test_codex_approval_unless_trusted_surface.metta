@@ -1,6 +1,5 @@
-!(register-module! ../codex)
+!(register-module! /home/zarclaw/repos/CeTTa/codex)
 !(import! &self codex:approval)
-!(import! &self codex:exec_policy)
 
 !(assertEqualToResult
   (codex:approval-requirement-type
