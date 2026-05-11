@@ -22,6 +22,13 @@
 ;   CeTTa's current native session store only drains output during the visible
 ;   exec_command / write_stdin calls, so a very chatty background process can
 ;   still backpressure between polls until a later async watcher slice lands.
+; - Rust does not need a helper to resume a prior exec result object because
+;   its async handler layer can naturally thread `session_id` into a later
+;   write_stdin tool call. This slice adds an internal
+;   `codex:run-exec-command-then-write-stdin-output-text` helper only for
+;   deterministic local surface coverage, because the current evaluator is
+;   still brittle when a single `.metta` file tries to rebuild follow-on JSON
+;   from a prior result. The public `write_stdin` tool path remains unchanged.
 ; - Rust applies `apply_patch` interception inside unified_exec. The restarted
 ;   CeTTa tool layer does not yet have the full unified_exec/orchestrator
 ;   stack, so the visible interception is wired at the custom-tool-call
@@ -839,6 +846,64 @@
              $original-token-count)))
         ((ProcessSessionCallResult False $error $snapshot)
          (format-args "write_stdin failed: {}" ($error)))))))
+
+(= (codex:run-exec-command-then-write-stdin-output-text
+      $open-call-id
+      $open-input
+      $write-call-id
+      $chars
+      $yield-time-ms)
+   (function
+     (case
+       (codex:run-exec-command $open-call-id $open-input)
+       (((CodexExecCommandRun
+           $prior-call-id
+           $prior-chunk-id
+           $args
+           True
+           $session-id
+           $has-exit-code
+           $exit-code
+           $stdout
+           $stderr
+           $aggregated-output
+           $duration-ms
+           $original-token-count
+           $text)
+         (case
+           (process-write-session-stdin-yield-cap-bytes
+             $session-id
+             $chars
+             $yield-time-ms
+             (codex:maximum-raw-output-bytes))
+           (((ProcessSessionCallResult True
+               $error
+               (ProcessSessionSnapshot
+                 $is-running
+                 $next-session-id
+                 $has-next-exit-code
+                 $next-exit-code
+                 $next-stdout
+                 $next-stderr
+                 $next-aggregated-output
+                 $next-duration-ms))
+             (let $next-original-token-count
+               (codex:approx-token-count $next-aggregated-output)
+               (return
+                 (codex:format-exec-command-output
+                   (codex:chunk-id-from-call-id $write-call-id)
+                   $next-duration-ms
+                   $is-running
+                   $next-session-id
+                   $has-next-exit-code
+                   $next-exit-code
+                   $next-aggregated-output
+                   (codex:exec-command-max-output-tokens $args)
+                   $next-original-token-count))))
+            ((ProcessSessionCallResult False $error $snapshot)
+             (return (format-args "write_stdin failed: {}" ($error)))))))
+        ($other
+         (return "write_stdin helper requires a running exec_command result"))))))
 
 (= (codex:run-write-stdin-tool-call $call-id $input)
    (codex:tool-result

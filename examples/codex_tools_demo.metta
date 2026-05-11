@@ -14,20 +14,6 @@
 
 !(println!
   (once
-    (codex:is-exec-command-run-running
-      (codex:run-exec-command
-        "call_live_demo"
-        "{\"cmd\":\"sleep 0.4; printf live-demo\",\"login\":false,\"yield_time_ms\":250}"))))
-
-!(println!
-  (once
-    (codex:exec-command-run-session-id
-      (codex:run-exec-command
-        "call_live_demo_sid"
-        "{\"cmd\":\"sleep 0.4; printf live-demo\",\"login\":false,\"yield_time_ms\":250}"))))
-
-!(println!
-  (once
     (codex:run-write-stdin-output-text
       "call_write_demo"
       "{\"session_id\":99999,\"chars\":\"x\",\"yield_time_ms\":250}")))

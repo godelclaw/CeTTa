@@ -3,17 +3,14 @@
 !(import! &self codex:tools)
 
 !(assertEqual
-  (let $run
-    (codex:run-exec-command
+  (codex:is-string-contains
+    (codex:run-exec-command-then-write-stdin-output-text
       "call_live"
-      "{\"cmd\":\"sleep 0.4; printf hello\",\"login\":false,\"yield_time_ms\":250}")
-    (if (codex:is-exec-command-run-running $run)
-        (and
-          (> (codex:exec-command-run-session-id $run) 0)
-          (codex:is-string-contains
-            (codex:exec-command-run-text $run)
-            "Process running with session ID"))
-        False))
+      "{\"cmd\":\"sleep 0.4; printf hello\",\"login\":false,\"yield_time_ms\":250}"
+      "call_live_poll"
+      ""
+      100)
+    "hello")
   True)
 
 !(assertEqual
