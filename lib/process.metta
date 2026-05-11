@@ -24,6 +24,28 @@
              $argv $cwd $env $timeout-ms $max-bytes)
        (($result (return $result))))))
 
+(= (process-open-session-cmd-cwd-env-tty-yield-cap-bytes
+      $argv
+      $cwd
+      $env
+      $tty
+      $yield-ms
+      $max-bytes)
+   (function
+     (case (__cetta_lib_process_open_session_cmd_cwd_env_tty_yield_cap_bytes
+             $argv $cwd $env $tty $yield-ms $max-bytes)
+       (($result (return $result))))))
+
+(= (process-write-session-stdin-yield-cap-bytes
+      $session-id
+      $chars
+      $yield-ms
+      $max-bytes)
+   (function
+     (case (__cetta_lib_process_write_session_stdin_yield_cap_bytes
+             $session-id $chars $yield-ms $max-bytes)
+       (($result (return $result))))))
+
 (= (process-shell $type $path)
    (ProcessShell $type $path))
 
@@ -82,3 +104,111 @@
 (= (process-result-timed-out?
      (ProcessResult $exit-code $stdout $stderr $aggregated-output $duration-ms $timed-out))
    $timed-out)
+
+(= (process-session-call-is-ok
+     (ProcessSessionCallResult $ok $error $snapshot))
+   $ok)
+
+(= (process-session-call-error
+     (ProcessSessionCallResult $ok $error $snapshot))
+   $error)
+
+(= (process-session-call-snapshot
+     (ProcessSessionCallResult $ok $error $snapshot))
+   $snapshot)
+
+(= (process-session-snapshot-is-running
+     (ProcessSessionSnapshot
+       $is-running
+       $session-id
+       $has-exit-code
+       $exit-code
+       $stdout
+       $stderr
+       $aggregated-output
+       $duration-ms))
+   $is-running)
+
+(= (process-session-snapshot-session-id
+     (ProcessSessionSnapshot
+       $is-running
+       $session-id
+       $has-exit-code
+       $exit-code
+       $stdout
+       $stderr
+       $aggregated-output
+       $duration-ms))
+   $session-id)
+
+(= (process-session-snapshot-has-exit-code
+     (ProcessSessionSnapshot
+       $is-running
+       $session-id
+       $has-exit-code
+       $exit-code
+       $stdout
+       $stderr
+       $aggregated-output
+       $duration-ms))
+   $has-exit-code)
+
+(= (process-session-snapshot-exit-code
+     (ProcessSessionSnapshot
+       $is-running
+       $session-id
+       $has-exit-code
+       $exit-code
+       $stdout
+       $stderr
+       $aggregated-output
+       $duration-ms))
+   $exit-code)
+
+(= (process-session-snapshot-stdout
+     (ProcessSessionSnapshot
+       $is-running
+       $session-id
+       $has-exit-code
+       $exit-code
+       $stdout
+       $stderr
+       $aggregated-output
+       $duration-ms))
+   $stdout)
+
+(= (process-session-snapshot-stderr
+     (ProcessSessionSnapshot
+       $is-running
+       $session-id
+       $has-exit-code
+       $exit-code
+       $stdout
+       $stderr
+       $aggregated-output
+       $duration-ms))
+   $stderr)
+
+(= (process-session-snapshot-aggregated-output
+     (ProcessSessionSnapshot
+       $is-running
+       $session-id
+       $has-exit-code
+       $exit-code
+       $stdout
+       $stderr
+       $aggregated-output
+       $duration-ms))
+   $aggregated-output)
+
+(= (process-session-snapshot-duration-ms
+     (ProcessSessionSnapshot
+       $is-running
+       $session-id
+       $has-exit-code
+       $exit-code
+       $stdout
+       $stderr
+       $aggregated-output
+       $duration-ms))
+   $duration-ms)

@@ -241,6 +241,8 @@ typedef struct {
     X(lib_process_run_shell_cwd_timeout_ms, "__cetta_lib_process_run_shell_cwd_timeout_ms") \
     X(lib_process_run_shell_cwd_timeout_cap_bytes, "__cetta_lib_process_run_shell_cwd_timeout_cap_bytes") \
     X(lib_process_run_cmd_cwd_env_timeout_cap_bytes, "__cetta_lib_process_run_cmd_cwd_env_timeout_cap_bytes") \
+    X(lib_process_open_session_cmd_cwd_env_tty_yield_cap_bytes, "__cetta_lib_process_open_session_cmd_cwd_env_tty_yield_cap_bytes") \
+    X(lib_process_write_session_stdin_yield_cap_bytes, "__cetta_lib_process_write_session_stdin_yield_cap_bytes") \
     X(lib_process_create_shell_env, "__cetta_lib_process_create_shell_env") \
     X(lib_process_create_shell_env_no_thread, "__cetta_lib_process_create_shell_env_no_thread") \
     X(lib_process_default_shell, "__cetta_lib_process_default_shell") \

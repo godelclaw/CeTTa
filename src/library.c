@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #ifndef _WIN32
+#include <pty.h>
 #include <pwd.h>
 #endif
 #include <signal.h>
@@ -2108,7 +2109,12 @@ static void process_append_read(int fd,
             *open_flag = false;
             return;
         }
-        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+        // PTY masters can report EIO during startup or after child-side state
+        // transitions before output is readable. Treat it like a transient
+        // no-data condition here and let waitpid-driven exit tracking decide
+        // when the session is actually done.
+        if (errno == EAGAIN || errno == EWOULDBLOCK ||
+            errno == EINTR || errno == EIO) {
             return;
         }
         *open_flag = false;
@@ -2165,6 +2171,651 @@ typedef struct {
 } ProcessEnvPair;
 
 static char *process_strdup_cstr(const char *text);
+static void process_close_fd(int *fd);
+
+typedef struct {
+    size_t max_bytes;
+    size_t head_budget;
+    size_t tail_budget;
+    CettaStringBuf head;
+    CettaStringBuf tail;
+    size_t omitted_bytes;
+} ProcessHeadTailBuffer;
+
+typedef struct {
+    int session_id;
+    pid_t pid;
+    bool tty;
+    bool exited;
+    bool stdin_open;
+    int exit_code;
+    int tty_fd;
+    int stdout_fd;
+    int stderr_fd;
+    uint64_t last_used_ns;
+} ProcessSession;
+
+typedef struct {
+    ProcessSession *items;
+    uint32_t len;
+    uint32_t cap;
+} ProcessSessionStore;
+
+static ProcessSessionStore g_process_session_store = {0};
+static bool g_process_session_rng_seeded = false;
+
+static bool process_parse_argv(Arena *a, Atom *arg, char ***argv_out);
+static bool process_parse_env_pairs(Arena *a, Atom *arg,
+                                    ProcessEnvPair **pairs_out,
+                                    uint32_t *count_out);
+static void process_apply_child_env(const ProcessEnvPair *env_pairs,
+                                    uint32_t env_count);
+static void process_head_tail_buffer_append(ProcessHeadTailBuffer *buffer,
+                                            const char *data,
+                                            size_t len);
+static void process_head_tail_buffer_to_stringbuf(ProcessHeadTailBuffer *buffer,
+                                                  CettaStringBuf *out);
+static void process_head_tail_buffer_init(ProcessHeadTailBuffer *buffer,
+                                          size_t max_bytes);
+static void process_head_tail_buffer_free(ProcessHeadTailBuffer *buffer);
+static void process_session_close(ProcessSession *session);
+static int process_session_store_find_index(int session_id);
+static void process_session_store_remove_at(uint32_t index);
+static int process_session_generate_id(void);
+
+enum {
+    PROCESS_SESSION_MAX = 64,
+    PROCESS_SESSION_PROTECTED_RECENT = 8,
+    PROCESS_SESSION_MIN_YIELD_MS = 250,
+    PROCESS_SESSION_MIN_EMPTY_WRITE_YIELD_MS = 5000,
+    PROCESS_SESSION_MAX_YIELD_MS = 30000,
+    PROCESS_SESSION_MAX_BACKGROUND_YIELD_MS = 300000,
+};
+
+static const char *PROCESS_STDIN_CLOSED_MESSAGE =
+    "stdin is closed for this session; rerun exec_command with tty=true to keep stdin open";
+static const char *PROCESS_WRITE_STDIN_FAILED_MESSAGE =
+    "failed to write to stdin";
+
+static void process_head_tail_append_read(int fd,
+                                          ProcessHeadTailBuffer *stream_buf,
+                                          ProcessHeadTailBuffer *aggregated_buf,
+                                          bool *open_flag,
+                                          bool *did_read) {
+    char chunk[4096];
+    for (;;) {
+        ssize_t nread = read(fd, chunk, sizeof(chunk));
+        if (nread > 0) {
+            if (did_read) *did_read = true;
+            process_head_tail_buffer_append(stream_buf, chunk, (size_t)nread);
+            if (aggregated_buf) {
+                process_head_tail_buffer_append(aggregated_buf, chunk, (size_t)nread);
+            }
+            continue;
+        }
+        if (nread == 0) {
+            *open_flag = false;
+            return;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+            return;
+        }
+        *open_flag = false;
+        return;
+    }
+}
+
+static bool process_session_has_open_fds(ProcessSession *session) {
+    if (session->tty) {
+        return session->tty_fd >= 0;
+    }
+    return session->stdout_fd >= 0 || session->stderr_fd >= 0;
+}
+
+static void process_session_update_exit_status(ProcessSession *session) {
+    int status = 0;
+    pid_t wait_result;
+    if (!session || session->exited) return;
+    for (;;) {
+        wait_result = waitpid(session->pid, &status, WNOHANG);
+        if (wait_result == 0) return;
+        if (wait_result < 0) {
+            if (errno == EINTR) continue;
+            session->exited = true;
+            session->exit_code = -1;
+            session->stdin_open = false;
+            return;
+        }
+        session->exited = true;
+        session->exit_code = process_exit_code_from_status(status);
+        session->stdin_open = false;
+        return;
+    }
+}
+
+static void process_session_read_available(ProcessSession *session,
+                                           ProcessHeadTailBuffer *stdout_buf,
+                                           ProcessHeadTailBuffer *stderr_buf,
+                                           ProcessHeadTailBuffer *aggregated_buf,
+                                           bool *did_read) {
+    bool open_flag;
+    if (!session) return;
+    if (session->tty) {
+        if (session->tty_fd >= 0) {
+            open_flag = true;
+            process_head_tail_append_read(session->tty_fd,
+                                          stdout_buf,
+                                          aggregated_buf,
+                                          &open_flag,
+                                          did_read);
+            if (!open_flag) {
+                process_close_fd(&session->tty_fd);
+                session->stdin_open = false;
+            }
+        }
+        return;
+    }
+    if (session->stdout_fd >= 0) {
+        open_flag = true;
+        process_head_tail_append_read(session->stdout_fd,
+                                      stdout_buf,
+                                      aggregated_buf,
+                                      &open_flag,
+                                      did_read);
+        if (!open_flag) {
+            process_close_fd(&session->stdout_fd);
+        }
+    }
+    if (session->stderr_fd >= 0) {
+        open_flag = true;
+        process_head_tail_append_read(session->stderr_fd,
+                                      stderr_buf,
+                                      aggregated_buf,
+                                      &open_flag,
+                                      did_read);
+        if (!open_flag) {
+            process_close_fd(&session->stderr_fd);
+        }
+    }
+}
+
+static int process_session_select(ProcessSession *session, int timeout_ms) {
+    fd_set readfds;
+    struct timeval tv;
+    int max_fd = -1;
+    FD_ZERO(&readfds);
+    if (session->tty) {
+        if (session->tty_fd >= 0) {
+            FD_SET(session->tty_fd, &readfds);
+            max_fd = session->tty_fd;
+        }
+    } else {
+        if (session->stdout_fd >= 0) {
+            FD_SET(session->stdout_fd, &readfds);
+            if (session->stdout_fd > max_fd) max_fd = session->stdout_fd;
+        }
+        if (session->stderr_fd >= 0) {
+            FD_SET(session->stderr_fd, &readfds);
+            if (session->stderr_fd > max_fd) max_fd = session->stderr_fd;
+        }
+    }
+    if (max_fd < 0) return 0;
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    return select(max_fd + 1, &readfds, NULL, NULL, &tv);
+}
+
+static bool process_write_all_fd(int fd, const char *data, size_t len) {
+    size_t offset = 0;
+    while (offset < len) {
+        ssize_t nwritten = write(fd, data + offset, len - offset);
+        if (nwritten > 0) {
+            offset += (size_t)nwritten;
+            continue;
+        }
+        if (nwritten < 0 && errno == EINTR) continue;
+        if (nwritten < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            fd_set writefds;
+            FD_ZERO(&writefds);
+            FD_SET(fd, &writefds);
+            if (select(fd + 1, NULL, &writefds, NULL, NULL) < 0 && errno != EINTR) {
+                return false;
+            }
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+static void process_session_store_ensure_cap(uint32_t want) {
+    if (g_process_session_store.cap >= want) return;
+    g_process_session_store.cap = g_process_session_store.cap
+        ? g_process_session_store.cap * 2u
+        : 8u;
+    if (g_process_session_store.cap < want) {
+        g_process_session_store.cap = want;
+    }
+    g_process_session_store.items = cetta_realloc(
+        g_process_session_store.items,
+        sizeof(ProcessSession) * g_process_session_store.cap);
+}
+
+static uint32_t process_session_store_find_prune_candidate(void) {
+    bool protected_flags[PROCESS_SESSION_MAX];
+    uint64_t chosen_recency;
+    int chosen_index;
+    uint64_t oldest_ns;
+    int oldest_exited = -1;
+    int oldest_any = -1;
+    memset(protected_flags, 0, sizeof(protected_flags));
+    for (uint32_t slot = 0; slot < PROCESS_SESSION_PROTECTED_RECENT; slot++) {
+        chosen_index = -1;
+        chosen_recency = 0;
+        for (uint32_t i = 0; i < g_process_session_store.len; i++) {
+            if (protected_flags[i]) continue;
+            if (chosen_index < 0 ||
+                g_process_session_store.items[i].last_used_ns > chosen_recency) {
+                chosen_index = (int)i;
+                chosen_recency = g_process_session_store.items[i].last_used_ns;
+            }
+        }
+        if (chosen_index < 0) break;
+        protected_flags[chosen_index] = true;
+    }
+
+    oldest_ns = 0;
+    for (uint32_t i = 0; i < g_process_session_store.len; i++) {
+        ProcessSession *session = &g_process_session_store.items[i];
+        if (!protected_flags[i] &&
+            (oldest_exited < 0 || session->last_used_ns < oldest_ns) &&
+            session->exited) {
+            oldest_exited = (int)i;
+            oldest_ns = session->last_used_ns;
+        }
+    }
+    if (oldest_exited >= 0) return (uint32_t)oldest_exited;
+
+    oldest_ns = 0;
+    for (uint32_t i = 0; i < g_process_session_store.len; i++) {
+        ProcessSession *session = &g_process_session_store.items[i];
+        if (!protected_flags[i] &&
+            (oldest_any < 0 || session->last_used_ns < oldest_ns)) {
+            oldest_any = (int)i;
+            oldest_ns = session->last_used_ns;
+        }
+    }
+    if (oldest_any >= 0) return (uint32_t)oldest_any;
+    return 0;
+}
+
+static void process_session_store_prune_if_needed(void) {
+    if (g_process_session_store.len < PROCESS_SESSION_MAX) return;
+    process_session_store_remove_at(process_session_store_find_prune_candidate());
+}
+
+static Atom *process_session_snapshot_atom(Arena *a,
+                                           bool is_running,
+                                           int session_id,
+                                           bool has_exit_code,
+                                           int exit_code,
+                                           const CettaStringBuf *stdout_buf,
+                                           const CettaStringBuf *stderr_buf,
+                                           const CettaStringBuf *aggregated_buf,
+                                           uint64_t duration_ms) {
+    if (duration_ms > (uint64_t)INT64_MAX) duration_ms = (uint64_t)INT64_MAX;
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "ProcessSessionSnapshot"),
+        is_running ? atom_true(a) : atom_false(a),
+        atom_int(a, is_running ? session_id : 0),
+        has_exit_code ? atom_true(a) : atom_false(a),
+        atom_int(a, has_exit_code ? exit_code : 0),
+        atom_string(a, stdout_buf->buf ? stdout_buf->buf : ""),
+        atom_string(a, stderr_buf->buf ? stderr_buf->buf : ""),
+        atom_string(a, aggregated_buf->buf ? aggregated_buf->buf : ""),
+        atom_int(a, (int64_t)duration_ms),
+    }, 9);
+}
+
+static Atom *process_session_call_result_atom(Arena *a,
+                                              bool ok,
+                                              const char *error_text,
+                                              Atom *snapshot) {
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "ProcessSessionCallResult"),
+        ok ? atom_true(a) : atom_false(a),
+        atom_string(a, error_text ? error_text : ""),
+        snapshot ? snapshot : atom_symbol(a, "ProcessNoSessionSnapshot"),
+    }, 4);
+}
+
+static bool process_spawn_session(char **argv,
+                                  const char *cwd,
+                                  ProcessEnvPair *env_pairs,
+                                  uint32_t env_count,
+                                  ProcessSession *session,
+                                  bool tty,
+                                  char *errbuf,
+                                  size_t errbuf_sz) {
+    pid_t pid;
+    session->tty = tty;
+    session->exited = false;
+    session->stdin_open = tty;
+    session->exit_code = -1;
+    session->tty_fd = -1;
+    session->stdout_fd = -1;
+    session->stderr_fd = -1;
+    session->last_used_ns = library_monotonic_ns();
+#ifdef _WIN32
+    snprintf(errbuf, errbuf_sz, "persistent process sessions are not implemented on Windows");
+    return false;
+#else
+    if (tty) {
+        int master_fd = -1;
+        pid = forkpty(&master_fd, NULL, NULL, NULL);
+        if (pid < 0) {
+            snprintf(errbuf, errbuf_sz, "%s", strerror(errno));
+            return false;
+        }
+        if (pid == 0) {
+            setpgid(0, 0);
+            if (cwd && cwd[0] != '\0' && chdir(cwd) != 0) {
+                dprintf(STDERR_FILENO, "chdir(%s): %s\n", cwd, strerror(errno));
+                _exit(125);
+            }
+            process_apply_child_env(env_pairs, env_count);
+            execvp(argv[0], argv);
+            _exit(127);
+        }
+        setpgid(pid, pid);
+        if (!process_set_nonblocking(master_fd)) {
+            process_kill_group(pid);
+            close(master_fd);
+            waitpid(pid, NULL, 0);
+            snprintf(errbuf, errbuf_sz, "%s", strerror(errno));
+            return false;
+        }
+        session->pid = pid;
+        session->tty_fd = master_fd;
+        return true;
+    } else {
+        int stdout_pipe[2] = {-1, -1};
+        int stderr_pipe[2] = {-1, -1};
+        int stdin_fd = -1;
+        if (pipe(stdout_pipe) != 0 || pipe(stderr_pipe) != 0) {
+            process_close_fd(&stdout_pipe[0]);
+            process_close_fd(&stdout_pipe[1]);
+            process_close_fd(&stderr_pipe[0]);
+            process_close_fd(&stderr_pipe[1]);
+            snprintf(errbuf, errbuf_sz, "%s", strerror(errno));
+            return false;
+        }
+        pid = fork();
+        if (pid < 0) {
+            process_close_fd(&stdout_pipe[0]);
+            process_close_fd(&stdout_pipe[1]);
+            process_close_fd(&stderr_pipe[0]);
+            process_close_fd(&stderr_pipe[1]);
+            snprintf(errbuf, errbuf_sz, "%s", strerror(errno));
+            return false;
+        }
+        if (pid == 0) {
+            stdin_fd = open("/dev/null", O_RDONLY);
+            setpgid(0, 0);
+            close(stdout_pipe[0]);
+            close(stderr_pipe[0]);
+            if (stdin_fd >= 0) {
+                if (dup2(stdin_fd, STDIN_FILENO) < 0) _exit(126);
+                close(stdin_fd);
+            }
+            if (dup2(stdout_pipe[1], STDOUT_FILENO) < 0 ||
+                dup2(stderr_pipe[1], STDERR_FILENO) < 0) {
+                _exit(126);
+            }
+            close(stdout_pipe[1]);
+            close(stderr_pipe[1]);
+            if (cwd && cwd[0] != '\0' && chdir(cwd) != 0) {
+                dprintf(STDERR_FILENO, "chdir(%s): %s\n", cwd, strerror(errno));
+                _exit(125);
+            }
+            process_apply_child_env(env_pairs, env_count);
+            execvp(argv[0], argv);
+            _exit(127);
+        }
+        setpgid(pid, pid);
+        process_close_fd(&stdout_pipe[1]);
+        process_close_fd(&stderr_pipe[1]);
+        if (!process_set_nonblocking(stdout_pipe[0]) ||
+            !process_set_nonblocking(stderr_pipe[0])) {
+            process_kill_group(pid);
+            process_close_fd(&stdout_pipe[0]);
+            process_close_fd(&stderr_pipe[0]);
+            waitpid(pid, NULL, 0);
+            snprintf(errbuf, errbuf_sz, "%s", strerror(errno));
+            return false;
+        }
+        session->pid = pid;
+        session->stdout_fd = stdout_pipe[0];
+        session->stderr_fd = stderr_pipe[0];
+        session->stdin_open = false;
+        return true;
+    }
+#endif
+}
+
+static Atom *process_session_collect_atom(Arena *a,
+                                          ProcessSession *session,
+                                          int yield_ms,
+                                          int max_bytes) {
+    ProcessHeadTailBuffer stdout_buf;
+    ProcessHeadTailBuffer stderr_buf;
+    ProcessHeadTailBuffer aggregated_buf;
+    uint64_t start_ns = library_monotonic_ns();
+    uint64_t deadline_ns = start_ns + ((uint64_t)yield_ms * 1000000ull);
+    uint64_t end_ns = start_ns;
+    bool did_read;
+    bool is_running;
+    int select_result;
+
+    process_head_tail_buffer_init(&stdout_buf, (size_t)max_bytes);
+    process_head_tail_buffer_init(&stderr_buf, (size_t)max_bytes);
+    process_head_tail_buffer_init(&aggregated_buf, (size_t)max_bytes);
+
+    for (;;) {
+        process_session_update_exit_status(session);
+        did_read = false;
+        process_session_read_available(session,
+                                       &stdout_buf,
+                                       &stderr_buf,
+                                       &aggregated_buf,
+                                       &did_read);
+        end_ns = library_monotonic_ns();
+        if (session->exited && !process_session_has_open_fds(session)) {
+            break;
+        }
+        if (end_ns >= deadline_ns) {
+            break;
+        }
+        if (did_read) {
+            continue;
+        }
+        if (!process_session_has_open_fds(session)) {
+            break;
+        }
+        select_result = process_session_select(
+            session,
+            (int)((deadline_ns - end_ns) / 1000000ull));
+        if (select_result < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        if (select_result == 0) {
+            break;
+        }
+    }
+
+    process_session_update_exit_status(session);
+    process_session_read_available(session,
+                                   &stdout_buf,
+                                   &stderr_buf,
+                                   &aggregated_buf,
+                                   NULL);
+    end_ns = library_monotonic_ns();
+    if (session->exited) {
+        process_session_close(session);
+    }
+    session->last_used_ns = end_ns;
+    is_running = !session->exited;
+
+    {
+        CettaStringBuf stdout_text;
+        CettaStringBuf stderr_text;
+        CettaStringBuf aggregated_text;
+        Atom *result;
+        cetta_sb_init(&stdout_text);
+        cetta_sb_init(&stderr_text);
+        cetta_sb_init(&aggregated_text);
+        process_head_tail_buffer_to_stringbuf(&stdout_buf, &stdout_text);
+        process_head_tail_buffer_to_stringbuf(&stderr_buf, &stderr_text);
+        process_head_tail_buffer_to_stringbuf(&aggregated_buf, &aggregated_text);
+        result = process_session_snapshot_atom(a,
+                                               is_running,
+                                               session->session_id,
+                                               session->exited,
+                                               session->exit_code,
+                                               &stdout_text,
+                                               &stderr_text,
+                                               &aggregated_text,
+                                               process_duration_ms(start_ns, end_ns));
+        cetta_sb_free(&stdout_text);
+        cetta_sb_free(&stderr_text);
+        cetta_sb_free(&aggregated_text);
+        process_head_tail_buffer_free(&stdout_buf);
+        process_head_tail_buffer_free(&stderr_buf);
+        process_head_tail_buffer_free(&aggregated_buf);
+        return result;
+    }
+}
+
+static Atom *process_open_session_cmd_cwd_env_tty_yield_cap_bytes(
+    Arena *a,
+    Atom *head,
+    Atom **args,
+    uint32_t nargs
+) {
+    char **argv;
+    const char *cwd;
+    ProcessEnvPair *env_pairs;
+    uint32_t env_count = 0;
+    bool tty = false;
+    int yield_ms = 0;
+    int max_bytes = 0;
+    ProcessSession session;
+    Atom *snapshot;
+    char errbuf[256] = {0};
+
+    if (nargs != 6 || !process_parse_argv(a, args[0], &argv) ||
+        !(cwd = library_text_arg(args[1])) ||
+        !process_parse_env_pairs(a, args[2], &env_pairs, &env_count) ||
+        !library_bool_arg(args[3], &tty) ||
+        !library_int_arg(args[4], &yield_ms) ||
+        !library_int_arg(args[5], &max_bytes) ||
+        yield_ms < 0 || max_bytes < 0) {
+        return library_signature_error(
+            a, head, args, nargs,
+            "expected command argv, cwd, env pairs, tty bool, non-negative yield ms, and non-negative max bytes");
+    }
+
+    memset(&session, 0, sizeof(session));
+    session.session_id = process_session_generate_id();
+    if (!process_spawn_session(argv, cwd, env_pairs, env_count, &session, tty,
+                               errbuf, sizeof(errbuf))) {
+        return process_session_call_result_atom(a, false, errbuf, NULL);
+    }
+    snapshot = process_session_collect_atom(a, &session, yield_ms, max_bytes);
+    if (!session.exited) {
+        process_session_store_prune_if_needed();
+        process_session_store_ensure_cap(g_process_session_store.len + 1u);
+        g_process_session_store.items[g_process_session_store.len++] = session;
+    }
+    return process_session_call_result_atom(a, true, "", snapshot);
+}
+
+static int process_effective_write_yield_ms(const char *input, int yield_ms) {
+    int time_ms = yield_ms > PROCESS_SESSION_MIN_YIELD_MS
+        ? yield_ms
+        : PROCESS_SESSION_MIN_YIELD_MS;
+    if (input && input[0] == '\0') {
+        if (time_ms < PROCESS_SESSION_MIN_EMPTY_WRITE_YIELD_MS) {
+            time_ms = PROCESS_SESSION_MIN_EMPTY_WRITE_YIELD_MS;
+        }
+        if (time_ms > PROCESS_SESSION_MAX_BACKGROUND_YIELD_MS) {
+            time_ms = PROCESS_SESSION_MAX_BACKGROUND_YIELD_MS;
+        }
+        return time_ms;
+    }
+    if (time_ms > PROCESS_SESSION_MAX_YIELD_MS) {
+        time_ms = PROCESS_SESSION_MAX_YIELD_MS;
+    }
+    return time_ms;
+}
+
+static Atom *process_write_session_stdin_yield_cap_bytes(Arena *a,
+                                                         Atom *head,
+                                                         Atom **args,
+                                                         uint32_t nargs) {
+    int session_id = 0;
+    const char *input;
+    int yield_ms = 0;
+    int max_bytes = 0;
+    int index;
+    ProcessSession *session;
+    Atom *snapshot;
+    char errbuf[256];
+
+    if (nargs != 4 || !library_int_arg(args[0], &session_id) ||
+        !(input = library_text_arg(args[1])) ||
+        !library_int_arg(args[2], &yield_ms) ||
+        !library_int_arg(args[3], &max_bytes) ||
+        yield_ms < 0 || max_bytes < 0) {
+        return library_signature_error(
+            a, head, args, nargs,
+            "expected session id, stdin chars, non-negative yield ms, and non-negative max bytes");
+    }
+
+    index = process_session_store_find_index(session_id);
+    if (index < 0) {
+        snprintf(errbuf, sizeof(errbuf), "Unknown process id %d", session_id);
+        return process_session_call_result_atom(a, false, errbuf, NULL);
+    }
+
+    session = &g_process_session_store.items[index];
+    if (input[0] != '\0') {
+        if (!session->tty || !session->stdin_open || session->tty_fd < 0) {
+            return process_session_call_result_atom(
+                a, false, PROCESS_STDIN_CLOSED_MESSAGE, NULL);
+        }
+        if (!process_write_all_fd(session->tty_fd, input, strlen(input))) {
+            process_session_update_exit_status(session);
+            if (!session->exited) {
+                return process_session_call_result_atom(
+                    a, false, PROCESS_WRITE_STDIN_FAILED_MESSAGE, NULL);
+            }
+        } else {
+            usleep(100000);
+        }
+    }
+
+    snapshot = process_session_collect_atom(
+        a,
+        session,
+        process_effective_write_yield_ms(input, yield_ms),
+        max_bytes);
+    if (session->exited) {
+        process_session_store_remove_at((uint32_t)index);
+    }
+    return process_session_call_result_atom(a, true, "", snapshot);
+}
 
 static bool process_expr_head_name(Atom *atom, const char *name) {
     return atom && atom->kind == ATOM_EXPR && atom->expr.len > 0 &&
@@ -2213,6 +2864,132 @@ static bool process_parse_env_pairs(Arena *a, Atom *arg,
     *pairs_out = pairs;
     *count_out = arg->expr.len;
     return true;
+}
+
+static void process_head_tail_buffer_init(ProcessHeadTailBuffer *buffer,
+                                          size_t max_bytes) {
+    buffer->max_bytes = max_bytes;
+    buffer->head_budget = max_bytes / 2u;
+    buffer->tail_budget = max_bytes - buffer->head_budget;
+    buffer->omitted_bytes = 0;
+    cetta_sb_init(&buffer->head);
+    cetta_sb_init(&buffer->tail);
+}
+
+static void process_head_tail_buffer_free(ProcessHeadTailBuffer *buffer) {
+    cetta_sb_free(&buffer->head);
+    cetta_sb_free(&buffer->tail);
+    buffer->max_bytes = 0;
+    buffer->head_budget = 0;
+    buffer->tail_budget = 0;
+    buffer->omitted_bytes = 0;
+}
+
+static void process_head_tail_tail_trim(ProcessHeadTailBuffer *buffer,
+                                        size_t excess) {
+    if (excess == 0 || buffer->tail.len == 0) return;
+    if (excess >= buffer->tail.len) {
+        buffer->omitted_bytes += buffer->tail.len;
+        buffer->tail.len = 0;
+        if (buffer->tail.buf) buffer->tail.buf[0] = '\0';
+        return;
+    }
+    memmove(buffer->tail.buf, buffer->tail.buf + excess, buffer->tail.len - excess);
+    buffer->tail.len -= excess;
+    buffer->tail.buf[buffer->tail.len] = '\0';
+    buffer->omitted_bytes += excess;
+}
+
+static void process_head_tail_buffer_append(ProcessHeadTailBuffer *buffer,
+                                            const char *data,
+                                            size_t len) {
+    size_t head_remaining;
+    size_t tail_len;
+    if (len == 0) return;
+    if (buffer->max_bytes == 0) {
+        buffer->omitted_bytes += len;
+        return;
+    }
+    if (buffer->head.len < buffer->head_budget) {
+        head_remaining = buffer->head_budget - buffer->head.len;
+        if (head_remaining > 0) {
+            size_t head_take = len < head_remaining ? len : head_remaining;
+            cetta_sb_append_n(&buffer->head, data, head_take);
+            data += head_take;
+            len -= head_take;
+            if (len == 0) return;
+        }
+    }
+    if (buffer->tail_budget == 0) {
+        buffer->omitted_bytes += len;
+        return;
+    }
+    if (len >= buffer->tail_budget) {
+        size_t start = len - buffer->tail_budget;
+        buffer->omitted_bytes += buffer->tail.len + start;
+        buffer->tail.len = 0;
+        if (buffer->tail.buf) buffer->tail.buf[0] = '\0';
+        cetta_sb_append_n(&buffer->tail, data + start, buffer->tail_budget);
+        return;
+    }
+    tail_len = buffer->tail.len + len;
+    if (tail_len > buffer->tail_budget) {
+        process_head_tail_tail_trim(buffer, tail_len - buffer->tail_budget);
+    }
+    cetta_sb_append_n(&buffer->tail, data, len);
+}
+
+static void process_head_tail_buffer_to_stringbuf(ProcessHeadTailBuffer *buffer,
+                                                  CettaStringBuf *out) {
+    if (buffer->head.len > 0) {
+        cetta_sb_append_n(out, buffer->head.buf, buffer->head.len);
+    }
+    if (buffer->tail.len > 0) {
+        cetta_sb_append_n(out, buffer->tail.buf, buffer->tail.len);
+    }
+}
+
+static void process_session_store_seed_rng(void) {
+    if (!g_process_session_rng_seeded) {
+        srand((unsigned int)(time(NULL) ^ (unsigned int)getpid()));
+        g_process_session_rng_seeded = true;
+    }
+}
+
+static int process_session_store_find_index(int session_id) {
+    for (uint32_t i = 0; i < g_process_session_store.len; i++) {
+        if (g_process_session_store.items[i].session_id == session_id) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+static void process_session_close(ProcessSession *session) {
+    if (!session) return;
+    process_close_fd(&session->tty_fd);
+    process_close_fd(&session->stdout_fd);
+    process_close_fd(&session->stderr_fd);
+    session->stdin_open = false;
+}
+
+static void process_session_store_remove_at(uint32_t index) {
+    if (index >= g_process_session_store.len) return;
+    process_session_close(&g_process_session_store.items[index]);
+    if (index + 1u < g_process_session_store.len) {
+        memmove(&g_process_session_store.items[index],
+                &g_process_session_store.items[index + 1u],
+                sizeof(ProcessSession) * (g_process_session_store.len - index - 1u));
+    }
+    g_process_session_store.len--;
+}
+
+static int process_session_generate_id(void) {
+    process_session_store_seed_rng();
+    for (;;) {
+        int session_id = 1000 + (rand() % 99000);
+        if (process_session_store_find_index(session_id) < 0) return session_id;
+    }
 }
 
 typedef enum {
@@ -3196,6 +3973,12 @@ static Atom *cetta_library_dispatch_process(Arena *a, Atom *head,
     }
     if (head_id == g_builtin_syms.lib_process_run_cmd_cwd_env_timeout_cap_bytes) {
         return process_run_cmd_cwd_env_timeout_cap_bytes(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_open_session_cmd_cwd_env_tty_yield_cap_bytes) {
+        return process_open_session_cmd_cwd_env_tty_yield_cap_bytes(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_write_session_stdin_yield_cap_bytes) {
+        return process_write_session_stdin_yield_cap_bytes(a, head, args, nargs);
     }
     if (head_id == g_builtin_syms.lib_process_default_shell) {
         return process_default_shell(a, head, args, nargs);
