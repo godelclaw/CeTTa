@@ -64,9 +64,11 @@
 
 (= (codex:fixture-steps-items $steps)
    (let ($head $tail) (decons-atom $steps)
-     (list:append
-       (codex:fixture-step-items $head)
-       (codex:fixture-steps-items $tail))))
+     (let $head-items (eval (codex:fixture-step-items $head))
+       (let $tail-items (eval (codex:fixture-steps-items $tail))
+         (list:append
+           $head-items
+           $tail-items)))))
 
 (= (codex:final-response-candidate $item)
    (case $item
@@ -92,7 +94,8 @@
            (codex:final-response-from-reversed-items $rest $fallback)))))))
 
 (= (codex:final-response-from-items $items)
-   (codex:final-response-from-reversed-items (list:reverse $items) CodexAbsent))
+   (let $reversed-items (eval (list:reverse $items))
+     (codex:final-response-from-reversed-items $reversed-items CodexAbsent)))
 
 (= (codex:run-fixture-turn $steps)
    (let $items (codex:fixture-steps-items $steps)

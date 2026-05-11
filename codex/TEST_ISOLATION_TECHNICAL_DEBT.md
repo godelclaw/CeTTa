@@ -21,6 +21,11 @@ Repeated cases currently split for stability:
   `tests/test_codex_request_user_input_turn_phase_surface.metta`
   Default-mode tool-call output extraction is also evaluator-sensitive; use a
   single `once` around the tool wrapper before reading the output text.
+  Multi-step fixture-turn assembly around a request_user_input step is also
+  brittle; the stable checks go through smaller `fixture-steps-items` /
+  direct item assertions instead of one four-step turn, and the
+  `final-response-from-items` selector can still collapse to `Empty` on that
+  mixed computed item list even when the final-answer item is present.
 - `tests/test_codex_request_permissions_surface.metta`
   `tests/test_codex_request_permissions_cancel_surface.metta`
   Handler event/output/state assertions were rewritten to stable constructor and

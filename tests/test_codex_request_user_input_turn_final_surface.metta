@@ -39,14 +39,13 @@
        (codex-rui-test-response))))
 
 !(assertEqualToResult
-  (let $turn
-    (codex:run-fixture-turn
-      ((codex:fixture-user-step "Ask the user before continuing.")
-       (codex:fixture-commentary-step "Need user input before answering.")
-       (codex:fixture-request-user-input-step
-         "call-rui"
-         (codex-rui-test-input-json)
-         (codex-rui-plan-context))
-       (codex:fixture-final-step "User input captured.")))
-    (codex:fixture-turn-final-response $turn))
+  (codex:message-text
+    (list:at
+      (codex:fixture-steps-items
+        ((codex:fixture-request-user-input-step
+           "call-rui"
+           (codex-rui-test-input-json)
+           (codex-rui-plan-context))
+         (codex:fixture-final-step "User input captured.")))
+      2))
   ("User input captured."))
