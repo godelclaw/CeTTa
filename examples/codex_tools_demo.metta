@@ -20,10 +20,7 @@
 
 !(println!
   (once
-    (json-stringify
-      (codex:item-json
-        (codex:run-tool-call-item
-          (codex:tool-call
-            "call_demo"
-            "exec_command"
-            "{\"cmd\":\"printf codex-tools-demo\",\"login\":false,\"yield_time_ms\":1000}"))))))
+    (codex:exec-command-run-text
+      (codex:run-exec-command
+        "call_demo_text"
+        "{\"cmd\":\"printf codex-tools-demo\",\"login\":false,\"yield_time_ms\":1000}"))))

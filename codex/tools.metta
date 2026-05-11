@@ -25,10 +25,11 @@
 ; - Rust does not need a helper to resume a prior exec result object because
 ;   its async handler layer can naturally thread `session_id` into a later
 ;   write_stdin tool call. This slice adds an internal
-;   `codex:run-exec-command-then-write-stdin-output-text` helper only for
+;   `codex:run-exec-command-then-write-stdin-result` helper only for
 ;   deterministic local surface coverage, because the current evaluator is
 ;   still brittle when a single `.metta` file tries to rebuild follow-on JSON
-;   from a prior result. The public `write_stdin` tool path remains unchanged.
+;   from a prior result. The public `write_stdin` tool path remains unchanged,
+;   but the helper keeps the resumed-session metadata lane auditable.
 ; - Rust applies `apply_patch` interception inside unified_exec. The restarted
 ;   CeTTa tool layer does not yet have the full unified_exec/orchestrator
 ;   stack, so the visible interception is wired at the custom-tool-call
@@ -514,9 +515,8 @@
                 $max-output-tokens))))))
 
 (= (codex:make-exec-command-run-from-snapshot
-      $call-id
       $chunk-id
-      $args
+      $max-output-tokens
       (ProcessSessionSnapshot
         $is-running
         $session-id
@@ -525,13 +525,16 @@
         $stdout
         $stderr
         $aggregated-output
-        $duration-ms))
+        $duration-ms
+        $event-call-id
+        $hook-command))
    (let $original-token-count
      (codex:approx-token-count $aggregated-output)
      (CodexExecCommandRun
-       $call-id
+       $event-call-id
        $chunk-id
-       $args
+       $hook-command
+       $max-output-tokens
        $is-running
        $session-id
        $has-exit-code
@@ -549,16 +552,21 @@
          $has-exit-code
          $exit-code
          $aggregated-output
-         (codex:exec-command-max-output-tokens $args)
+         $max-output-tokens
          $original-token-count))))
 
-(= (codex:make-exec-command-error-run $call-id $args $error)
+(= (codex:make-exec-command-error-run
+      $call-id
+      $hook-command
+      $max-output-tokens
+      $error)
    (let $aggregated-output (str-concat "exec_command failed: " $error)
      (let $original-token-count (codex:approx-token-count $aggregated-output)
        (CodexExecCommandRun
          $call-id
          ""
-         $args
+         $hook-command
+         $max-output-tokens
          False
          0
          False
@@ -573,31 +581,52 @@
 (= (codex:run-exec-command $call-id $input)
    (let $args (codex:parse-exec-command-args $input)
      (case
-       (process-open-session-cmd-cwd-env-tty-yield-cap-bytes
+       (process-open-session-cmd-cwd-env-tty-event-call-id-hook-command-yield-cap-bytes
          (codex:exec-command-argv $args)
          (codex:exec-command-cwd $args)
          (process-create-shell-env-no-thread
            (process-default-shell-env-policy))
          (codex:exec-command-tty $args)
+         $call-id
+         (codex:exec-command-text $args)
          (codex:exec-command-yield-time-ms $args)
          (codex:maximum-raw-output-bytes))
        (((ProcessSessionCallResult True $error $snapshot)
          (codex:make-exec-command-run-from-snapshot
-           $call-id
            (codex:chunk-id-from-call-id $call-id)
-           $args
+           (codex:exec-command-max-output-tokens $args)
            $snapshot))
         ((ProcessSessionCallResult False $error $snapshot)
          (codex:make-exec-command-error-run
            $call-id
-           $args
+           (codex:exec-command-text $args)
+           (codex:exec-command-max-output-tokens $args)
            $error))))))
+
+(= (codex:exec-command-run-event-call-id
+      (CodexExecCommandRun
+        $call-id
+        $chunk-id
+        $hook-command
+        $max-output-tokens
+        $is-running
+        $session-id
+        $has-exit-code
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $original-token-count
+        $text))
+   $call-id)
 
 (= (codex:exec-command-run-call-id
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         $has-exit-code
@@ -614,7 +643,8 @@
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         $has-exit-code
@@ -627,11 +657,48 @@
         $text))
    $chunk-id)
 
+(= (codex:exec-command-run-hook-command
+      (CodexExecCommandRun
+        $call-id
+        $chunk-id
+        $hook-command
+        $max-output-tokens
+        $is-running
+        $session-id
+        $has-exit-code
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $original-token-count
+        $text))
+   $hook-command)
+
+(= (codex:exec-command-run-max-output-tokens
+      (CodexExecCommandRun
+        $call-id
+        $chunk-id
+        $hook-command
+        $max-output-tokens
+        $is-running
+        $session-id
+        $has-exit-code
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $original-token-count
+        $text))
+   $max-output-tokens)
+
 (= (codex:exec-command-run-text
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         $has-exit-code
@@ -648,7 +715,8 @@
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         $has-exit-code
@@ -665,7 +733,8 @@
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         $has-exit-code
@@ -682,7 +751,8 @@
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         True
@@ -699,7 +769,8 @@
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         $has-exit-code
@@ -716,7 +787,8 @@
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         $has-exit-code
@@ -733,7 +805,8 @@
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         $has-exit-code
@@ -750,7 +823,8 @@
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         $has-exit-code
@@ -767,7 +841,8 @@
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         $has-exit-code
@@ -784,7 +859,8 @@
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         $has-exit-code
@@ -798,10 +874,30 @@
    False)
 
 (= (codex:exec-command-run-output-item
+      $output-call-id
       (CodexExecCommandRun
         $call-id
         $chunk-id
-        $args
+        $hook-command
+        $max-output-tokens
+        $is-running
+        $session-id
+        $has-exit-code
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $original-token-count
+        $text))
+   (codex:tool-result $output-call-id $text))
+
+(= (codex:exec-command-run-output-item
+      (CodexExecCommandRun
+        $call-id
+        $chunk-id
+        $hook-command
+        $max-output-tokens
         $is-running
         $session-id
         $has-exit-code
@@ -814,7 +910,44 @@
         $text))
    (codex:tool-result $call-id $text))
 
-(= (codex:run-write-stdin-output-text $call-id $input)
+(= (codex:write-stdin-result-text
+      (CodexWriteStdinResultSuccess $run))
+   (codex:exec-command-run-text $run))
+
+(= (codex:write-stdin-result-text
+      (CodexWriteStdinResultError $text))
+   $text)
+
+(= (codex:is-write-stdin-result-success
+      (CodexWriteStdinResultSuccess $run))
+   True)
+
+(= (codex:is-write-stdin-result-success
+      (CodexWriteStdinResultError $text))
+   False)
+
+(= (codex:write-stdin-result-run
+      (CodexWriteStdinResultSuccess $run))
+   $run)
+
+(= (codex:write-stdin-call-result-to-result
+      $call-id
+      $max-output-tokens
+      (ProcessSessionCallResult True $error $snapshot))
+   (CodexWriteStdinResultSuccess
+     (codex:make-exec-command-run-from-snapshot
+       (codex:chunk-id-from-call-id $call-id)
+       $max-output-tokens
+       $snapshot)))
+
+(= (codex:write-stdin-call-result-to-result
+      $call-id
+      $max-output-tokens
+      (ProcessSessionCallResult False $error $snapshot))
+   (CodexWriteStdinResultError
+     (format-args "write_stdin failed: {}" ($error))))
+
+(= (codex:run-write-stdin $call-id $input)
    (let $args (codex:parse-write-stdin-args $input)
      (case
        (process-write-session-stdin-yield-cap-bytes
@@ -822,30 +955,61 @@
          (codex:write-stdin-chars $args)
          (codex:write-stdin-yield-time-ms $args)
          (codex:maximum-raw-output-bytes))
-       (((ProcessSessionCallResult True $error
-           (ProcessSessionSnapshot
-             $is-running
-             $session-id
-             $has-exit-code
-             $exit-code
-             $stdout
-             $stderr
-             $aggregated-output
-             $duration-ms))
-         (let $original-token-count
-           (codex:approx-token-count $aggregated-output)
-           (codex:format-exec-command-output
+       (((ProcessSessionCallResult True $error $snapshot)
+         (CodexWriteStdinResultSuccess
+           (codex:make-exec-command-run-from-snapshot
              (codex:chunk-id-from-call-id $call-id)
-             $duration-ms
-             $is-running
-             $session-id
-             $has-exit-code
-             $exit-code
-             $aggregated-output
              (codex:write-stdin-max-output-tokens $args)
-             $original-token-count)))
-        ((ProcessSessionCallResult False $error $snapshot)
-         (format-args "write_stdin failed: {}" ($error)))))))
+             $snapshot)))
+       ((ProcessSessionCallResult False $error $snapshot)
+         (CodexWriteStdinResultError
+           (format-args "write_stdin failed: {}" ($error))))))))
+
+(= (codex:run-write-stdin-output-text $call-id $input)
+   (codex:write-stdin-result-text
+     (codex:run-write-stdin $call-id $input)))
+
+(= (codex:run-exec-command-then-write-stdin-result
+      $open-call-id
+      $open-input
+      $write-call-id
+      $chars
+      $yield-time-ms)
+   (case
+     (codex:run-exec-command $open-call-id $open-input)
+     (((CodexExecCommandRun
+         $prior-call-id
+         $prior-chunk-id
+         $prior-hook-command
+         $max-output-tokens
+         True
+         $session-id
+         $has-exit-code
+         $exit-code
+         $stdout
+         $stderr
+         $aggregated-output
+         $duration-ms
+         $original-token-count
+         $text)
+       (case
+         (process-write-session-stdin-yield-cap-bytes
+           $session-id
+           $chars
+           $yield-time-ms
+           (codex:maximum-raw-output-bytes))
+         (((ProcessSessionCallResult True $error $snapshot)
+           (CodexWriteStdinResultSuccess
+             (codex:make-exec-command-run-from-snapshot
+               (codex:chunk-id-from-call-id $write-call-id)
+               $max-output-tokens
+               $snapshot)))
+          ((ProcessSessionCallResult False $error $snapshot)
+           (CodexWriteStdinResultError
+             (format-args "write_stdin failed: {}" ($error)))))))
+      ($other
+       (CodexWriteStdinResultError
+         "write_stdin helper requires a running exec_command result")))))
 
 (= (codex:run-exec-command-then-write-stdin-output-text
       $open-call-id
@@ -853,62 +1017,19 @@
       $write-call-id
       $chars
       $yield-time-ms)
-   (function
-     (case
-       (codex:run-exec-command $open-call-id $open-input)
-       (((CodexExecCommandRun
-           $prior-call-id
-           $prior-chunk-id
-           $args
-           True
-           $session-id
-           $has-exit-code
-           $exit-code
-           $stdout
-           $stderr
-           $aggregated-output
-           $duration-ms
-           $original-token-count
-           $text)
-         (case
-           (process-write-session-stdin-yield-cap-bytes
-             $session-id
-             $chars
-             $yield-time-ms
-             (codex:maximum-raw-output-bytes))
-           (((ProcessSessionCallResult True
-               $error
-               (ProcessSessionSnapshot
-                 $is-running
-                 $next-session-id
-                 $has-next-exit-code
-                 $next-exit-code
-                 $next-stdout
-                 $next-stderr
-                 $next-aggregated-output
-                 $next-duration-ms))
-             (let $next-original-token-count
-               (codex:approx-token-count $next-aggregated-output)
-               (return
-                 (codex:format-exec-command-output
-                   (codex:chunk-id-from-call-id $write-call-id)
-                   $next-duration-ms
-                   $is-running
-                   $next-session-id
-                   $has-next-exit-code
-                   $next-exit-code
-                   $next-aggregated-output
-                   (codex:exec-command-max-output-tokens $args)
-                   $next-original-token-count))))
-            ((ProcessSessionCallResult False $error $snapshot)
-             (return (format-args "write_stdin failed: {}" ($error)))))))
-        ($other
-         (return "write_stdin helper requires a running exec_command result"))))))
+   (codex:write-stdin-result-text
+     (codex:run-exec-command-then-write-stdin-result
+       $open-call-id
+       $open-input
+       $write-call-id
+       $chars
+       $yield-time-ms)))
 
 (= (codex:run-write-stdin-tool-call $call-id $input)
-   (codex:tool-result
-     $call-id
-     (codex:run-write-stdin-output-text $call-id $input)))
+   (let $result (codex:run-write-stdin $call-id $input)
+     (codex:tool-result
+       $call-id
+       (codex:write-stdin-result-text $result))))
 
 (= (codex:run-exec-command-tool-call $call-id $input)
    (let $args (codex:parse-exec-command-args $input)
@@ -917,8 +1038,10 @@
          (codex:exec-command-cwd $args)
          (codex:exec-command-text $args))
        (((CodexApplyPatchInterceptNotMatched)
-         (codex:exec-command-run-output-item
-           (codex:run-exec-command $call-id $input)))
+         (let $run (codex:run-exec-command $call-id $input)
+           (codex:exec-command-run-output-item
+             $call-id
+             $run)))
         ((CodexApplyPatchInterceptMatched $text)
          (codex:tool-result $call-id $text)))))
 

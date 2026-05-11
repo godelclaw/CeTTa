@@ -2193,6 +2193,8 @@ typedef struct {
     int stdout_fd;
     int stderr_fd;
     uint64_t last_used_ns;
+    char *event_call_id;
+    char *hook_command;
 } ProcessSession;
 
 typedef struct {
@@ -2219,6 +2221,7 @@ static void process_head_tail_buffer_init(ProcessHeadTailBuffer *buffer,
                                           size_t max_bytes);
 static void process_head_tail_buffer_free(ProcessHeadTailBuffer *buffer);
 static void process_session_close(ProcessSession *session);
+static void process_session_clear_metadata(ProcessSession *session);
 static int process_session_store_find_index(int session_id);
 static void process_session_store_remove_at(uint32_t index);
 static int process_session_generate_id(void);
@@ -2462,7 +2465,9 @@ static Atom *process_session_snapshot_atom(Arena *a,
                                            const CettaStringBuf *stdout_buf,
                                            const CettaStringBuf *stderr_buf,
                                            const CettaStringBuf *aggregated_buf,
-                                           uint64_t duration_ms) {
+                                           uint64_t duration_ms,
+                                           const char *event_call_id,
+                                           const char *hook_command) {
     if (duration_ms > (uint64_t)INT64_MAX) duration_ms = (uint64_t)INT64_MAX;
     return atom_expr(a, (Atom *[]){
         atom_symbol(a, "ProcessSessionSnapshot"),
@@ -2474,7 +2479,9 @@ static Atom *process_session_snapshot_atom(Arena *a,
         atom_string(a, stderr_buf->buf ? stderr_buf->buf : ""),
         atom_string(a, aggregated_buf->buf ? aggregated_buf->buf : ""),
         atom_int(a, (int64_t)duration_ms),
-    }, 9);
+        atom_string(a, event_call_id ? event_call_id : ""),
+        atom_string(a, hook_command ? hook_command : ""),
+    }, 11);
 }
 
 static Atom *process_session_call_result_atom(Arena *a,
@@ -2640,7 +2647,11 @@ static Atom *process_session_collect_atom(Arena *a,
             continue;
         }
         if (!process_session_has_open_fds(session)) {
-            break;
+            if (session->exited) {
+                break;
+            }
+            usleep(1000);
+            continue;
         }
         select_result = process_session_select(
             session,
@@ -2686,7 +2697,12 @@ static Atom *process_session_collect_atom(Arena *a,
                                                &stdout_text,
                                                &stderr_text,
                                                &aggregated_text,
-                                               process_duration_ms(start_ns, end_ns));
+                                               process_duration_ms(start_ns, end_ns),
+                                               session->event_call_id,
+                                               session->hook_command);
+        if (session->exited) {
+            process_session_clear_metadata(session);
+        }
         cetta_sb_free(&stdout_text);
         cetta_sb_free(&stderr_text);
         cetta_sb_free(&aggregated_text);
@@ -2708,28 +2724,35 @@ static Atom *process_open_session_cmd_cwd_env_tty_yield_cap_bytes(
     ProcessEnvPair *env_pairs;
     uint32_t env_count = 0;
     bool tty = false;
+    const char *event_call_id;
+    const char *hook_command;
     int yield_ms = 0;
     int max_bytes = 0;
     ProcessSession session;
     Atom *snapshot;
     char errbuf[256] = {0};
 
-    if (nargs != 6 || !process_parse_argv(a, args[0], &argv) ||
+    if (nargs != 8 || !process_parse_argv(a, args[0], &argv) ||
         !(cwd = library_text_arg(args[1])) ||
         !process_parse_env_pairs(a, args[2], &env_pairs, &env_count) ||
         !library_bool_arg(args[3], &tty) ||
-        !library_int_arg(args[4], &yield_ms) ||
-        !library_int_arg(args[5], &max_bytes) ||
+        !(event_call_id = library_text_arg(args[4])) ||
+        !(hook_command = library_text_arg(args[5])) ||
+        !library_int_arg(args[6], &yield_ms) ||
+        !library_int_arg(args[7], &max_bytes) ||
         yield_ms < 0 || max_bytes < 0) {
         return library_signature_error(
             a, head, args, nargs,
-            "expected command argv, cwd, env pairs, tty bool, non-negative yield ms, and non-negative max bytes");
+            "expected command argv, cwd, env pairs, tty bool, event call id text, hook command text, non-negative yield ms, and non-negative max bytes");
     }
 
     memset(&session, 0, sizeof(session));
     session.session_id = process_session_generate_id();
+    session.event_call_id = process_strdup_cstr(event_call_id);
+    session.hook_command = process_strdup_cstr(hook_command);
     if (!process_spawn_session(argv, cwd, env_pairs, env_count, &session, tty,
                                errbuf, sizeof(errbuf))) {
+        process_session_clear_metadata(&session);
         return process_session_call_result_atom(a, false, errbuf, NULL);
     }
     snapshot = process_session_collect_atom(a, &session, yield_ms, max_bytes);
@@ -2973,9 +2996,22 @@ static void process_session_close(ProcessSession *session) {
     session->stdin_open = false;
 }
 
+static void process_session_clear_metadata(ProcessSession *session) {
+    if (!session) return;
+    if (session->event_call_id) {
+        free(session->event_call_id);
+        session->event_call_id = NULL;
+    }
+    if (session->hook_command) {
+        free(session->hook_command);
+        session->hook_command = NULL;
+    }
+}
+
 static void process_session_store_remove_at(uint32_t index) {
     if (index >= g_process_session_store.len) return;
     process_session_close(&g_process_session_store.items[index]);
+    process_session_clear_metadata(&g_process_session_store.items[index]);
     if (index + 1u < g_process_session_store.len) {
         memmove(&g_process_session_store.items[index],
                 &g_process_session_store.items[index + 1u],

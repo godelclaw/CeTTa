@@ -40,11 +40,8 @@
 
 !(assertEqualToResult
   (codex:tool-result-output-text
-    (list:at
-      (codex:fixture-steps-items
-        ((codex:fixture-request-user-input-step
-           "call-rui"
-           (codex-rui-test-input-json)
-           (codex-rui-plan-context))))
-      1))
+    (codex:run-request-user-input-tool-call-with-context
+      (codex-rui-plan-context)
+      "call-rui"
+      (codex-rui-test-input-json)))
   ("{\"answers\":{\"choice\":{\"answers\":[\"A (Recommended)\",\"note: keep the stable path\"]}}}"))

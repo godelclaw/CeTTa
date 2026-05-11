@@ -34,6 +34,16 @@ Repeated cases currently split for stability:
   The cancellation-message assertion also has to live in its own file and read
   through the tool-call-result wrapper; direct handler-message extraction can
   still collapse to `Empty` in combined runs.
+- `tests/test_codex_tools_surface.metta`
+  `tests/test_codex_tools_exec_exit_surface.metta`
+  `tests/test_codex_tools_exec_stdout_surface.metta`
+  `tests/test_codex_tools_exec_text_surface.metta`
+  `tests/test_codex_tools_exec_tool_call_surface.metta`
+  Repeated session-backed `exec_command` / tool-call assertions do not stay
+  stable in one combined surface file; the evaluator can re-materialize the
+  session-backed term and intermittently observe the still-running branch
+  instead of the settled one-shot result. These checks now live in one-purpose
+  files and still keep a single `once` around the live expression.
 
 Current workaround:
 - Keep high-risk assertion clusters in separate surface files.

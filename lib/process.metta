@@ -33,7 +33,28 @@
       $max-bytes)
    (function
      (case (__cetta_lib_process_open_session_cmd_cwd_env_tty_yield_cap_bytes
-             $argv $cwd $env $tty $yield-ms $max-bytes)
+             $argv $cwd $env $tty "" "" $yield-ms $max-bytes)
+       (($result (return $result))))))
+
+(= (process-open-session-cmd-cwd-env-tty-event-call-id-hook-command-yield-cap-bytes
+      $argv
+      $cwd
+      $env
+      $tty
+      $event-call-id
+      $hook-command
+      $yield-ms
+      $max-bytes)
+   (function
+     (case (__cetta_lib_process_open_session_cmd_cwd_env_tty_yield_cap_bytes
+             $argv
+             $cwd
+             $env
+             $tty
+             $event-call-id
+             $hook-command
+             $yield-ms
+             $max-bytes)
        (($result (return $result))))))
 
 (= (process-write-session-stdin-yield-cap-bytes
@@ -126,7 +147,9 @@
        $stdout
        $stderr
        $aggregated-output
-       $duration-ms))
+       $duration-ms
+       $event-call-id
+       $hook-command))
    $is-running)
 
 (= (process-session-snapshot-session-id
@@ -138,7 +161,9 @@
        $stdout
        $stderr
        $aggregated-output
-       $duration-ms))
+       $duration-ms
+       $event-call-id
+       $hook-command))
    $session-id)
 
 (= (process-session-snapshot-has-exit-code
@@ -150,7 +175,9 @@
        $stdout
        $stderr
        $aggregated-output
-       $duration-ms))
+       $duration-ms
+       $event-call-id
+       $hook-command))
    $has-exit-code)
 
 (= (process-session-snapshot-exit-code
@@ -162,7 +189,9 @@
        $stdout
        $stderr
        $aggregated-output
-       $duration-ms))
+       $duration-ms
+       $event-call-id
+       $hook-command))
    $exit-code)
 
 (= (process-session-snapshot-stdout
@@ -174,7 +203,9 @@
        $stdout
        $stderr
        $aggregated-output
-       $duration-ms))
+       $duration-ms
+       $event-call-id
+       $hook-command))
    $stdout)
 
 (= (process-session-snapshot-stderr
@@ -186,7 +217,9 @@
        $stdout
        $stderr
        $aggregated-output
-       $duration-ms))
+       $duration-ms
+       $event-call-id
+       $hook-command))
    $stderr)
 
 (= (process-session-snapshot-aggregated-output
@@ -198,7 +231,9 @@
        $stdout
        $stderr
        $aggregated-output
-       $duration-ms))
+       $duration-ms
+       $event-call-id
+       $hook-command))
    $aggregated-output)
 
 (= (process-session-snapshot-duration-ms
@@ -210,5 +245,35 @@
        $stdout
        $stderr
        $aggregated-output
-       $duration-ms))
+       $duration-ms
+       $event-call-id
+       $hook-command))
    $duration-ms)
+
+(= (process-session-snapshot-event-call-id
+     (ProcessSessionSnapshot
+       $is-running
+       $session-id
+       $has-exit-code
+       $exit-code
+       $stdout
+       $stderr
+       $aggregated-output
+       $duration-ms
+       $event-call-id
+       $hook-command))
+   $event-call-id)
+
+(= (process-session-snapshot-hook-command
+     (ProcessSessionSnapshot
+       $is-running
+       $session-id
+       $has-exit-code
+       $exit-code
+       $stdout
+       $stderr
+       $aggregated-output
+       $duration-ms
+       $event-call-id
+       $hook-command))
+   $hook-command)

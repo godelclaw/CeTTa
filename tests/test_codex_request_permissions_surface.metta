@@ -115,8 +115,8 @@
   ("request_permissions handler received unsupported payload"))
 
 !(assertEqualToResult
-  (let $result
-    (codex:run-request-permissions-tool-call-with-context-state
+  (codex:tool-result-output-text
+    (codex:run-request-permissions-tool-call-with-context
       (codex:request-permissions-handler-context
         (codex:ask-for-approval-granular-config
           True
@@ -131,11 +131,8 @@
             (codex-rp-granted-profile)
             (codex:permission-grant-scope-turn)
             False)))
-      (codex:empty-request-permissions-state)
       "call-rp-granular"
-      (codex-rp-input-json))
-    (codex:tool-result-output-text
-      (codex:request-permissions-tool-call-result-item $result)))
+      (codex-rp-input-json)))
   ("{\"permissions\":{},\"scope\":\"turn\"}"))
 
 !(assertEqualToResult

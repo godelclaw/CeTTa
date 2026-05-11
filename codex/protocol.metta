@@ -76,6 +76,13 @@
         (CodexFunctionCallOutputText $text)))
    $text)
 
+(= (codex:tool-result-call-id
+      (CodexResponseItemCustomToolCallOutput
+        $call_id
+        $name
+        $output))
+   $call_id)
+
 (= (codex:content-item-json (CodexInputText $text))
    (JsonObject
      ((JsonPair "type" (JsonString "input_text"))

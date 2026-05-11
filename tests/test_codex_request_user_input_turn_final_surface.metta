@@ -1,6 +1,5 @@
 !(register-module! ../codex)
 !(import! &self json)
-!(import! &self list)
 !(import! &self codex:protocol)
 !(import! &self codex:request_user_input)
 !(import! &self codex:tools)
@@ -39,13 +38,11 @@
        (codex-rui-test-response))))
 
 !(assertEqualToResult
-  (codex:message-text
-    (list:at
-      (codex:fixture-steps-items
-        ((codex:fixture-request-user-input-step
-           "call-rui"
-           (codex-rui-test-input-json)
-           (codex-rui-plan-context))
-         (codex:fixture-final-step "User input captured.")))
-      2))
+  (codex:fixture-turn-final-response
+    (codex:run-fixture-turn
+      ((codex:fixture-request-user-input-step
+         "call-rui"
+         (codex-rui-test-input-json)
+         (codex-rui-plan-context))
+       (codex:fixture-final-step "User input captured."))))
   ("User input captured."))
