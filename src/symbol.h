@@ -248,6 +248,8 @@ typedef struct {
     X(lib_json_parse, "__cetta_lib_json_parse") \
     X(lib_json_stringify, "__cetta_lib_json_stringify") \
     X(lib_json_object_get, "__cetta_lib_json_object_get") \
+    X(lib_patch_inspect, "__cetta_lib_patch_inspect") \
+    X(lib_patch_inspect_shell_command, "__cetta_lib_patch_inspect_shell_command") \
     X(lib_patch_apply, "__cetta_lib_patch_apply") \
     X(lib_patch_intercept_shell_command, "__cetta_lib_patch_intercept_shell_command") \
     X(lib_git_repo_root, "__cetta_lib_git_repo_root") \

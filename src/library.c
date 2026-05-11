@@ -3876,6 +3876,45 @@ typedef struct {
     uint32_t cap;
 } PatchAffectedVec;
 
+typedef enum {
+    PATCH_VERIFIED_ADD = 1,
+    PATCH_VERIFIED_DELETE = 2,
+    PATCH_VERIFIED_UPDATE = 3,
+} PatchVerifiedChangeKind;
+
+typedef struct {
+    PatchVerifiedChangeKind kind;
+    char *path;
+    char *content;
+    char *move_path;
+    char *unified_diff;
+    char *new_content;
+} PatchVerifiedChange;
+
+typedef struct {
+    PatchVerifiedChange *items;
+    uint32_t len;
+    uint32_t cap;
+} PatchVerifiedChangeVec;
+
+typedef enum {
+    PATCH_VIRTUAL_MISSING = 0,
+    PATCH_VIRTUAL_FILE = 1,
+    PATCH_VIRTUAL_DIRECTORY = 2,
+} PatchVirtualFileKind;
+
+typedef struct {
+    char *path;
+    PatchVirtualFileKind kind;
+    char *content;
+} PatchVirtualFile;
+
+typedef struct {
+    PatchVirtualFile *items;
+    uint32_t len;
+    uint32_t cap;
+} PatchVirtualFileVec;
+
 static void patch_set_error(PatchDoc *doc, const char *fmt, ...) {
     va_list ap;
     if (!doc || doc->error[0] != '\0') return;
@@ -4502,6 +4541,411 @@ static void patch_affected_vec_free(PatchAffectedVec *vec) {
     vec->cap = 0;
 }
 
+static void patch_verified_change_vec_init(PatchVerifiedChangeVec *vec) {
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void patch_verified_change_free(PatchVerifiedChange *change) {
+    if (!change) return;
+    free(change->path);
+    free(change->content);
+    free(change->move_path);
+    free(change->unified_diff);
+    free(change->new_content);
+}
+
+static void patch_verified_change_vec_free(PatchVerifiedChangeVec *vec) {
+    if (!vec) return;
+    for (uint32_t i = 0; i < vec->len; i++) {
+        patch_verified_change_free(&vec->items[i]);
+    }
+    free(vec->items);
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void patch_verified_change_vec_push(PatchVerifiedChangeVec *vec,
+                                           PatchVerifiedChangeKind kind,
+                                           const char *path,
+                                           const char *content,
+                                           const char *move_path,
+                                           const char *unified_diff,
+                                           const char *new_content) {
+    if (vec->len >= vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2u : 4u;
+        vec->items = cetta_realloc(vec->items,
+                                   sizeof(PatchVerifiedChange) * vec->cap);
+    }
+    PatchVerifiedChange *slot = &vec->items[vec->len++];
+    slot->kind = kind;
+    slot->path = process_strdup_cstr(path ? path : "");
+    slot->content = content ? process_strdup_cstr(content) : NULL;
+    slot->move_path = move_path ? process_strdup_cstr(move_path) : NULL;
+    slot->unified_diff = unified_diff ? process_strdup_cstr(unified_diff) : NULL;
+    slot->new_content = new_content ? process_strdup_cstr(new_content) : NULL;
+}
+
+static void patch_virtual_file_vec_init(PatchVirtualFileVec *vec) {
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void patch_virtual_file_free(PatchVirtualFile *file) {
+    if (!file) return;
+    free(file->path);
+    free(file->content);
+}
+
+static void patch_virtual_file_vec_free(PatchVirtualFileVec *vec) {
+    if (!vec) return;
+    for (uint32_t i = 0; i < vec->len; i++) {
+        patch_virtual_file_free(&vec->items[i]);
+    }
+    free(vec->items);
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static PatchVirtualFile *patch_virtual_file_find(PatchVirtualFileVec *vec,
+                                                 const char *path) {
+    for (uint32_t i = 0; i < vec->len; i++) {
+        if (strcmp(vec->items[i].path, path) == 0) {
+            return &vec->items[i];
+        }
+    }
+    return NULL;
+}
+
+static PatchVirtualFile *patch_virtual_file_ensure(PatchVirtualFileVec *vec,
+                                                   const char *path) {
+    PatchVirtualFile *existing = patch_virtual_file_find(vec, path);
+    if (existing) return existing;
+    if (vec->len >= vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2u : 4u;
+        vec->items = cetta_realloc(vec->items,
+                                   sizeof(PatchVirtualFile) * vec->cap);
+    }
+    PatchVirtualFile *slot = &vec->items[vec->len++];
+    slot->path = process_strdup_cstr(path ? path : "");
+    slot->kind = PATCH_VIRTUAL_MISSING;
+    slot->content = NULL;
+    return slot;
+}
+
+static bool patch_virtual_file_set(PatchVirtualFileVec *vec,
+                                   const char *path,
+                                   PatchVirtualFileKind kind,
+                                   const char *content) {
+    PatchVirtualFile *file = patch_virtual_file_ensure(vec, path);
+    if (!file) return false;
+    file->kind = kind;
+    free(file->content);
+    file->content = kind == PATCH_VIRTUAL_FILE
+        ? process_strdup_cstr(content ? content : "")
+        : NULL;
+    return true;
+}
+
+static PatchVirtualFile *patch_virtual_file_get_or_load(
+    const char *cwd,
+    const char *path,
+    PatchVirtualFileVec *vec,
+    char *errbuf,
+    size_t errbuf_sz
+) {
+    PatchVirtualFile *file = patch_virtual_file_find(vec, path);
+    if (file) return file;
+
+    file = patch_virtual_file_ensure(vec, path);
+    if (!file) return NULL;
+
+    char path_abs[PATH_MAX];
+    struct stat st;
+    if (!patch_join_path(cwd, path, path_abs, sizeof(path_abs), errbuf, errbuf_sz)) {
+        return NULL;
+    }
+    if (stat(path_abs, &st) != 0) {
+        if (errno == ENOENT) {
+            file->kind = PATCH_VIRTUAL_MISSING;
+            return file;
+        }
+        snprintf(errbuf, errbuf_sz, "cannot stat file: %s", strerror(errno));
+        return NULL;
+    }
+    if (S_ISDIR(st.st_mode)) {
+        file->kind = PATCH_VIRTUAL_DIRECTORY;
+        return file;
+    }
+
+    CettaStringBuf text;
+    if (!library_read_text_file(path_abs, &text, errbuf, errbuf_sz)) {
+        return NULL;
+    }
+    file->kind = PATCH_VIRTUAL_FILE;
+    free(file->content);
+    file->content = process_strdup_cstr(text.buf ? text.buf : "");
+    cetta_sb_free(&text);
+    return file;
+}
+
+static char *patch_format_update_hunk(PatchHunk *hunk) {
+    CettaStringBuf out;
+    cetta_sb_init(&out);
+    for (uint32_t i = 0; i < hunk->chunk_len; i++) {
+        PatchChunk *chunk = &hunk->chunks[i];
+        if (chunk->change_context) {
+            cetta_sb_append(&out, "@@ ");
+            cetta_sb_append(&out, chunk->change_context);
+            cetta_sb_append(&out, "\n");
+        } else {
+            cetta_sb_append(&out, "@@\n");
+        }
+        for (uint32_t j = 0; j < chunk->old_lines.len; j++) {
+            cetta_sb_append(&out, "-");
+            cetta_sb_append(&out, chunk->old_lines.items[j]);
+            cetta_sb_append(&out, "\n");
+        }
+        for (uint32_t j = 0; j < chunk->new_lines.len; j++) {
+            cetta_sb_append(&out, "+");
+            cetta_sb_append(&out, chunk->new_lines.items[j]);
+            cetta_sb_append(&out, "\n");
+        }
+        if (chunk->is_end_of_file) {
+            cetta_sb_append(&out, "*** End of File\n");
+        }
+    }
+    char *result = process_strdup_cstr(out.buf ? out.buf : "");
+    cetta_sb_free(&out);
+    return result;
+}
+
+static bool patch_verify_doc(const char *cwd,
+                             PatchDoc *doc,
+                             PatchVerifiedChangeVec *verified,
+                             char *errbuf,
+                             size_t errbuf_sz) {
+    PatchVirtualFileVec virtual_files;
+    patch_virtual_file_vec_init(&virtual_files);
+
+    for (uint32_t i = 0; i < doc->len; i++) {
+        PatchHunk *hunk = &doc->hunks[i];
+        char path_abs[PATH_MAX];
+        if (!patch_join_path(cwd, hunk->path, path_abs, sizeof(path_abs),
+                             errbuf, errbuf_sz)) {
+            patch_virtual_file_vec_free(&virtual_files);
+            return false;
+        }
+
+        if (hunk->kind == PATCH_HUNK_ADD) {
+            patch_verified_change_vec_push(verified, PATCH_VERIFIED_ADD,
+                                           hunk->path, hunk->contents,
+                                           NULL, NULL, NULL);
+            patch_virtual_file_set(&virtual_files, hunk->path,
+                                   PATCH_VIRTUAL_FILE,
+                                   hunk->contents ? hunk->contents : "");
+            continue;
+        }
+
+        if (hunk->kind == PATCH_HUNK_DELETE) {
+            PatchVirtualFile *file = patch_virtual_file_get_or_load(
+                cwd, hunk->path, &virtual_files, errbuf, errbuf_sz);
+            if (!file) {
+                patch_virtual_file_vec_free(&virtual_files);
+                return false;
+            }
+            if (file->kind == PATCH_VIRTUAL_MISSING) {
+                snprintf(errbuf, errbuf_sz,
+                         "Failed to read file to delete %s: %s",
+                         hunk->path, strerror(ENOENT));
+                patch_virtual_file_vec_free(&virtual_files);
+                return false;
+            }
+            if (file->kind == PATCH_VIRTUAL_DIRECTORY) {
+                snprintf(errbuf, errbuf_sz,
+                         "Failed to delete file %s: path is a directory",
+                         hunk->path);
+                patch_virtual_file_vec_free(&virtual_files);
+                return false;
+            }
+            patch_verified_change_vec_push(verified, PATCH_VERIFIED_DELETE,
+                                           hunk->path, file->content,
+                                           NULL, NULL, NULL);
+            patch_virtual_file_set(&virtual_files, hunk->path,
+                                   PATCH_VIRTUAL_MISSING, NULL);
+            continue;
+        }
+
+        PatchVirtualFile *file = patch_virtual_file_get_or_load(
+            cwd, hunk->path, &virtual_files, errbuf, errbuf_sz);
+        if (!file) {
+            patch_virtual_file_vec_free(&virtual_files);
+            return false;
+        }
+        if (file->kind == PATCH_VIRTUAL_MISSING) {
+            snprintf(errbuf, errbuf_sz,
+                     "Failed to read file to update %s: %s",
+                     hunk->path, strerror(ENOENT));
+            patch_virtual_file_vec_free(&virtual_files);
+            return false;
+        }
+        if (file->kind == PATCH_VIRTUAL_DIRECTORY) {
+            snprintf(errbuf, errbuf_sz,
+                     "Failed to read file to update %s: %s",
+                     hunk->path, strerror(EISDIR));
+            patch_virtual_file_vec_free(&virtual_files);
+            return false;
+        }
+
+        PatchLineVec original_lines;
+        PatchReplacementVec replacements;
+        PatchLineVec new_lines;
+        char *new_text = NULL;
+        char *unified_diff = NULL;
+        patch_split_content_lines(file->content ? file->content : "", &original_lines);
+        patch_replacement_vec_init(&replacements);
+        if (!patch_compute_replacements(&original_lines, hunk->path, hunk,
+                                        &replacements, errbuf, errbuf_sz)) {
+            patch_replacement_vec_free(&replacements);
+            patch_line_vec_free(&original_lines);
+            patch_virtual_file_vec_free(&virtual_files);
+            return false;
+        }
+        patch_apply_replacements(&original_lines, &replacements, &new_lines);
+        new_text = patch_join_content(&new_lines);
+        unified_diff = patch_format_update_hunk(hunk);
+
+        if (hunk->move_path) {
+            char dest_abs[PATH_MAX];
+            if (!patch_join_path(cwd, hunk->move_path, dest_abs, sizeof(dest_abs),
+                                 errbuf, errbuf_sz)) {
+                free(new_text);
+                free(unified_diff);
+                patch_line_vec_free(&new_lines);
+                patch_replacement_vec_free(&replacements);
+                patch_line_vec_free(&original_lines);
+                patch_virtual_file_vec_free(&virtual_files);
+                return false;
+            }
+        }
+
+        patch_verified_change_vec_push(verified, PATCH_VERIFIED_UPDATE,
+                                       hunk->path, NULL, hunk->move_path,
+                                       unified_diff, new_text);
+        if (hunk->move_path) {
+            patch_virtual_file_set(&virtual_files, hunk->move_path,
+                                   PATCH_VIRTUAL_FILE, new_text);
+            patch_virtual_file_set(&virtual_files, hunk->path,
+                                   PATCH_VIRTUAL_MISSING, NULL);
+        } else {
+            patch_virtual_file_set(&virtual_files, hunk->path,
+                                   PATCH_VIRTUAL_FILE, new_text);
+        }
+
+        free(unified_diff);
+        free(new_text);
+        patch_line_vec_free(&new_lines);
+        patch_replacement_vec_free(&replacements);
+        patch_line_vec_free(&original_lines);
+    }
+
+    patch_virtual_file_vec_free(&virtual_files);
+    return true;
+}
+
+static Atom *patch_action_atom(Arena *a,
+                               const char *cwd,
+                               PatchVerifiedChangeVec *verified) {
+    Atom **changes = verified->len
+        ? arena_alloc(a, sizeof(Atom *) * verified->len)
+        : NULL;
+    for (uint32_t i = 0; i < verified->len; i++) {
+        PatchVerifiedChange *change = &verified->items[i];
+        if (change->kind == PATCH_VERIFIED_ADD) {
+            changes[i] = atom_expr(a, (Atom *[]){
+                atom_symbol(a, "PatchActionAdd"),
+                atom_string(a, change->path ? change->path : ""),
+                atom_string(a, change->content ? change->content : ""),
+            }, 3);
+            continue;
+        }
+        if (change->kind == PATCH_VERIFIED_DELETE) {
+            changes[i] = atom_expr(a, (Atom *[]){
+                atom_symbol(a, "PatchActionDelete"),
+                atom_string(a, change->path ? change->path : ""),
+                atom_string(a, change->content ? change->content : ""),
+            }, 3);
+            continue;
+        }
+        changes[i] = atom_expr(a, (Atom *[]){
+            atom_symbol(a, "PatchActionUpdate"),
+            atom_string(a, change->path ? change->path : ""),
+            atom_string(a, change->unified_diff ? change->unified_diff : ""),
+            change->move_path
+                ? atom_string(a, change->move_path)
+                : atom_symbol(a, "PatchNoMove"),
+            atom_string(a, change->new_content ? change->new_content : ""),
+        }, 5);
+    }
+    Atom *action = atom_expr(a, (Atom *[]){
+        atom_symbol(a, "PatchAction"),
+        atom_string(a, cwd ? cwd : ""),
+        atom_expr(a, changes, verified->len),
+    }, 3);
+    return action;
+}
+
+static Atom *patch_inspect_result_atom(Arena *a,
+                                       bool ok,
+                                       const char *error_text,
+                                       Atom *action) {
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "PatchInspectResult"),
+        ok ? atom_true(a) : atom_false(a),
+        atom_string(a, error_text ? error_text : ""),
+        action ? action : atom_symbol(a, "PatchNoAction"),
+    }, 4);
+}
+
+static Atom *patch_inspect(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *cwd;
+    const char *patch_text;
+    PatchDoc doc;
+    PatchVerifiedChangeVec verified;
+    char errbuf[512] = {0};
+    Atom *result;
+
+    if (nargs != 2 || !(cwd = library_text_arg(args[0])) ||
+        !(patch_text = library_text_arg(args[1]))) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected cwd and patch text");
+    }
+
+    patch_doc_init(&doc);
+    patch_verified_change_vec_init(&verified);
+    if (!patch_parse_text(patch_text, &doc)) {
+        snprintf(errbuf, sizeof(errbuf), "%s",
+                 doc.error[0] ? doc.error : "Invalid patch");
+        result = patch_inspect_result_atom(a, false, errbuf, NULL);
+        goto cleanup;
+    }
+    if (!patch_verify_doc(cwd, &doc, &verified, errbuf, sizeof(errbuf))) {
+        result = patch_inspect_result_atom(a, false, errbuf, NULL);
+        goto cleanup;
+    }
+    result = patch_inspect_result_atom(
+        a, true, "", patch_action_atom(a, cwd, &verified));
+
+cleanup:
+    patch_verified_change_vec_free(&verified);
+    patch_doc_free(&doc);
+    return result;
+}
+
 static bool patch_apply_doc(const char *cwd,
                             PatchDoc *doc,
                             PatchAffectedVec *affected,
@@ -4809,6 +5253,83 @@ static Atom *patch_shell_intercept_atom(Arena *a, bool matched, Atom *result) {
     }, 3);
 }
 
+static Atom *patch_shell_inspect_atom(Arena *a,
+                                      bool matched,
+                                      const char *effective_cwd,
+                                      const char *patch_text,
+                                      Atom *result) {
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "PatchShellInspect"),
+        matched ? atom_true(a) : atom_false(a),
+        atom_string(a, effective_cwd ? effective_cwd : ""),
+        atom_string(a, patch_text ? patch_text : ""),
+        result ? result : atom_symbol(a, "PatchNoResult"),
+    }, 5);
+}
+
+static Atom *patch_inspect_shell_command(Arena *a,
+                                         Atom *head,
+                                         Atom **args,
+                                         uint32_t nargs) {
+    const char *cwd;
+    const char *command;
+    char *patch_text = NULL;
+    char *cd_path = NULL;
+    char effective_cwd[PATH_MAX];
+    char errbuf[512] = {0};
+    PatchDoc doc;
+    PatchVerifiedChangeVec verified;
+    Atom *inspect_result;
+    Atom *shell_result;
+
+    if (nargs != 2 || !(cwd = library_text_arg(args[0])) ||
+        !(command = library_text_arg(args[1]))) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected cwd and shell command");
+    }
+
+    if (!patch_extract_shell_heredoc(command, &patch_text, &cd_path)) {
+        return patch_shell_inspect_atom(a, false, "", "", NULL);
+    }
+
+    patch_doc_init(&doc);
+    patch_verified_change_vec_init(&verified);
+
+    if (!patch_join_workdir(cwd, cd_path, effective_cwd, sizeof(effective_cwd),
+                            errbuf, sizeof(errbuf))) {
+        inspect_result = patch_inspect_result_atom(a, false, errbuf, NULL);
+        shell_result = patch_shell_inspect_atom(a, true, "", patch_text,
+                                                inspect_result);
+        goto cleanup;
+    }
+    if (!patch_parse_text(patch_text, &doc)) {
+        snprintf(errbuf, sizeof(errbuf), "%s",
+                 doc.error[0] ? doc.error : "Invalid patch");
+        inspect_result = patch_inspect_result_atom(a, false, errbuf, NULL);
+        shell_result = patch_shell_inspect_atom(a, true, effective_cwd,
+                                                patch_text, inspect_result);
+        goto cleanup;
+    }
+    if (!patch_verify_doc(effective_cwd, &doc, &verified, errbuf, sizeof(errbuf))) {
+        inspect_result = patch_inspect_result_atom(a, false, errbuf, NULL);
+        shell_result = patch_shell_inspect_atom(a, true, effective_cwd,
+                                                patch_text, inspect_result);
+        goto cleanup;
+    }
+
+    inspect_result = patch_inspect_result_atom(
+        a, true, "", patch_action_atom(a, effective_cwd, &verified));
+    shell_result = patch_shell_inspect_atom(a, true, effective_cwd,
+                                            patch_text, inspect_result);
+
+cleanup:
+    patch_verified_change_vec_free(&verified);
+    patch_doc_free(&doc);
+    free(patch_text);
+    free(cd_path);
+    return shell_result;
+}
+
 static Atom *patch_intercept_shell_command(Arena *a,
                                            Atom *head,
                                            Atom **args,
@@ -4882,6 +5403,12 @@ static Atom *cetta_library_dispatch_patch(Arena *a, Atom *head,
                                           Atom **args, uint32_t nargs) {
     if (head->kind != ATOM_SYMBOL) return NULL;
     SymbolId head_id = head->sym_id;
+    if (head_id == g_builtin_syms.lib_patch_inspect) {
+        return patch_inspect(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_patch_inspect_shell_command) {
+        return patch_inspect_shell_command(a, head, args, nargs);
+    }
     if (head_id == g_builtin_syms.lib_patch_apply) {
         return patch_apply(a, head, args, nargs);
     }

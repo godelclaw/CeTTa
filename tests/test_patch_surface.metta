@@ -1,4 +1,5 @@
 !(import! &self fs)
+!(import! &self list)
 !(import! &self patch)
 (= (patch-test-cwd) "/home/zarclaw/repos/CeTTa")
 
@@ -42,6 +43,37 @@
   (fs-read-text "/home/zarclaw/repos/CeTTa/runtime/patch-moved/dest.txt")
   ("new\n"))
 
+!(fs-write-text "/home/zarclaw/repos/CeTTa/runtime/patch-inspect-source.txt" "before\n")
+
+!(assertEqualToResult
+  (patch-inspect-ok?
+    (patch-inspect
+      (patch-test-cwd)
+      "*** Begin Patch\n*** Add File: runtime/patch-inspect-added.txt\n+alpha\n*** Update File: runtime/patch-inspect-source.txt\n*** Move to: runtime/patch-inspect-moved.txt\n@@\n-before\n+after\n*** End Patch"))
+  (True))
+
+!(let $inspection
+    (patch-inspect
+      (patch-test-cwd)
+      "*** Begin Patch\n*** Add File: runtime/patch-inspect-added.txt\n+alpha\n*** Update File: runtime/patch-inspect-source.txt\n*** Move to: runtime/patch-inspect-moved.txt\n@@\n-before\n+after\n*** End Patch")
+  (let $changes (patch-action-changes (patch-inspect-action $inspection))
+    (assertEqualToResult
+      (patch-action-change-kind (list:first $changes))
+      ("add"))))
+
+!(let $inspection
+    (patch-inspect
+      (patch-test-cwd)
+      "*** Begin Patch\n*** Add File: runtime/patch-inspect-added.txt\n+alpha\n*** Update File: runtime/patch-inspect-source.txt\n*** Move to: runtime/patch-inspect-moved.txt\n@@\n-before\n+after\n*** End Patch")
+  (let $changes (patch-action-changes (patch-inspect-action $inspection))
+    (assertEqualToResult
+      (patch-action-change-move-path (list:at $changes 1))
+      ("runtime/patch-inspect-moved.txt"))))
+
+!(assertEqualToResult
+  (fs-read-text "/home/zarclaw/repos/CeTTa/runtime/patch-inspect-source.txt")
+  ("before\n"))
+
 !(assertEqualToResult
   (patch-result-ok?
     (patch-apply
@@ -82,3 +114,31 @@
 !(assertEqualToResult
   (fs-read-text "/home/zarclaw/repos/CeTTa/runtime/patch-shell-cd-target.txt")
   ("cd-after\n"))
+
+!(fs-write-text "/home/zarclaw/repos/CeTTa/runtime/patch-shell-inspect-target.txt" "inspect-before\n")
+
+!(assertEqualToResult
+  (patch-shell-inspect-matched?
+    (patch-inspect-shell-command
+      (patch-test-cwd)
+      "cd runtime && apply_patch <<'PATCH'\n*** Begin Patch\n*** Update File: patch-shell-inspect-target.txt\n@@\n-inspect-before\n+inspect-after\n*** End Patch\nPATCH"))
+  (True))
+
+!(assertEqualToResult
+  (patch-shell-inspect-effective-cwd
+    (patch-inspect-shell-command
+      (patch-test-cwd)
+      "cd runtime && apply_patch <<'PATCH'\n*** Begin Patch\n*** Update File: patch-shell-inspect-target.txt\n@@\n-inspect-before\n+inspect-after\n*** End Patch\nPATCH"))
+  ("/home/zarclaw/repos/CeTTa/runtime"))
+
+!(assertEqualToResult
+  (patch-inspect-ok?
+    (patch-shell-inspect-result
+      (patch-inspect-shell-command
+        (patch-test-cwd)
+        "cd runtime && apply_patch <<'PATCH'\n*** Begin Patch\n*** Update File: patch-shell-inspect-target.txt\n@@\n-inspect-before\n+inspect-after\n*** End Patch\nPATCH")))
+  (True))
+
+!(assertEqualToResult
+  (fs-read-text "/home/zarclaw/repos/CeTTa/runtime/patch-shell-inspect-target.txt")
+  ("inspect-before\n"))
