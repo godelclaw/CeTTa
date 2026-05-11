@@ -235,6 +235,7 @@ typedef struct {
     X(lib_str_starts_with, "__cetta_lib_str_starts_with") \
     X(lib_str_ends_with, "__cetta_lib_str_ends_with") \
     X(lib_str_trim, "__cetta_lib_str_trim") \
+    X(lib_str_base64_encode, "__cetta_lib_str_base64_encode") \
     X(lib_shell_plain_commands, "__cetta_lib_shell_plain_commands") \
     X(lib_process_run_shell, "__cetta_lib_process_run_shell") \
     X(lib_process_run_shell_timeout_ms, "__cetta_lib_process_run_shell_timeout_ms") \

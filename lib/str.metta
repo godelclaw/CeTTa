@@ -47,3 +47,8 @@
    (function
      (case (__cetta_lib_str_trim $text)
        (($result (return $result))))))
+
+(= (str-base64-encode $text)
+   (function
+     (case (__cetta_lib_str_base64_encode $text)
+       (($result (return $result))))))

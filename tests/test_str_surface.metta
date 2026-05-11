@@ -11,3 +11,4 @@
 !(assertEqual (str-starts-with? "alphabet" "alpha") True)
 !(assertEqual (str-ends-with? "alphabet" "bet") True)
 !(assertEqual (str-trim "  hi  ") "hi")
+!(assertEqual (str-base64-encode "hello") "aGVsbG8=")

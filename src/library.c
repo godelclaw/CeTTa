@@ -8133,6 +8133,53 @@ static Atom *str_trim(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     return result;
 }
 
+static Atom *str_base64_encode(Arena *a, Atom *head,
+                               Atom **args, uint32_t nargs) {
+    static const char table[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const char *text;
+    size_t len;
+    size_t out_len;
+    size_t in_ix = 0;
+    size_t out_ix = 0;
+    char *encoded;
+    Atom *result;
+    if (nargs != 1 || !(text = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected text argument");
+    }
+    len = strlen(text);
+    out_len = ((len + 2u) / 3u) * 4u;
+    encoded = cetta_malloc(out_len + 1u);
+    while (in_ix + 3u <= len) {
+        unsigned char b0 = (unsigned char)text[in_ix];
+        unsigned char b1 = (unsigned char)text[in_ix + 1u];
+        unsigned char b2 = (unsigned char)text[in_ix + 2u];
+        encoded[out_ix++] = table[b0 >> 2];
+        encoded[out_ix++] = table[((b0 & 0x03u) << 4) | (b1 >> 4)];
+        encoded[out_ix++] = table[((b1 & 0x0fu) << 2) | (b2 >> 6)];
+        encoded[out_ix++] = table[b2 & 0x3fu];
+        in_ix += 3u;
+    }
+    if (in_ix < len) {
+        unsigned char b0 = (unsigned char)text[in_ix];
+        encoded[out_ix++] = table[b0 >> 2];
+        if (in_ix + 1u < len) {
+            unsigned char b1 = (unsigned char)text[in_ix + 1u];
+            encoded[out_ix++] = table[((b0 & 0x03u) << 4) | (b1 >> 4)];
+            encoded[out_ix++] = table[(b1 & 0x0fu) << 2];
+            encoded[out_ix++] = '=';
+        } else {
+            encoded[out_ix++] = table[(b0 & 0x03u) << 4];
+            encoded[out_ix++] = '=';
+            encoded[out_ix++] = '=';
+        }
+    }
+    encoded[out_ix] = '\0';
+    result = atom_string(a, encoded);
+    free(encoded);
+    return result;
+}
+
 static Atom *cetta_library_dispatch_str(Arena *a, Atom *head,
                                         Atom **args, uint32_t nargs) {
     if (head->kind != ATOM_SYMBOL) return NULL;
@@ -8166,6 +8213,9 @@ static Atom *cetta_library_dispatch_str(Arena *a, Atom *head,
     }
     if (head_id == g_builtin_syms.lib_str_trim) {
         return str_trim(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_str_base64_encode) {
+        return str_base64_encode(a, head, args, nargs);
     }
     return NULL;
 }

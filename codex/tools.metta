@@ -45,6 +45,13 @@
 ;   the native process runtime is still unsandboxed. The merged permission
 ;   profile therefore gates execution and feeds the visible `apply_patch`
 ;   intercept lane, but it cannot yet constrain arbitrary spawned processes.
+; - Rust streams exec output as many delta events with original read chunk
+;   boundaries and raw bytes. The current CeTTa session snapshot surface only
+;   exposes per-poll unread stdout/stderr text, so the visible event helpers
+;   reconstruct at most one delta per stream per poll. Embedded NUL bytes are
+;   also not preserved through the current text atom surface, so event chunks
+;   remain faithful for ordinary text output but not yet for arbitrary binary
+;   output.
 ; - Direct `apply_patch` execution and exec_command interception therefore use
 ;   the current local CLI assumptions from `codex:apply_patch`.
 
@@ -1299,6 +1306,48 @@
         $text))
    (codex:tool-result $call-id $text))
 
+(= (codex:single-exec-command-output-delta-items $call-id $stream $chunk)
+   (if (== $chunk "")
+       ()
+       ((codex:exec-command-output-delta-event $call-id $stream $chunk))))
+
+(= (codex:exec-command-run-output-delta-items
+      (CodexExecCommandRun
+        $call-id
+        $chunk-id
+        $hook-command
+        $max-output-tokens
+        $is-running
+        $session-id
+        $has-exit-code
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $original-token-count
+        $text))
+   (if (== $chunk-id "")
+       ()
+       (let $stdout-items
+         (codex:single-exec-command-output-delta-items
+           $call-id
+           "stdout"
+           $stdout)
+         (let $stderr-items
+           (codex:single-exec-command-output-delta-items
+             $call-id
+             "stderr"
+             $stderr)
+           (list:append
+             $stdout-items
+             $stderr-items)))))
+
+(= (codex:exec-command-run-output-items $output-call-id $run)
+   (list:append
+     (codex:exec-command-run-output-delta-items $run)
+     ((codex:exec-command-run-output-item $output-call-id $run))))
+
 (= (codex:write-stdin-result-text
       (CodexWriteStdinResultSuccess $run))
    (codex:exec-command-run-text $run))
@@ -1450,6 +1499,21 @@
      (codex:tool-result
        $call-id
        (codex:write-stdin-result-text $result))))
+
+(= (codex:write-stdin-result-event-items
+      $args
+      (CodexWriteStdinResultSuccess $run))
+   (list:append
+     ((codex:terminal-interaction-event
+         (codex:exec-command-run-event-call-id $run)
+         (codex:number-text (codex:write-stdin-session-id $args))
+         (codex:write-stdin-chars $args)))
+     (codex:exec-command-run-output-delta-items $run)))
+
+(= (codex:write-stdin-result-event-items
+      $args
+      (CodexWriteStdinResultError $text))
+   ())
 
 (= (codex:run-apply-patch-shell-command-with-request-permissions-state
       $state

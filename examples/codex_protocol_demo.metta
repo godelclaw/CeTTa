@@ -10,5 +10,10 @@
       ((codex:user-message "Summarize the repo state.")
        (codex:assistant-message "Inspecting the workspace.")
        (codex:tool-call "call_1" "exec_command" "{\"cmd\":\"pwd\"}")
+       (codex:exec-command-output-delta-event
+         "call_1"
+         "stdout"
+         "/home/zarclaw/repos/CeTTa\n")
        (codex:tool-result "call_1" "{\"stdout\":\"/home/zarclaw/repos/CeTTa\\n\"}")
+       (codex:terminal-interaction-event "call_1" "45" "exit\n")
        (codex:final-response "The workspace root is /home/zarclaw/repos/CeTTa.")))))
