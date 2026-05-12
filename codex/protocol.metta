@@ -5,8 +5,10 @@
 ; openai-codex/codex-rs/protocol/src/protocol.rs:
 ; - Message
 ; - FunctionCallOutput
+; - McpToolCallOutput
 ; - CustomToolCall
 ; - CustomToolCallOutput
+; - ToolSearchOutput
 ; - ExecCommandOutputDeltaEvent
 ; - TerminalInteractionEvent
 ;
@@ -61,6 +63,12 @@
      CodexAbsent
      (CodexFunctionCallOutputContentItems $items)))
 
+(= (codex:mcp-tool-call-output $call_id $output)
+   (CodexResponseItemMcpToolCallOutput $call_id $output))
+
+(= (codex:tool-search-output $call_id $status $execution $tools)
+   (CodexResponseItemToolSearchOutput $call_id $status $execution $tools))
+
 (= (codex:named-tool-result $call_id $name $output)
    (CodexResponseItemCustomToolCallOutput
      $call_id
@@ -91,12 +99,23 @@
 (= (codex:item-type (CodexResponseItemFunctionCallOutput $call_id $output))
    "function_call_output")
 
+(= (codex:item-type (CodexResponseItemMcpToolCallOutput $call_id $output))
+   "mcp_tool_call_output")
+
 (= (codex:item-type (CodexResponseItemCustomToolCall $call_id $name $input))
    "custom_tool_call")
 
 (= (codex:item-type
       (CodexResponseItemCustomToolCallOutput $call_id $name $output))
    "custom_tool_call_output")
+
+(= (codex:item-type
+      (CodexResponseItemToolSearchOutput
+        $call_id
+        $status
+        $execution
+        $tools))
+   "tool_search_output")
 
 (= (codex:item-type
       (CodexEventExecCommandOutputDelta $call_id $stream $chunk))
@@ -136,6 +155,30 @@
         $name
         $output))
    $call_id)
+
+(= (codex:mcp-tool-call-output-call-id
+      (CodexResponseItemMcpToolCallOutput $call_id $output))
+   $call_id)
+
+(= (codex:mcp-tool-call-output-result
+      (CodexResponseItemMcpToolCallOutput $call_id $output))
+   $output)
+
+(= (codex:tool-search-output-call-id
+      (CodexResponseItemToolSearchOutput
+        $call_id
+        $status
+        $execution
+        $tools))
+   $call_id)
+
+(= (codex:tool-search-output-tools
+      (CodexResponseItemToolSearchOutput
+        $call_id
+        $status
+        $execution
+        $tools))
+   $tools)
 
 (= (codex:exec-command-output-delta-call-id
       (CodexEventExecCommandOutputDelta $call_id $stream $chunk))
@@ -210,6 +253,12 @@
       (JsonPair "call_id" (JsonString $call_id))
       (JsonPair "output" (codex:output-json $output)))))
 
+(= (codex:item-json (CodexResponseItemMcpToolCallOutput $call_id $output))
+   (JsonObject
+     ((JsonPair "type" (JsonString "mcp_tool_call_output"))
+      (JsonPair "call_id" (JsonString $call_id))
+      (JsonPair "output" $output))))
+
 (= (codex:item-json (CodexResponseItemCustomToolCall $call_id $name $input))
    (JsonObject
      ((JsonPair "type" (JsonString "custom_tool_call"))
@@ -232,6 +281,19 @@
           (JsonPair "call_id" (JsonString $call_id))
          (JsonPair "name" (JsonString $name))
          (JsonPair "output" (codex:output-json $output))))))
+
+(= (codex:item-json
+      (CodexResponseItemToolSearchOutput
+        $call_id
+        $status
+        $execution
+        $tools))
+   (JsonObject
+     ((JsonPair "type" (JsonString "tool_search_output"))
+      (JsonPair "call_id" (JsonString $call_id))
+      (JsonPair "status" (JsonString $status))
+      (JsonPair "execution" (JsonString $execution))
+      (JsonPair "tools" (JsonArray $tools)))))
 
 (= (codex:item-json
       (CodexEventExecCommandOutputDelta $call_id $stream $chunk))

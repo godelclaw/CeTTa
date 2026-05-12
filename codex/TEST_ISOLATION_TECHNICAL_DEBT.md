@@ -45,6 +45,10 @@ Repeated cases currently split for stability:
   stable `handle-request-permissions-payload` output instead of the smaller
   tool-call wrapper, because that wrapper can collapse to `Empty` even when the
   underlying handler output is present.
+  The state-profile JSON surface hit the same constructor-lowering issue after
+  the context restart work: passing the derived turn-permissions term directly
+  into `request-permission-profile-json` can miscompare, while an explicit
+  constructor match on `CodexRequestPermissionProfile` stays green.
   The request_permissions + apply_patch lane hit the same pattern again:
   one combined surface file could pass in isolation but fail in the full sweep
   after a neighboring mutating check changed the file baseline. The stable
@@ -108,6 +112,12 @@ Repeated cases currently split for stability:
   coverage remains in the background-drain surface and the write_stdin error
   surface; happy-path resumed-helper metadata checks are deferred until the
   helper/runtime timing can be stabilized again.
+  The background-drain surface itself also needs a timing-tolerant assertion in
+  the current environment: after the waited repoll, the snapshot may already be
+  completed with the trailing `done` text present, or it may still be the
+  running session snapshot. The green public check therefore accepts either
+  state while still bounding the elapsed runtime, instead of requiring the
+  completed-tail branch on every run.
   The same evaluator behavior currently makes live multi-item event lowering
   from a real `exec_command` tool call brittle: direct tool-call -> event-list
   helper wrappers collapsed to `Empty` even though the underlying

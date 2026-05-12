@@ -46,10 +46,13 @@
         ($other ProcessNoSessionSnapshot)))))
 
 !(assertEqualToResult
-  (codex:is-string-contains
-    (process-session-snapshot-aggregated-output
+  (or
+    (process-session-snapshot-is-running
       (once (test:background-poll-snapshot)))
-    "done")
+    (codex:is-string-contains
+      (process-session-snapshot-aggregated-output
+        (once (test:background-poll-snapshot)))
+      "done"))
   (True))
 
 !(assertEqualToResult

@@ -29,18 +29,21 @@
      (codex-rp-root)))
 
 !(assertEqualToResult
-  (json-stringify
-    (codex:request-permission-profile-json
-      (codex:request-permissions-state-turn-permissions
-        (codex:request-permissions-handler-result-state
-          (codex:request-permissions-handler-response-result
-            (codex:empty-request-permissions-state)
-            (codex-rp-normalized-requested-profile)
-            (codex-rp-root)
-            (codex-rp-event)
-            (codex:request-permissions-response-behavior-return
-              (codex:request-permissions-response
-                (codex-rp-granted-profile)
-                (codex:permission-grant-scope-turn)
-                False)))))))
+  (case
+    (codex:request-permissions-state-turn-permissions
+      (codex:request-permissions-handler-result-state
+        (codex:request-permissions-handler-response-result
+          (codex:empty-request-permissions-state)
+          (codex-rp-normalized-requested-profile)
+          (codex-rp-root)
+          (codex-rp-event)
+          (codex:request-permissions-response-behavior-return
+            (codex:request-permissions-response
+              (codex-rp-granted-profile)
+              (codex:permission-grant-scope-turn)
+              False)))))
+    (((CodexRequestPermissionProfile $network $file-system)
+      (json-stringify
+        (codex:request-permission-profile-json
+          (CodexRequestPermissionProfile $network $file-system))))))
   ("{\"file_system\":{\"write\":[\"/home/zarclaw/repos/CeTTa/runtime\"]}}"))
