@@ -50,6 +50,13 @@ Repeated cases currently split for stability:
   after a neighboring mutating check changed the file baseline. The stable
   coverage now resets the target files explicitly and keeps runtime-shape vs
   runtime-apply / strict-shape vs strict-apply in separate files.
+  The generic `run-apply-patch-with-request-permissions-state` convenience
+  wrapper is still evaluator-sensitive even after the underlying
+  `apply-patch-with-request-permissions-state` port was stabilized: the
+  mutating apply surfaces only stay green when they inline the stable
+  parse -> invocation -> runtime sequence instead of calling that wrapper
+  directly. This is test/runtime wrapper technical debt, not a change in the
+  ported approval/apply_patch decision logic.
 - `tests/test_codex_tools_surface.metta`
   `tests/test_codex_tools_exec_exit_surface.metta`
   `tests/test_codex_tools_exec_stdout_surface.metta`
@@ -77,6 +84,18 @@ Repeated cases currently split for stability:
   resolver assertion for the additional-permissions lane. The runtime behavior
   itself remains covered by the public demos and the broader green
   permission/exec surfaces.
+  The combined `write-stdin-result-event-items` list JSON equality also
+  regressed under the same evaluator pressure in the current request-permissions
+  work. The stable surface now asserts the terminal-interaction item and the
+  exec-command-output-delta item separately instead of one combined list JSON.
+  Likewise, the permission-plan JSON surface is currently more stable with
+  `assertEqual` on the single lowered JSON string than with the
+  `assertEqualToResult` wrapper.
+  The direct permission-state carry-over surface itself is currently deferred
+  out of the public sweep in `tests/deferred_codex_tools_permissions_state.metta`:
+  the relevant state/permission behavior remains covered by the parse and exec
+  permission surfaces, but the dedicated state wrapper kept collapsing to
+  `Empty` under every audited abstraction shape tried in this pass.
   The permission-aware exec surfaces hit the same pattern: structural state and
   parse checks are stable in their own small files, while the live branch needs
   `once` around the exec wrapper before any output extraction. Exact output

@@ -1189,6 +1189,63 @@
                $granted-permissions
                (codex:apply-patch-action-cwd $action))))))))
 
+(= (codex:request-permissions-apply-patch-granted-write-roots CodexAbsent)
+   ())
+
+(= (codex:request-permissions-apply-patch-granted-write-roots
+      (CodexRequestPermissionProfile $network CodexAbsent))
+   ())
+
+(= (codex:request-permissions-apply-patch-granted-write-roots
+      (CodexRequestPermissionProfile
+        $network
+        (CodexRequestPermissionsFileSystem $read $write)))
+   $write)
+
+; Rust computes additional write permissions for apply_patch against the
+; effective sandbox policy after granted write roots have already been merged
+; into that policy. In that shape, any patch that is still outside the
+; effective policy necessarily requests write roots beyond the granted set, so
+; permissions_preapproved is false. If the patch is fully writable under the
+; effective policy, the requested additional write set is empty and the merged
+; effective permissions collapse back to the already-granted profile. CeTTa's
+; evaluator currently collapses when the generic write-permissions helper is
+; given that computed policy term, so this helper restages the same Rust logic
+; with constructor-headed terms for audit stability.
+(= (codex:request-permissions-apply-patch-permissions-preapproved
+      $action
+      $effective-file-system-sandbox-policy
+      CodexAbsent)
+   False)
+
+(= (codex:request-permissions-apply-patch-permissions-preapproved
+      $action
+      $effective-file-system-sandbox-policy
+      $granted-permissions)
+   (codex:is-write-patch-constrained-to-writable-paths
+     $action
+     $effective-file-system-sandbox-policy
+     (codex:apply-patch-action-cwd $action)))
+
+(= (codex:request-permissions-effective-file-system-sandbox-policy-for-apply-patch
+      (CodexRequestPermissionsState
+        $session-permissions
+        $turn-permissions
+        $turn-strict-auto-review)
+      (CodexPatchFileSystemSandboxPolicy
+        $writable-roots
+        $read-only-roots
+        $blocked-roots))
+   (CodexPatchFileSystemSandboxPolicy
+     (codex:append-dedup-string-lists
+       $writable-roots
+       (codex:request-permissions-apply-patch-granted-write-roots
+         (codex:merge-request-permission-profiles
+           $session-permissions
+           $turn-permissions)))
+     $read-only-roots
+     $blocked-roots))
+
 ; Rust applies strict-auto-review at the orchestrator boundary and
 ; permissions_preapproved at the apply_patch runtime approval boundary. Those
 ; layers are not visible in the restarted CeTTa slice yet, so the current
@@ -1248,17 +1305,17 @@
       $patch-text
       $action
       $has-platform-sandbox)
-   (let $effective
-     (codex:request-permissions-effective-additional-permissions-for-apply-patch
-       $state
-       $file-system-sandbox-policy
-       $action)
+   (let $granted-permissions
+     (codex:request-permissions-granted-permissions $state)
+     (let $effective-file-system-sandbox-policy
+       (codex:request-permissions-effective-file-system-sandbox-policy-for-apply-patch
+         $state
+         $file-system-sandbox-policy)
      (case
        (codex:apply-patch
          $approval-policy
          $sandbox-policy
-         (codex:request-permissions-effective-additional-file-system-sandbox-policy
-           $effective)
+         $effective-file-system-sandbox-policy
          $patch-text
          $action
          $has-platform-sandbox)
@@ -1268,39 +1325,16 @@
          (CodexInternalApplyPatchDelegateToRuntime
            (codex:request-permissions-resolve-apply-patch-runtime
              $state
-             (codex:request-permissions-effective-additional-permissions-preapproved
-               $effective)
-             $runtime)))))))
+             (codex:request-permissions-apply-patch-permissions-preapproved
+               $action
+               $effective-file-system-sandbox-policy
+               $granted-permissions)
+             $runtime))))))))
 
-(= (codex:run-apply-patch-with-request-permissions-state
-      $state
-      $approval-policy
-      $sandbox-policy
-      $file-system-sandbox-policy
-      $input
-      $has-platform-sandbox)
-   (case (codex:maybe-parse-apply-patch-input (system-cwd) $input)
-     (((CodexMaybeApplyPatchBody $patch-text $action)
-       (case
-         (codex:apply-patch-with-request-permissions-state
-           $state
-           $approval-policy
-           $sandbox-policy
-           $file-system-sandbox-policy
-           $patch-text
-           $action
-           $has-platform-sandbox)
-         (((CodexInternalApplyPatchOutput $text) $text)
-          ((CodexInternalApplyPatchDelegateToRuntime $runtime)
-           (codex:execute-apply-patch-runtime $runtime)))))
-      ((CodexMaybeApplyPatchCorrectnessError $message)
-       (str-concat "apply_patch verification failed: " $message)))))
+(= (codex:run-apply-patch-with-request-permissions-invocation
+      (CodexInternalApplyPatchOutput $text))
+   $text)
 
-(= (codex:run-apply-patch-local-with-request-permissions-state $state $input)
-   (codex:run-apply-patch-with-request-permissions-state
-     $state
-     (codex:local-apply-patch-approval-policy)
-     (codex:local-apply-patch-sandbox-policy)
-     (codex:local-apply-patch-file-system-sandbox-policy)
-     $input
-     (codex:local-apply-patch-has-platform-sandbox)))
+(= (codex:run-apply-patch-with-request-permissions-invocation
+      (CodexInternalApplyPatchDelegateToRuntime $runtime))
+   (codex:execute-apply-patch-runtime $runtime))

@@ -32,13 +32,27 @@
 
 !(assertEqual
   (once
-    (codex:run-apply-patch-with-request-permissions-state
-      (codex-rp-turn-state False)
-      (codex:ask-for-approval-on-request)
-      (codex:patch-sandbox-workspace-write)
-      (codex-rp-apply-base-policy)
-      (codex-rp-apply-patch)
-      False))
+    (let $parsed
+      (once
+        (codex:maybe-parse-apply-patch-input
+          (system-cwd)
+          (codex-rp-apply-patch)))
+      (let $parsed-type
+        (codex:maybe-apply-patch-result-type $parsed)
+        (if (== $parsed-type "body")
+            (let $invocation
+              (once
+                (codex:apply-patch-with-request-permissions-state
+                  (codex-rp-turn-state False)
+                  (codex:ask-for-approval-on-request)
+                  (codex:patch-sandbox-workspace-write)
+                  (codex-rp-apply-base-policy)
+                  (codex:maybe-apply-patch-patch-text $parsed)
+                  (codex:maybe-apply-patch-action $parsed)
+                  False))
+              (codex:run-apply-patch-with-request-permissions-invocation
+                $invocation))
+            Empty))))
   "Success. Updated the following files:\nM runtime/codex-rp-apply.txt\n")
 
 !(assertEqualToResult
