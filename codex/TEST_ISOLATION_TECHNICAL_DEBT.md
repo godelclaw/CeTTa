@@ -28,6 +28,9 @@ Repeated cases currently split for stability:
   mixed computed item list even when the final-answer item is present.
 - `tests/test_codex_request_permissions_surface.metta`
   `tests/test_codex_request_permissions_cancel_surface.metta`
+  `tests/test_codex_request_permissions_granular_surface.metta`
+  `tests/test_codex_request_permissions_handler_output_surface.metta`
+  `tests/test_codex_request_permissions_state_surface.metta`
   `tests/test_codex_request_permissions_apply_patch_runtime_shape_surface.metta`
   `tests/test_codex_request_permissions_apply_patch_runtime_apply_surface.metta`
   `tests/test_codex_request_permissions_apply_patch_strict_shape_surface.metta`

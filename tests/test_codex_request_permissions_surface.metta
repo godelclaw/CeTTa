@@ -75,37 +75,6 @@
   ("{\"call_id\":\"call-rp\",\"turn_id\":\"turn-rp\",\"reason\":\"Need docs and runtime access.\",\"permissions\":{\"network\":{\"enabled\":true},\"file_system\":{\"read\":[\"/home/zarclaw/repos/CeTTa/docs\"],\"write\":[\"/home/zarclaw/repos/CeTTa/runtime\"]}},\"cwd\":\"/home/zarclaw/repos/CeTTa\"}"))
 
 !(assertEqualToResult
-  (codex:request-permissions-handler-result-output-text
-    (codex:request-permissions-handler-response-result
-      (codex:empty-request-permissions-state)
-      (codex-rp-normalized-requested-profile)
-      (codex-rp-root)
-      (codex-rp-event)
-      (codex:request-permissions-response-behavior-return
-        (codex:request-permissions-response
-          (codex-rp-granted-profile)
-          (codex:permission-grant-scope-turn)
-          False))))
-  ("{\"permissions\":{\"file_system\":{\"write\":[\"/home/zarclaw/repos/CeTTa/runtime\"]}},\"scope\":\"turn\"}"))
-
-!(assertEqualToResult
-  (json-stringify
-    (codex:request-permission-profile-json
-      (codex:request-permissions-state-turn-permissions
-        (codex:request-permissions-handler-result-state
-          (codex:request-permissions-handler-response-result
-            (codex:empty-request-permissions-state)
-            (codex-rp-normalized-requested-profile)
-            (codex-rp-root)
-            (codex-rp-event)
-            (codex:request-permissions-response-behavior-return
-              (codex:request-permissions-response
-                (codex-rp-granted-profile)
-                (codex:permission-grant-scope-turn)
-                False)))))))
-  ("{\"file_system\":{\"write\":[\"/home/zarclaw/repos/CeTTa/runtime\"]}}"))
-
-!(assertEqualToResult
   (codex:request-permissions-handler-result-message
     (codex:handle-request-permissions-payload
       (codex-rp-context)
@@ -113,32 +82,6 @@
       "call-rp"
       (codex:request-permissions-unsupported-payload "custom")))
   ("request_permissions handler received unsupported payload"))
-
-!(assertEqual
-  (once
-    (case
-      (codex:handle-request-permissions-payload
-        (codex:request-permissions-handler-context
-          (codex:ask-for-approval-granular-config
-            True
-            False
-            False
-            False
-            False)
-          "turn-rp"
-          (codex-rp-root)
-          (codex:request-permissions-response-behavior-return
-            (codex:request-permissions-response
-              (codex-rp-granted-profile)
-              (codex:permission-grant-scope-turn)
-              False)))
-        (codex:empty-request-permissions-state)
-        "call-rp-granular"
-        (codex:request-permissions-function-payload
-          (codex-rp-input-json)))
-      (((CodexRequestPermissionsHandlerOutput $event $output $next-state)
-        $output))))
-  "{\"permissions\":{},\"scope\":\"turn\"}")
 
 !(assertEqualToResult
   (json-stringify
