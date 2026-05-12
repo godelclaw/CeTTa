@@ -48,6 +48,11 @@
      (case (__cetta_lib_str_trim $text)
        (($result (return $result))))))
 
+(= (str-take-bytes-at-char-boundary $text $max_bytes)
+   (function
+     (case (__cetta_lib_str_take_bytes_at_char_boundary $text $max_bytes)
+       (($result (return $result))))))
+
 (= (str-base64-encode $text)
    (function
      (case (__cetta_lib_str_base64_encode $text)

@@ -8133,6 +8133,33 @@ static Atom *str_trim(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     return result;
 }
 
+static Atom *str_take_bytes_at_char_boundary(Arena *a, Atom *head,
+                                             Atom **args, uint32_t nargs) {
+    const char *text;
+    int max_bytes;
+    size_t len;
+    size_t stop;
+    char *slice;
+    Atom *result;
+    if (nargs != 2 || !(text = library_text_arg(args[0])) ||
+        !library_int_arg(args[1], &max_bytes) || max_bytes < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected text and non-negative byte length");
+    }
+    len = strlen(text);
+    stop = (size_t)max_bytes;
+    if (stop > len) stop = len;
+    while (stop > 0 && (((unsigned char)text[stop]) & 0xc0u) == 0x80u) {
+        stop--;
+    }
+    slice = cetta_malloc(stop + 1u);
+    memcpy(slice, text, stop);
+    slice[stop] = '\0';
+    result = atom_string(a, slice);
+    free(slice);
+    return result;
+}
+
 static Atom *str_base64_encode(Arena *a, Atom *head,
                                Atom **args, uint32_t nargs) {
     static const char table[] =
@@ -8213,6 +8240,9 @@ static Atom *cetta_library_dispatch_str(Arena *a, Atom *head,
     }
     if (head_id == g_builtin_syms.lib_str_trim) {
         return str_trim(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_str_take_bytes_at_char_boundary) {
+        return str_take_bytes_at_char_boundary(a, head, args, nargs);
     }
     if (head_id == g_builtin_syms.lib_str_base64_encode) {
         return str_base64_encode(a, head, args, nargs);

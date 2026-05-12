@@ -4,14 +4,16 @@
 ; openai-codex/codex-rs/protocol/src/models.rs and
 ; openai-codex/codex-rs/protocol/src/protocol.rs:
 ; - Message
+; - FunctionCallOutput
 ; - CustomToolCall
 ; - CustomToolCallOutput
 ; - ExecCommandOutputDeltaEvent
 ; - TerminalInteractionEvent
 ;
-; This first increment intentionally covers only the plain-text branches of
-; ContentItem and FunctionCallOutputPayload. The array content-item branch will
-; land in a later slice.
+; This increment covers the plain-text and structured content-item branches of
+; FunctionCallOutputPayload at the JSON wire layer. The content-item subset
+; follows Rust here: `input_text` and `input_image` are supported for
+; function/custom tool outputs.
 ;
 ; CeTTa detail: `Empty` is a reduction sentinel, so omitted optional protocol
 ; fields use the internal tag `CodexAbsent` until projected back out.
@@ -35,6 +37,15 @@
 (= (codex:final-response $text)
    (CodexResponseItemMessage "assistant" ((CodexOutputText $text)) "final_answer"))
 
+(= (codex:function-call-output-text $text)
+   (CodexFunctionCallOutputText $text))
+
+(= (codex:function-call-output-content-items $items)
+   (CodexFunctionCallOutputContentItems $items))
+
+(= (codex:function-tool-result $call_id $output)
+   (CodexResponseItemFunctionCallOutput $call_id $output))
+
 (= (codex:tool-call $call_id $name $input)
    (CodexResponseItemCustomToolCall $call_id $name $input))
 
@@ -44,11 +55,29 @@
      CodexAbsent
      (CodexFunctionCallOutputText $output)))
 
+(= (codex:tool-result-content-items $call_id $items)
+   (CodexResponseItemCustomToolCallOutput
+     $call_id
+     CodexAbsent
+     (CodexFunctionCallOutputContentItems $items)))
+
 (= (codex:named-tool-result $call_id $name $output)
    (CodexResponseItemCustomToolCallOutput
      $call_id
      $name
      (CodexFunctionCallOutputText $output)))
+
+(= (codex:named-tool-result-content-items $call_id $name $items)
+   (CodexResponseItemCustomToolCallOutput
+     $call_id
+     $name
+     (CodexFunctionCallOutputContentItems $items)))
+
+(= (codex:input-image $image_url)
+   (CodexInputImage $image_url CodexAbsent))
+
+(= (codex:input-image $image_url $detail)
+   (CodexInputImage $image_url $detail))
 
 (= (codex:exec-command-output-delta-event $call_id $stream $chunk)
    (CodexEventExecCommandOutputDelta $call_id $stream $chunk))
@@ -58,6 +87,9 @@
 
 (= (codex:item-type (CodexResponseItemMessage $role $content $phase))
    "message")
+
+(= (codex:item-type (CodexResponseItemFunctionCallOutput $call_id $output))
+   "function_call_output")
 
 (= (codex:item-type (CodexResponseItemCustomToolCall $call_id $name $input))
    "custom_tool_call")
@@ -134,6 +166,16 @@
      ((JsonPair "type" (JsonString "input_text"))
       (JsonPair "text" (JsonString $text)))))
 
+(= (codex:content-item-json (CodexInputImage $image_url $detail))
+   (if (== $detail CodexAbsent)
+       (JsonObject
+         ((JsonPair "type" (JsonString "input_image"))
+          (JsonPair "image_url" (JsonString $image_url))))
+       (JsonObject
+         ((JsonPair "type" (JsonString "input_image"))
+          (JsonPair "image_url" (JsonString $image_url))
+          (JsonPair "detail" (JsonString $detail))))))
+
 (= (codex:content-item-json (CodexOutputText $text))
    (JsonObject
      ((JsonPair "type" (JsonString "output_text"))
@@ -147,6 +189,9 @@
 (= (codex:output-json (CodexFunctionCallOutputText $text))
    (JsonString $text))
 
+(= (codex:output-json (CodexFunctionCallOutputContentItems $items))
+   (codex:content-json $items))
+
 (= (codex:item-json (CodexResponseItemMessage $role $content $phase))
    (if (== $phase CodexAbsent)
        (JsonObject
@@ -158,6 +203,12 @@
           (JsonPair "role" (JsonString $role))
           (JsonPair "content" (codex:content-json $content))
           (JsonPair "phase" (JsonString $phase))))))
+
+(= (codex:item-json (CodexResponseItemFunctionCallOutput $call_id $output))
+   (JsonObject
+     ((JsonPair "type" (JsonString "function_call_output"))
+      (JsonPair "call_id" (JsonString $call_id))
+      (JsonPair "output" (codex:output-json $output)))))
 
 (= (codex:item-json (CodexResponseItemCustomToolCall $call_id $name $input))
    (JsonObject

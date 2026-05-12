@@ -11,4 +11,8 @@
 !(assertEqual (str-starts-with? "alphabet" "alpha") True)
 !(assertEqual (str-ends-with? "alphabet" "bet") True)
 !(assertEqual (str-trim "  hi  ") "hi")
+!(assertEqual (str-take-bytes-at-char-boundary "AeB" 2) "Ae")
+!(assertEqual (str-take-bytes-at-char-boundary "Aé日B" 2) "A")
+!(assertEqual (str-take-bytes-at-char-boundary "Aé日B" 5) "Aé")
+!(assertEqual (str-take-bytes-at-char-boundary "Aé日B" 6) "Aé日")
 !(assertEqual (str-base64-encode "hello") "aGVsbG8=")
