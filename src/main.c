@@ -30,6 +30,8 @@ static void handle_sigsegv(int sig) {
 static bool g_count_only = false;
 static bool g_quiet_results = false;
 static const uint64_t CETTA_MM2_DEFAULT_RUN_STEPS = 1000000000000000ULL;
+static bool atom_id_is_symbol_id(const TermUniverse *universe, AtomId atom_id,
+                                 SymbolId sym_id);
 
 typedef enum {
     CETTA_DISPLAY_VARS_AUTO = 0,
@@ -552,9 +554,287 @@ static void write_results(FILE *out, ResultSet *rs) {
     fprintf(out, "]\n");
 }
 
+static void reset_eval_arena(Arena *eval_arena) {
+    eval_release_temporary_spaces();
+    arena_free(eval_arena);
+    arena_init(eval_arena);
+    arena_set_runtime_kind(eval_arena, CETTA_ARENA_RUNTIME_KIND_EVAL);
+    arena_set_hashcons(eval_arena, NULL);
+}
+
+static int execute_top_level_batch(bool lang_is_mm2,
+                                   Atom **atoms,
+                                   AtomId *atom_ids,
+                                   int n,
+                                   Space *space,
+                                   Arena *eval_arena,
+                                   Arena *arena,
+                                   Registry *registry,
+                                   CettaLibraryContext *libraries,
+                                   FILE *out) {
+    int i = 0;
+
+    while (i < n) {
+        if (lang_is_mm2) {
+            Atom *at = atoms[i];
+            if (atom_is_symbol_id(at, g_builtin_syms.bang) && i + 1 < n) {
+                Atom *expr = atoms[i + 1];
+                ResultSet rs;
+                result_set_init(&rs);
+                eval_top_with_registry(space, eval_arena, arena, registry, expr, &rs);
+                write_results(out, &rs);
+                if (fflush(out) != 0) {
+                    fprintf(stderr, "error: could not flush evaluation output\n");
+                    free(rs.items);
+                    return 1;
+                }
+                bool stop_after_error = result_set_has_error(&rs);
+                free(rs.items);
+                reset_eval_arena(eval_arena);
+                if (stop_after_error) break;
+                i += 2;
+                continue;
+            }
+
+            /* MM2 lowering still owns this mutable surface. */
+            space_add(space, at);
+            i++;
+            continue;
+        }
+
+        AtomId at_id = atom_ids[i];
+        if (atom_id_is_symbol_id(&libraries->term_universe, at_id,
+                                 g_builtin_syms.bang) &&
+            i + 1 < n) {
+            Atom *expr = term_universe_copy_atom(&libraries->term_universe, arena,
+                                                 atom_ids[i + 1]);
+            ResultSet rs;
+            if (!expr) {
+                fprintf(stderr, "error: could not decode top-level eval form\n");
+                return 1;
+            }
+            result_set_init(&rs);
+            eval_top_with_registry(space, eval_arena, arena, registry, expr, &rs);
+            write_results(out, &rs);
+            if (fflush(out) != 0) {
+                fprintf(stderr, "error: could not flush evaluation output\n");
+                free(rs.items);
+                return 1;
+            }
+            bool stop_after_error = result_set_has_error(&rs);
+            free(rs.items);
+            reset_eval_arena(eval_arena);
+            if (stop_after_error) break;
+            i += 2;
+            continue;
+        }
+
+        space_add_atom_id(space, at_id);
+        i++;
+    }
+
+    return 0;
+}
+
+static bool text_buffer_append(char **buf,
+                               size_t *len,
+                               size_t *cap,
+                               const char *text) {
+    size_t text_len = strlen(text);
+    size_t needed = *len + text_len + 1;
+    if (needed > *cap) {
+        size_t next_cap = *cap ? *cap * 2u : 256u;
+        while (next_cap < needed) next_cap *= 2u;
+        char *next = realloc(*buf, next_cap);
+        if (!next) return false;
+        *buf = next;
+        *cap = next_cap;
+    }
+    memcpy(*buf + *len, text, text_len);
+    *len += text_len;
+    (*buf)[*len] = '\0';
+    return true;
+}
+
+static const char *trim_ascii_space(const char *text) {
+    while (*text && isspace((unsigned char)*text)) text++;
+    return text;
+}
+
+static bool repl_line_is_blank_or_comment(const char *line) {
+    const char *trimmed = trim_ascii_space(line);
+    return *trimmed == '\0' || *trimmed == ';';
+}
+
+static bool repl_line_matches_command(const char *line, const char *command) {
+    const char *trimmed = trim_ascii_space(line);
+    size_t command_len = strlen(command);
+    if (strncmp(trimmed, command, command_len) != 0) return false;
+    trimmed += command_len;
+    while (*trimmed && isspace((unsigned char)*trimmed)) trimmed++;
+    return *trimmed == '\0';
+}
+
+static bool repl_text_is_complete(const char *text) {
+    int paren_depth = 0;
+    bool in_string = false;
+    bool escape = false;
+    bool in_comment = false;
+    bool saw_payload = false;
+
+    for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
+        unsigned char c = *p;
+        if (in_comment) {
+            if (c == '\n') in_comment = false;
+            continue;
+        }
+        if (in_string) {
+            saw_payload = true;
+            if (escape) {
+                escape = false;
+            } else if (c == '\\') {
+                escape = true;
+            } else if (c == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (c == ';') {
+            in_comment = true;
+            continue;
+        }
+        if (c == '"') {
+            in_string = true;
+            saw_payload = true;
+            continue;
+        }
+        if (c == '(') {
+            paren_depth++;
+            saw_payload = true;
+            continue;
+        }
+        if (c == ')') {
+            if (paren_depth > 0) paren_depth--;
+            saw_payload = true;
+            continue;
+        }
+        if (!isspace(c)) saw_payload = true;
+    }
+
+    return saw_payload && !in_string && paren_depth == 0;
+}
+
+static int run_repl(const CettaLanguageSpec *lang,
+                    const CettaProfile *profile,
+                    bool lang_is_mm2,
+                    Space *space,
+                    Arena *eval_arena,
+                    Arena *arena,
+                    Registry *registry,
+                    CettaLibraryContext *libraries) {
+    int rc = 0;
+    char *line = NULL;
+    size_t line_cap = 0;
+    char *pending = NULL;
+    size_t pending_len = 0;
+    size_t pending_cap = 0;
+    bool interactive = isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
+
+    if (interactive) {
+        fprintf(stdout, "CeTTa REPL (%s", lang->canonical);
+        if (profile) fprintf(stdout, "/%s", profile->name);
+        fputs(")\n", stdout);
+        fputs("Enter top-level forms. Prefix an expression with ! to evaluate it.\n",
+              stdout);
+        fputs("Commands: .help  .quit  .exit\n", stdout);
+    }
+
+    while (true) {
+        if (interactive) {
+            fputs(pending_len ? "...> " : "cetta> ", stdout);
+            if (fflush(stdout) != 0) {
+                fprintf(stderr, "error: could not flush REPL prompt\n");
+                rc = 1;
+                break;
+            }
+        }
+
+        ssize_t line_len = getline(&line, &line_cap, stdin);
+        if (line_len < 0) {
+            if (interactive) fputc('\n', stdout);
+            break;
+        }
+
+        if (pending_len == 0) {
+            if (repl_line_is_blank_or_comment(line)) continue;
+            if (repl_line_matches_command(line, ".quit") ||
+                repl_line_matches_command(line, ".exit")) {
+                break;
+            }
+            if (repl_line_matches_command(line, ".help")) {
+                fputs("Enter top-level forms; definitions persist for the session.\n",
+                      stdout);
+                fputs("Prefix a form with ! to evaluate and print its results.\n",
+                      stdout);
+                fputs("Commands: .help, .quit, .exit\n", stdout);
+                continue;
+            }
+        }
+
+        if (!text_buffer_append(&pending, &pending_len, &pending_cap, line)) {
+            fprintf(stderr, "error: out of memory while buffering REPL input\n");
+            rc = 1;
+            break;
+        }
+        if (!repl_text_is_complete(pending)) continue;
+
+        if (lang_is_mm2) {
+            Atom **repl_atoms = NULL;
+            int repl_n = parse_metta_text(pending, arena, &repl_atoms);
+            if (repl_n < 0) {
+                fprintf(stderr, "error: could not parse interactive MeTTa text\n");
+            } else {
+                cetta_mm2_lower_atoms(arena, repl_atoms, repl_n);
+                if (execute_top_level_batch(true, repl_atoms, NULL, repl_n,
+                                            space, eval_arena, arena, registry,
+                                            libraries, stdout) != 0) {
+                    rc = 1;
+                    free(repl_atoms);
+                    break;
+                }
+            }
+            free(repl_atoms);
+        } else {
+            AtomId *repl_atom_ids = NULL;
+            int repl_n = parse_metta_text_ids(pending, &libraries->term_universe,
+                                              &repl_atom_ids);
+            if (repl_n < 0) {
+                fprintf(stderr, "error: could not parse interactive MeTTa text\n");
+            } else {
+                if (execute_top_level_batch(false, NULL, repl_atom_ids, repl_n,
+                                            space, eval_arena, arena, registry,
+                                            libraries, stdout) != 0) {
+                    rc = 1;
+                    free(repl_atom_ids);
+                    break;
+                }
+            }
+            free(repl_atom_ids);
+        }
+
+        pending_len = 0;
+        if (pending) pending[0] = '\0';
+    }
+
+    free(pending);
+    free(line);
+    return rc;
+}
+
 static void print_usage(FILE *out) {
     fputs("usage: cetta [--lang <name>] <file.metta>\n", out);
     fputs("       cetta -e '<expr>' [-e '<expr>' ...]  # inline expressions (multiple -e concatenate)\n", out);
+    fputs("       cetta [--lang <name>] --repl         # interactive session / REPL\n", out);
     fputs("       cetta [--lang he --profile <he_compat|he_extended|he_prime>] <file.metta>\n", out);
     fputs("       cetta [--lang <name>] [--import-mode <upstream|relative|ancestor-walk>] <file.metta>\n", out);
     fputs("       note: --lang selects the base language; --profile is an optional language-specific override\n", out);
@@ -933,6 +1213,7 @@ int main(int argc, char **argv) {
     int script_arg_start = -1;
     bool compile_mode = false;
     bool compile_stdlib_mode = false;
+    bool repl_mode = false;
     bool count_only = false;
     bool emit_runtime_stats = false;
     bool list_profiles = false;
@@ -968,6 +1249,14 @@ int main(int argc, char **argv) {
         }
         if (strcmp(argv[i], "--compile-stdlib") == 0) {
             compile_stdlib_mode = true;
+            continue;
+        }
+        if (strcmp(argv[i], "--repl") == 0) {
+            repl_mode = true;
+            if (!script_path) {
+                script_path = "<repl>";
+                script_arg_start = i + 1;
+            }
             continue;
         }
         if (strcmp(argv[i], "--count-only") == 0) {
@@ -1137,7 +1426,18 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    if (!filename && !inline_text) {
+    if (repl_mode && compile_mode) {
+        fprintf(stderr, "error: --repl and --compile cannot be used together\n");
+        free(inline_buf);
+        return 2;
+    }
+    if (repl_mode && compile_stdlib_mode) {
+        fprintf(stderr, "error: --repl and --compile-stdlib cannot be used together\n");
+        free(inline_buf);
+        return 2;
+    }
+
+    if (!filename && !inline_text && !repl_mode) {
         print_usage(stderr);
         free(inline_buf);
         return 1;
@@ -1169,7 +1469,7 @@ int main(int argc, char **argv) {
         return 2;
     }
 
-    if (!compile_mode && strcmp(lang->canonical, "mm2") == 0 &&
+    if (!repl_mode && !compile_mode && strcmp(lang->canonical, "mm2") == 0 &&
         filename && !inline_text && path_has_suffix(filename, ".mm2")) {
         int mm2_rc = run_mm2_file_via_mork(filename, count_only, mm2_step_limit);
         free(inline_buf);
@@ -1227,7 +1527,7 @@ int main(int argc, char **argv) {
     arena_set_hashcons(&arena, &hashcons_table);
     arena_set_hashcons(&eval_arena, NULL);
 
-    if (lang_is_mm2) {
+    if (lang_is_mm2 && (inline_text || filename)) {
         n = inline_text
             ? parse_metta_text(inline_text, &arena, &atoms)
             : parse_metta_file(filename, &arena, &atoms);
@@ -1247,7 +1547,7 @@ int main(int argc, char **argv) {
         cetta_runtime_stats_reset();
         cetta_runtime_stats_enable();
     }
-    if (lang_is_mm2 &&
+    if (lang_is_mm2 && !repl_mode && n > 0 &&
         !cetta_mm2_atoms_have_top_level_eval(atoms, n)) {
         int mm2_rc = run_mm2_program_via_mork(&arena, atoms, n, count_only,
                                               mm2_step_limit);
@@ -1289,7 +1589,7 @@ int main(int argc, char **argv) {
     cleanup.registry_initialized = true;
     registry_bind_id(&registry, g_builtin_syms.self, atom_space(&arena, &space));
 
-    if (!lang_is_mm2) {
+    if (!lang_is_mm2 && (inline_text || filename)) {
         n = inline_text
             ? parse_metta_text_ids(inline_text, &libraries.term_universe, &atom_ids)
             : parse_metta_file_ids(filename, &libraries.term_universe, &atom_ids);
@@ -1348,107 +1648,43 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
 
-    /* Process top-level atoms */
-    int i = 0;
-    FILE *output_spool = tmpfile();
-    if (!output_spool) {
-        fprintf(stderr, "error: could not create output spool\n");
-        rc = 1;
-        goto cleanup;
-    }
-    cleanup.output_spool = output_spool;
-    while (i < n) {
-        if (lang_is_mm2) {
-            Atom *at = atoms[i];
+    if (n > 0) {
+        FILE *output_spool = tmpfile();
+        if (!output_spool) {
+            fprintf(stderr, "error: could not create output spool\n");
+            rc = 1;
+            goto cleanup;
+        }
+        cleanup.output_spool = output_spool;
+        if (execute_top_level_batch(lang_is_mm2, atoms, atom_ids, n, &space,
+                                    &eval_arena, &arena, &registry, &libraries,
+                                    output_spool) != 0) {
+            rc = 1;
+            goto cleanup;
+        }
 
-            /* ! prefix → evaluate and print */
-            if (atom_is_symbol_id(at, g_builtin_syms.bang) && i + 1 < n) {
-                Atom *expr = atoms[i + 1];
-                ResultSet rs;
-                result_set_init(&rs);
-                eval_top_with_registry(&space, &eval_arena, &arena, &registry, expr, &rs);
-                write_results(output_spool, &rs);
-                if (fflush(output_spool) != 0) {
-                    fprintf(stderr, "error: could not write output spool\n");
-                    free(rs.items);
+        if (fseek(output_spool, 0, SEEK_SET) != 0) {
+            fprintf(stderr, "error: could not rewind output spool\n");
+            rc = 1;
+            goto cleanup;
+        }
+        {
+            char io_buf[8192];
+            size_t nread;
+            while ((nread = fread(io_buf, 1, sizeof(io_buf), output_spool)) > 0) {
+                if (fwrite(io_buf, 1, nread, stdout) != nread) {
+                    fprintf(stderr, "error: could not flush output spool to stdout\n");
                     rc = 1;
                     goto cleanup;
                 }
-                bool stop_after_error = result_set_has_error(&rs);
-                free(rs.items);
-                eval_release_temporary_spaces();
-                /* Reset ephemeral arena — frees all intermediate eval atoms.
-                   This makes CeTTa safe for unlimited chaining iterations. */
-                arena_free(&eval_arena);
-                arena_init(&eval_arena);
-                arena_set_runtime_kind(&eval_arena, CETTA_ARENA_RUNTIME_KIND_EVAL);
-                arena_set_hashcons(&eval_arena, NULL);
-                if (stop_after_error) break;
-                i += 2;
-                continue;
             }
-
-            /* Otherwise: add to space */
-            /* MM2 lowering still owns this mutable surface. */
-            space_add(&space, at);
-            i++;
-            continue;
         }
-
-        AtomId at_id = atom_ids[i];
-
-        /* ! prefix → evaluate and print */
-        if (atom_id_is_symbol_id(&libraries.term_universe, at_id,
-                                 g_builtin_syms.bang) &&
-            i + 1 < n) {
-            Atom *expr = term_universe_copy_atom(&libraries.term_universe, &arena,
-                                                 atom_ids[i + 1]);
-            ResultSet rs;
-            if (!expr) {
-                fprintf(stderr, "error: could not decode top-level eval form\n");
-                rc = 1;
-                goto cleanup;
-            }
-            result_set_init(&rs);
-            eval_top_with_registry(&space, &eval_arena, &arena, &registry, expr, &rs);
-            write_results(output_spool, &rs);
-            if (fflush(output_spool) != 0) {
-                fprintf(stderr, "error: could not write output spool\n");
-                free(rs.items);
-                rc = 1;
-                goto cleanup;
-            }
-            bool stop_after_error = result_set_has_error(&rs);
-            free(rs.items);
-            eval_release_temporary_spaces();
-            arena_free(&eval_arena);
-            arena_init(&eval_arena);
-            arena_set_runtime_kind(&eval_arena, CETTA_ARENA_RUNTIME_KIND_EVAL);
-            arena_set_hashcons(&eval_arena, NULL);
-            if (stop_after_error) break;
-            i += 2;
-            continue;
-        }
-
-        space_add_atom_id(&space, at_id);
-        i++;
     }
 
-    if (fseek(output_spool, 0, SEEK_SET) != 0) {
-        fprintf(stderr, "error: could not rewind output spool\n");
-        rc = 1;
-        goto cleanup;
-    }
-    {
-        char io_buf[8192];
-        size_t nread;
-        while ((nread = fread(io_buf, 1, sizeof(io_buf), output_spool)) > 0) {
-            if (fwrite(io_buf, 1, nread, stdout) != nread) {
-                fprintf(stderr, "error: could not flush output spool to stdout\n");
-                rc = 1;
-                goto cleanup;
-            }
-        }
+    if (repl_mode) {
+        rc = run_repl(lang, profile, lang_is_mm2, &space, &eval_arena, &arena,
+                      &registry, &libraries);
+        if (rc != 0) goto cleanup;
     }
 
     if (emit_runtime_stats) {
