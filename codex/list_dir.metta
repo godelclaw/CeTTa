@@ -33,6 +33,7 @@
 !(import! &self path)
 !(import! &self protocol)
 !(import! &self str)
+!(import! &self tool_handler_common)
 
 (= (codex:list-dir-tool-name)
    "list_dir")
@@ -320,11 +321,11 @@
        (codex:list-dir-parse-error $message)))))
 
 (= (codex:parse-list-dir-args $input)
-   (case (json-parse $input)
-     (((JsonObject $pairs)
-       (codex:parse-list-dir-args-object (JsonObject $pairs)))
-      ($other
-       (codex:list-dir-parse-error "invalid type: expected object")))))
+   (case (codex:parse-function-arguments-object $input)
+     (((CodexParseFunctionArgumentsObjectOk $object)
+       (codex:parse-list-dir-args-object $object))
+      ((CodexParseFunctionArgumentsObjectError $message)
+       (codex:list-dir-parse-error $message)))))
 
 (= (codex:list-dir-fs-entry-name ($name $kind))
    $name)
@@ -624,9 +625,7 @@
        (codex:handle-list-dir-args $context $args))
       ((CodexListDirParseError $message)
        (codex:list-dir-handler-result-error
-         (str-concat
-           "failed to parse function arguments: "
-           $message))))))
+         (codex:function-arguments-parse-error-message $message))))))
 
 (= (codex:handle-list-dir-payload $context $call-id $payload)
    (case $payload

@@ -29,6 +29,7 @@
 !(import! &self path)
 !(import! &self protocol)
 !(import! &self system)
+!(import! &self tool_handler_common)
 
 (= (codex:view-image-tool-name)
    "view_image")
@@ -148,11 +149,11 @@
        (codex:view-image-parse-error $message)))))
 
 (= (codex:parse-view-image-args $input)
-   (case (json-parse $input)
-     (((JsonObject $pairs)
-       (codex:parse-view-image-args-object (JsonObject $pairs)))
-      ($other
-       (codex:view-image-parse-error "invalid type: expected object")))))
+   (case (codex:parse-function-arguments-object $input)
+     (((CodexParseFunctionArgumentsObjectOk $object)
+       (codex:parse-view-image-args-object $object))
+      ((CodexParseFunctionArgumentsObjectError $message)
+       (codex:view-image-parse-error $message)))))
 
 (= (codex:view-image-resolve-path $cwd $path)
    (if (path-is-absolute? $path)
@@ -250,9 +251,7 @@
       ((CodexViewImageParseError $message)
        (codex:tool-result
          $call-id
-         (str-concat
-           "failed to parse function arguments: "
-           $message))))))
+         (codex:function-arguments-parse-error-message $message))))))
 
 (= (codex:run-view-image-tool-call $call-id $input)
    (codex:run-view-image-tool-call-with-context

@@ -26,6 +26,7 @@
 !(import! &self json)
 !(import! &self protocol)
 !(import! &self request_user_input)
+!(import! &self tool_handler_common)
 
 (= (codex:update-plan-tool-name)
    "update_plan")
@@ -292,12 +293,11 @@
              (codex:parse-update-plan-steps $plan-items)))))))))
 
 (= (codex:parse-update-plan-args $input)
-   (case (json-parse $input)
-     (((JsonObject $pairs)
-       (codex:parse-update-plan-args-object (JsonObject $pairs)))
-      ($other
-       (codex:update-plan-parse-error
-         "invalid type: expected object")))))
+   (case (codex:parse-function-arguments-object $input)
+     (((CodexParseFunctionArgumentsObjectOk $object)
+       (codex:parse-update-plan-args-object $object))
+      ((CodexParseFunctionArgumentsObjectError $message)
+       (codex:update-plan-parse-error $message)))))
 
 (= (codex:handle-update-plan-function $context $arguments)
    (if (==
@@ -312,9 +312,7 @@
              (codex:update-plan-updated-message)))
           ((CodexUpdatePlanParseError $message)
            (CodexUpdatePlanHandlerResultError
-             (str-concat
-               "failed to parse function arguments: "
-               $message)))))))
+             (codex:function-arguments-parse-error-message $message)))))))
 
 (= (codex:handle-update-plan-payload $context $call-id $payload)
    (case $payload
