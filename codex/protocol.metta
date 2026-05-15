@@ -25,6 +25,7 @@
 ; - ThreadNameUpdatedEvent / ThreadRolledBackEvent
 ; - WarningEvent / ModelRerouteEvent / ContextCompactedEvent
 ; - ModelVerificationEvent
+; - TurnCompleteEvent / StreamInfoEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
 ; This increment covers the plain-text and structured content-item branches of
@@ -44,6 +45,7 @@
 ; whose current byte sequence is base64-encoded at JSON projection time.
 
 !(import! &self json)
+!(import! &self list)
 !(import! &self str)
 
 (= (codex:response-message $id $role $content $phase)
@@ -207,6 +209,22 @@
 
 (= (codex:context-compacted-event)
    (CodexEventContextCompacted))
+
+(= (codex:turn-complete-event
+      $turn_id
+      $last_agent_message
+      $completed_at
+      $duration_ms
+      $time_to_first_token_ms)
+   (CodexEventTurnComplete
+     $turn_id
+     $last_agent_message
+     $completed_at
+     $duration_ms
+     $time_to_first_token_ms))
+
+(= (codex:stream-info-event $message)
+   (CodexEventStreamInfo $message))
 
 (= (codex:web-search-begin-event $call_id)
    (CodexEventWebSearchBegin $call_id))
@@ -792,6 +810,19 @@
    "context_compacted")
 
 (= (codex:item-type
+      (CodexEventTurnComplete
+        $turn_id
+        $last_agent_message
+        $completed_at
+        $duration_ms
+        $time_to_first_token_ms))
+   "task_complete")
+
+(= (codex:item-type
+      (CodexEventStreamInfo $message))
+   "stream_info")
+
+(= (codex:item-type
       (CodexEventWebSearchBegin $call_id))
    "web_search_begin")
 
@@ -1038,6 +1069,55 @@
 (= (codex:model-verification-event-verifications
       (CodexEventModelVerification $verifications))
    $verifications)
+
+(= (codex:turn-complete-turn-id
+      (CodexEventTurnComplete
+        $turn_id
+        $last_agent_message
+        $completed_at
+        $duration_ms
+        $time_to_first_token_ms))
+   $turn_id)
+
+(= (codex:turn-complete-last-agent-message
+      (CodexEventTurnComplete
+        $turn_id
+        $last_agent_message
+        $completed_at
+        $duration_ms
+        $time_to_first_token_ms))
+   (if (== $last_agent_message CodexAbsent) Empty $last_agent_message))
+
+(= (codex:turn-complete-completed-at
+      (CodexEventTurnComplete
+        $turn_id
+        $last_agent_message
+        $completed_at
+        $duration_ms
+        $time_to_first_token_ms))
+   (if (== $completed_at CodexAbsent) Empty $completed_at))
+
+(= (codex:turn-complete-duration-ms
+      (CodexEventTurnComplete
+        $turn_id
+        $last_agent_message
+        $completed_at
+        $duration_ms
+        $time_to_first_token_ms))
+   (if (== $duration_ms CodexAbsent) Empty $duration_ms))
+
+(= (codex:turn-complete-time-to-first-token-ms
+      (CodexEventTurnComplete
+        $turn_id
+        $last_agent_message
+        $completed_at
+        $duration_ms
+        $time_to_first_token_ms))
+   (if (== $time_to_first_token_ms CodexAbsent) Empty $time_to_first_token_ms))
+
+(= (codex:stream-info-message
+      (CodexEventStreamInfo $message))
+   $message)
 
 (= (codex:web-search-begin-call-id
       (CodexEventWebSearchBegin $call_id))
@@ -1431,6 +1511,147 @@
       (CodexEventContextCompacted))
    (JsonObject
      ((JsonPair "type" (JsonString "context_compacted")))))
+
+(= (codex:item-json
+      (CodexEventTurnComplete
+        $turn_id
+        $last_agent_message
+        $completed_at
+        $duration_ms
+        $time_to_first_token_ms))
+   (if (== $last_agent_message CodexAbsent)
+       (if (== $completed_at CodexAbsent)
+           (if (== $duration_ms CodexAbsent)
+               (if (== $time_to_first_token_ms CodexAbsent)
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))))
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair
+                        "time_to_first_token_ms"
+                        (JsonNumber $time_to_first_token_ms)))))
+               (if (== $time_to_first_token_ms CodexAbsent)
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair "duration_ms" (JsonNumber $duration_ms))))
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair "duration_ms" (JsonNumber $duration_ms))
+                      (JsonPair
+                        "time_to_first_token_ms"
+                        (JsonNumber $time_to_first_token_ms))))))
+           (if (== $duration_ms CodexAbsent)
+               (if (== $time_to_first_token_ms CodexAbsent)
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair "completed_at" (JsonNumber $completed_at))))
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair "completed_at" (JsonNumber $completed_at))
+                      (JsonPair
+                        "time_to_first_token_ms"
+                        (JsonNumber $time_to_first_token_ms)))))
+               (if (== $time_to_first_token_ms CodexAbsent)
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair "completed_at" (JsonNumber $completed_at))
+                      (JsonPair "duration_ms" (JsonNumber $duration_ms))))
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair "completed_at" (JsonNumber $completed_at))
+                      (JsonPair "duration_ms" (JsonNumber $duration_ms))
+                      (JsonPair
+                        "time_to_first_token_ms"
+                        (JsonNumber $time_to_first_token_ms)))))))
+       (if (== $completed_at CodexAbsent)
+           (if (== $duration_ms CodexAbsent)
+               (if (== $time_to_first_token_ms CodexAbsent)
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair
+                        "last_agent_message"
+                        (JsonString $last_agent_message))))
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair
+                        "last_agent_message"
+                        (JsonString $last_agent_message))
+                      (JsonPair
+                        "time_to_first_token_ms"
+                        (JsonNumber $time_to_first_token_ms)))))
+               (if (== $time_to_first_token_ms CodexAbsent)
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair
+                        "last_agent_message"
+                        (JsonString $last_agent_message))
+                      (JsonPair "duration_ms" (JsonNumber $duration_ms))))
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair
+                        "last_agent_message"
+                        (JsonString $last_agent_message))
+                      (JsonPair "duration_ms" (JsonNumber $duration_ms))
+                      (JsonPair
+                        "time_to_first_token_ms"
+                        (JsonNumber $time_to_first_token_ms))))))
+           (if (== $duration_ms CodexAbsent)
+               (if (== $time_to_first_token_ms CodexAbsent)
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair
+                        "last_agent_message"
+                        (JsonString $last_agent_message))
+                      (JsonPair "completed_at" (JsonNumber $completed_at))))
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair
+                        "last_agent_message"
+                        (JsonString $last_agent_message))
+                      (JsonPair "completed_at" (JsonNumber $completed_at))
+                      (JsonPair
+                        "time_to_first_token_ms"
+                        (JsonNumber $time_to_first_token_ms)))))
+               (if (== $time_to_first_token_ms CodexAbsent)
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair
+                        "last_agent_message"
+                        (JsonString $last_agent_message))
+                      (JsonPair "completed_at" (JsonNumber $completed_at))
+                      (JsonPair "duration_ms" (JsonNumber $duration_ms))))
+                   (JsonObject
+                     ((JsonPair "type" (JsonString "task_complete"))
+                      (JsonPair "turn_id" (JsonString $turn_id))
+                      (JsonPair
+                        "last_agent_message"
+                        (JsonString $last_agent_message))
+                      (JsonPair "completed_at" (JsonNumber $completed_at))
+                      (JsonPair "duration_ms" (JsonNumber $duration_ms))
+                      (JsonPair
+                        "time_to_first_token_ms"
+                        (JsonNumber $time_to_first_token_ms)))))))))
+
+(= (codex:item-json
+      (CodexEventStreamInfo $message))
+   (JsonObject
+     ((JsonPair "type" (JsonString "stream_info"))
+      (JsonPair "message" (JsonString $message)))))
 
 (= (codex:item-json
       (CodexEventWebSearchBegin $call_id))

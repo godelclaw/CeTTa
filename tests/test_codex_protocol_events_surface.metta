@@ -176,6 +176,33 @@
   ("{\"type\":\"model_verification\",\"verifications\":[\"trusted_access_for_cyber\"]}"))
 
 !(assertEqualToResult
+  (codex:item-type
+    (codex:turn-complete-event
+      "turn-9"
+      "final answer"
+      1712345678
+      240
+      80))
+  ("task_complete"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:turn-complete-event
+        "turn-9"
+        "final answer"
+        1712345678
+        240
+        80)))
+  ("{\"type\":\"task_complete\",\"turn_id\":\"turn-9\",\"last_agent_message\":\"final answer\",\"completed_at\":1712345678,\"duration_ms\":240,\"time_to_first_token_ms\":80}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:stream-info-event "retrying model stream")))
+  ("{\"type\":\"stream_info\",\"message\":\"retrying model stream\"}"))
+
+!(assertEqualToResult
   (json-stringify
     (codex:item-json
       (codex:web-search-begin-event "search-17")))
