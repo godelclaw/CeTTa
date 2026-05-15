@@ -14,6 +14,7 @@
 ; - ImageGenerationCall
 ; - ExecCommandOutputDeltaEvent
 ; - TerminalInteractionEvent
+; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
 ; This increment covers the plain-text and structured content-item branches of
 ; FunctionCallOutputPayload at the JSON wire layer. The content-item subset
@@ -136,6 +137,132 @@
      $status
      $revised-prompt
      $result))
+
+(= (codex:review-line-range $start $end)
+   (CodexReviewLineRange $start $end))
+
+(= (codex:review-line-range-start
+      (CodexReviewLineRange $start $end))
+   $start)
+
+(= (codex:review-line-range-end
+      (CodexReviewLineRange $start $end))
+   $end)
+
+(= (codex:review-code-location $absolute-file-path $line-range)
+   (CodexReviewCodeLocation $absolute-file-path $line-range))
+
+(= (codex:review-code-location-absolute-file-path
+      (CodexReviewCodeLocation $absolute-file-path $line-range))
+   $absolute-file-path)
+
+(= (codex:review-code-location-line-range
+      (CodexReviewCodeLocation $absolute-file-path $line-range))
+   $line-range)
+
+(= (codex:review-finding
+      $title
+      $body
+      $confidence-score
+      $priority
+      $code-location)
+   (CodexReviewFinding
+     $title
+     $body
+     $confidence-score
+     $priority
+     $code-location))
+
+(= (codex:review-finding-title
+      (CodexReviewFinding
+        $title
+        $body
+        $confidence-score
+        $priority
+        $code-location))
+   $title)
+
+(= (codex:review-finding-body
+      (CodexReviewFinding
+        $title
+        $body
+        $confidence-score
+        $priority
+        $code-location))
+   $body)
+
+(= (codex:review-finding-confidence-score
+      (CodexReviewFinding
+        $title
+        $body
+        $confidence-score
+        $priority
+        $code-location))
+   $confidence-score)
+
+(= (codex:review-finding-priority
+      (CodexReviewFinding
+        $title
+        $body
+        $confidence-score
+        $priority
+        $code-location))
+   $priority)
+
+(= (codex:review-finding-code-location
+      (CodexReviewFinding
+        $title
+        $body
+        $confidence-score
+        $priority
+        $code-location))
+   $code-location)
+
+(= (codex:review-output-event
+      $findings
+      $overall-correctness
+      $overall-explanation
+      $overall-confidence-score)
+   (CodexReviewOutputEvent
+     $findings
+     $overall-correctness
+     $overall-explanation
+     $overall-confidence-score))
+
+(= (codex:default-review-output-event)
+   (CodexReviewOutputEvent () "" "" 0.0))
+
+(= (codex:review-output-event-findings
+      (CodexReviewOutputEvent
+        $findings
+        $overall-correctness
+        $overall-explanation
+        $overall-confidence-score))
+   $findings)
+
+(= (codex:review-output-event-overall-correctness
+      (CodexReviewOutputEvent
+        $findings
+        $overall-correctness
+        $overall-explanation
+        $overall-confidence-score))
+   $overall-correctness)
+
+(= (codex:review-output-event-overall-explanation
+      (CodexReviewOutputEvent
+        $findings
+        $overall-correctness
+        $overall-explanation
+        $overall-confidence-score))
+   $overall-explanation)
+
+(= (codex:review-output-event-overall-confidence-score
+      (CodexReviewOutputEvent
+        $findings
+        $overall-correctness
+        $overall-explanation
+        $overall-confidence-score))
+   $overall-confidence-score)
 
 (= (codex:default-image-detail)
    "high")
