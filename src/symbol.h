@@ -225,6 +225,9 @@ typedef struct {
     X(lib_fs_write_text, "__cetta_lib_fs_write_text") \
     X(lib_fs_append_text, "__cetta_lib_fs_append_text") \
     X(lib_fs_read_lines, "__cetta_lib_fs_read_lines") \
+    X(lib_fs_read_dir_entries, "__cetta_lib_fs_read_dir_entries") \
+    X(lib_fs_path_kind, "__cetta_lib_fs_path_kind") \
+    X(lib_fs_read_image_data_url, "__cetta_lib_fs_read_image_data_url") \
     X(lib_str_length, "__cetta_lib_str_length") \
     X(lib_str_concat, "__cetta_lib_str_concat") \
     X(lib_str_split, "__cetta_lib_str_split") \

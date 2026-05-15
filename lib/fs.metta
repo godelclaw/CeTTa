@@ -22,3 +22,18 @@
    (function
      (case (__cetta_lib_fs_read_lines $path)
        (($result (return $result))))))
+
+(= (fs-read-dir-entries $path)
+   (function
+     (case (__cetta_lib_fs_read_dir_entries $path)
+       (($result (return $result))))))
+
+(= (fs-path-kind $path)
+   (function
+     (case (__cetta_lib_fs_path_kind $path)
+       (($result (return $result))))))
+
+(= (fs-read-image-data-url $path)
+   (function
+     (case (__cetta_lib_fs_read_image_data_url $path)
+       (($result (return $result))))))

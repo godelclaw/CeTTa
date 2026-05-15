@@ -65,12 +65,14 @@
 !(import! &self apply_patch)
 !(import! &self command)
 !(import! &self json)
+!(import! &self list_dir)
 !(import! &self list)
 !(import! &self path)
 !(import! &self process)
 !(import! &self protocol)
 !(import! &self request_permissions)
 !(import! &self request_user_input)
+!(import! &self update_plan)
 !(import! &self str)
 !(import! &self system)
 
@@ -1895,7 +1897,7 @@
         ((CodexExecCommandPermissionPlanError $message)
          (codex:tool-result
            $call-id
-           (str-concat "exec_command failed: " $message))))))
+           (str-concat "exec_command failed: " $message)))))))
 
 (= (codex:run-exec-command-tool-call $call-id $input)
    (codex:run-exec-command-tool-call-with-context-state
@@ -1908,7 +1910,49 @@
    (codex:tool-result $call-id (codex:run-apply-patch-local $input)))
 
 (= (codex:run-request-permissions-tool-call-item $call-id $input)
-   (codex:run-request-permissions-tool-call $call-id $input))
+   ; Rust returns a CustomToolCallOutput item directly from each handler.
+   ; Several imported text-output handlers already reduce correctly when their
+   ; visible output text is observed, but the raw imported ResponseItem term can
+   ; collapse to `Empty` inside this large module. Rebuilding the same visible
+   ; item from the stable accessor preserves the Rust behavior while avoiding
+   ; the current evaluator boundary issue.
+   (codex:tool-result
+     $call-id
+     (codex:tool-result-output-text
+       (once
+         (codex:run-request-permissions-tool-call $call-id $input)))))
+
+(= (codex:run-list-dir-tool-call-item $call-id $input)
+   (codex:tool-result
+     $call-id
+     (codex:tool-result-output-text
+       (once
+         (codex:run-list-dir-tool-call $call-id $input)))))
+
+(= (codex:run-request-user-input-tool-call-item $call-id $input)
+   (codex:tool-result
+     $call-id
+     (codex:tool-result-output-text
+       (once
+         (codex:run-request-user-input-tool-call $call-id $input)))))
+
+(= (codex:run-update-plan-tool-call-item $call-id $input)
+   (codex:tool-result
+     $call-id
+     (codex:tool-result-output-text
+       (once
+         (codex:run-update-plan-tool-call $call-id $input)))))
+
+; Rust dispatches from a handler registry whose imported handlers are already
+; fully linked. The current CeTTa module surface needs one explicit
+; helper-constructor normalization for `codex:tool-call`, and some imported
+; text-output handlers are rebuilt from their stable visible output text to
+; avoid current evaluator boundary issues with the raw ResponseItem term.
+(= (codex:run-tool-call-item
+      (codex:tool-call $call-id $name $input))
+   (eval
+     (codex:run-tool-call-item
+       (CodexResponseItemCustomToolCall $call-id $name $input))))
 
 (= (codex:run-tool-call-item
       (CodexResponseItemCustomToolCall $call-id $name $input))
@@ -1918,11 +1962,15 @@
            (codex:run-write-stdin-tool-call $call-id $input)
            (if (== $name "apply_patch")
                (codex:run-apply-patch-tool-call $call-id $input)
-               (if (== $name "request_permissions")
-                   (codex:run-request-permissions-tool-call-item $call-id $input)
-                   (if (== $name "request_user_input")
-                       (codex:run-request-user-input-tool-call $call-id $input)
-                   (codex:named-tool-result
-                         $call-id
-                         $name
-                         (format-args "unsupported tool: {}" ($name))))))))))
+               (if (== $name "list_dir")
+                   (codex:run-list-dir-tool-call-item $call-id $input)
+                   (if (== $name "request_permissions")
+                       (codex:run-request-permissions-tool-call-item $call-id $input)
+                       (if (== $name "request_user_input")
+                           (codex:run-request-user-input-tool-call-item $call-id $input)
+                           (if (== $name "update_plan")
+                               (codex:run-update-plan-tool-call-item $call-id $input)
+                               (codex:named-tool-result
+                                     $call-id
+                                     $name
+                                     (format-args "unsupported tool: {}" ($name)))))))))))

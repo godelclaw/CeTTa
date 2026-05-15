@@ -1888,6 +1888,166 @@ static bool library_read_text_file(const char *path, CettaStringBuf *out,
     return true;
 }
 
+static bool library_read_binary_file(const char *path, uint8_t **out,
+                                     size_t *out_len,
+                                     char *errbuf, size_t errbuf_sz) {
+    FILE *fp = fopen(path, "rb");
+    uint8_t *buf = NULL;
+    size_t len = 0;
+    size_t cap = 0;
+    uint8_t chunk[4096];
+    size_t nread;
+
+    *out = NULL;
+    *out_len = 0;
+    if (!fp) {
+        if (errbuf && errbuf_sz > 0) {
+            snprintf(errbuf, errbuf_sz, "cannot open file: %s", strerror(errno));
+        }
+        return false;
+    }
+
+    while ((nread = fread(chunk, 1, sizeof(chunk), fp)) > 0) {
+        if (len + nread > cap) {
+            size_t next_cap = cap ? cap : 4096u;
+            while (len + nread > next_cap) next_cap *= 2u;
+            buf = cetta_realloc(buf, next_cap);
+            cap = next_cap;
+        }
+        memcpy(buf + len, chunk, nread);
+        len += nread;
+    }
+    if (ferror(fp)) {
+        if (errbuf && errbuf_sz > 0) {
+            snprintf(errbuf, errbuf_sz, "cannot read file: %s", strerror(errno));
+        }
+        fclose(fp);
+        free(buf);
+        return false;
+    }
+
+    fclose(fp);
+    *out = buf;
+    *out_len = len;
+    return true;
+}
+
+static char *library_base64_encode_bytes(const uint8_t *bytes, size_t len) {
+    static const char table[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    size_t out_len = ((len + 2u) / 3u) * 4u;
+    size_t in_ix = 0;
+    size_t out_ix = 0;
+    char *encoded = cetta_malloc(out_len + 1u);
+
+    while (in_ix + 3u <= len) {
+        unsigned char b0 = bytes[in_ix];
+        unsigned char b1 = bytes[in_ix + 1u];
+        unsigned char b2 = bytes[in_ix + 2u];
+        encoded[out_ix++] = table[b0 >> 2];
+        encoded[out_ix++] = table[((b0 & 0x03u) << 4) | (b1 >> 4)];
+        encoded[out_ix++] = table[((b1 & 0x0fu) << 2) | (b2 >> 6)];
+        encoded[out_ix++] = table[b2 & 0x3fu];
+        in_ix += 3u;
+    }
+    if (in_ix < len) {
+        unsigned char b0 = bytes[in_ix];
+        encoded[out_ix++] = table[b0 >> 2];
+        if (in_ix + 1u < len) {
+            unsigned char b1 = bytes[in_ix + 1u];
+            encoded[out_ix++] = table[((b0 & 0x03u) << 4) | (b1 >> 4)];
+            encoded[out_ix++] = table[(b1 & 0x0fu) << 2];
+            encoded[out_ix++] = '=';
+        } else {
+            encoded[out_ix++] = table[(b0 & 0x03u) << 4];
+            encoded[out_ix++] = '=';
+            encoded[out_ix++] = '=';
+        }
+    }
+    encoded[out_ix] = '\0';
+    return encoded;
+}
+
+static const char *library_image_mime_type(const uint8_t *bytes, size_t len,
+                                           const char *path) {
+    const char *ext;
+    if (len >= 8u &&
+        memcmp(bytes, "\x89PNG\r\n\x1a\n", 8u) == 0) {
+        return "image/png";
+    }
+    if (len >= 3u && bytes[0] == 0xffu && bytes[1] == 0xd8u && bytes[2] == 0xffu) {
+        return "image/jpeg";
+    }
+    if (len >= 6u &&
+        (memcmp(bytes, "GIF87a", 6u) == 0 || memcmp(bytes, "GIF89a", 6u) == 0)) {
+        return "image/gif";
+    }
+    if (len >= 12u &&
+        memcmp(bytes, "RIFF", 4u) == 0 &&
+        memcmp(bytes + 8u, "WEBP", 4u) == 0) {
+        return "image/webp";
+    }
+    if (len >= 2u && bytes[0] == 'B' && bytes[1] == 'M') {
+        return "image/bmp";
+    }
+
+    ext = strrchr(path, '.');
+    if (!ext) return NULL;
+    if (strcasecmp(ext, ".png") == 0) return "image/png";
+    if (strcasecmp(ext, ".jpg") == 0 || strcasecmp(ext, ".jpeg") == 0) {
+        return "image/jpeg";
+    }
+    if (strcasecmp(ext, ".gif") == 0) return "image/gif";
+    if (strcasecmp(ext, ".webp") == 0) return "image/webp";
+    if (strcasecmp(ext, ".bmp") == 0) return "image/bmp";
+    return NULL;
+}
+
+static char *library_image_data_url_from_file(const char *path,
+                                              char *stage_buf,
+                                              size_t stage_buf_sz,
+                                              char *errbuf,
+                                              size_t errbuf_sz) {
+    uint8_t *bytes = NULL;
+    size_t len = 0;
+    const char *mime_type;
+    char *encoded = NULL;
+    CettaStringBuf out;
+    char *result;
+
+    if (!library_read_binary_file(path, &bytes, &len, errbuf, errbuf_sz)) {
+        snprintf(stage_buf, stage_buf_sz, "read");
+        return NULL;
+    }
+
+    mime_type = library_image_mime_type(bytes, len, path);
+    if (!mime_type) {
+        free(bytes);
+        snprintf(stage_buf, stage_buf_sz, "process");
+        if (errbuf && errbuf_sz > 0) {
+            snprintf(errbuf, errbuf_sz, "unsupported image format");
+        }
+        return NULL;
+    }
+
+    encoded = library_base64_encode_bytes(bytes, len);
+    free(bytes);
+
+    cetta_sb_init(&out);
+    cetta_sb_append(&out, "data:");
+    cetta_sb_append(&out, mime_type);
+    cetta_sb_append(&out, ";base64,");
+    cetta_sb_append(&out, encoded);
+    free(encoded);
+
+    result = out.buf;
+    if (!result) {
+        result = cetta_malloc(1u);
+        result[0] = '\0';
+    }
+    return result;
+}
+
 static bool library_write_text_file(const char *path, const char *text, bool append,
                                     char *errbuf, size_t errbuf_sz) {
     FILE *fp = fopen(path, append ? "ab" : "wb");
@@ -7892,6 +8052,173 @@ static Atom *fs_append_text(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     return fs_write_like(a, head, args, nargs, true);
 }
 
+typedef struct {
+    char *name;
+    const char *kind;
+} FsReadDirEntry;
+
+static void fs_read_dir_entries_free(FsReadDirEntry *items, uint32_t nitems) {
+    if (!items) return;
+    for (uint32_t i = 0; i < nitems; i++) {
+        free(items[i].name);
+    }
+    free(items);
+}
+
+static int fs_read_dir_entry_cmp(const void *lhs, const void *rhs) {
+    const FsReadDirEntry *a = (const FsReadDirEntry *)lhs;
+    const FsReadDirEntry *b = (const FsReadDirEntry *)rhs;
+    return strcmp(a->name, b->name);
+}
+
+static Atom *fs_read_dir_entries(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *path;
+    DIR *dir = NULL;
+    struct dirent *entry;
+    FsReadDirEntry *items = NULL;
+    uint32_t nitems = 0;
+    uint32_t cap = 0;
+    const char *error_stage = NULL;
+    char error_text[160];
+    Atom *result;
+
+    error_text[0] = '\0';
+    if (nargs != 1 || !(path = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected filename");
+    }
+
+    dir = opendir(path);
+    if (!dir) {
+        error_stage = "read";
+        snprintf(error_text, sizeof(error_text), "%s", strerror(errno));
+        goto error;
+    }
+
+    errno = 0;
+    while ((entry = readdir(dir)) != NULL) {
+        char child[PATH_MAX];
+        struct stat st;
+        const char *kind = "other";
+
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        if (!path_join2(child, sizeof(child), path, entry->d_name)) {
+            error_stage = "inspect";
+            snprintf(error_text, sizeof(error_text), "path too long");
+            goto error;
+        }
+        if (lstat(child, &st) != 0) {
+            error_stage = "inspect";
+            snprintf(error_text, sizeof(error_text), "%s", strerror(errno));
+            goto error;
+        }
+
+        if (S_ISLNK(st.st_mode)) {
+            kind = "symlink";
+        } else if (S_ISDIR(st.st_mode)) {
+            kind = "directory";
+        } else if (S_ISREG(st.st_mode)) {
+            kind = "file";
+        }
+
+        if (nitems >= cap) {
+            cap = cap ? cap * 2u : 8u;
+            items = cetta_realloc(items, sizeof(FsReadDirEntry) * cap);
+        }
+        items[nitems].name = process_strdup_cstr(entry->d_name);
+        items[nitems].kind = kind;
+        nitems++;
+        errno = 0;
+    }
+
+    if (errno != 0) {
+        error_stage = "read";
+        snprintf(error_text, sizeof(error_text), "%s", strerror(errno));
+        goto error;
+    }
+
+    closedir(dir);
+    dir = NULL;
+
+    if (nitems > 1) {
+        qsort(items, nitems, sizeof(FsReadDirEntry), fs_read_dir_entry_cmp);
+    }
+
+    if (nitems == 0) {
+        fs_read_dir_entries_free(items, nitems);
+        return atom_expr(a, NULL, 0);
+    }
+
+    Atom **atoms = arena_alloc(a, sizeof(Atom *) * nitems);
+    for (uint32_t i = 0; i < nitems; i++) {
+        atoms[i] = atom_expr(a, (Atom *[]){
+            atom_string(a, items[i].name),
+            atom_string(a, items[i].kind),
+        }, 2);
+    }
+    result = atom_expr(a, atoms, nitems);
+    fs_read_dir_entries_free(items, nitems);
+    return result;
+
+error:
+    if (dir) closedir(dir);
+    result = atom_error(a, library_call_expr(a, head, args, nargs),
+                        atom_expr(a, (Atom *[]){
+                            atom_string(a, error_stage ? error_stage : "read"),
+                            atom_string(a, error_text[0] ? error_text : "unknown directory error"),
+                        }, 2));
+    fs_read_dir_entries_free(items, nitems);
+    return result;
+}
+
+static Atom *fs_path_kind(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *path;
+    struct stat st;
+    if (nargs != 1 || !(path = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected filename");
+    }
+    if (stat(path, &st) != 0) {
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_expr(a, (Atom *[]){
+                              atom_string(a, "stat"),
+                              atom_string(a, strerror(errno)),
+                          }, 2));
+    }
+    if (S_ISREG(st.st_mode)) return atom_string(a, "file");
+    if (S_ISDIR(st.st_mode)) return atom_string(a, "directory");
+    return atom_string(a, "other");
+}
+
+static Atom *fs_read_image_data_url(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *path;
+    char stage_buf[16];
+    char errbuf[160];
+    char *data_url;
+    Atom *result;
+
+    stage_buf[0] = '\0';
+    errbuf[0] = '\0';
+    if (nargs != 1 || !(path = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected filename");
+    }
+
+    data_url = library_image_data_url_from_file(path, stage_buf, sizeof(stage_buf),
+                                                errbuf, sizeof(errbuf));
+    if (!data_url) {
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_expr(a, (Atom *[]){
+                              atom_string(a, stage_buf[0] ? stage_buf : "process"),
+                              atom_string(a, errbuf[0] ? errbuf : "unable to process image"),
+                          }, 2));
+    }
+
+    result = atom_string(a, data_url);
+    free(data_url);
+    return result;
+}
+
 static Atom *fs_read_lines(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     const char *path;
     CettaStringBuf text;
@@ -7971,6 +8298,15 @@ static Atom *cetta_library_dispatch_fs(Arena *a, Atom *head,
     }
     if (head_id == g_builtin_syms.lib_fs_read_lines) {
         return fs_read_lines(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_fs_read_dir_entries) {
+        return fs_read_dir_entries(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_fs_path_kind) {
+        return fs_path_kind(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_fs_read_image_data_url) {
+        return fs_read_image_data_url(a, head, args, nargs);
     }
     return NULL;
 }

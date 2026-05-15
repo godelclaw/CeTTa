@@ -3,7 +3,6 @@
 !(import! &self codex:approval)
 !(import! &self codex:protocol)
 !(import! &self codex:request_permissions)
-!(import! &self codex:tools)
 
 (= (codex-rp-root) "/home/zarclaw/repos/CeTTa")
 
@@ -73,6 +72,23 @@
     (codex:request-permissions-event-json
       (codex-rp-event)))
   ("{\"call_id\":\"call-rp\",\"turn_id\":\"turn-rp\",\"reason\":\"Need docs and runtime access.\",\"permissions\":{\"network\":{\"enabled\":true},\"file_system\":{\"read\":[\"/home/zarclaw/repos/CeTTa/docs\"],\"write\":[\"/home/zarclaw/repos/CeTTa/runtime\"]}},\"cwd\":\"/home/zarclaw/repos/CeTTa\"}"))
+
+!(assertEqualToResult
+  (codex:tool-result-output-text
+    (once
+      (codex:run-request-permissions-tool-call
+        "call-rp-default"
+        (codex-rp-input-json))))
+  ("{\"permissions\":{},\"scope\":\"turn\"}"))
+
+!(assertEqualToResult
+  (codex:tool-result-output-text
+    (once
+      (codex:run-request-permissions-tool-call-with-context
+        (codex-rp-context)
+        "call-rp-context"
+        (codex-rp-input-json))))
+  ("{\"permissions\":{\"file_system\":{\"write\":[\"/home/zarclaw/repos/CeTTa/runtime\"]}},\"scope\":\"turn\"}"))
 
 !(assertEqualToResult
   (codex:request-permissions-handler-result-message

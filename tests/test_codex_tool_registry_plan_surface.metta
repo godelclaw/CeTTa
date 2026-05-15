@@ -1,0 +1,141 @@
+!(register-module! ../codex)
+!(import! &self json)
+!(import! &self codex:tool_config)
+!(import! &self codex:tool_registry_plan)
+
+(= (codex-tool-config-model)
+   (codex:tool-config-model-info
+     (codex:config-shell-tool-type-unified-exec)
+     CodexAbsent
+     ()
+     False))
+
+(= (codex-tool-config-list-dir-model)
+   (codex:tool-config-model-info
+     (codex:config-shell-tool-type-unified-exec)
+     CodexAbsent
+     ("list_dir")
+     False))
+
+(= (codex-tool-config-view-image-original-model)
+   (codex:tool-config-model-info
+     (codex:config-shell-tool-type-unified-exec)
+     CodexAbsent
+     ()
+     True))
+
+(= (codex-tool-config-default-features)
+   (codex:tool-config-features
+     True
+     True
+     False
+     True
+     False
+     False
+     False))
+
+(= (codex-tool-config-request-permissions-features)
+   (codex:tool-config-features
+     True
+     True
+     False
+     True
+     True
+     True
+     False))
+
+(= (codex-tool-registry-default-config)
+   (codex:tools-config-new
+     (codex:tools-config-new-params
+       (codex-tool-config-model)
+       (codex-tool-config-default-features)
+       False
+       (codex:tool-config-sandbox-policy-danger-full-access)
+       (codex:windows-sandbox-level-disabled))))
+
+(= (codex-tool-registry-request-permissions-config)
+   (codex:tools-config-new
+     (codex:tools-config-new-params
+       (codex-tool-config-model)
+       (codex-tool-config-request-permissions-features)
+       False
+       (codex:tool-config-sandbox-policy-danger-full-access)
+       (codex:windows-sandbox-level-disabled))))
+
+(= (codex-tool-registry-list-dir-config)
+   (codex:tools-config-new
+     (codex:tools-config-new-params
+       (codex-tool-config-list-dir-model)
+       (codex-tool-config-default-features)
+       False
+       (codex:tool-config-sandbox-policy-danger-full-access)
+       (codex:windows-sandbox-level-disabled))))
+
+(= (codex-tool-registry-view-image-original-config)
+   (codex:tools-config-new
+     (codex:tools-config-new-params
+       (codex-tool-config-view-image-original-model)
+       (codex-tool-config-default-features)
+       False
+       (codex:tool-config-sandbox-policy-danger-full-access)
+       (codex:windows-sandbox-level-disabled))))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:tool-spec-json
+      (codex:create-update-plan-tool)))
+  ("{\"type\":\"function\",\"name\":\"update_plan\",\"description\":\"Updates the task plan.\\nProvide an optional explanation and a list of plan items, each with a step and status.\\nAt most one step can be in_progress at a time.\\n\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{\"explanation\":{\"type\":\"string\"},\"plan\":{\"type\":\"array\",\"description\":\"The list of steps\",\"items\":{\"type\":\"object\",\"properties\":{\"step\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"description\":\"One of: pending, in_progress, completed\"}},\"required\":[\"step\",\"status\"],\"additionalProperties\":false}}},\"required\":[\"plan\"],\"additionalProperties\":false}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:tool-spec-json
+      (codex:create-list-dir-tool)))
+  ("{\"type\":\"function\",\"name\":\"list_dir\",\"description\":\"Lists entries in a local directory with 1-indexed entry numbers and simple type labels.\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{\"dir_path\":{\"type\":\"string\",\"description\":\"Absolute path to the directory to list.\"},\"offset\":{\"type\":\"number\",\"description\":\"The entry number to start listing from. Must be 1 or greater.\"},\"limit\":{\"type\":\"number\",\"description\":\"The maximum number of entries to return.\"},\"depth\":{\"type\":\"number\",\"description\":\"The maximum directory depth to traverse. Must be 1 or greater.\"}},\"required\":[\"dir_path\"],\"additionalProperties\":false}}"))
+
+!(assertEqual
+  (json-stringify
+    (codex:tool-spec-json
+      (codex:create-view-image-tool False)))
+  "{\"type\":\"function\",\"name\":\"view_image\",\"description\":\"View a local image from the filesystem (only use if given a full filepath by the user, and the image isn't already attached to the thread context within <image ...> tags).\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"Local filesystem path to an image file\"}},\"required\":[\"path\"],\"additionalProperties\":false}}")
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:function-tool-output-schema
+      (codex:tool-spec-function-tool
+        (codex:create-view-image-tool False))))
+  ("{\"type\":\"object\",\"properties\":{\"image_url\":{\"type\":\"string\",\"description\":\"Data URL for the loaded image.\"},\"detail\":{\"type\":[\"string\",\"null\"],\"description\":\"Image detail hint returned by view_image. Returns `original` when original resolution is preserved, otherwise `null`.\"}},\"required\":[\"image_url\",\"detail\"],\"additionalProperties\":false}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (json-object-get
+      (json-object-get
+        (codex:function-tool-parameters
+          (codex:tool-spec-function-tool
+            (codex:create-view-image-tool True)))
+        "properties")
+      "detail"))
+  ("{\"type\":\"string\",\"description\":\"Optional detail override. The only supported value is `original`; omit this field for default resized behavior. Use `original` to preserve the file's original resolution instead of resizing to fit. This is important when high-fidelity image perception or precise localization is needed, especially for CUA agents.\"}"))
+
+!(assertEqual
+  (codex:freeform-tool-format-definition
+    (codex:tool-spec-freeform-tool
+      (codex:create-apply-patch-freeform-tool)))
+  "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\n\nhunk: add_hunk | delete_hunk | update_hunk\nadd_hunk: \"*** Add File: \" filename LF add_line+\ndelete_hunk: \"*** Delete File: \" filename LF\nupdate_hunk: \"*** Update File: \" filename LF change_move? change?\n\nfilename: /(.+)/\nadd_line: \"+\" /(.*)/ LF -> line\n\nchange_move: \"*** Move to: \" filename LF\nchange: (change_context | change_line)+ eof_line?\nchange_context: (\"@@\" | \"@@ \" /(.+)/) LF\nchange_line: (\"+\" | \"-\" | \" \") /(.*)/ LF\neof_line: \"*** End of File\" LF\n\n%import common.LF\n")
+
+!(assertEqualToResult
+  (json-stringify
+    (json-object-get
+      (json-object-get
+        (codex:function-tool-parameters
+          (codex:tool-spec-function-tool
+            (codex:create-exec-command-tool True True)))
+        "properties")
+      "additional_permissions"))
+  ("{\"type\":\"object\",\"properties\":{\"file_system\":{\"type\":\"object\",\"properties\":{\"read\":{\"type\":\"array\",\"description\":\"Absolute paths to grant read access to.\",\"items\":{\"type\":\"string\"}},\"write\":{\"type\":\"array\",\"description\":\"Absolute paths to grant write access to.\",\"items\":{\"type\":\"string\"}}},\"additionalProperties\":false},\"network\":{\"type\":\"object\",\"properties\":{\"enabled\":{\"type\":\"boolean\",\"description\":\"Set to true to request network access.\"}},\"additionalProperties\":false}},\"additionalProperties\":false}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:function-tool-output-schema
+      (codex:tool-spec-function-tool
+        (codex:create-write-stdin-tool))))
+  ("{\"type\":\"object\",\"properties\":{\"chunk_id\":{\"type\":\"string\",\"description\":\"Chunk identifier included when the response reports one.\"},\"wall_time_seconds\":{\"type\":\"number\",\"description\":\"Elapsed wall time spent waiting for output in seconds.\"},\"exit_code\":{\"type\":\"number\",\"description\":\"Process exit code when the command finished during this call.\"},\"session_id\":{\"type\":\"number\",\"description\":\"Session identifier to pass to write_stdin when the process is still running.\"},\"original_token_count\":{\"type\":\"number\",\"description\":\"Approximate token count before output truncation.\"},\"output\":{\"type\":\"string\",\"description\":\"Command output text, possibly truncated.\"}},\"required\":[\"wall_time_seconds\",\"output\"],\"additionalProperties\":false}"))

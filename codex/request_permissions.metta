@@ -1033,6 +1033,21 @@
       $context
       $state
       $call-id
+      (codex:request-permissions-function-payload $arguments))
+   ; Rust receives an already-decoded function payload from the tool runtime.
+   ; The current CeTTa evaluator can leave the helper constructor unreduced
+   ; when it flows through the generic payload `case`, so the direct helper
+   ; form is normalized explicitly here. Visible handler behavior is unchanged.
+   (codex:handle-request-permissions-function
+     $context
+     $state
+     $call-id
+     $arguments))
+
+(= (codex:handle-request-permissions-payload
+      $context
+      $state
+      $call-id
       $payload)
    (case $payload
      (((CodexRequestPermissionsPayloadFunction $arguments)
@@ -1050,24 +1065,35 @@
       $state
       $call-id
       $input)
-   (case
-     (codex:handle-request-permissions-payload
+   (let $result
+     ; Rust reaches this path only for function-payload tool calls.
+     ; The current CeTTa evaluator can still collapse the extra payload helper
+     ; layer to `Empty`, so the runnable tool-call surface invokes the same
+     ; underlying handler function directly with the raw arguments string.
+     ;
+     ; Rust then matches on the concrete handler enum. In the current CeTTa
+     ; evaluator, a direct constructor-pattern `case` over this imported
+     ; handler result can also collapse to `Empty`, while the faithful field
+     ; accessors still reduce. The wrapper therefore branches via the visible
+     ; result tag and accessors without changing the emitted tool-call surface.
+     (codex:handle-request-permissions-function
        $context
        $state
        $call-id
-       (codex:request-permissions-function-payload $input))
-     (((CodexRequestPermissionsHandlerOutput $event $output $next-state)
-       (CodexRequestPermissionsToolCallResult
-         (codex:tool-result $call-id $output)
-         $next-state))
-      ((CodexRequestPermissionsHandlerCancelled $event $message)
-       (CodexRequestPermissionsToolCallResult
-         (codex:tool-result $call-id $message)
-         $state))
-      ((CodexRequestPermissionsHandlerError $message)
-       (CodexRequestPermissionsToolCallResult
-         (codex:tool-result $call-id $message)
-         $state)))))
+       $input)
+     (let $result-type
+       (codex:request-permissions-handler-result-type $result)
+       (if (== $result-type "output")
+           (CodexRequestPermissionsToolCallResult
+             (codex:tool-result
+               $call-id
+               (codex:request-permissions-handler-result-output-text $result))
+             (codex:request-permissions-handler-result-state $result))
+           (CodexRequestPermissionsToolCallResult
+             (codex:tool-result
+               $call-id
+               (codex:request-permissions-handler-result-message $result))
+             $state)))))
 
 (= (codex:run-request-permissions-tool-call-with-context $context $call-id $input)
    (codex:request-permissions-tool-call-result-item
