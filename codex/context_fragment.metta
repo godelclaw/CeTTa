@@ -16,6 +16,9 @@
 ; - SubagentNotification
 ; - AvailableSkillsInstructions
 ; - AvailablePluginsInstructions
+; - AppsInstructions
+; - PluginInstructions
+; - CollaborationModeInstructions
 ; - PermissionsInstructions wrapper onto the generic fragment surface
 ; - narrow standard contextual-user-fragment detection for the concrete
 ;   user-role fragments above
@@ -41,6 +44,11 @@
 ;   The current CeTTa slice keeps the same visible behavior through direct
 ;   helper records, using `Empty` for the absent `Option` case because there is
 ;   not yet a broader runtime option layer in this port slice.
+; - Rust's `AppsInstructions::from_connectors()` depends on the wider
+;   `AppInfo` surface, and `CollaborationModeInstructions` depends on the full
+;   `CollaborationMode.settings` runtime config object. The current CeTTa slice
+;   ports the exact visible fragment behavior through direct helper records that
+;   keep only the fields read by these fragment constructors.
 ; - Rust's hook-prompt parsing delegates to quick-xml and therefore accepts a
 ;   broader XML surface. The current CeTTa slice ports the specific
 ;   `hook_prompt` shape emitted by Codex itself, with predefined XML entities,
@@ -805,6 +813,151 @@
      (codex:permissions-instructions-end-marker)
      (codex:permissions-instructions-body $instructions)))
 
+(= (codex:apps-mcp-server-name)
+   "codex_apps")
+
+(= (codex:apps-instructions-role)
+   "developer")
+
+(= (codex:apps-instructions-start-marker)
+   "<apps_instructions>")
+
+(= (codex:apps-instructions-end-marker)
+   "</apps_instructions>")
+
+(= (codex:app-info $id $name $is-accessible $is-enabled)
+   (CodexAppInfo $id $name $is-accessible $is-enabled))
+
+(= (codex:app-info-id (CodexAppInfo $id $name $is-accessible $is-enabled))
+   $id)
+
+(= (codex:app-info-name (CodexAppInfo $id $name $is-accessible $is-enabled))
+   $name)
+
+(= (codex:app-info-is-accessible
+      (CodexAppInfo $id $name $is-accessible $is-enabled))
+   $is-accessible)
+
+(= (codex:app-info-is-enabled
+      (CodexAppInfo $id $name $is-accessible $is-enabled))
+   $is-enabled)
+
+(= (codex:any-accessible-enabled-connectors $connectors)
+   (if (== $connectors ())
+       False
+       (let $head (list:first $connectors)
+         (let $tail (list:rest $connectors)
+           (if (codex:app-info-is-accessible $head)
+               (if (codex:app-info-is-enabled $head)
+                   True
+                   (codex:any-accessible-enabled-connectors $tail))
+               (codex:any-accessible-enabled-connectors $tail))))))
+
+(= (codex:apps-instructions)
+   (codex:contextual-fragment
+     (codex:apps-instructions-role)
+     (codex:apps-instructions-start-marker)
+     (codex:apps-instructions-end-marker)
+     (str-concat
+       "\n## Apps (Connectors)\nApps (Connectors) can be explicitly triggered in user messages in the format `[$app-name](app://{connector_id})`. Apps can also be implicitly triggered as long as the context suggests usage of available apps.\nAn app is equivalent to a set of MCP tools within the `"
+       (str-concat
+         (codex:apps-mcp-server-name)
+         (str-concat
+           "` MCP.\nAn installed app's MCP tools are either provided to you already, or can be lazy-loaded through the `tool_search` tool. If `tool_search` is available, the apps that are searchable by `tools_search` will be listed by it.\nDo not additionally call list_mcp_resources or list_mcp_resource_templates for apps.\n"
+           "")))))
+
+(= (codex:apps-instructions-from-connectors $connectors)
+   (if (codex:any-accessible-enabled-connectors $connectors)
+       (codex:apps-instructions)
+       Empty))
+
+(= (codex:apps-instructions-matches-text $text)
+   (let $trimmed-lower (codex:ascii-lower-text (str-trim $text))
+     (if (str-starts-with? $trimmed-lower "<apps_instructions>")
+         (str-ends-with? $trimmed-lower "</apps_instructions>")
+         False)))
+
+(= (codex:plugin-instructions-role)
+   "developer")
+
+(= (codex:plugin-instructions-start-marker)
+   "")
+
+(= (codex:plugin-instructions-end-marker)
+   "")
+
+(= (codex:plugin-instructions $text)
+   (codex:contextual-fragment
+     (codex:plugin-instructions-role)
+     (codex:plugin-instructions-start-marker)
+     (codex:plugin-instructions-end-marker)
+     $text))
+
+(= (codex:plugin-instructions-matches-text $text)
+   (codex:contextual-fragment-matches-markers
+     (codex:plugin-instructions-start-marker)
+     (codex:plugin-instructions-end-marker)
+     $text))
+
+(= (codex:collaboration-mode-instructions-role)
+   "developer")
+
+(= (codex:collaboration-mode-instructions-start-marker)
+   "<collaboration_mode>")
+
+(= (codex:collaboration-mode-instructions-end-marker)
+   "</collaboration_mode>")
+
+(= (codex:settings $model $reasoning-effort $developer-instructions)
+   (CodexSettings $model $reasoning-effort $developer-instructions))
+
+(= (codex:settings-model (CodexSettings $model $reasoning-effort $developer-instructions))
+   $model)
+
+(= (codex:settings-reasoning-effort
+      (CodexSettings $model $reasoning-effort $developer-instructions))
+   $reasoning-effort)
+
+(= (codex:settings-developer-instructions
+      (CodexSettings $model $reasoning-effort $developer-instructions))
+   $developer-instructions)
+
+(= (codex:collaboration-mode $mode $settings)
+   (CodexCollaborationMode $mode $settings))
+
+(= (codex:collaboration-mode-kind
+      (CodexCollaborationMode $mode $settings))
+   $mode)
+
+(= (codex:collaboration-mode-settings
+      (CodexCollaborationMode $mode $settings))
+   $settings)
+
+(= (codex:collaboration-mode-instructions $instructions)
+   (codex:contextual-fragment
+     (codex:collaboration-mode-instructions-role)
+     (codex:collaboration-mode-instructions-start-marker)
+     (codex:collaboration-mode-instructions-end-marker)
+     $instructions))
+
+(= (codex:collaboration-mode-instructions-from-collaboration-mode
+      $collaboration-mode)
+   (let $developer-instructions
+     (codex:settings-developer-instructions
+       (codex:collaboration-mode-settings $collaboration-mode))
+     (if (== $developer-instructions CodexAbsent)
+         Empty
+         (if (== $developer-instructions "")
+             Empty
+             (codex:collaboration-mode-instructions
+               $developer-instructions)))))
+
+(= (codex:collaboration-mode-instructions-matches-text $text)
+   (codex:contextual-fragment-matches-markers
+     (codex:collaboration-mode-instructions-start-marker)
+     (codex:collaboration-mode-instructions-end-marker)
+     $text))
+
 (= (codex:available-skills-instructions-role)
    "developer")
 
@@ -851,9 +1004,11 @@
           "\n"
           (codex:available-skills-instructions-lines $skill-lines))))))
 
-(= (codex:available-skills-instructions-from-available-skills $available-skills)
-   (codex:available-skills-instructions
-     (codex:available-skills-skill-lines $available-skills)))
+; CeTTa reduction detail: matching the constructor directly avoids a nested
+; accessor reduction hole here while preserving Rust's visible behavior.
+(= (codex:available-skills-instructions-from-available-skills
+      (CodexAvailableSkills $skill-lines))
+   (codex:available-skills-instructions $skill-lines))
 
 (= (codex:available-skills-instructions-matches-text $text)
    (codex:contextual-fragment-matches-markers
