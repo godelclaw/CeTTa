@@ -26,6 +26,9 @@
 ; - HookAdditionalContext
 ; - ApprovedCommandPrefixSaved
 ; - NetworkRuleSaved
+; - RealtimeStartInstructions
+; - RealtimeStartWithInstructions
+; - RealtimeEndInstructions
 ; - PermissionsInstructions wrapper onto the generic fragment surface
 ; - narrow standard contextual-user-fragment detection for the concrete
 ;   user-role fragments above
@@ -60,6 +63,10 @@
 ;   `NetworkPolicyAmendment`/`NetworkPolicyRuleAction` surface. The current
 ;   CeTTa slice ports the exact visible fragment behavior through direct helper
 ;   records that keep only the action/host fields read by this fragment.
+; - Rust loads the realtime conversation instructions through `include_str!`
+;   prompt files and trims them before wrapping them in the fragment body. The
+;   current CeTTa slice ports those exact visible prompt texts as inline string
+;   constants because there is not yet a prompt-file loader at this layer.
 ; - Rust's hook-prompt parsing delegates to quick-xml and therefore accepts a
 ;   broader XML surface. The current CeTTa slice ports the specific
 ;   `hook_prompt` shape emitted by Codex itself, with predefined XML entities,
@@ -1172,6 +1179,54 @@
    (codex:contextual-fragment-matches-markers
      (codex:network-rule-saved-start-marker)
      (codex:network-rule-saved-end-marker)
+     $text))
+
+(= (codex:realtime-conversation-role)
+   "developer")
+
+(= (codex:realtime-conversation-start-marker)
+   "<realtime_conversation>")
+
+(= (codex:realtime-conversation-end-marker)
+   "</realtime_conversation>")
+
+(= (codex:realtime-start-instructions-text)
+   "Realtime conversation started.\n\nYou are operating as a backend executor behind an intermediary. The user does not talk to you directly. Any response you produce will be consumed by the intermediary and may be summarized before the user sees it.\n\nWhen invoked, you receive the latest conversation transcript and any relevant mode or metadata. The intermediary may invoke you even when backend help is not actually needed. Use the transcript to decide whether you should do work. If backend help is unnecessary, avoid verbose responses that add user-visible latency.\n\nWhen user text is routed from realtime, treat it as a transcript. It may be unpunctuated or contain recognition errors.\n\n- Keep responses concise and action-oriented. Your updates should help the intermediary respond to the user.")
+
+(= (codex:realtime-end-instructions-text)
+   "Realtime conversation ended.\n\nSubsequent user input will return to typed text rather than transcript-style text. Do not assume recognition errors or missing punctuation once realtime has ended. Resume normal chat behavior.")
+
+(= (codex:realtime-start-instructions)
+   (codex:contextual-fragment
+     (codex:realtime-conversation-role)
+     (codex:realtime-conversation-start-marker)
+     (codex:realtime-conversation-end-marker)
+     (format-args
+       "\n{}\n"
+       ((codex:realtime-start-instructions-text)))))
+
+(= (codex:realtime-start-with-instructions $instructions)
+   (codex:contextual-fragment
+     (codex:realtime-conversation-role)
+     (codex:realtime-conversation-start-marker)
+     (codex:realtime-conversation-end-marker)
+     (format-args
+       "\n{}\n"
+       ($instructions))))
+
+(= (codex:realtime-end-instructions $reason)
+   (codex:contextual-fragment
+     (codex:realtime-conversation-role)
+     (codex:realtime-conversation-start-marker)
+     (codex:realtime-conversation-end-marker)
+     (format-args
+       "\n{}\n\nReason: {}\n"
+       ((codex:realtime-end-instructions-text) $reason))))
+
+(= (codex:realtime-conversation-matches-text $text)
+   (codex:contextual-fragment-matches-markers
+     (codex:realtime-conversation-start-marker)
+     (codex:realtime-conversation-end-marker)
      $text))
 
 (= (codex:available-skills-instructions-role)
