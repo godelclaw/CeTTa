@@ -13,6 +13,7 @@
 ; - ToolSearchOutput
 ; - WebSearchCall
 ; - ImageGenerationCall
+; - TokenUsage / FinalOutput
 ; - ExecCommandOutputDeltaEvent
 ; - TerminalInteractionEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
@@ -285,6 +286,73 @@
         $overall-explanation
         $overall-confidence-score))
    $overall-confidence-score)
+
+(= (codex:token-usage
+      $input-tokens
+      $cached-input-tokens
+      $output-tokens
+      $reasoning-output-tokens
+      $total-tokens)
+   (CodexTokenUsage
+     $input-tokens
+     $cached-input-tokens
+     $output-tokens
+     $reasoning-output-tokens
+     $total-tokens))
+
+(= (codex:default-token-usage)
+   (CodexTokenUsage 0 0 0 0 0))
+
+(= (codex:token-usage-input-tokens
+      (CodexTokenUsage
+        $input-tokens
+        $cached-input-tokens
+        $output-tokens
+        $reasoning-output-tokens
+        $total-tokens))
+   $input-tokens)
+
+(= (codex:token-usage-cached-input-tokens
+      (CodexTokenUsage
+        $input-tokens
+        $cached-input-tokens
+        $output-tokens
+        $reasoning-output-tokens
+        $total-tokens))
+   $cached-input-tokens)
+
+(= (codex:token-usage-output-tokens
+      (CodexTokenUsage
+        $input-tokens
+        $cached-input-tokens
+        $output-tokens
+        $reasoning-output-tokens
+        $total-tokens))
+   $output-tokens)
+
+(= (codex:token-usage-reasoning-output-tokens
+      (CodexTokenUsage
+        $input-tokens
+        $cached-input-tokens
+        $output-tokens
+        $reasoning-output-tokens
+        $total-tokens))
+   $reasoning-output-tokens)
+
+(= (codex:token-usage-total-tokens
+      (CodexTokenUsage
+        $input-tokens
+        $cached-input-tokens
+        $output-tokens
+        $reasoning-output-tokens
+        $total-tokens))
+   $total-tokens)
+
+(= (codex:final-output $token-usage)
+   (CodexFinalOutput $token-usage))
+
+(= (codex:final-output-token-usage (CodexFinalOutput $token-usage))
+   $token-usage)
 
 (= (codex:default-image-detail)
    "high")
