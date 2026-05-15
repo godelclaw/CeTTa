@@ -163,6 +163,19 @@
   ("{\"type\":\"context_compacted\"}"))
 
 !(assertEqualToResult
+  (codex:item-type
+    (codex:model-verification-event
+      ((codex:model-verification-trusted-access-for-cyber))))
+  ("model_verification"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:model-verification-event
+        ((codex:model-verification-trusted-access-for-cyber)))))
+  ("{\"type\":\"model_verification\",\"verifications\":[\"trusted_access_for_cyber\"]}"))
+
+!(assertEqualToResult
   (json-stringify
     (codex:item-json
       (codex:web-search-begin-event "search-17")))

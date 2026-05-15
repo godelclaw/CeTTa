@@ -24,6 +24,7 @@
 ; - McpStartupUpdateEvent / McpStartupCompleteEvent
 ; - ThreadNameUpdatedEvent / ThreadRolledBackEvent
 ; - WarningEvent / ModelRerouteEvent / ContextCompactedEvent
+; - ModelVerificationEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
 ; This increment covers the plain-text and structured content-item branches of
@@ -197,6 +198,12 @@
 
 (= (codex:model-reroute-event $from_model $to_model $reason)
    (CodexEventModelReroute $from_model $to_model $reason))
+
+(= (codex:model-verification-trusted-access-for-cyber)
+   (CodexModelVerificationTrustedAccessForCyber))
+
+(= (codex:model-verification-event $verifications)
+   (CodexEventModelVerification $verifications))
 
 (= (codex:context-compacted-event)
    (CodexEventContextCompacted))
@@ -777,6 +784,10 @@
    "model_reroute")
 
 (= (codex:item-type
+      (CodexEventModelVerification $verifications))
+   "model_verification")
+
+(= (codex:item-type
       (CodexEventContextCompacted))
    "context_compacted")
 
@@ -1024,6 +1035,10 @@
       (CodexEventModelReroute $from_model $to_model $reason))
    $reason)
 
+(= (codex:model-verification-event-verifications
+      (CodexEventModelVerification $verifications))
+   $verifications)
+
 (= (codex:web-search-begin-call-id
       (CodexEventWebSearchBegin $call_id))
    $call_id)
@@ -1155,6 +1170,10 @@
 (= (codex:model-reroute-reason-json
       (CodexModelRerouteReasonHighRiskCyberActivity))
    (JsonString "high_risk_cyber_activity"))
+
+(= (codex:model-verification-json
+      (CodexModelVerificationTrustedAccessForCyber))
+   (JsonString "trusted_access_for_cyber"))
 
 (= (codex:content-item-json (CodexInputText $text))
    (JsonObject
@@ -1398,6 +1417,15 @@
       (JsonPair "from_model" (JsonString $from_model))
       (JsonPair "to_model" (JsonString $to_model))
       (JsonPair "reason" (codex:model-reroute-reason-json $reason)))))
+
+(= (codex:item-json
+      (CodexEventModelVerification $verifications))
+   (JsonObject
+     ((JsonPair "type" (JsonString "model_verification"))
+      (JsonPair
+        "verifications"
+        (JsonArray
+          (map-atom $verifications $item (codex:model-verification-json $item)))))))
 
 (= (codex:item-json
       (CodexEventContextCompacted))
