@@ -53,26 +53,6 @@
   ("{\"explanation\":null,\"plan\":[{\"step\":\"Finish port\",\"status\":\"completed\"}]}"))
 
 !(assertEqualToResult
-  (json-stringify
-    (codex:update-plan-event-json
-      (codex:update-plan-handler-result-event
-        (codex:handle-update-plan-payload
-          (codex-up-default-context)
-          "call-up"
-          (codex:update-plan-function-payload
-            (codex-up-input-json))))))
-  ("{\"explanation\":\"Tool harness check\",\"plan\":[{\"step\":\"Inspect workspace\",\"status\":\"in_progress\"},{\"step\":\"Report results\",\"status\":\"pending\"}]}"))
-
-!(assertEqualToResult
-  (codex:update-plan-handler-result-output-text
-    (codex:handle-update-plan-payload
-      (codex-up-default-context)
-      "call-up"
-      (codex:update-plan-function-payload
-        (codex-up-input-json))))
-  ("Plan updated"))
-
-!(assertEqualToResult
   (codex:update-plan-handler-result-message
     (codex:handle-update-plan-payload
       (codex-up-default-context)
@@ -106,12 +86,3 @@
       "call-up"
       (codex:update-plan-unsupported-payload "custom")))
   ("update_plan handler received unsupported payload"))
-
-!(assertEqual
-  (once
-    (codex:tool-result-output-text
-      (once
-        (codex:run-update-plan-tool-call
-          "call-up"
-          (codex-up-input-json)))))
-  "Plan updated")

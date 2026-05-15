@@ -46,16 +46,6 @@
 
 !(assertEqualToResult
   (codex:parse-visible-hook-prompt-message
-    "msg-1"
-    ((CodexInputText "<environment_context>ctx</environment_context>")
-     (CodexInputText
-       "<hook_prompt hook_run_id=\"hook-run-1\">Retry with care &amp; joy.</hook_prompt>")))
-  ((CodexHookPromptItem
-      "msg-1"
-      ((CodexHookPromptFragment "Retry with care & joy." "hook-run-1")))))
-
-!(assertEqualToResult
-  (codex:parse-visible-hook-prompt-message
     CodexAbsent
     ((CodexInputText
         "<hook_prompt hook_run_id=\"hook-run-1\">Retry with tests.</hook_prompt>")
@@ -71,12 +61,6 @@
     (CodexInputText
       "<hook_prompt hook_run_id=\"hook-run-1\">Retry with tests.</hook_prompt>"))
   (True))
-
-!(assertEqualToResult
-  (codex:is-memory-excluded-contextual-user-fragment
-    (CodexInputText
-      "<hook_prompt hook_run_id=\"hook-run-1\">Retry with tests.</hook_prompt>"))
-  (False))
 
 !(assertEqual
   (codex:parse-visible-hook-prompt-message

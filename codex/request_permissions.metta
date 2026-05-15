@@ -328,41 +328,51 @@
       (CodexRequestPermissionsNormalizeError $message))
    $message)
 
-(= (codex:request-permissions-handler-result-type
-      (CodexRequestPermissionsHandlerOutput $event $output $state))
-   "output")
+(= (codex:request-permissions-handler-result-type $result)
+   (let $resolved-result (eval $result)
+     (case $resolved-result
+       (((CodexRequestPermissionsHandlerOutput $event $output $state)
+         "output")
+        ((CodexRequestPermissionsHandlerCancelled $event $message)
+         "cancelled")
+        ((CodexRequestPermissionsHandlerError $message)
+         "error")))))
 
-(= (codex:request-permissions-handler-result-type
-      (CodexRequestPermissionsHandlerCancelled $event $message))
-   "cancelled")
+(= (codex:request-permissions-handler-result-event $result)
+   (let $resolved-result (eval $result)
+     (case $resolved-result
+       (((CodexRequestPermissionsHandlerOutput $event $output $state)
+         $event)
+        ((CodexRequestPermissionsHandlerCancelled $event $message)
+         $event)
+        ($other
+         Empty)))))
 
-(= (codex:request-permissions-handler-result-type
-      (CodexRequestPermissionsHandlerError $message))
-   "error")
+(= (codex:request-permissions-handler-result-output-text $result)
+   (let $resolved-result (eval $result)
+     (case $resolved-result
+       (((CodexRequestPermissionsHandlerOutput $event $output $state)
+         $output)
+        ($other
+         Empty)))))
 
-(= (codex:request-permissions-handler-result-event
-      (CodexRequestPermissionsHandlerOutput $event $output $state))
-   $event)
+(= (codex:request-permissions-handler-result-state $result)
+   (let $resolved-result (eval $result)
+     (case $resolved-result
+       (((CodexRequestPermissionsHandlerOutput $event $output $state)
+         $state)
+        ($other
+         Empty)))))
 
-(= (codex:request-permissions-handler-result-event
-      (CodexRequestPermissionsHandlerCancelled $event $message))
-   $event)
-
-(= (codex:request-permissions-handler-result-output-text
-      (CodexRequestPermissionsHandlerOutput $event $output $state))
-   $output)
-
-(= (codex:request-permissions-handler-result-state
-      (CodexRequestPermissionsHandlerOutput $event $output $state))
-   $state)
-
-(= (codex:request-permissions-handler-result-message
-      (CodexRequestPermissionsHandlerCancelled $event $message))
-   $message)
-
-(= (codex:request-permissions-handler-result-message
-      (CodexRequestPermissionsHandlerError $message))
-   $message)
+(= (codex:request-permissions-handler-result-message $result)
+   (let $resolved-result (eval $result)
+     (case $resolved-result
+       (((CodexRequestPermissionsHandlerCancelled $event $message)
+         $message)
+        ((CodexRequestPermissionsHandlerError $message)
+         $message)
+        ($other
+         Empty)))))
 
 (= (codex:request-permissions-json-object-optional-value $object $key)
    (case (json-object-get $object $key)

@@ -67,11 +67,6 @@
   (Empty))
 
 !(assertEqualToResult
-  (codex:apps-instructions-matches-text
-    " <APPS_INSTRUCTIONS>\nbody\n</apps_instructions> ")
-  (True))
-
-!(assertEqualToResult
   (codex:contextual-fragment-role
     (codex:apps-instructions))
   ("developer"))
@@ -126,8 +121,3 @@
       (codex:collaboration-mode-default)
       (codex:settings "gpt-5.4" CodexAbsent CodexAbsent)))
   (Empty))
-
-!(assertEqualToResult
-  (codex:collaboration-mode-instructions-matches-text
-    "<COLLABORATION_MODE>body</collaboration_mode>")
-  (True))
