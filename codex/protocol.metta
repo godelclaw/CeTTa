@@ -25,6 +25,7 @@
 ; - ThreadNameUpdatedEvent / ThreadRolledBackEvent
 ; - WarningEvent / ModelRerouteEvent / ContextCompactedEvent
 ; - ModelVerificationEvent
+; - TurnStartedEvent
 ; - TurnCompleteEvent / StreamInfoEvent
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
@@ -207,6 +208,23 @@
 
 (= (codex:model-verification-event $verifications)
    (CodexEventModelVerification $verifications))
+
+(= (codex:mode-kind-plan)
+   (CodexModeKindPlan))
+
+(= (codex:mode-kind-default)
+   (CodexModeKindDefault))
+
+(= (codex:turn-started-event
+      $turn_id
+      $started_at
+      $model_context_window
+      $collaboration_mode_kind)
+   (CodexEventTurnStarted
+     $turn_id
+     $started_at
+     $model_context_window
+     $collaboration_mode_kind))
 
 (= (codex:context-compacted-event)
    (CodexEventContextCompacted))
@@ -813,6 +831,14 @@
    "model_verification")
 
 (= (codex:item-type
+      (CodexEventTurnStarted
+        $turn_id
+        $started_at
+        $model_context_window
+        $collaboration_mode_kind))
+   "task_started")
+
+(= (codex:item-type
       (CodexEventContextCompacted))
    "context_compacted")
 
@@ -1085,6 +1111,38 @@
       (CodexEventModelVerification $verifications))
    $verifications)
 
+(= (codex:turn-started-turn-id
+      (CodexEventTurnStarted
+        $turn_id
+        $started_at
+        $model_context_window
+        $collaboration_mode_kind))
+   $turn_id)
+
+(= (codex:turn-started-started-at
+      (CodexEventTurnStarted
+        $turn_id
+        $started_at
+        $model_context_window
+        $collaboration_mode_kind))
+   (if (== $started_at CodexAbsent) Empty $started_at))
+
+(= (codex:turn-started-model-context-window
+      (CodexEventTurnStarted
+        $turn_id
+        $started_at
+        $model_context_window
+        $collaboration_mode_kind))
+   (if (== $model_context_window CodexAbsent) Empty $model_context_window))
+
+(= (codex:turn-started-collaboration-mode-kind
+      (CodexEventTurnStarted
+        $turn_id
+        $started_at
+        $model_context_window
+        $collaboration_mode_kind))
+   $collaboration_mode_kind)
+
 (= (codex:turn-complete-turn-id
       (CodexEventTurnComplete
         $turn_id
@@ -1281,6 +1339,17 @@
 (= (codex:model-verification-json
       (CodexModelVerificationTrustedAccessForCyber))
    (JsonString "trusted_access_for_cyber"))
+
+; Rust `ModeKind` also has hidden `PairProgramming` and `Execute` variants, but
+; both are `skip_serializing`. This output-only protocol slice therefore models
+; just the serializable wire values.
+(= (codex:mode-kind-json
+      (CodexModeKindPlan))
+   (JsonString "plan"))
+
+(= (codex:mode-kind-json
+      (CodexModeKindDefault))
+   (JsonString "default"))
 
 (= (codex:content-item-json (CodexInputText $text))
    (JsonObject
@@ -1533,6 +1602,46 @@
         "verifications"
         (JsonArray
           (map-atom $verifications $item (codex:model-verification-json $item)))))))
+
+(= (codex:item-json
+      (CodexEventTurnStarted
+        $turn_id
+        $started_at
+        $model_context_window
+        $collaboration_mode_kind))
+   (if (== $started_at CodexAbsent)
+       (if (== $model_context_window CodexAbsent)
+           (JsonObject
+             ((JsonPair "type" (JsonString "task_started"))
+              (JsonPair "turn_id" (JsonString $turn_id))
+              (JsonPair "model_context_window" JsonNull)
+              (JsonPair
+                "collaboration_mode_kind"
+                (codex:mode-kind-json $collaboration_mode_kind))))
+           (JsonObject
+             ((JsonPair "type" (JsonString "task_started"))
+              (JsonPair "turn_id" (JsonString $turn_id))
+              (JsonPair "model_context_window" (JsonNumber $model_context_window))
+              (JsonPair
+                "collaboration_mode_kind"
+                (codex:mode-kind-json $collaboration_mode_kind)))))
+       (if (== $model_context_window CodexAbsent)
+           (JsonObject
+             ((JsonPair "type" (JsonString "task_started"))
+              (JsonPair "turn_id" (JsonString $turn_id))
+              (JsonPair "started_at" (JsonNumber $started_at))
+              (JsonPair "model_context_window" JsonNull)
+              (JsonPair
+                "collaboration_mode_kind"
+                (codex:mode-kind-json $collaboration_mode_kind))))
+           (JsonObject
+             ((JsonPair "type" (JsonString "task_started"))
+              (JsonPair "turn_id" (JsonString $turn_id))
+              (JsonPair "started_at" (JsonNumber $started_at))
+              (JsonPair "model_context_window" (JsonNumber $model_context_window))
+              (JsonPair
+                "collaboration_mode_kind"
+                (codex:mode-kind-json $collaboration_mode_kind)))))))
 
 (= (codex:item-json
       (CodexEventContextCompacted))

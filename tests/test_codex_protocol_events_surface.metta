@@ -177,6 +177,35 @@
 
 !(assertEqualToResult
   (codex:item-type
+    (codex:turn-started-event
+      "turn-8"
+      1712345600
+      400000
+      (codex:mode-kind-default)))
+  ("task_started"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:turn-started-event
+        "turn-8"
+        1712345600
+        400000
+        (codex:mode-kind-default))))
+  ("{\"type\":\"task_started\",\"turn_id\":\"turn-8\",\"started_at\":1712345600,\"model_context_window\":400000,\"collaboration_mode_kind\":\"default\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:turn-started-event
+        "turn-11"
+        CodexAbsent
+        CodexAbsent
+        (codex:mode-kind-plan))))
+  ("{\"type\":\"task_started\",\"turn_id\":\"turn-11\",\"model_context_window\":null,\"collaboration_mode_kind\":\"plan\"}"))
+
+!(assertEqualToResult
+  (codex:item-type
     (codex:turn-complete-event
       "turn-9"
       "final answer"
