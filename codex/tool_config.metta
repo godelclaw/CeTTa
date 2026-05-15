@@ -77,6 +77,9 @@
 (= (codex:windows-sandbox-level-restricted-token)
    "RestrictedToken")
 
+(= (codex:windows-sandbox-level-elevated)
+   "Elevated")
+
 (= (codex:tool-config-model-info
       $shell-type
       $apply-patch-tool-type
