@@ -14,6 +14,8 @@
 ; - EnvironmentContext
 ; - SkillInstructions
 ; - SubagentNotification
+; - AvailableSkillsInstructions
+; - AvailablePluginsInstructions
 ; - PermissionsInstructions wrapper onto the generic fragment surface
 ; - narrow standard contextual-user-fragment detection for the concrete
 ;   user-role fragments above
@@ -34,6 +36,11 @@
 ;   current CeTTa slice ports the same visible fragment bodies through direct
 ;   constructor helpers because the surrounding runtime injection layer is not
 ;   ported yet.
+; - Rust's `AvailableSkillsInstructions` is built from `AvailableSkills`, and
+;   `AvailablePluginsInstructions::from_plugins()` returns `Option<Self>`.
+;   The current CeTTa slice keeps the same visible behavior through direct
+;   helper records, using `Empty` for the absent `Option` case because there is
+;   not yet a broader runtime option layer in this port slice.
 ; - Rust's hook-prompt parsing delegates to quick-xml and therefore accepts a
 ;   broader XML surface. The current CeTTa slice ports the specific
 ;   `hook_prompt` shape emitted by Codex itself, with predefined XML entities,
@@ -797,6 +804,212 @@
      (codex:permissions-instructions-start-marker)
      (codex:permissions-instructions-end-marker)
      (codex:permissions-instructions-body $instructions)))
+
+(= (codex:available-skills-instructions-role)
+   "developer")
+
+(= (codex:available-skills-instructions-start-marker)
+   "<skills_instructions>")
+
+(= (codex:available-skills-instructions-end-marker)
+   "</skills_instructions>")
+
+(= (codex:available-skills $skill-lines)
+   (CodexAvailableSkills $skill-lines))
+
+(= (codex:available-skills-skill-lines
+      (CodexAvailableSkills $skill-lines))
+   $skill-lines)
+
+(= (codex:available-skills-instructions-guidance)
+   "- Discovery: The list above is the skills available in this session (name + description + file path). Skill bodies live on disk at the listed paths.\n- Trigger rules: If the user names a skill (with `$SkillName` or plain text) OR the task clearly matches a skill's description shown above, you must use that skill for that turn. Multiple mentions mean use them all. Do not carry skills across turns unless re-mentioned.\n- Missing/blocked: If a named skill isn't in the list or the path can't be read, say so briefly and continue with the best fallback.\n- How to use a skill (progressive disclosure):\n  1) After deciding to use a skill, open its `SKILL.md`. Read only enough to follow the workflow.\n  2) When `SKILL.md` references relative paths (e.g., `scripts/foo.py`), resolve them relative to the skill directory listed above first, and only consider other paths if needed.\n  3) If `SKILL.md` points to extra folders such as `references/`, load only the specific files needed for the request; don't bulk-load everything.\n  4) If `scripts/` exist, prefer running or patching them instead of retyping large code blocks.\n  5) If `assets/` or templates exist, reuse them instead of recreating from scratch.\n- Coordination and sequencing:\n  - If multiple skills apply, choose the minimal set that covers the request and state the order you'll use them.\n  - Announce which skill(s) you're using and why (one short line). If you skip an obvious skill, say why.\n- Context hygiene:\n  - Keep context small: summarize long sections instead of pasting them; only load extra files when needed.\n  - Avoid deep reference-chasing: prefer opening only files directly linked from `SKILL.md` unless you're blocked.\n  - When variants exist (frameworks, providers, domains), pick only the relevant reference file(s) and note that choice.\n- Safety and fallback: If a skill can't be applied cleanly (missing files, unclear instructions), state the issue, pick the next-best approach, and continue.")
+
+(= (codex:available-skills-instructions-lines $skill-lines)
+   (let $lines-0
+     (codex:append-item () "## Skills")
+     (let $lines-1
+       (codex:append-item
+         $lines-0
+         "A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used. Each entry includes a name, description, and file path so you can open the source for full instructions when using a specific skill.")
+       (let $lines-2
+         (codex:append-item $lines-1 "### Available skills")
+         (let $lines-3 (list:append $lines-2 $skill-lines)
+           (let $lines-4
+             (codex:append-item $lines-3 "### How to use skills")
+             (codex:append-item
+               $lines-4
+               (codex:available-skills-instructions-guidance))))))))
+
+(= (codex:available-skills-instructions $skill-lines)
+   (codex:contextual-fragment
+     (codex:available-skills-instructions-role)
+     (codex:available-skills-instructions-start-marker)
+     (codex:available-skills-instructions-end-marker)
+     (format-args
+       "\n{}\n"
+       ((str-join
+          "\n"
+          (codex:available-skills-instructions-lines $skill-lines))))))
+
+(= (codex:available-skills-instructions-from-available-skills $available-skills)
+   (codex:available-skills-instructions
+     (codex:available-skills-skill-lines $available-skills)))
+
+(= (codex:available-skills-instructions-matches-text $text)
+   (codex:contextual-fragment-matches-markers
+     (codex:available-skills-instructions-start-marker)
+     (codex:available-skills-instructions-end-marker)
+     $text))
+
+(= (codex:app-connector-id $text)
+   (CodexAppConnectorId $text))
+
+(= (codex:app-connector-id-text (CodexAppConnectorId $text))
+   $text)
+
+(= (codex:plugin-capability-summary
+      $config-name
+      $display-name
+      $description
+      $has-skills
+      $mcp-server-names
+      $app-connector-ids)
+   (CodexPluginCapabilitySummary
+     $config-name
+     $display-name
+     $description
+     $has-skills
+     $mcp-server-names
+     $app-connector-ids))
+
+(= (codex:plugin-capability-summary-config-name
+      (CodexPluginCapabilitySummary
+        $config-name
+        $display-name
+        $description
+        $has-skills
+        $mcp-server-names
+        $app-connector-ids))
+   $config-name)
+
+(= (codex:plugin-capability-summary-display-name
+      (CodexPluginCapabilitySummary
+        $config-name
+        $display-name
+        $description
+        $has-skills
+        $mcp-server-names
+        $app-connector-ids))
+   $display-name)
+
+(= (codex:plugin-capability-summary-description
+      (CodexPluginCapabilitySummary
+        $config-name
+        $display-name
+        $description
+        $has-skills
+        $mcp-server-names
+        $app-connector-ids))
+   $description)
+
+(= (codex:plugin-capability-summary-has-skills
+      (CodexPluginCapabilitySummary
+        $config-name
+        $display-name
+        $description
+        $has-skills
+        $mcp-server-names
+        $app-connector-ids))
+   $has-skills)
+
+(= (codex:plugin-capability-summary-mcp-server-names
+      (CodexPluginCapabilitySummary
+        $config-name
+        $display-name
+        $description
+        $has-skills
+        $mcp-server-names
+        $app-connector-ids))
+   $mcp-server-names)
+
+(= (codex:plugin-capability-summary-app-connector-ids
+      (CodexPluginCapabilitySummary
+        $config-name
+        $display-name
+        $description
+        $has-skills
+        $mcp-server-names
+        $app-connector-ids))
+   $app-connector-ids)
+
+(= (codex:available-plugins-instructions-role)
+   "developer")
+
+(= (codex:available-plugins-instructions-start-marker)
+   "<plugins_instructions>")
+
+(= (codex:available-plugins-instructions-end-marker)
+   "</plugins_instructions>")
+
+(= (codex:available-plugins-instructions-guidance)
+   "- Discovery: The list above is the plugins available in this session.\n- Skill naming: If a plugin contributes skills, those skill entries are prefixed with `plugin_name:` in the Skills list.\n- Trigger rules: If the user explicitly names a plugin, prefer capabilities associated with that plugin for that turn.\n- Relationship to capabilities: Plugins are not invoked directly. Use their underlying skills, MCP tools, and app tools to help solve the task.\n- Preference: When a relevant plugin is available, prefer using capabilities associated with that plugin over standalone capabilities that provide similar functionality.\n- Missing/blocked: If the user requests a plugin that is not listed above, or the plugin does not have relevant callable capabilities for the task, say so briefly and continue with the best fallback.")
+
+(= (codex:available-plugins-summary-line $plugin)
+   (let $display-name (codex:plugin-capability-summary-display-name $plugin)
+     (let $description (codex:plugin-capability-summary-description $plugin)
+       (if (== $description CodexAbsent)
+           (format-args "- `{}`" ($display-name))
+           (format-args "- `{}`: {}" ($display-name $description))))))
+
+(= (codex:available-plugins-summary-lines $plugins)
+   (if (== $plugins ())
+       ()
+       (let $head (list:first $plugins)
+         (let $tail (list:rest $plugins)
+           (cons-atom
+             (codex:available-plugins-summary-line $head)
+             (codex:available-plugins-summary-lines $tail))))))
+
+(= (codex:available-plugins-instructions-lines $plugins)
+   (let $lines-0
+     (codex:append-item () "## Plugins")
+     (let $lines-1
+       (codex:append-item
+         $lines-0
+         "A plugin is a local bundle of skills, MCP servers, and apps. Below is the list of plugins that are enabled and available in this session.")
+       (let $lines-2
+         (codex:append-item $lines-1 "### Available plugins")
+         (let $lines-3
+           (list:append
+             $lines-2
+             (codex:available-plugins-summary-lines $plugins))
+           (let $lines-4
+             (codex:append-item $lines-3 "### How to use plugins")
+             (codex:append-item
+               $lines-4
+               (codex:available-plugins-instructions-guidance))))))))
+
+(= (codex:available-plugins-instructions $plugins)
+   (codex:contextual-fragment
+     (codex:available-plugins-instructions-role)
+     (codex:available-plugins-instructions-start-marker)
+     (codex:available-plugins-instructions-end-marker)
+     (format-args
+       "\n{}\n"
+       ((str-join
+          "\n"
+          (codex:available-plugins-instructions-lines $plugins))))))
+
+(= (codex:available-plugins-instructions-from-plugins $plugins)
+   (if (== $plugins ())
+       Empty
+       (codex:available-plugins-instructions $plugins)))
+
+(= (codex:available-plugins-instructions-matches-text $text)
+   (codex:contextual-fragment-matches-markers
+     (codex:available-plugins-instructions-start-marker)
+     (codex:available-plugins-instructions-end-marker)
+     $text))
 
 (= (codex:is-standard-contextual-user-text $text)
    (if (codex:user-instructions-matches-text $text)
