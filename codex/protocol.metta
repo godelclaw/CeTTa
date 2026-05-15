@@ -19,6 +19,7 @@
 ; - TerminalInteractionEvent
 ; - WebSearchBeginEvent / WebSearchEndEvent
 ; - ImageGenerationBeginEvent / ImageGenerationEndEvent
+; - AgentMessageDeltaEvent / AgentReasoning*Event
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
 ; This increment covers the plain-text and structured content-item branches of
@@ -129,6 +130,24 @@
 
 (= (codex:terminal-interaction-event $call_id $process_id $stdin)
    (CodexEventTerminalInteraction $call_id $process_id $stdin))
+
+(= (codex:agent-message-delta-event $delta)
+   (CodexEventAgentMessageDelta $delta))
+
+(= (codex:agent-reasoning-event $text)
+   (CodexEventAgentReasoning $text))
+
+(= (codex:agent-reasoning-raw-content-event $text)
+   (CodexEventAgentReasoningRawContent $text))
+
+(= (codex:agent-reasoning-raw-content-delta-event $delta)
+   (CodexEventAgentReasoningRawContentDelta $delta))
+
+(= (codex:agent-reasoning-section-break-event $item_id $summary_index)
+   (CodexEventAgentReasoningSectionBreak $item_id $summary_index))
+
+(= (codex:agent-reasoning-delta-event $delta)
+   (CodexEventAgentReasoningDelta $delta))
 
 (= (codex:web-search-begin-event $call_id)
    (CodexEventWebSearchBegin $call_id))
@@ -650,6 +669,30 @@
    "terminal_interaction")
 
 (= (codex:item-type
+      (CodexEventAgentMessageDelta $delta))
+   "agent_message_delta")
+
+(= (codex:item-type
+      (CodexEventAgentReasoning $text))
+   "agent_reasoning")
+
+(= (codex:item-type
+      (CodexEventAgentReasoningRawContent $text))
+   "agent_reasoning_raw_content")
+
+(= (codex:item-type
+      (CodexEventAgentReasoningRawContentDelta $delta))
+   "agent_reasoning_raw_content_delta")
+
+(= (codex:item-type
+      (CodexEventAgentReasoningSectionBreak $item_id $summary_index))
+   "agent_reasoning_section_break")
+
+(= (codex:item-type
+      (CodexEventAgentReasoningDelta $delta))
+   "agent_reasoning_delta")
+
+(= (codex:item-type
       (CodexEventWebSearchBegin $call_id))
    "web_search_begin")
 
@@ -776,6 +819,34 @@
 (= (codex:terminal-interaction-stdin
       (CodexEventTerminalInteraction $call_id $process_id $stdin))
    $stdin)
+
+(= (codex:agent-message-delta-text
+      (CodexEventAgentMessageDelta $delta))
+   $delta)
+
+(= (codex:agent-reasoning-text
+      (CodexEventAgentReasoning $text))
+   $text)
+
+(= (codex:agent-reasoning-raw-content-text
+      (CodexEventAgentReasoningRawContent $text))
+   $text)
+
+(= (codex:agent-reasoning-raw-content-delta-text
+      (CodexEventAgentReasoningRawContentDelta $delta))
+   $delta)
+
+(= (codex:agent-reasoning-section-break-item-id
+      (CodexEventAgentReasoningSectionBreak $item_id $summary_index))
+   $item_id)
+
+(= (codex:agent-reasoning-section-break-summary-index
+      (CodexEventAgentReasoningSectionBreak $item_id $summary_index))
+   $summary_index)
+
+(= (codex:agent-reasoning-delta-text
+      (CodexEventAgentReasoningDelta $delta))
+   $delta)
 
 (= (codex:web-search-begin-call-id
       (CodexEventWebSearchBegin $call_id))
@@ -1003,6 +1074,43 @@
       (JsonPair "call_id" (JsonString $call_id))
       (JsonPair "process_id" (JsonString $process_id))
       (JsonPair "stdin" (JsonString $stdin)))))
+
+(= (codex:item-json
+      (CodexEventAgentMessageDelta $delta))
+   (JsonObject
+     ((JsonPair "type" (JsonString "agent_message_delta"))
+      (JsonPair "delta" (JsonString $delta)))))
+
+(= (codex:item-json
+      (CodexEventAgentReasoning $text))
+   (JsonObject
+     ((JsonPair "type" (JsonString "agent_reasoning"))
+      (JsonPair "text" (JsonString $text)))))
+
+(= (codex:item-json
+      (CodexEventAgentReasoningRawContent $text))
+   (JsonObject
+     ((JsonPair "type" (JsonString "agent_reasoning_raw_content"))
+      (JsonPair "text" (JsonString $text)))))
+
+(= (codex:item-json
+      (CodexEventAgentReasoningRawContentDelta $delta))
+   (JsonObject
+     ((JsonPair "type" (JsonString "agent_reasoning_raw_content_delta"))
+      (JsonPair "delta" (JsonString $delta)))))
+
+(= (codex:item-json
+      (CodexEventAgentReasoningSectionBreak $item_id $summary_index))
+   (JsonObject
+     ((JsonPair "type" (JsonString "agent_reasoning_section_break"))
+      (JsonPair "item_id" (JsonString $item_id))
+      (JsonPair "summary_index" (JsonNumber $summary_index)))))
+
+(= (codex:item-json
+      (CodexEventAgentReasoningDelta $delta))
+   (JsonObject
+     ((JsonPair "type" (JsonString "agent_reasoning_delta"))
+      (JsonPair "delta" (JsonString $delta)))))
 
 (= (codex:item-json
       (CodexEventWebSearchBegin $call_id))

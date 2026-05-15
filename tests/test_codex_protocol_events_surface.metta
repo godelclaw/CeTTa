@@ -28,6 +28,41 @@
 !(assertEqualToResult
   (json-stringify
     (codex:item-json
+      (codex:agent-message-delta-event "delta text")))
+  ("{\"type\":\"agent_message_delta\",\"delta\":\"delta text\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:agent-reasoning-event "reasoning text")))
+  ("{\"type\":\"agent_reasoning\",\"text\":\"reasoning text\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:agent-reasoning-raw-content-event "raw text")))
+  ("{\"type\":\"agent_reasoning_raw_content\",\"text\":\"raw text\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:agent-reasoning-raw-content-delta-event "raw delta")))
+  ("{\"type\":\"agent_reasoning_raw_content_delta\",\"delta\":\"raw delta\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:agent-reasoning-section-break-event "item-7" 2)))
+  ("{\"type\":\"agent_reasoning_section_break\",\"item_id\":\"item-7\",\"summary_index\":2}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:agent-reasoning-delta-event "step"))
+  ("agent_reasoning_delta"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
       (codex:web-search-begin-event "search-17")))
   ("{\"type\":\"web_search_begin\",\"call_id\":\"search-17\"}"))
 
