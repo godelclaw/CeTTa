@@ -16,9 +16,11 @@
 ;   `sed`, `wc`) so summaries bias toward the main command
 ;
 ; CeTTa-specific limitation for this first command slice:
-; shell wrapper reconstruction currently uses single-quoted script text, so the
-; visible wrapper path only covers scripts without embedded single quotes. The
-; broader Rust shell-quoting fidelity will land in a later slice.
+; shell wrapper reconstruction still threads through a quoted wrapper string
+; because the native shell parser is currently exposed at that boundary. The
+; visible wrapper path therefore remains narrower than Rust for some scripts
+; with complex quoting, even though absolute shell paths now follow basename
+; matching like the Rust helper.
 
 !(import! &self json)
 !(import! &self list)
@@ -95,23 +97,27 @@
 (= (codex:join-command $tokens)
    (str-join " " $tokens))
 
+(= (codex:path-last-part $path)
+   (let $parts (path-parts $path)
+     (if (== $parts ())
+         $path
+         (list:first (list:reverse $parts)))))
+
+(= (codex:is-bash-shell-name? $shell)
+   (let $name (codex:path-last-part $shell)
+     (if (== $name "bash")
+         True
+         (if (== $name "sh")
+             True
+             (if (== $name "zsh")
+                 True
+                 False)))))
+
 (= (codex:is-shell-wrapper-parts? $shell $flag)
    (if (== $flag "-c")
-       (if (== $shell "bash")
-           True
-           (if (== $shell "sh")
-               True
-               (if (== $shell "zsh")
-                   True
-                   False)))
+       (codex:is-bash-shell-name? $shell)
        (if (== $flag "-lc")
-           (if (== $shell "bash")
-               True
-               (if (== $shell "sh")
-                   True
-                   (if (== $shell "zsh")
-                       True
-                       False)))
+           (codex:is-bash-shell-name? $shell)
            False)))
 
 (= (codex:single-unknown-for-command $tokens)

@@ -23,5 +23,11 @@
 !(assertEqualToResult
   (json-stringify
     (codex:parsed-commands-json
+      (codex:parse-command ("/bin/bash" "-lc" "rg --files webview/src | head -n 5"))))
+  ("[{\"type\":\"list_files\",\"cmd\":\"rg --files webview/src\",\"path\":\"webview\"}]"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:parsed-commands-json
       (codex:parse-command ("bash" "-lc" "echo foo > bar"))))
   ("[{\"type\":\"unknown\",\"cmd\":\"echo foo > bar\"}]"))
