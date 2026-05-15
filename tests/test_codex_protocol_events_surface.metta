@@ -84,6 +84,31 @@
 !(assertEqualToResult
   (json-stringify
     (codex:item-json
+      (codex:mcp-startup-update-event
+        "memory"
+        (codex:mcp-startup-status-failed "oauth expired"))))
+  ("{\"type\":\"mcp_startup_update\",\"server\":\"memory\",\"status\":{\"state\":\"failed\",\"error\":\"oauth expired\"}}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:mcp-startup-complete-event
+      ("memory" "images")
+      ((codex:mcp-startup-failure "docs" "not logged in"))
+      ("calendar")))
+  ("mcp_startup_complete"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:mcp-startup-complete-event
+        ("memory" "images")
+        ((codex:mcp-startup-failure "docs" "not logged in"))
+        ("calendar"))))
+  ("{\"type\":\"mcp_startup_complete\",\"ready\":[\"memory\",\"images\"],\"failed\":[{\"server\":\"docs\",\"error\":\"not logged in\"}],\"cancelled\":[\"calendar\"]}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
       (codex:web-search-begin-event "search-17")))
   ("{\"type\":\"web_search_begin\",\"call_id\":\"search-17\"}"))
 

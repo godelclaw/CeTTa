@@ -21,6 +21,7 @@
 ; - ImageGenerationBeginEvent / ImageGenerationEndEvent
 ; - AgentMessageDeltaEvent / AgentReasoning*Event
 ; - McpInvocation / McpToolCallBeginEvent
+; - McpStartupUpdateEvent / McpStartupCompleteEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
 ; This increment covers the plain-text and structured content-item branches of
@@ -155,6 +156,27 @@
 
 (= (codex:mcp-tool-call-begin-event $call_id $invocation $mcp_app_resource_uri)
    (CodexEventMcpToolCallBegin $call_id $invocation $mcp_app_resource_uri))
+
+(= (codex:mcp-startup-status-starting)
+   (CodexMcpStartupStatusStarting))
+
+(= (codex:mcp-startup-status-ready)
+   (CodexMcpStartupStatusReady))
+
+(= (codex:mcp-startup-status-failed $error)
+   (CodexMcpStartupStatusFailed $error))
+
+(= (codex:mcp-startup-status-cancelled)
+   (CodexMcpStartupStatusCancelled))
+
+(= (codex:mcp-startup-failure $server $error)
+   (CodexMcpStartupFailure $server $error))
+
+(= (codex:mcp-startup-update-event $server $status)
+   (CodexEventMcpStartupUpdate $server $status))
+
+(= (codex:mcp-startup-complete-event $ready $failed $cancelled)
+   (CodexEventMcpStartupComplete $ready $failed $cancelled))
 
 (= (codex:web-search-begin-event $call_id)
    (CodexEventWebSearchBegin $call_id))
@@ -704,6 +726,14 @@
    "mcp_tool_call_begin")
 
 (= (codex:item-type
+      (CodexEventMcpStartupUpdate $server $status))
+   "mcp_startup_update")
+
+(= (codex:item-type
+      (CodexEventMcpStartupComplete $ready $failed $cancelled))
+   "mcp_startup_complete")
+
+(= (codex:item-type
       (CodexEventWebSearchBegin $call_id))
    "web_search_begin")
 
@@ -883,6 +913,38 @@
       (CodexEventMcpToolCallBegin $call_id $invocation $mcp_app_resource_uri))
    (if (== $mcp_app_resource_uri CodexAbsent) Empty $mcp_app_resource_uri))
 
+(= (codex:mcp-startup-status-error
+      (CodexMcpStartupStatusFailed $error))
+   $error)
+
+(= (codex:mcp-startup-failure-server
+      (CodexMcpStartupFailure $server $error))
+   $server)
+
+(= (codex:mcp-startup-failure-error
+      (CodexMcpStartupFailure $server $error))
+   $error)
+
+(= (codex:mcp-startup-update-server
+      (CodexEventMcpStartupUpdate $server $status))
+   $server)
+
+(= (codex:mcp-startup-update-status
+      (CodexEventMcpStartupUpdate $server $status))
+   $status)
+
+(= (codex:mcp-startup-complete-ready
+      (CodexEventMcpStartupComplete $ready $failed $cancelled))
+   $ready)
+
+(= (codex:mcp-startup-complete-failed
+      (CodexEventMcpStartupComplete $ready $failed $cancelled))
+   $failed)
+
+(= (codex:mcp-startup-complete-cancelled
+      (CodexEventMcpStartupComplete $ready $failed $cancelled))
+   $cancelled)
+
 (= (codex:web-search-begin-call-id
       (CodexEventWebSearchBegin $call_id))
    $call_id)
@@ -983,6 +1045,33 @@
          ((JsonPair "server" (JsonString $server))
           (JsonPair "tool" (JsonString $tool))
           (JsonPair "arguments" $arguments)))))
+
+(= (codex:mcp-startup-status-json
+      (CodexMcpStartupStatusStarting))
+   (JsonObject
+     ((JsonPair "state" (JsonString "starting")))))
+
+(= (codex:mcp-startup-status-json
+      (CodexMcpStartupStatusReady))
+   (JsonObject
+     ((JsonPair "state" (JsonString "ready")))))
+
+(= (codex:mcp-startup-status-json
+      (CodexMcpStartupStatusFailed $error))
+   (JsonObject
+     ((JsonPair "state" (JsonString "failed"))
+      (JsonPair "error" (JsonString $error)))))
+
+(= (codex:mcp-startup-status-json
+      (CodexMcpStartupStatusCancelled))
+   (JsonObject
+     ((JsonPair "state" (JsonString "cancelled")))))
+
+(= (codex:mcp-startup-failure-json
+      (CodexMcpStartupFailure $server $error))
+   (JsonObject
+     ((JsonPair "server" (JsonString $server))
+      (JsonPair "error" (JsonString $error)))))
 
 (= (codex:content-item-json (CodexInputText $text))
    (JsonObject
@@ -1168,8 +1257,27 @@
        (JsonObject
          ((JsonPair "type" (JsonString "mcp_tool_call_begin"))
           (JsonPair "call_id" (JsonString $call_id))
-          (JsonPair "invocation" (codex:mcp-invocation-json $invocation))
-          (JsonPair "mcp_app_resource_uri" (JsonString $mcp_app_resource_uri))))))
+         (JsonPair "invocation" (codex:mcp-invocation-json $invocation))
+         (JsonPair "mcp_app_resource_uri" (JsonString $mcp_app_resource_uri))))))
+
+(= (codex:item-json
+      (CodexEventMcpStartupUpdate $server $status))
+   (JsonObject
+     ((JsonPair "type" (JsonString "mcp_startup_update"))
+      (JsonPair "server" (JsonString $server))
+      (JsonPair "status" (codex:mcp-startup-status-json $status)))))
+
+(= (codex:item-json
+      (CodexEventMcpStartupComplete $ready $failed $cancelled))
+   (JsonObject
+     ((JsonPair "type" (JsonString "mcp_startup_complete"))
+      (JsonPair "ready" (JsonArray (map-atom $ready $item (JsonString $item))))
+      (JsonPair
+        "failed"
+        (JsonArray (map-atom $failed $item (codex:mcp-startup-failure-json $item))))
+      (JsonPair
+        "cancelled"
+        (JsonArray (map-atom $cancelled $item (JsonString $item)))))))
 
 (= (codex:item-json
       (CodexEventWebSearchBegin $call_id))
