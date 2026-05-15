@@ -5,6 +5,7 @@
 ; openai-codex/codex-rs/protocol/src/protocol.rs:
 ; - Message
 ; - Reasoning
+; - FunctionCall
 ; - FunctionCallOutput
 ; - McpToolCallOutput
 ; - CustomToolCall
@@ -45,6 +46,27 @@
 
 (= (codex:final-response $text)
    (CodexResponseItemMessage "assistant" ((CodexOutputText $text)) "final_answer"))
+
+(= (codex:function-call-response-item $name $arguments $call_id)
+   (CodexResponseItemFunctionCall
+     CodexAbsent
+     $name
+     CodexAbsent
+     $arguments
+     $call_id))
+
+(= (codex:function-call-response-item
+      $id
+      $name
+      $namespace
+      $arguments
+      $call_id)
+   (CodexResponseItemFunctionCall
+     $id
+     $name
+     $namespace
+     $arguments
+     $call_id))
 
 (= (codex:function-call-output-text $text)
    (CodexFunctionCallOutputText $text))
@@ -305,6 +327,10 @@
       (CodexResponseItemReasoning $id $summary $content $encrypted-content))
    "reasoning")
 
+(= (codex:item-type
+      (CodexResponseItemFunctionCall $id $name $namespace $arguments $call_id))
+   "function_call")
+
 (= (codex:item-type (CodexResponseItemFunctionCallOutput $call_id $output))
    "function_call_output")
 
@@ -366,6 +392,14 @@
 
 (= (codex:tool-call-name (CodexResponseItemCustomToolCall $call_id $name $input))
    $name)
+
+(= (codex:function-call-name
+      (CodexResponseItemFunctionCall $id $name $namespace $arguments $call_id))
+   $name)
+
+(= (codex:function-call-namespace
+      (CodexResponseItemFunctionCall $id $name $namespace $arguments $call_id))
+   $namespace)
 
 (= (codex:message-text
       (CodexResponseItemMessage $role ((CodexInputText $text)) $phase))
@@ -484,9 +518,39 @@
           (JsonPair "content" (codex:content-json $content))))
        (JsonObject
          ((JsonPair "type" (JsonString "message"))
-          (JsonPair "role" (JsonString $role))
-          (JsonPair "content" (codex:content-json $content))
-          (JsonPair "phase" (JsonString $phase))))))
+         (JsonPair "role" (JsonString $role))
+         (JsonPair "content" (codex:content-json $content))
+         (JsonPair "phase" (JsonString $phase))))))
+
+(= (codex:item-json
+      (CodexResponseItemFunctionCall $id $name $namespace $arguments $call_id))
+   (if (== $namespace CodexAbsent)
+       (if (== $id CodexAbsent)
+           (JsonObject
+             ((JsonPair "type" (JsonString "function_call"))
+              (JsonPair "name" (JsonString $name))
+              (JsonPair "arguments" (JsonString $arguments))
+              (JsonPair "call_id" (JsonString $call_id))))
+           (JsonObject
+             ((JsonPair "type" (JsonString "function_call"))
+              (JsonPair "id" (JsonString $id))
+              (JsonPair "name" (JsonString $name))
+              (JsonPair "arguments" (JsonString $arguments))
+              (JsonPair "call_id" (JsonString $call_id)))))
+       (if (== $id CodexAbsent)
+           (JsonObject
+             ((JsonPair "type" (JsonString "function_call"))
+              (JsonPair "name" (JsonString $name))
+              (JsonPair "namespace" (JsonString $namespace))
+              (JsonPair "arguments" (JsonString $arguments))
+              (JsonPair "call_id" (JsonString $call_id))))
+           (JsonObject
+             ((JsonPair "type" (JsonString "function_call"))
+              (JsonPair "id" (JsonString $id))
+              (JsonPair "name" (JsonString $name))
+              (JsonPair "namespace" (JsonString $namespace))
+              (JsonPair "arguments" (JsonString $arguments))
+              (JsonPair "call_id" (JsonString $call_id)))))))
 
 (= (codex:item-json (CodexResponseItemFunctionCallOutput $call_id $output))
    (JsonObject
