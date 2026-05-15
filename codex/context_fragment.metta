@@ -19,6 +19,13 @@
 ; - AppsInstructions
 ; - PluginInstructions
 ; - CollaborationModeInstructions
+; - PersonalitySpecInstructions
+; - ImageGenerationInstructions
+; - ModelSwitchInstructions
+; - GuardianFollowupReviewReminder
+; - HookAdditionalContext
+; - ApprovedCommandPrefixSaved
+; - NetworkRuleSaved
 ; - PermissionsInstructions wrapper onto the generic fragment surface
 ; - narrow standard contextual-user-fragment detection for the concrete
 ;   user-role fragments above
@@ -49,6 +56,10 @@
 ;   `CollaborationMode.settings` runtime config object. The current CeTTa slice
 ;   ports the exact visible fragment behavior through direct helper records that
 ;   keep only the fields read by these fragment constructors.
+; - Rust's `NetworkRuleSaved::new()` depends on the wider approvals protocol
+;   `NetworkPolicyAmendment`/`NetworkPolicyRuleAction` surface. The current
+;   CeTTa slice ports the exact visible fragment behavior through direct helper
+;   records that keep only the action/host fields read by this fragment.
 ; - Rust's hook-prompt parsing delegates to quick-xml and therefore accepts a
 ;   broader XML surface. The current CeTTa slice ports the specific
 ;   `hook_prompt` shape emitted by Codex itself, with predefined XML entities,
@@ -958,6 +969,211 @@
      (codex:collaboration-mode-instructions-end-marker)
      $text))
 
+(= (codex:personality-spec-instructions-role)
+   "developer")
+
+(= (codex:personality-spec-instructions-start-marker)
+   "<personality_spec>")
+
+(= (codex:personality-spec-instructions-end-marker)
+   "</personality_spec>")
+
+(= (codex:personality-spec-instructions $spec)
+   (codex:contextual-fragment
+     (codex:personality-spec-instructions-role)
+     (codex:personality-spec-instructions-start-marker)
+     (codex:personality-spec-instructions-end-marker)
+     (format-args
+       " The user has requested a new communication style. Future messages should adhere to the following personality: \n{} "
+       ($spec))))
+
+(= (codex:personality-spec-instructions-matches-text $text)
+   (codex:contextual-fragment-matches-markers
+     (codex:personality-spec-instructions-start-marker)
+     (codex:personality-spec-instructions-end-marker)
+     $text))
+
+(= (codex:image-generation-instructions-role)
+   "developer")
+
+(= (codex:image-generation-instructions-start-marker)
+   "")
+
+(= (codex:image-generation-instructions-end-marker)
+   "")
+
+(= (codex:image-generation-instructions $image-output-dir $image-output-path)
+   (codex:contextual-fragment
+     (codex:image-generation-instructions-role)
+     (codex:image-generation-instructions-start-marker)
+     (codex:image-generation-instructions-end-marker)
+     (format-args
+       "Generated images are saved to {} as {} by default.\nIf you need to use a generated image at another path, copy it and leave the original in place unless the user explicitly asks you to delete it."
+       ($image-output-dir $image-output-path))))
+
+(= (codex:image-generation-instructions-matches-text $text)
+   (codex:contextual-fragment-matches-markers
+     (codex:image-generation-instructions-start-marker)
+     (codex:image-generation-instructions-end-marker)
+     $text))
+
+(= (codex:model-switch-instructions-role)
+   "developer")
+
+(= (codex:model-switch-instructions-start-marker)
+   "<model_switch>")
+
+(= (codex:model-switch-instructions-end-marker)
+   "</model_switch>")
+
+(= (codex:model-switch-instructions $model-instructions)
+   (codex:contextual-fragment
+     (codex:model-switch-instructions-role)
+     (codex:model-switch-instructions-start-marker)
+     (codex:model-switch-instructions-end-marker)
+     (format-args
+       "\nThe user was previously using a different model. Please continue the conversation according to the following instructions:\n\n{}\n"
+       ($model-instructions))))
+
+(= (codex:model-switch-instructions-matches-text $text)
+   (codex:contextual-fragment-matches-markers
+     (codex:model-switch-instructions-start-marker)
+     (codex:model-switch-instructions-end-marker)
+     $text))
+
+(= (codex:guardian-followup-review-reminder-role)
+   "developer")
+
+(= (codex:guardian-followup-review-reminder-start-marker)
+   "")
+
+(= (codex:guardian-followup-review-reminder-end-marker)
+   "")
+
+(= (codex:guardian-followup-review-reminder)
+   (codex:contextual-fragment
+     (codex:guardian-followup-review-reminder-role)
+     (codex:guardian-followup-review-reminder-start-marker)
+     (codex:guardian-followup-review-reminder-end-marker)
+     "Use prior reviews as context, not binding precedent. Follow the Workspace Policy. If the user explicitly approves a previously rejected action after being informed of the concrete risks, set outcome to \"allow\" unless the policy explicitly disallows user overwrites in such cases."))
+
+(= (codex:guardian-followup-review-reminder-matches-text $text)
+   (codex:contextual-fragment-matches-markers
+     (codex:guardian-followup-review-reminder-start-marker)
+     (codex:guardian-followup-review-reminder-end-marker)
+     $text))
+
+(= (codex:hook-additional-context-role)
+   "developer")
+
+(= (codex:hook-additional-context-start-marker)
+   "")
+
+(= (codex:hook-additional-context-end-marker)
+   "")
+
+(= (codex:hook-additional-context $text)
+   (codex:contextual-fragment
+     (codex:hook-additional-context-role)
+     (codex:hook-additional-context-start-marker)
+     (codex:hook-additional-context-end-marker)
+     $text))
+
+(= (codex:hook-additional-context-matches-text $text)
+   (codex:contextual-fragment-matches-markers
+     (codex:hook-additional-context-start-marker)
+     (codex:hook-additional-context-end-marker)
+     $text))
+
+(= (codex:approved-command-prefix-saved-role)
+   "developer")
+
+(= (codex:approved-command-prefix-saved-start-marker)
+   "")
+
+(= (codex:approved-command-prefix-saved-end-marker)
+   "")
+
+(= (codex:approved-command-prefix-saved $prefixes)
+   (codex:contextual-fragment
+     (codex:approved-command-prefix-saved-role)
+     (codex:approved-command-prefix-saved-start-marker)
+     (codex:approved-command-prefix-saved-end-marker)
+     (format-args
+       "Approved command prefix saved:\n{}"
+       ($prefixes))))
+
+(= (codex:approved-command-prefix-saved-matches-text $text)
+   (codex:contextual-fragment-matches-markers
+     (codex:approved-command-prefix-saved-start-marker)
+     (codex:approved-command-prefix-saved-end-marker)
+     $text))
+
+(= (codex:network-policy-rule-action-allow)
+   (CodexNetworkPolicyRuleActionAllow))
+
+(= (codex:network-policy-rule-action-deny)
+   (CodexNetworkPolicyRuleActionDeny))
+
+(= (codex:network-policy-amendment $action $host)
+   (CodexNetworkPolicyAmendment $action $host))
+
+(= (codex:network-policy-amendment-action
+      (CodexNetworkPolicyAmendment $action $host))
+   $action)
+
+(= (codex:network-policy-amendment-host
+      (CodexNetworkPolicyAmendment $action $host))
+   $host)
+
+(= (codex:network-rule-saved-role)
+   "developer")
+
+(= (codex:network-rule-saved-start-marker)
+   "")
+
+(= (codex:network-rule-saved-end-marker)
+   "")
+
+(= (codex:network-rule-saved-action-text
+      (CodexNetworkPolicyRuleActionAllow))
+   "Allowed")
+
+(= (codex:network-rule-saved-action-text
+      (CodexNetworkPolicyRuleActionDeny))
+   "Denied")
+
+(= (codex:network-rule-saved-list-name
+      (CodexNetworkPolicyRuleActionAllow))
+   "allowlist")
+
+(= (codex:network-rule-saved-list-name
+      (CodexNetworkPolicyRuleActionDeny))
+   "denylist")
+
+(= (codex:network-rule-saved $action $host)
+   (codex:contextual-fragment
+     (codex:network-rule-saved-role)
+     (codex:network-rule-saved-start-marker)
+     (codex:network-rule-saved-end-marker)
+     (format-args
+       "{} network rule saved in execpolicy ({}): {}"
+       ((codex:network-rule-saved-action-text $action)
+        (codex:network-rule-saved-list-name $action)
+        $host))))
+
+; CeTTa reduction detail: matching the minimal amendment record directly avoids
+; an extra accessor reduction layer while preserving Rust's visible behavior.
+(= (codex:network-rule-saved-from-amendment
+      (CodexNetworkPolicyAmendment $action $host))
+   (codex:network-rule-saved $action $host))
+
+(= (codex:network-rule-saved-matches-text $text)
+   (codex:contextual-fragment-matches-markers
+     (codex:network-rule-saved-start-marker)
+     (codex:network-rule-saved-end-marker)
+     $text))
+
 (= (codex:available-skills-instructions-role)
    "developer")
 
@@ -1004,11 +1220,14 @@
           "\n"
           (codex:available-skills-instructions-lines $skill-lines))))))
 
-; CeTTa reduction detail: matching the constructor directly avoids a nested
-; accessor reduction hole here while preserving Rust's visible behavior.
-(= (codex:available-skills-instructions-from-available-skills
-      (CodexAvailableSkills $skill-lines))
-   (codex:available-skills-instructions $skill-lines))
+; CeTTa reduction detail: forcing the helper accessor through `eval` avoids a
+; nested reduction hole here while preserving Rust's visible behavior.
+(= (codex:available-skills-instructions-from-available-skills $available-skills)
+   (function
+     (let $skill-lines
+       (eval (codex:available-skills-skill-lines $available-skills))
+       (return
+         (codex:available-skills-instructions $skill-lines)))))
 
 (= (codex:available-skills-instructions-matches-text $text)
    (codex:contextual-fragment-matches-markers
