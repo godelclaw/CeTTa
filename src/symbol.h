@@ -248,6 +248,7 @@ typedef struct {
     X(lib_process_create_shell_env, "__cetta_lib_process_create_shell_env") \
     X(lib_process_create_shell_env_no_thread, "__cetta_lib_process_create_shell_env_no_thread") \
     X(lib_process_default_shell, "__cetta_lib_process_default_shell") \
+    X(lib_process_shell_from_model_provided_path, "__cetta_lib_process_shell_from_model_provided_path") \
     X(lib_process_shell_argv, "__cetta_lib_process_shell_argv") \
     X(lib_json_parse, "__cetta_lib_json_parse") \
     X(lib_json_stringify, "__cetta_lib_json_stringify") \

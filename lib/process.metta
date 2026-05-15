@@ -75,6 +75,11 @@
      (case (__cetta_lib_process_default_shell ())
        (($result (return $result))))))
 
+(= (process-shell-from-model-provided-path $path)
+   (function
+     (case (__cetta_lib_process_shell_from_model_provided_path $path)
+       (($result (return $result))))))
+
 (= (process-shell-argv $shell $command $use-login-shell)
    (function
      (case (__cetta_lib_process_shell_argv $shell $command $use-login-shell)

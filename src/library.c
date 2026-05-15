@@ -3811,6 +3811,37 @@ static void process_default_shell_value(ProcessShell *shell,
     shell->path = path;
 }
 
+static void process_ultimate_fallback_shell_value(ProcessShell *shell,
+                                                  char *path,
+                                                  size_t path_sz) {
+#ifdef _WIN32
+    shell->type = PROCESS_SHELL_CMD;
+    if (!process_copy_path(path, path_sz, "cmd.exe")) {
+        path[0] = '\0';
+    }
+#else
+    shell->type = PROCESS_SHELL_SH;
+    if (!process_copy_path(path, path_sz, "/bin/sh")) {
+        path[0] = '\0';
+    }
+#endif
+    shell->path = path;
+}
+
+static void process_shell_from_model_provided_path_value(const char *provided_path,
+                                                         ProcessShell *shell,
+                                                         char *path,
+                                                         size_t path_sz) {
+    ProcessShellType type = process_detect_shell_type(provided_path);
+    if (type != PROCESS_SHELL_UNKNOWN &&
+        process_shell_path_for_type(type, provided_path, path, path_sz)) {
+        shell->type = type;
+        shell->path = path;
+        return;
+    }
+    process_ultimate_fallback_shell_value(shell, path, path_sz);
+}
+
 static Atom *process_shell_atom(Arena *a, const ProcessShell *shell) {
     return atom_expr(a, (Atom *[]){
         atom_symbol(a, "ProcessShell"),
@@ -4437,6 +4468,22 @@ static Atom *process_default_shell(Arena *a,
     return process_shell_atom(a, &shell);
 }
 
+static Atom *process_shell_from_model_provided_path(Arena *a,
+                                                    Atom *head,
+                                                    Atom **args,
+                                                    uint32_t nargs) {
+    const char *provided_path;
+    char path[PATH_MAX];
+    ProcessShell shell;
+    if (nargs != 1 || !(provided_path = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected shell path text");
+    }
+    process_shell_from_model_provided_path_value(provided_path, &shell,
+                                                 path, sizeof(path));
+    return process_shell_atom(a, &shell);
+}
+
 static Atom *process_shell_argv(Arena *a,
                                 Atom *head,
                                 Atom **args,
@@ -4518,6 +4565,9 @@ static Atom *cetta_library_dispatch_process(Arena *a, Atom *head,
     }
     if (head_id == g_builtin_syms.lib_process_default_shell) {
         return process_default_shell(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_shell_from_model_provided_path) {
+        return process_shell_from_model_provided_path(a, head, args, nargs);
     }
     if (head_id == g_builtin_syms.lib_process_shell_argv) {
         return process_shell_argv(a, head, args, nargs);

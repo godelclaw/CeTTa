@@ -36,9 +36,12 @@
 ;   stack, so the visible interception is wired at the custom-tool-call
 ;   lowering surface instead. This preserves the exec_command behavior that is
 ;   user-visible in the current restart slices.
-; - Rust threads login-shell allowance from session config. This slice assumes
-;   login shells are allowed and therefore matches the public `exec_command`
-;   default of `login = true`.
+; - Rust threads unified-exec shell mode and login-shell allowance from the
+;   session/tool config layer. This slice now ports the `get_command()`
+;   algorithm itself, including explicit-login rejection and zsh-fork shell
+;   selection, but the public visible `exec_command` path still feeds it the
+;   default runtime config (`Direct`, default session shell,
+;   `allow_login_shell = true`) until the higher config layer is ported.
 ; - The restarted tool surface does not yet expose the full unified-exec
 ;   approval/session config. This slice now ports Rust-shaped
 ;   `sandbox_permissions` / `additional_permissions` parsing, validation, and
@@ -183,11 +186,6 @@
            (codex:maximum-exec-yield-time-ms)
            $value)))
 
-(= (codex:resolve-login-shell $value)
-   (if (== $value CodexAbsent)
-       True
-       $value))
-
 (= (codex:resolve-tty $value)
    (if (== $value CodexAbsent)
        False
@@ -230,35 +228,6 @@
              (str-concat
                (str-concat (system-cwd) "/")
                $workdir)))))
-
-(= (codex:shell-path-name $shell-path)
-   (let $parts (path-parts $shell-path)
-     (if (== $parts ())
-         $shell-path
-         (list:first (list:reverse $parts)))))
-
-(= (codex:resolve-shell-from-path $shell-path)
-   (let $shell-name (codex:shell-path-name $shell-path)
-     (if (== $shell-name "bash")
-         (process-shell "bash" $shell-path)
-         (if (== $shell-name "zsh")
-             (process-shell "zsh" $shell-path)
-             (if (== $shell-name "sh")
-                 (process-shell "sh" $shell-path)
-                 (if (== $shell-name "pwsh")
-                     (process-shell "powershell" $shell-path)
-                     (if (== $shell-name "powershell")
-                         (process-shell "powershell" $shell-path)
-                         (if (== $shell-name "cmd")
-                             (process-shell "cmd" $shell-path)
-                             (if (== $shell-name "cmd.exe")
-                                 (process-shell "cmd" $shell-path)
-                                 (process-default-shell))))))))))
-
-(= (codex:resolve-shell $shell-path)
-   (if (== $shell-path CodexAbsent)
-       (process-default-shell)
-       (codex:resolve-shell-from-path $shell-path)))
 
 (= (codex:hook-tool-name $name $matcher-aliases)
    (CodexHookToolName $name $matcher-aliases))
@@ -388,8 +357,8 @@
                            (CodexExecCommandArgs
                              $cmd
                              $resolved-workdir
-                             (codex:resolve-shell $shell)
-                             (codex:resolve-login-shell $login)
+                             $shell
+                             $login
                              (codex:resolve-tty $tty)
                              (codex:resolve-yield-time-ms $yield-time-ms)
                              (codex:resolve-max-output-tokens $max-output-tokens)
@@ -588,6 +557,29 @@
 (= (codex:exec-command-context $approval-policy $additional-permissions-allowed)
    (CodexExecCommandContext $approval-policy $additional-permissions-allowed))
 
+(= (codex:exec-command-runtime-config
+      $session-shell
+      $shell-mode
+      $allow-login-shell)
+   (CodexExecCommandRuntimeConfig
+     $session-shell
+     $shell-mode
+     $allow-login-shell))
+
+(= (codex:direct-shell-mode)
+   CodexUnifiedExecShellModeDirect)
+
+(= (codex:zsh-fork-shell-mode $shell-zsh-path $main-execve-wrapper-exe)
+   (CodexUnifiedExecShellModeZshFork
+     $shell-zsh-path
+     $main-execve-wrapper-exe))
+
+(= (codex:default-exec-command-runtime-config)
+   (codex:exec-command-runtime-config
+     (process-default-shell)
+     (codex:direct-shell-mode)
+     True))
+
 (= (codex:default-exec-command-context)
    (codex:exec-command-context
      (codex:ask-for-approval-never)
@@ -600,6 +592,27 @@
 (= (codex:exec-command-context-additional-permissions-allowed
       (CodexExecCommandContext $approval-policy $additional-permissions-allowed))
    $additional-permissions-allowed)
+
+(= (codex:exec-command-runtime-config-session-shell
+      (CodexExecCommandRuntimeConfig
+        $session-shell
+        $shell-mode
+        $allow-login-shell))
+   $session-shell)
+
+(= (codex:exec-command-runtime-config-shell-mode
+      (CodexExecCommandRuntimeConfig
+        $session-shell
+        $shell-mode
+        $allow-login-shell))
+   $shell-mode)
+
+(= (codex:exec-command-runtime-config-allow-login-shell
+      (CodexExecCommandRuntimeConfig
+        $session-shell
+        $shell-mode
+        $allow-login-shell))
+   $allow-login-shell)
 
 (= (codex:exec-command-permission-plan-type
       (CodexExecCommandPermissionPlanOk
@@ -840,11 +853,93 @@
         $max-output-tokens))
    $max-output-tokens)
 
+(= (codex:exec-command-use-login-shell-plan
+      $runtime-config
+      $args)
+   (let $login (codex:exec-command-login-shell $args)
+     (if (== $login CodexAbsent)
+         (CodexExecCommandUseLoginShellOk
+           (codex:exec-command-runtime-config-allow-login-shell $runtime-config))
+         (if (and
+               $login
+               (not
+                 (codex:exec-command-runtime-config-allow-login-shell
+                   $runtime-config)))
+             (CodexExecCommandUseLoginShellError
+               "login shell is disabled by config; omit `login` or set it to false.")
+             (CodexExecCommandUseLoginShellOk $login)))))
+
+(= (codex:exec-command-use-login-shell-plan-message
+      (CodexExecCommandUseLoginShellError $message))
+   $message)
+
+(= (codex:exec-command-use-login-shell-plan-value
+      (CodexExecCommandUseLoginShellOk $use-login-shell))
+   $use-login-shell)
+
+(= (codex:resolve-exec-command-direct-shell $runtime-config $args)
+   (let $model-shell-path (codex:exec-command-shell $args)
+     (if (== $model-shell-path CodexAbsent)
+         (codex:exec-command-runtime-config-session-shell $runtime-config)
+         (process-shell-from-model-provided-path $model-shell-path))))
+
+(= (codex:exec-command-argv-for-shell-mode
+      CodexUnifiedExecShellModeDirect
+      $runtime-config
+      $args
+      $use-login-shell)
+   (CodexExecCommandArgvOk
+     (once
+       (process-shell-argv
+         (codex:resolve-exec-command-direct-shell $runtime-config $args)
+         (codex:exec-command-text $args)
+         $use-login-shell))))
+
+(= (codex:exec-command-argv-for-shell-mode
+      (CodexUnifiedExecShellModeZshFork
+        $shell-zsh-path
+        $main-execve-wrapper-exe)
+      $runtime-config
+      $args
+      $use-login-shell)
+   ; Rust stores `main_execve_wrapper_exe` on the mode, but
+   ; `get_command()` only needs `shell_zsh_path`.
+   (CodexExecCommandArgvOk
+     ($shell-zsh-path
+      (if $use-login-shell "-lc" "-c")
+      (codex:exec-command-text $args))))
+
+(= (codex:exec-command-argv-with-runtime-config $runtime-config $args)
+   (once
+     (case
+       (codex:exec-command-use-login-shell-plan $runtime-config $args)
+       (((CodexExecCommandUseLoginShellError $message)
+         (CodexExecCommandArgvError $message))
+        ((CodexExecCommandUseLoginShellOk $use-login-shell)
+         (codex:exec-command-argv-for-shell-mode
+           (codex:exec-command-runtime-config-shell-mode $runtime-config)
+           $runtime-config
+           $args
+           $use-login-shell))))))
+
+(= (codex:default-exec-command-use-login-shell $args)
+   (let $login (codex:exec-command-login-shell $args)
+     (if (== $login CodexAbsent)
+         True
+         $login)))
+
 (= (codex:exec-command-argv $args)
-   (process-shell-argv
-     (codex:exec-command-shell $args)
-     (codex:exec-command-text $args)
-     (codex:exec-command-login-shell $args)))
+   (once
+     (process-shell-argv
+       (codex:resolve-exec-command-direct-shell
+         (codex:default-exec-command-runtime-config)
+         $args)
+       (codex:exec-command-text $args)
+       (codex:default-exec-command-use-login-shell $args))))
+
+(= (codex:exec-command-argv-plan-message
+      (CodexExecCommandArgvError $message))
+   $message)
 
 (= (codex:strip-trailing-dot-zero $text)
    (if (str-ends-with? $text ".0")
