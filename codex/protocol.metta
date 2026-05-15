@@ -20,6 +20,7 @@
 ; - WebSearchBeginEvent / WebSearchEndEvent
 ; - ImageGenerationBeginEvent / ImageGenerationEndEvent
 ; - AgentMessageDeltaEvent / AgentReasoning*Event
+; - McpInvocation / McpToolCallBeginEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
 ; This increment covers the plain-text and structured content-item branches of
@@ -148,6 +149,12 @@
 
 (= (codex:agent-reasoning-delta-event $delta)
    (CodexEventAgentReasoningDelta $delta))
+
+(= (codex:mcp-invocation $server $tool $arguments)
+   (CodexMcpInvocation $server $tool $arguments))
+
+(= (codex:mcp-tool-call-begin-event $call_id $invocation $mcp_app_resource_uri)
+   (CodexEventMcpToolCallBegin $call_id $invocation $mcp_app_resource_uri))
 
 (= (codex:web-search-begin-event $call_id)
    (CodexEventWebSearchBegin $call_id))
@@ -693,6 +700,10 @@
    "agent_reasoning_delta")
 
 (= (codex:item-type
+      (CodexEventMcpToolCallBegin $call_id $invocation $mcp_app_resource_uri))
+   "mcp_tool_call_begin")
+
+(= (codex:item-type
       (CodexEventWebSearchBegin $call_id))
    "web_search_begin")
 
@@ -848,6 +859,30 @@
       (CodexEventAgentReasoningDelta $delta))
    $delta)
 
+(= (codex:mcp-invocation-server
+      (CodexMcpInvocation $server $tool $arguments))
+   $server)
+
+(= (codex:mcp-invocation-tool
+      (CodexMcpInvocation $server $tool $arguments))
+   $tool)
+
+(= (codex:mcp-invocation-arguments
+      (CodexMcpInvocation $server $tool $arguments))
+   (if (== $arguments CodexAbsent) Empty $arguments))
+
+(= (codex:mcp-tool-call-begin-call-id
+      (CodexEventMcpToolCallBegin $call_id $invocation $mcp_app_resource_uri))
+   $call_id)
+
+(= (codex:mcp-tool-call-begin-invocation
+      (CodexEventMcpToolCallBegin $call_id $invocation $mcp_app_resource_uri))
+   $invocation)
+
+(= (codex:mcp-tool-call-begin-mcp_app_resource_uri
+      (CodexEventMcpToolCallBegin $call_id $invocation $mcp_app_resource_uri))
+   (if (== $mcp_app_resource_uri CodexAbsent) Empty $mcp_app_resource_uri))
+
 (= (codex:web-search-begin-call-id
       (CodexEventWebSearchBegin $call_id))
    $call_id)
@@ -937,6 +972,17 @@
       (CodexWebSearchActionOther))
    (JsonObject
      ((JsonPair "type" (JsonString "other")))))
+
+(= (codex:mcp-invocation-json
+      (CodexMcpInvocation $server $tool $arguments))
+   (if (== $arguments CodexAbsent)
+       (JsonObject
+         ((JsonPair "server" (JsonString $server))
+          (JsonPair "tool" (JsonString $tool))))
+       (JsonObject
+         ((JsonPair "server" (JsonString $server))
+          (JsonPair "tool" (JsonString $tool))
+          (JsonPair "arguments" $arguments)))))
 
 (= (codex:content-item-json (CodexInputText $text))
    (JsonObject
@@ -1111,6 +1157,19 @@
    (JsonObject
      ((JsonPair "type" (JsonString "agent_reasoning_delta"))
       (JsonPair "delta" (JsonString $delta)))))
+
+(= (codex:item-json
+      (CodexEventMcpToolCallBegin $call_id $invocation $mcp_app_resource_uri))
+   (if (== $mcp_app_resource_uri CodexAbsent)
+       (JsonObject
+         ((JsonPair "type" (JsonString "mcp_tool_call_begin"))
+          (JsonPair "call_id" (JsonString $call_id))
+          (JsonPair "invocation" (codex:mcp-invocation-json $invocation))))
+       (JsonObject
+         ((JsonPair "type" (JsonString "mcp_tool_call_begin"))
+          (JsonPair "call_id" (JsonString $call_id))
+          (JsonPair "invocation" (codex:mcp-invocation-json $invocation))
+          (JsonPair "mcp_app_resource_uri" (JsonString $mcp_app_resource_uri))))))
 
 (= (codex:item-json
       (CodexEventWebSearchBegin $call_id))

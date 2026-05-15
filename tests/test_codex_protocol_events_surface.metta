@@ -63,6 +63,27 @@
 !(assertEqualToResult
   (json-stringify
     (codex:item-json
+      (codex:mcp-tool-call-begin-event
+        "mcp-call-1"
+        (codex:mcp-invocation
+          "memory"
+          "create_entities"
+          (JsonObject
+            ((JsonPair "id" (JsonNumber 1)))))
+        "app://memory")))
+  ("{\"type\":\"mcp_tool_call_begin\",\"call_id\":\"mcp-call-1\",\"invocation\":{\"server\":\"memory\",\"tool\":\"create_entities\",\"arguments\":{\"id\":1}},\"mcp_app_resource_uri\":\"app://memory\"}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:mcp-tool-call-begin-event
+      "mcp-call-2"
+      (codex:mcp-invocation "images" "image" (JsonObject ()))
+      CodexAbsent))
+  ("mcp_tool_call_begin"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
       (codex:web-search-begin-event "search-17")))
   ("{\"type\":\"web_search_begin\",\"call_id\":\"search-17\"}"))
 
