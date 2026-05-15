@@ -22,6 +22,7 @@
 ; - AgentMessageDeltaEvent / AgentReasoning*Event
 ; - McpInvocation / McpToolCallBeginEvent
 ; - McpStartupUpdateEvent / McpStartupCompleteEvent
+; - ThreadNameUpdatedEvent / ThreadRolledBackEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
 ; This increment covers the plain-text and structured content-item branches of
@@ -177,6 +178,12 @@
 
 (= (codex:mcp-startup-complete-event $ready $failed $cancelled)
    (CodexEventMcpStartupComplete $ready $failed $cancelled))
+
+(= (codex:thread-name-updated-event $thread_id $thread_name)
+   (CodexEventThreadNameUpdated $thread_id $thread_name))
+
+(= (codex:thread-rolled-back-event $num_turns)
+   (CodexEventThreadRolledBack $num_turns))
 
 (= (codex:web-search-begin-event $call_id)
    (CodexEventWebSearchBegin $call_id))
@@ -734,6 +741,14 @@
    "mcp_startup_complete")
 
 (= (codex:item-type
+      (CodexEventThreadNameUpdated $thread_id $thread_name))
+   "thread_name_updated")
+
+(= (codex:item-type
+      (CodexEventThreadRolledBack $num_turns))
+   "thread_rolled_back")
+
+(= (codex:item-type
       (CodexEventWebSearchBegin $call_id))
    "web_search_begin")
 
@@ -944,6 +959,18 @@
 (= (codex:mcp-startup-complete-cancelled
       (CodexEventMcpStartupComplete $ready $failed $cancelled))
    $cancelled)
+
+(= (codex:thread-name-updated-thread-id
+      (CodexEventThreadNameUpdated $thread_id $thread_name))
+   $thread_id)
+
+(= (codex:thread-name-updated-thread-name
+      (CodexEventThreadNameUpdated $thread_id $thread_name))
+   (if (== $thread_name CodexAbsent) Empty $thread_name))
+
+(= (codex:thread-rolled-back-num-turns
+      (CodexEventThreadRolledBack $num_turns))
+   $num_turns)
 
 (= (codex:web-search-begin-call-id
       (CodexEventWebSearchBegin $call_id))
@@ -1278,6 +1305,23 @@
       (JsonPair
         "cancelled"
         (JsonArray (map-atom $cancelled $item (JsonString $item)))))))
+
+(= (codex:item-json
+      (CodexEventThreadNameUpdated $thread_id $thread_name))
+   (if (== $thread_name CodexAbsent)
+       (JsonObject
+         ((JsonPair "type" (JsonString "thread_name_updated"))
+          (JsonPair "thread_id" (JsonString $thread_id))))
+       (JsonObject
+         ((JsonPair "type" (JsonString "thread_name_updated"))
+          (JsonPair "thread_id" (JsonString $thread_id))
+          (JsonPair "thread_name" (JsonString $thread_name))))))
+
+(= (codex:item-json
+      (CodexEventThreadRolledBack $num_turns))
+   (JsonObject
+     ((JsonPair "type" (JsonString "thread_rolled_back"))
+      (JsonPair "num_turns" (JsonNumber $num_turns)))))
 
 (= (codex:item-json
       (CodexEventWebSearchBegin $call_id))

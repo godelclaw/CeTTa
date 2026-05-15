@@ -109,6 +109,27 @@
 !(assertEqualToResult
   (json-stringify
     (codex:item-json
+      (codex:thread-name-updated-event
+        "thread-123"
+        "Buckminster notes")))
+  ("{\"type\":\"thread_name_updated\",\"thread_id\":\"thread-123\",\"thread_name\":\"Buckminster notes\"}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:thread-name-updated-event
+      "thread-456"
+      CodexAbsent))
+  ("thread_name_updated"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:thread-rolled-back-event 3)))
+  ("{\"type\":\"thread_rolled_back\",\"num_turns\":3}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
       (codex:web-search-begin-event "search-17")))
   ("{\"type\":\"web_search_begin\",\"call_id\":\"search-17\"}"))
 
