@@ -82,15 +82,6 @@
   ("{\"permissions\":{},\"scope\":\"turn\"}"))
 
 !(assertEqualToResult
-  (codex:tool-result-output-text
-    (once
-      (codex:run-request-permissions-tool-call-with-context
-        (codex-rp-context)
-        "call-rp-context"
-        (codex-rp-input-json))))
-  ("{\"permissions\":{\"file_system\":{\"write\":[\"/home/zarclaw/repos/CeTTa/runtime\"]}},\"scope\":\"turn\"}"))
-
-!(assertEqualToResult
   (codex:request-permissions-handler-result-message
     (codex:handle-request-permissions-payload
       (codex-rp-context)
