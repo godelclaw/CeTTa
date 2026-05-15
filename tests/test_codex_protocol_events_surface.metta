@@ -203,6 +203,23 @@
   ("{\"type\":\"stream_info\",\"message\":\"retrying model stream\"}"))
 
 !(assertEqualToResult
+  (codex:item-type
+    (codex:undo-started-event CodexAbsent))
+  ("undo_started"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:undo-started-event "rolling back last turn")))
+  ("{\"type\":\"undo_started\",\"message\":\"rolling back last turn\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:undo-completed-event True "rollback applied")))
+  ("{\"type\":\"undo_completed\",\"success\":true,\"message\":\"rollback applied\"}"))
+
+!(assertEqualToResult
   (json-stringify
     (codex:item-json
       (codex:web-search-begin-event "search-17")))

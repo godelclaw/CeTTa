@@ -26,6 +26,7 @@
 ; - WarningEvent / ModelRerouteEvent / ContextCompactedEvent
 ; - ModelVerificationEvent
 ; - TurnCompleteEvent / StreamInfoEvent
+; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
 ; This increment covers the plain-text and structured content-item branches of
@@ -225,6 +226,12 @@
 
 (= (codex:stream-info-event $message)
    (CodexEventStreamInfo $message))
+
+(= (codex:undo-started-event $message)
+   (CodexEventUndoStarted $message))
+
+(= (codex:undo-completed-event $success $message)
+   (CodexEventUndoCompleted $success $message))
 
 (= (codex:web-search-begin-event $call_id)
    (CodexEventWebSearchBegin $call_id))
@@ -823,6 +830,14 @@
    "stream_info")
 
 (= (codex:item-type
+      (CodexEventUndoStarted $message))
+   "undo_started")
+
+(= (codex:item-type
+      (CodexEventUndoCompleted $success $message))
+   "undo_completed")
+
+(= (codex:item-type
       (CodexEventWebSearchBegin $call_id))
    "web_search_begin")
 
@@ -1118,6 +1133,18 @@
 (= (codex:stream-info-message
       (CodexEventStreamInfo $message))
    $message)
+
+(= (codex:undo-started-message
+      (CodexEventUndoStarted $message))
+   (if (== $message CodexAbsent) Empty $message))
+
+(= (codex:undo-completed-success
+      (CodexEventUndoCompleted $success $message))
+   $success)
+
+(= (codex:undo-completed-message
+      (CodexEventUndoCompleted $success $message))
+   (if (== $message CodexAbsent) Empty $message))
 
 (= (codex:web-search-begin-call-id
       (CodexEventWebSearchBegin $call_id))
@@ -1652,6 +1679,26 @@
    (JsonObject
      ((JsonPair "type" (JsonString "stream_info"))
       (JsonPair "message" (JsonString $message)))))
+
+(= (codex:item-json
+      (CodexEventUndoStarted $message))
+   (if (== $message CodexAbsent)
+       (JsonObject
+         ((JsonPair "type" (JsonString "undo_started"))))
+       (JsonObject
+         ((JsonPair "type" (JsonString "undo_started"))
+          (JsonPair "message" (JsonString $message))))))
+
+(= (codex:item-json
+      (CodexEventUndoCompleted $success $message))
+   (if (== $message CodexAbsent)
+       (JsonObject
+         ((JsonPair "type" (JsonString "undo_completed"))
+          (JsonPair "success" (JsonBool $success))))
+       (JsonObject
+         ((JsonPair "type" (JsonString "undo_completed"))
+          (JsonPair "success" (JsonBool $success))
+          (JsonPair "message" (JsonString $message))))))
 
 (= (codex:item-json
       (CodexEventWebSearchBegin $call_id))
