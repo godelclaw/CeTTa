@@ -18,6 +18,7 @@
 ;   stay self-contained without introducing a second JSON object model.
 
 !(import! &self json)
+!(import! &self image_detail)
 !(import! &self list)
 !(import! &self protocol)
 !(import! &self str)
@@ -481,7 +482,10 @@
       (CodexToolOutputMcp $result $tool-input $wall-time-ms $supported)
       $call-id
       $payload)
-   (case (codex:mcp-tool-output-response-payload $result $wall-time-ms $supported)
+   ; The current evaluator can duplicate identical MCP payload reductions after
+   ; the image-detail helper split. Rust emits one deterministic response item,
+   ; so this port forces that visible boundary with `once`.
+   (case (once (codex:mcp-tool-output-response-payload $result $wall-time-ms $supported))
      (((CodexFunctionCallOutputText $text)
        (codex:function-tool-result
          $call-id
@@ -737,39 +741,23 @@
         ($_
          (codex:default-image-detail))))))
 
-(= (codex:sanitize-original-image-detail-item True $item)
-   $item)
-
-(= (codex:sanitize-original-image-detail-item False $item)
-   (case $item
-     (((CodexInputImage $image-url "original")
-       (CodexInputImage $image-url (codex:default-image-detail)))
-      ($other $other))))
-
-(= (codex:sanitize-original-image-detail-items $supported ())
-   ())
-
-(= (codex:sanitize-original-image-detail-items $supported $items)
-   (let ($head $tail) (decons-atom $items)
-     (let $sanitized-head
-       (codex:sanitize-original-image-detail-item $supported $head)
-       (case (codex:sanitize-original-image-detail-items $supported $tail)
-         (($sanitized-tail
-           (cons-atom $sanitized-head $sanitized-tail)))))))
-
 (= (codex:mcp-tool-output-response-payload $result $wall-time-ms $supported)
    (let $header
      (format-args
        "Wall time: {} seconds\nOutput:"
        ((codex:duration-ms-to-seconds-text $wall-time-ms)))
      (case (codex:mcp-call-tool-result-as-function-call-output $result)
-       (((CodexFunctionCallOutputText $text)
+      (((CodexFunctionCallOutputText $text)
         (if (== $text "")
              (codex:function-call-output-text $header)
              (codex:function-call-output-text
                (str-concat $header (str-concat "\n" $text)))))
         ((CodexFunctionCallOutputContentItems $items)
-         (case (codex:sanitize-original-image-detail-items $supported $items)
+         ; The imported image-detail helper can currently surface duplicate
+         ; identical reductions at this module boundary. Rust has a single
+         ; deterministic result here, so the CeTTa port forces that visible
+         ; shape with `once`.
+         (case (once (codex:sanitize-original-image-detail-items $supported $items))
            (($sanitized-items
              (codex:function-call-output-content-items
                (cons-atom

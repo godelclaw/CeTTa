@@ -27,6 +27,8 @@
 ;   the default `Direct` mode, so this module stores the field but does not yet
 ;   port the per-session mode-selection helper.
 
+!(import! &self image_detail)
+
 (= (codex:config-shell-tool-type-default)
    "Default")
 
@@ -619,7 +621,7 @@
      (codex:tool-config-features-request-permissions-tool $features)
      (codex:tool-config-features-default-mode-request-user-input $features)
      (codex:tool-config-model-info-experimental-supported-tools $model-info)
-     (codex:tool-config-model-info-can-request-original-image-detail $model-info)))
+     (codex:can-request-original-image-detail $model-info)))
 
 (= (codex:default-tools-config)
    (codex:tools-config-new
