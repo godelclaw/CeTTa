@@ -24,11 +24,6 @@
 ; - Rust also lowers Plan and ContextCompaction turn items. Those ResponseItem
 ;   variants are not yet part of the restarted CeTTa protocol surface, so they
 ;   are intentionally out of scope here.
-; - Rust routes visible hook-prompt user messages through the shared contextual
-;   parser here. The current CeTTa evaluator still collapses that imported
-;   high-level hook-prompt path when nested inside this reducer, so hook-prompt
-;   lowering remains covered in `context_fragment.metta` and is intentionally
-;   parked from `parse-turn-item` until that evaluator issue is isolated.
 
 !(import! &self context_fragment)
 !(import! &self protocol)
@@ -530,6 +525,20 @@
       (CodexWebSearchActionOther))
    "")
 
+; CeTTa-specific reduction forcing: the imported hook-prompt parser must be
+; evaluated eagerly here so this helper preserves Rust's
+; `parse_visible_hook_prompt_message(...).or_else(parse_user_message(...))`
+; behavior when nested inside `parse-turn-item`.
+(= (codex:parse-user-turn-item $id $content)
+   (let $hook-prompt-item
+     (eval (codex:parse-visible-hook-prompt-message $id $content))
+     (if (== $hook-prompt-item Empty)
+         (let $user-message (codex:parse-user-message $content)
+           (if (== $user-message Empty)
+               Empty
+               (codex:turn-item-user-message $user-message)))
+         (codex:turn-item-hook-prompt $hook-prompt-item))))
+
 (= (codex:parse-turn-item $item)
    (let $resolved-item (eval $item)
      (codex:parse-turn-item-resolved $resolved-item)))
@@ -537,15 +546,9 @@
 (= (codex:parse-turn-item-resolved $item)
    (case $item
      (((CodexResponseItemMessage "user" $content $phase)
-       (let $user-message (codex:parse-user-message $content)
-         (if (== $user-message Empty)
-             Empty
-             (CodexTurnItemUserMessage $user-message))))
+       (codex:parse-user-turn-item CodexAbsent $content))
       ((CodexResponseItemMessageWithId $id "user" $content $phase)
-       (let $user-message (codex:parse-user-message $content)
-         (if (== $user-message Empty)
-             Empty
-             (CodexTurnItemUserMessage $user-message))))
+       (codex:parse-user-turn-item $id $content))
       ((CodexResponseItemMessage "assistant" $content $phase)
        (codex:turn-item-agent-message
          (codex:parse-agent-message CodexAbsent $content $phase)))
