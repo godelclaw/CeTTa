@@ -13,7 +13,8 @@
 ; - ToolSearchOutput
 ; - WebSearchCall
 ; - ImageGenerationCall
-; - TokenUsage / TokenUsageInfo / TokenCountEvent / FinalOutput
+; - TokenUsage / TokenUsageInfo / TokenCountEvent / RateLimitSnapshot /
+;   RateLimitWindow / CreditsSnapshot / FinalOutput
 ; - ExecCommandOutputDeltaEvent
 ; - TerminalInteractionEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
@@ -25,6 +26,10 @@
 ;
 ; CeTTa detail: `Empty` is a reduction sentinel, so omitted optional protocol
 ; fields use the internal tag `CodexAbsent` until projected back out.
+;
+; This restart subset does not yet port `account::PlanType`, so the
+; `RateLimitSnapshot.plan_type` field is currently carried through as the same
+; visible raw value/string supplied by callers.
 ;
 ; The unified-exec delta event stores raw bytes in Rust and serializes them as
 ; base64. The current CeTTa surface therefore models the event payload as text
@@ -394,6 +399,145 @@
 (= (codex:token-count-event-rate-limits
       (CodexTokenCountEvent $info $rate-limits))
    $rate-limits)
+
+(= (codex:rate-limit-reached-type-rate-limit-reached)
+   "rate_limit_reached")
+
+(= (codex:rate-limit-reached-type-workspace-owner-credits-depleted)
+   "workspace_owner_credits_depleted")
+
+(= (codex:rate-limit-reached-type-workspace-member-credits-depleted)
+   "workspace_member_credits_depleted")
+
+(= (codex:rate-limit-reached-type-workspace-owner-usage-limit-reached)
+   "workspace_owner_usage_limit_reached")
+
+(= (codex:rate-limit-reached-type-workspace-member-usage-limit-reached)
+   "workspace_member_usage_limit_reached")
+
+(= (codex:rate-limit-window $used-percent $window-minutes $resets-at)
+   (CodexRateLimitWindow $used-percent $window-minutes $resets-at))
+
+(= (codex:rate-limit-window-used-percent
+      (CodexRateLimitWindow $used-percent $window-minutes $resets-at))
+   $used-percent)
+
+(= (codex:rate-limit-window-window-minutes
+      (CodexRateLimitWindow $used-percent $window-minutes $resets-at))
+   $window-minutes)
+
+(= (codex:rate-limit-window-resets-at
+      (CodexRateLimitWindow $used-percent $window-minutes $resets-at))
+   $resets-at)
+
+(= (codex:credits-snapshot $has-credits $unlimited $balance)
+   (CodexCreditsSnapshot $has-credits $unlimited $balance))
+
+(= (codex:credits-snapshot-has-credits
+      (CodexCreditsSnapshot $has-credits $unlimited $balance))
+   $has-credits)
+
+(= (codex:credits-snapshot-unlimited
+      (CodexCreditsSnapshot $has-credits $unlimited $balance))
+   $unlimited)
+
+(= (codex:credits-snapshot-balance
+      (CodexCreditsSnapshot $has-credits $unlimited $balance))
+   $balance)
+
+(= (codex:rate-limit-snapshot
+      $limit-id
+      $limit-name
+      $primary
+      $secondary
+      $credits
+      $plan-type
+      $rate-limit-reached-type)
+   (CodexRateLimitSnapshot
+     $limit-id
+     $limit-name
+     $primary
+     $secondary
+     $credits
+     $plan-type
+     $rate-limit-reached-type))
+
+(= (codex:rate-limit-snapshot-limit-id
+      (CodexRateLimitSnapshot
+        $limit-id
+        $limit-name
+        $primary
+        $secondary
+        $credits
+        $plan-type
+        $rate-limit-reached-type))
+   $limit-id)
+
+(= (codex:rate-limit-snapshot-limit-name
+      (CodexRateLimitSnapshot
+        $limit-id
+        $limit-name
+        $primary
+        $secondary
+        $credits
+        $plan-type
+        $rate-limit-reached-type))
+   $limit-name)
+
+(= (codex:rate-limit-snapshot-primary
+      (CodexRateLimitSnapshot
+        $limit-id
+        $limit-name
+        $primary
+        $secondary
+        $credits
+        $plan-type
+        $rate-limit-reached-type))
+   $primary)
+
+(= (codex:rate-limit-snapshot-secondary
+      (CodexRateLimitSnapshot
+        $limit-id
+        $limit-name
+        $primary
+        $secondary
+        $credits
+        $plan-type
+        $rate-limit-reached-type))
+   $secondary)
+
+(= (codex:rate-limit-snapshot-credits
+      (CodexRateLimitSnapshot
+        $limit-id
+        $limit-name
+        $primary
+        $secondary
+        $credits
+        $plan-type
+        $rate-limit-reached-type))
+   $credits)
+
+(= (codex:rate-limit-snapshot-plan-type
+      (CodexRateLimitSnapshot
+        $limit-id
+        $limit-name
+        $primary
+        $secondary
+        $credits
+        $plan-type
+        $rate-limit-reached-type))
+   $plan-type)
+
+(= (codex:rate-limit-snapshot-rate-limit-reached-type
+      (CodexRateLimitSnapshot
+        $limit-id
+        $limit-name
+        $primary
+        $secondary
+        $credits
+        $plan-type
+        $rate-limit-reached-type))
+   $rate-limit-reached-type)
 
 (= (codex:default-image-detail)
    "high")
