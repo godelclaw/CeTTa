@@ -17,6 +17,8 @@
 ;   RateLimitWindow / CreditsSnapshot / FinalOutput
 ; - ExecCommandOutputDeltaEvent
 ; - TerminalInteractionEvent
+; - WebSearchBeginEvent / WebSearchEndEvent
+; - ImageGenerationBeginEvent / ImageGenerationEndEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
 ; This increment covers the plain-text and structured content-item branches of
@@ -127,6 +129,28 @@
 
 (= (codex:terminal-interaction-event $call_id $process_id $stdin)
    (CodexEventTerminalInteraction $call_id $process_id $stdin))
+
+(= (codex:web-search-begin-event $call_id)
+   (CodexEventWebSearchBegin $call_id))
+
+(= (codex:web-search-end-event $call_id $query $action)
+   (CodexEventWebSearchEnd $call_id $query $action))
+
+(= (codex:image-generation-begin-event $call_id)
+   (CodexEventImageGenerationBegin $call_id))
+
+(= (codex:image-generation-end-event
+      $call_id
+      $status
+      $revised-prompt
+      $result
+      $saved-path)
+   (CodexEventImageGenerationEnd
+     $call_id
+     $status
+     $revised-prompt
+     $result
+     $saved-path))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -625,6 +649,27 @@
       (CodexEventTerminalInteraction $call_id $process_id $stdin))
    "terminal_interaction")
 
+(= (codex:item-type
+      (CodexEventWebSearchBegin $call_id))
+   "web_search_begin")
+
+(= (codex:item-type
+      (CodexEventWebSearchEnd $call_id $query $action))
+   "web_search_end")
+
+(= (codex:item-type
+      (CodexEventImageGenerationBegin $call_id))
+   "image_generation_begin")
+
+(= (codex:item-type
+      (CodexEventImageGenerationEnd
+        $call_id
+        $status
+        $revised-prompt
+        $result
+        $saved-path))
+   "image_generation_end")
+
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
 
@@ -731,6 +776,96 @@
 (= (codex:terminal-interaction-stdin
       (CodexEventTerminalInteraction $call_id $process_id $stdin))
    $stdin)
+
+(= (codex:web-search-begin-call-id
+      (CodexEventWebSearchBegin $call_id))
+   $call_id)
+
+(= (codex:web-search-end-call-id
+      (CodexEventWebSearchEnd $call_id $query $action))
+   $call_id)
+
+(= (codex:web-search-end-query
+      (CodexEventWebSearchEnd $call_id $query $action))
+   $query)
+
+(= (codex:web-search-end-action
+      (CodexEventWebSearchEnd $call_id $query $action))
+   $action)
+
+(= (codex:image-generation-begin-call-id
+      (CodexEventImageGenerationBegin $call_id))
+   $call_id)
+
+(= (codex:image-generation-end-call-id
+      (CodexEventImageGenerationEnd
+        $call_id
+        $status
+        $revised-prompt
+        $result
+        $saved-path))
+   $call_id)
+
+(= (codex:image-generation-end-status
+      (CodexEventImageGenerationEnd
+        $call_id
+        $status
+        $revised-prompt
+        $result
+        $saved-path))
+   $status)
+
+(= (codex:image-generation-end-revised-prompt
+      (CodexEventImageGenerationEnd
+        $call_id
+        $status
+        $revised-prompt
+        $result
+        $saved-path))
+   (if (== $revised-prompt CodexAbsent) Empty $revised-prompt))
+
+(= (codex:image-generation-end-result
+      (CodexEventImageGenerationEnd
+        $call_id
+        $status
+        $revised-prompt
+        $result
+        $saved-path))
+   $result)
+
+(= (codex:image-generation-end-saved-path
+      (CodexEventImageGenerationEnd
+        $call_id
+        $status
+        $revised-prompt
+        $result
+        $saved-path))
+   (if (== $saved-path CodexAbsent) Empty $saved-path))
+
+(= (codex:web-search-action-json
+      (CodexWebSearchActionSearch $query $queries))
+   (JsonObject
+     ((JsonPair "type" (JsonString "search"))
+      (JsonPair "query" (JsonString $query))
+      (JsonPair "queries" (JsonArray (map-atom $queries $item (JsonString $item)))))))
+
+(= (codex:web-search-action-json
+      (CodexWebSearchActionOpenPage $url))
+   (JsonObject
+     ((JsonPair "type" (JsonString "open_page"))
+      (JsonPair "url" (JsonString $url)))))
+
+(= (codex:web-search-action-json
+      (CodexWebSearchActionFindInPage $url $pattern))
+   (JsonObject
+     ((JsonPair "type" (JsonString "find_in_page"))
+      (JsonPair "url" (JsonString $url))
+      (JsonPair "pattern" (JsonString $pattern)))))
+
+(= (codex:web-search-action-json
+      (CodexWebSearchActionOther))
+   (JsonObject
+     ((JsonPair "type" (JsonString "other")))))
 
 (= (codex:content-item-json (CodexInputText $text))
    (JsonObject
@@ -868,6 +1003,61 @@
       (JsonPair "call_id" (JsonString $call_id))
       (JsonPair "process_id" (JsonString $process_id))
       (JsonPair "stdin" (JsonString $stdin)))))
+
+(= (codex:item-json
+      (CodexEventWebSearchBegin $call_id))
+   (JsonObject
+     ((JsonPair "type" (JsonString "web_search_begin"))
+      (JsonPair "call_id" (JsonString $call_id)))))
+
+(= (codex:item-json
+      (CodexEventWebSearchEnd $call_id $query $action))
+   (JsonObject
+     ((JsonPair "type" (JsonString "web_search_end"))
+      (JsonPair "call_id" (JsonString $call_id))
+      (JsonPair "query" (JsonString $query))
+      (JsonPair "action" (codex:web-search-action-json $action)))))
+
+(= (codex:item-json
+      (CodexEventImageGenerationBegin $call_id))
+   (JsonObject
+     ((JsonPair "type" (JsonString "image_generation_begin"))
+      (JsonPair "call_id" (JsonString $call_id)))))
+
+(= (codex:item-json
+      (CodexEventImageGenerationEnd
+        $call_id
+        $status
+        $revised-prompt
+        $result
+        $saved-path))
+   (if (== $revised-prompt CodexAbsent)
+       (if (== $saved-path CodexAbsent)
+           (JsonObject
+             ((JsonPair "type" (JsonString "image_generation_end"))
+              (JsonPair "call_id" (JsonString $call_id))
+              (JsonPair "status" (JsonString $status))
+              (JsonPair "result" (JsonString $result))))
+           (JsonObject
+             ((JsonPair "type" (JsonString "image_generation_end"))
+              (JsonPair "call_id" (JsonString $call_id))
+              (JsonPair "status" (JsonString $status))
+              (JsonPair "result" (JsonString $result))
+              (JsonPair "saved_path" (JsonString $saved-path)))))
+       (if (== $saved-path CodexAbsent)
+           (JsonObject
+             ((JsonPair "type" (JsonString "image_generation_end"))
+              (JsonPair "call_id" (JsonString $call_id))
+              (JsonPair "status" (JsonString $status))
+              (JsonPair "revised_prompt" (JsonString $revised-prompt))
+              (JsonPair "result" (JsonString $result))))
+           (JsonObject
+             ((JsonPair "type" (JsonString "image_generation_end"))
+              (JsonPair "call_id" (JsonString $call_id))
+              (JsonPair "status" (JsonString $status))
+              (JsonPair "revised_prompt" (JsonString $revised-prompt))
+              (JsonPair "result" (JsonString $result))
+              (JsonPair "saved_path" (JsonString $saved-path)))))))
 
 (= (codex:items-json $items)
    (function
