@@ -130,6 +130,41 @@
 !(assertEqualToResult
   (json-stringify
     (codex:item-json
+      (codex:warning-event "network unstable")))
+  ("{\"type\":\"warning\",\"message\":\"network unstable\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:guardian-warning-event "approval reviewer timeout")))
+  ("{\"type\":\"guardian_warning\",\"message\":\"approval reviewer timeout\"}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:model-reroute-event
+      "gpt-5"
+      "gpt-5-safe"
+      (codex:model-reroute-reason-high-risk-cyber-activity)))
+  ("model_reroute"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:model-reroute-event
+        "gpt-5"
+        "gpt-5-safe"
+        (codex:model-reroute-reason-high-risk-cyber-activity))))
+  ("{\"type\":\"model_reroute\",\"from_model\":\"gpt-5\",\"to_model\":\"gpt-5-safe\",\"reason\":\"high_risk_cyber_activity\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:context-compacted-event)))
+  ("{\"type\":\"context_compacted\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
       (codex:web-search-begin-event "search-17")))
   ("{\"type\":\"web_search_begin\",\"call_id\":\"search-17\"}"))
 

@@ -23,6 +23,7 @@
 ; - McpInvocation / McpToolCallBeginEvent
 ; - McpStartupUpdateEvent / McpStartupCompleteEvent
 ; - ThreadNameUpdatedEvent / ThreadRolledBackEvent
+; - WarningEvent / ModelRerouteEvent / ContextCompactedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
 ; This increment covers the plain-text and structured content-item branches of
@@ -184,6 +185,21 @@
 
 (= (codex:thread-rolled-back-event $num_turns)
    (CodexEventThreadRolledBack $num_turns))
+
+(= (codex:warning-event $message)
+   (CodexEventWarning $message))
+
+(= (codex:guardian-warning-event $message)
+   (CodexEventGuardianWarning $message))
+
+(= (codex:model-reroute-reason-high-risk-cyber-activity)
+   (CodexModelRerouteReasonHighRiskCyberActivity))
+
+(= (codex:model-reroute-event $from_model $to_model $reason)
+   (CodexEventModelReroute $from_model $to_model $reason))
+
+(= (codex:context-compacted-event)
+   (CodexEventContextCompacted))
 
 (= (codex:web-search-begin-event $call_id)
    (CodexEventWebSearchBegin $call_id))
@@ -749,6 +765,22 @@
    "thread_rolled_back")
 
 (= (codex:item-type
+      (CodexEventWarning $message))
+   "warning")
+
+(= (codex:item-type
+      (CodexEventGuardianWarning $message))
+   "guardian_warning")
+
+(= (codex:item-type
+      (CodexEventModelReroute $from_model $to_model $reason))
+   "model_reroute")
+
+(= (codex:item-type
+      (CodexEventContextCompacted))
+   "context_compacted")
+
+(= (codex:item-type
       (CodexEventWebSearchBegin $call_id))
    "web_search_begin")
 
@@ -972,6 +1004,26 @@
       (CodexEventThreadRolledBack $num_turns))
    $num_turns)
 
+(= (codex:warning-message
+      (CodexEventWarning $message))
+   $message)
+
+(= (codex:guardian-warning-message
+      (CodexEventGuardianWarning $message))
+   $message)
+
+(= (codex:model-reroute-from-model
+      (CodexEventModelReroute $from_model $to_model $reason))
+   $from_model)
+
+(= (codex:model-reroute-to-model
+      (CodexEventModelReroute $from_model $to_model $reason))
+   $to_model)
+
+(= (codex:model-reroute-reason
+      (CodexEventModelReroute $from_model $to_model $reason))
+   $reason)
+
 (= (codex:web-search-begin-call-id
       (CodexEventWebSearchBegin $call_id))
    $call_id)
@@ -1099,6 +1151,10 @@
    (JsonObject
      ((JsonPair "server" (JsonString $server))
       (JsonPair "error" (JsonString $error)))))
+
+(= (codex:model-reroute-reason-json
+      (CodexModelRerouteReasonHighRiskCyberActivity))
+   (JsonString "high_risk_cyber_activity"))
 
 (= (codex:content-item-json (CodexInputText $text))
    (JsonObject
@@ -1322,6 +1378,31 @@
    (JsonObject
      ((JsonPair "type" (JsonString "thread_rolled_back"))
       (JsonPair "num_turns" (JsonNumber $num_turns)))))
+
+(= (codex:item-json
+      (CodexEventWarning $message))
+   (JsonObject
+     ((JsonPair "type" (JsonString "warning"))
+      (JsonPair "message" (JsonString $message)))))
+
+(= (codex:item-json
+      (CodexEventGuardianWarning $message))
+   (JsonObject
+     ((JsonPair "type" (JsonString "guardian_warning"))
+      (JsonPair "message" (JsonString $message)))))
+
+(= (codex:item-json
+      (CodexEventModelReroute $from_model $to_model $reason))
+   (JsonObject
+     ((JsonPair "type" (JsonString "model_reroute"))
+      (JsonPair "from_model" (JsonString $from_model))
+      (JsonPair "to_model" (JsonString $to_model))
+      (JsonPair "reason" (codex:model-reroute-reason-json $reason)))))
+
+(= (codex:item-json
+      (CodexEventContextCompacted))
+   (JsonObject
+     ((JsonPair "type" (JsonString "context_compacted")))))
 
 (= (codex:item-json
       (CodexEventWebSearchBegin $call_id))
