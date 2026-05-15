@@ -13,7 +13,7 @@
 ; - ToolSearchOutput
 ; - WebSearchCall
 ; - ImageGenerationCall
-; - TokenUsage / FinalOutput
+; - TokenUsage / TokenUsageInfo / TokenCountEvent / FinalOutput
 ; - ExecCommandOutputDeltaEvent
 ; - TerminalInteractionEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
@@ -353,6 +353,47 @@
 
 (= (codex:final-output-token-usage (CodexFinalOutput $token-usage))
    $token-usage)
+
+(= (codex:token-usage-info
+      $total-token-usage
+      $last-token-usage
+      $model-context-window)
+   (CodexTokenUsageInfo
+     $total-token-usage
+     $last-token-usage
+     $model-context-window))
+
+(= (codex:token-usage-info-total-token-usage
+      (CodexTokenUsageInfo
+        $total-token-usage
+        $last-token-usage
+        $model-context-window))
+   $total-token-usage)
+
+(= (codex:token-usage-info-last-token-usage
+      (CodexTokenUsageInfo
+        $total-token-usage
+        $last-token-usage
+        $model-context-window))
+   $last-token-usage)
+
+(= (codex:token-usage-info-model-context-window
+      (CodexTokenUsageInfo
+        $total-token-usage
+        $last-token-usage
+        $model-context-window))
+   $model-context-window)
+
+(= (codex:token-count-event $info $rate-limits)
+   (CodexTokenCountEvent $info $rate-limits))
+
+(= (codex:token-count-event-info
+      (CodexTokenCountEvent $info $rate-limits))
+   $info)
+
+(= (codex:token-count-event-rate-limits
+      (CodexTokenCountEvent $info $rate-limits))
+   $rate-limits)
 
 (= (codex:default-image-detail)
    "high")
