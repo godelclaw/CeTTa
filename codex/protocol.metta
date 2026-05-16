@@ -47,7 +47,9 @@
 ; - Submission / W3cTraceContext / Event queue wrappers
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
-; - Op::Compact / DropMemories / UpdateMemories / McpServerRefreshConfig
+; - Op::Compact / DropMemories / UpdateMemories
+; - Op::SetThreadName / SetThreadMemoryMode / Undo / ThreadRollback
+; - McpServerRefreshConfig
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
 ; - SessionSource / SubAgentSource
@@ -867,6 +869,24 @@
 
 (= (codex:update-memories-op)
    (CodexOpUpdateMemories))
+
+(= (codex:set-thread-name-op $name)
+   (CodexOpSetThreadName $name))
+
+(= (codex:thread-memory-mode-enabled)
+   (CodexThreadMemoryModeEnabled))
+
+(= (codex:thread-memory-mode-disabled)
+   (CodexThreadMemoryModeDisabled))
+
+(= (codex:set-thread-memory-mode-op $mode)
+   (CodexOpSetThreadMemoryMode $mode))
+
+(= (codex:undo-op)
+   (CodexOpUndo))
+
+(= (codex:thread-rollback-op $num-turns)
+   (CodexOpThreadRollback $num-turns))
 
 (= (codex:realtime-conversation-version-v1)
    (CodexRealtimeConversationVersionV1))
@@ -6373,6 +6393,22 @@
       (CodexOpUpdateMemories))
    "update_memories")
 
+(= (codex:op-type
+      (CodexOpSetThreadName $name))
+   "set_thread_name")
+
+(= (codex:op-type
+      (CodexOpSetThreadMemoryMode $mode))
+   "set_thread_memory_mode")
+
+(= (codex:op-type
+      (CodexOpUndo))
+   "undo")
+
+(= (codex:op-type
+      (CodexOpThreadRollback $num-turns))
+   "thread_rollback")
+
 (= (codex:w3c-trace-context-json
       (CodexW3cTraceContext $traceparent $tracestate))
    (let $pairs-1 ()
@@ -6391,6 +6427,14 @@
                "tracestate"
                (JsonString $tracestate)))
          (JsonObject $pairs-3)))))
+
+(= (codex:thread-memory-mode-json
+      (CodexThreadMemoryModeEnabled))
+   (JsonString "enabled"))
+
+(= (codex:thread-memory-mode-json
+      (CodexThreadMemoryModeDisabled))
+   (JsonString "disabled"))
 
 (= (codex:mcp-server-refresh-config-json
       (CodexMcpServerRefreshConfig
@@ -6537,6 +6581,29 @@
       (CodexOpUpdateMemories))
    (JsonObject
      ((JsonPair "type" (JsonString "update_memories")))))
+
+(= (codex:op-json
+      (CodexOpSetThreadName $name))
+   (JsonObject
+     ((JsonPair "type" (JsonString "set_thread_name"))
+      (JsonPair "name" (JsonString $name)))))
+
+(= (codex:op-json
+      (CodexOpSetThreadMemoryMode $mode))
+   (JsonObject
+     ((JsonPair "type" (JsonString "set_thread_memory_mode"))
+      (JsonPair "mode" (codex:thread-memory-mode-json $mode)))))
+
+(= (codex:op-json
+      (CodexOpUndo))
+   (JsonObject
+     ((JsonPair "type" (JsonString "undo")))))
+
+(= (codex:op-json
+      (CodexOpThreadRollback $num-turns))
+   (JsonObject
+     ((JsonPair "type" (JsonString "thread_rollback"))
+      (JsonPair "num_turns" (JsonNumber $num-turns)))))
 
 ; CeTTa evaluator detail: the generic `Submission` wrapper path below works
 ; for the simple already-landed op subset, but the structured realtime-start
