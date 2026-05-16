@@ -46,6 +46,7 @@
 ; - SessionConfiguredEvent / SessionNetworkProxyRuntime
 ; - ExecPolicyAmendment / ReviewDecision
 ; - FileChange / Chunk
+; - CollabAgent* events / protocol-local AgentStatus JSON
 ; - PatchApplyBeginEvent / PatchApplyUpdatedEvent / PatchApplyEndEvent
 ; - HookStartedEvent / HookCompletedEvent / HookRunSummary
 ; - UndoStartedEvent / UndoCompletedEvent
@@ -62,6 +63,10 @@
 ; Rust represents `PatchApply*Event.changes` as `HashMap<PathBuf, FileChange>`.
 ; This CeTTa slice models the same visible payload as an ordered list of keyed
 ; entries and projects it back to the Rust JSON object shape at serialization.
+;
+; Rust also represents `CollabWaitingEndEvent.statuses` as
+; `HashMap<ThreadId, AgentStatus>`. This CeTTa slice uses the same ordered-list
+; projection approach there so the visible JSON object shape remains identical.
 ;
 ; This restart subset does not yet port `account::PlanType`, so the
 ; `RateLimitSnapshot.plan_type` field is currently carried through as the same
@@ -402,6 +407,180 @@
 
 (= (codex:turn-aborted-event $turn-id $reason $completed-at $duration-ms)
    (CodexEventTurnAborted $turn-id $reason $completed-at $duration-ms))
+
+(= (codex:protocol-agent-status-pending-init)
+   (CodexProtocolAgentStatusPendingInit))
+
+(= (codex:protocol-agent-status-running)
+   (CodexProtocolAgentStatusRunning))
+
+(= (codex:protocol-agent-status-interrupted)
+   (CodexProtocolAgentStatusInterrupted))
+
+(= (codex:protocol-agent-status-completed $message)
+   (CodexProtocolAgentStatusCompleted $message))
+
+(= (codex:protocol-agent-status-errored $message)
+   (CodexProtocolAgentStatusErrored $message))
+
+(= (codex:protocol-agent-status-shutdown)
+   (CodexProtocolAgentStatusShutdown))
+
+(= (codex:protocol-agent-status-not-found)
+   (CodexProtocolAgentStatusNotFound))
+
+(= (codex:collab-agent-ref $thread-id $agent-nickname $agent-role)
+   (CodexCollabAgentRef $thread-id $agent-nickname $agent-role))
+
+(= (codex:collab-agent-status-entry
+      $thread-id
+      $agent-nickname
+      $agent-role
+      $status)
+   (CodexCollabAgentStatusEntry
+     $thread-id
+     $agent-nickname
+     $agent-role
+     $status))
+
+(= (codex:collab-waiting-status-entry $thread-id $status)
+   (CodexCollabWaitingStatusEntry $thread-id $status))
+
+(= (codex:collab-agent-spawn-begin-event
+      $call-id
+      $sender-thread-id
+      $prompt
+      $model
+      $reasoning-effort)
+   (CodexEventCollabAgentSpawnBegin
+     $call-id
+     $sender-thread-id
+     $prompt
+     $model
+     $reasoning-effort))
+
+(= (codex:collab-agent-spawn-end-event
+      $call-id
+      $sender-thread-id
+      $new-thread-id
+      $new-agent-nickname
+      $new-agent-role
+      $prompt
+      $model
+      $reasoning-effort
+      $status)
+   (CodexEventCollabAgentSpawnEnd
+     $call-id
+     $sender-thread-id
+     $new-thread-id
+     $new-agent-nickname
+     $new-agent-role
+     $prompt
+     $model
+     $reasoning-effort
+     $status))
+
+(= (codex:collab-agent-interaction-begin-event
+      $call-id
+      $sender-thread-id
+      $receiver-thread-id
+      $prompt)
+   (CodexEventCollabAgentInteractionBegin
+     $call-id
+     $sender-thread-id
+     $receiver-thread-id
+     $prompt))
+
+(= (codex:collab-agent-interaction-end-event
+      $call-id
+      $sender-thread-id
+      $receiver-thread-id
+      $receiver-agent-nickname
+      $receiver-agent-role
+      $prompt
+      $status)
+   (CodexEventCollabAgentInteractionEnd
+     $call-id
+     $sender-thread-id
+     $receiver-thread-id
+     $receiver-agent-nickname
+     $receiver-agent-role
+     $prompt
+     $status))
+
+(= (codex:collab-waiting-begin-event
+      $sender-thread-id
+      $receiver-thread-ids
+      $receiver-agents
+      $call-id)
+   (CodexEventCollabWaitingBegin
+     $sender-thread-id
+     $receiver-thread-ids
+     $receiver-agents
+     $call-id))
+
+(= (codex:collab-waiting-end-event
+      $sender-thread-id
+      $call-id
+      $agent-statuses
+      $statuses)
+   (CodexEventCollabWaitingEnd
+     $sender-thread-id
+     $call-id
+     $agent-statuses
+     $statuses))
+
+(= (codex:collab-close-begin-event
+      $call-id
+      $sender-thread-id
+      $receiver-thread-id)
+   (CodexEventCollabCloseBegin
+     $call-id
+     $sender-thread-id
+     $receiver-thread-id))
+
+(= (codex:collab-close-end-event
+      $call-id
+      $sender-thread-id
+      $receiver-thread-id
+      $receiver-agent-nickname
+      $receiver-agent-role
+      $status)
+   (CodexEventCollabCloseEnd
+     $call-id
+     $sender-thread-id
+     $receiver-thread-id
+     $receiver-agent-nickname
+     $receiver-agent-role
+     $status))
+
+(= (codex:collab-resume-begin-event
+      $call-id
+      $sender-thread-id
+      $receiver-thread-id
+      $receiver-agent-nickname
+      $receiver-agent-role)
+   (CodexEventCollabResumeBegin
+     $call-id
+     $sender-thread-id
+     $receiver-thread-id
+     $receiver-agent-nickname
+     $receiver-agent-role))
+
+(= (codex:collab-resume-end-event
+      $call-id
+      $sender-thread-id
+      $receiver-thread-id
+      $receiver-agent-nickname
+      $receiver-agent-role
+      $status)
+   (CodexEventCollabResumeEnd
+     $call-id
+     $sender-thread-id
+     $receiver-thread-id
+     $receiver-agent-nickname
+     $receiver-agent-role
+     $status))
 
 (= (codex:non-steerable-turn-kind-review)
    (CodexNonSteerableTurnKindReview))
@@ -1732,6 +1911,99 @@
    "turn_aborted")
 
 (= (codex:item-type
+      (CodexEventCollabAgentSpawnBegin
+        $call-id
+        $sender-thread-id
+        $prompt
+        $model
+        $reasoning-effort))
+   "collab_agent_spawn_begin")
+
+(= (codex:item-type
+      (CodexEventCollabAgentSpawnEnd
+        $call-id
+        $sender-thread-id
+        $new-thread-id
+        $new-agent-nickname
+        $new-agent-role
+        $prompt
+        $model
+        $reasoning-effort
+        $status))
+   "collab_agent_spawn_end")
+
+(= (codex:item-type
+      (CodexEventCollabAgentInteractionBegin
+        $call-id
+        $sender-thread-id
+        $receiver-thread-id
+        $prompt))
+   "collab_agent_interaction_begin")
+
+(= (codex:item-type
+      (CodexEventCollabAgentInteractionEnd
+        $call-id
+        $sender-thread-id
+        $receiver-thread-id
+        $receiver-agent-nickname
+        $receiver-agent-role
+        $prompt
+        $status))
+   "collab_agent_interaction_end")
+
+(= (codex:item-type
+      (CodexEventCollabWaitingBegin
+        $sender-thread-id
+        $receiver-thread-ids
+        $receiver-agents
+        $call-id))
+   "collab_waiting_begin")
+
+(= (codex:item-type
+      (CodexEventCollabWaitingEnd
+        $sender-thread-id
+        $call-id
+        $agent-statuses
+        $statuses))
+   "collab_waiting_end")
+
+(= (codex:item-type
+      (CodexEventCollabCloseBegin
+        $call-id
+        $sender-thread-id
+        $receiver-thread-id))
+   "collab_close_begin")
+
+(= (codex:item-type
+      (CodexEventCollabCloseEnd
+        $call-id
+        $sender-thread-id
+        $receiver-thread-id
+        $receiver-agent-nickname
+        $receiver-agent-role
+        $status))
+   "collab_close_end")
+
+(= (codex:item-type
+      (CodexEventCollabResumeBegin
+        $call-id
+        $sender-thread-id
+        $receiver-thread-id
+        $receiver-agent-nickname
+        $receiver-agent-role))
+   "collab_resume_begin")
+
+(= (codex:item-type
+      (CodexEventCollabResumeEnd
+        $call-id
+        $sender-thread-id
+        $receiver-thread-id
+        $receiver-agent-nickname
+        $receiver-agent-role
+        $status))
+   "collab_resume_end")
+
+(= (codex:item-type
       (CodexEventStreamError $message $codex-error-info $additional-details))
    "stream_error")
 
@@ -2479,6 +2751,100 @@
 (= (codex:turn-abort-reason-json
       (CodexTurnAbortReasonReviewEnded))
    (JsonString "review_ended"))
+
+(= (codex:protocol-agent-status-json-value-for-completed $message)
+   (if (== $message CodexAbsent)
+       JsonNull
+       (JsonString $message)))
+
+(= (codex:protocol-agent-status-json
+      (CodexProtocolAgentStatusPendingInit))
+   (JsonString "pending_init"))
+
+(= (codex:protocol-agent-status-json
+      (CodexProtocolAgentStatusRunning))
+   (JsonString "running"))
+
+(= (codex:protocol-agent-status-json
+      (CodexProtocolAgentStatusInterrupted))
+   (JsonString "interrupted"))
+
+(= (codex:protocol-agent-status-json
+      (CodexProtocolAgentStatusCompleted $message))
+   (JsonObject
+     ((JsonPair
+        "completed"
+        (codex:protocol-agent-status-json-value-for-completed $message)))))
+
+(= (codex:protocol-agent-status-json
+      (CodexProtocolAgentStatusErrored $message))
+   (JsonObject
+     ((JsonPair "errored" (JsonString $message)))))
+
+(= (codex:protocol-agent-status-json
+      (CodexProtocolAgentStatusShutdown))
+   (JsonString "shutdown"))
+
+(= (codex:protocol-agent-status-json
+      (CodexProtocolAgentStatusNotFound))
+   (JsonString "not_found"))
+
+(= (codex:collab-agent-ref-json-pairs
+      $thread-id
+      $agent-nickname
+      $agent-role)
+   (let $pairs-1
+     ((JsonPair "thread_id" (JsonString $thread-id)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "agent_nickname"
+         $agent-nickname)
+       (codex:append-optional-json-string-pair
+         $pairs-2
+         "agent_role"
+         $agent-role))))
+
+(= (codex:collab-agent-ref-json
+      (CodexCollabAgentRef $thread-id $agent-nickname $agent-role))
+   (JsonObject
+     (codex:collab-agent-ref-json-pairs
+       $thread-id
+       $agent-nickname
+       $agent-role)))
+
+(= (codex:collab-agent-refs-json $items)
+   (JsonArray
+     (map-atom $items $item (codex:collab-agent-ref-json $item))))
+
+(= (codex:collab-agent-status-entry-json
+      (CodexCollabAgentStatusEntry
+        $thread-id
+        $agent-nickname
+        $agent-role
+        $status))
+   (let $pairs-1
+     (codex:collab-agent-ref-json-pairs
+       $thread-id
+       $agent-nickname
+       $agent-role)
+     (JsonObject
+       (codex:protocol-append-json-pair
+         $pairs-1
+         "status"
+         (codex:protocol-agent-status-json $status)))))
+
+(= (codex:collab-agent-status-entries-json $items)
+   (JsonArray
+     (map-atom $items $item (codex:collab-agent-status-entry-json $item))))
+
+(= (codex:collab-waiting-status-json-pair
+      (CodexCollabWaitingStatusEntry $thread-id $status))
+   (JsonPair $thread-id (codex:protocol-agent-status-json $status)))
+
+(= (codex:collab-waiting-statuses-json $items)
+   (JsonObject
+     (map-atom $items $item (codex:collab-waiting-status-json-pair $item))))
 
 (= (codex:non-steerable-turn-kind-json
       (CodexNonSteerableTurnKindReview))
@@ -4522,8 +4888,264 @@
                  ((JsonPair "type" (JsonString "turn_aborted"))
                   (JsonPair "turn_id" (JsonString $turn-id))
                   (JsonPair "reason" (codex:turn-abort-reason-json $reason))
-                  (JsonPair "completed_at" (JsonNumber $completed-at))
-                  (JsonPair "duration_ms" (JsonNumber $duration-ms))))))))
+                 (JsonPair "completed_at" (JsonNumber $completed-at))
+                 (JsonPair "duration_ms" (JsonNumber $duration-ms))))))))
+
+(= (codex:item-json
+      (CodexEventCollabAgentSpawnBegin
+        $call-id
+        $sender-thread-id
+        $prompt
+        $model
+        $reasoning-effort))
+   (JsonObject
+     ((JsonPair "type" (JsonString "collab_agent_spawn_begin"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+      (JsonPair "prompt" (JsonString $prompt))
+      (JsonPair "model" (JsonString $model))
+      (JsonPair
+        "reasoning_effort"
+        (codex:session-reasoning-effort-json $reasoning-effort)))))
+
+(= (codex:item-json
+      (CodexEventCollabAgentSpawnEnd
+        $call-id
+        $sender-thread-id
+        $new-thread-id
+        $new-agent-nickname
+        $new-agent-role
+        $prompt
+        $model
+        $reasoning-effort
+        $status))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "collab_agent_spawn_end"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+      (JsonPair
+        "new_thread_id"
+        (if (== $new-thread-id CodexAbsent)
+            JsonNull
+            (JsonString $new-thread-id))))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "new_agent_nickname"
+         $new-agent-nickname)
+       (let $pairs-3
+         (codex:append-optional-json-string-pair
+           $pairs-2
+           "new_agent_role"
+           $new-agent-role)
+         (let $pairs-4
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "prompt"
+             (JsonString $prompt))
+           (let $pairs-5
+             (codex:protocol-append-json-pair
+               $pairs-4
+               "model"
+               (JsonString $model))
+             (let $pairs-6
+               (codex:protocol-append-json-pair
+                 $pairs-5
+                 "reasoning_effort"
+                 (codex:session-reasoning-effort-json $reasoning-effort))
+               (JsonObject
+                 (codex:protocol-append-json-pair
+                   $pairs-6
+                   "status"
+                   (codex:protocol-agent-status-json $status))))))))))
+
+(= (codex:item-json
+      (CodexEventCollabAgentInteractionBegin
+        $call-id
+        $sender-thread-id
+        $receiver-thread-id
+        $prompt))
+   (JsonObject
+     ((JsonPair "type" (JsonString "collab_agent_interaction_begin"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+      (JsonPair "receiver_thread_id" (JsonString $receiver-thread-id))
+      (JsonPair "prompt" (JsonString $prompt)))))
+
+(= (codex:item-json
+      (CodexEventCollabAgentInteractionEnd
+        $call-id
+        $sender-thread-id
+        $receiver-thread-id
+        $receiver-agent-nickname
+        $receiver-agent-role
+        $prompt
+        $status))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "collab_agent_interaction_end"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+      (JsonPair "receiver_thread_id" (JsonString $receiver-thread-id)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "receiver_agent_nickname"
+         $receiver-agent-nickname)
+       (let $pairs-3
+         (codex:append-optional-json-string-pair
+           $pairs-2
+           "receiver_agent_role"
+           $receiver-agent-role)
+         (let $pairs-4
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "prompt"
+             (JsonString $prompt))
+           (JsonObject
+             (codex:protocol-append-json-pair
+               $pairs-4
+               "status"
+               (codex:protocol-agent-status-json $status))))))))
+
+(= (codex:item-json
+      (CodexEventCollabWaitingBegin
+        $sender-thread-id
+        $receiver-thread-ids
+        $receiver-agents
+        $call-id))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "collab_waiting_begin"))
+      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+      (JsonPair
+        "receiver_thread_ids"
+        (codex:json-string-array $receiver-thread-ids)))
+     (let $pairs-2
+       (if (== $receiver-agents ())
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "receiver_agents"
+             (codex:collab-agent-refs-json $receiver-agents)))
+       (JsonObject
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "call_id"
+           (JsonString $call-id))))))
+
+(= (codex:item-json
+      (CodexEventCollabWaitingEnd
+        $sender-thread-id
+        $call-id
+        $agent-statuses
+        $statuses))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "collab_waiting_end"))
+      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+      (JsonPair "call_id" (JsonString $call-id)))
+     (let $pairs-2
+       (if (== $agent-statuses ())
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "agent_statuses"
+             (codex:collab-agent-status-entries-json $agent-statuses)))
+       (JsonObject
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "statuses"
+           (codex:collab-waiting-statuses-json $statuses))))))
+
+(= (codex:item-json
+      (CodexEventCollabCloseBegin
+        $call-id
+        $sender-thread-id
+        $receiver-thread-id))
+   (JsonObject
+     ((JsonPair "type" (JsonString "collab_close_begin"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+      (JsonPair "receiver_thread_id" (JsonString $receiver-thread-id)))))
+
+(= (codex:item-json
+      (CodexEventCollabCloseEnd
+        $call-id
+        $sender-thread-id
+        $receiver-thread-id
+        $receiver-agent-nickname
+        $receiver-agent-role
+        $status))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "collab_close_end"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+      (JsonPair "receiver_thread_id" (JsonString $receiver-thread-id)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "receiver_agent_nickname"
+         $receiver-agent-nickname)
+       (let $pairs-3
+         (codex:append-optional-json-string-pair
+           $pairs-2
+           "receiver_agent_role"
+           $receiver-agent-role)
+         (JsonObject
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "status"
+             (codex:protocol-agent-status-json $status)))))))
+
+(= (codex:item-json
+      (CodexEventCollabResumeBegin
+        $call-id
+        $sender-thread-id
+        $receiver-thread-id
+        $receiver-agent-nickname
+        $receiver-agent-role))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "collab_resume_begin"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+      (JsonPair "receiver_thread_id" (JsonString $receiver-thread-id)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "receiver_agent_nickname"
+         $receiver-agent-nickname)
+       (JsonObject
+         (codex:append-optional-json-string-pair
+           $pairs-2
+           "receiver_agent_role"
+           $receiver-agent-role)))))
+
+(= (codex:item-json
+      (CodexEventCollabResumeEnd
+        $call-id
+        $sender-thread-id
+        $receiver-thread-id
+        $receiver-agent-nickname
+        $receiver-agent-role
+        $status))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "collab_resume_end"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+      (JsonPair "receiver_thread_id" (JsonString $receiver-thread-id)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "receiver_agent_nickname"
+         $receiver-agent-nickname)
+       (let $pairs-3
+         (codex:append-optional-json-string-pair
+           $pairs-2
+           "receiver_agent_role"
+           $receiver-agent-role)
+         (JsonObject
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "status"
+             (codex:protocol-agent-status-json $status)))))))
 
 (= (codex:item-json
       (CodexEventStreamError $message $codex-error-info $additional-details))
