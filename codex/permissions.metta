@@ -668,6 +668,101 @@
        (codex:file-system-sandbox-entries-have-denied-read $entries)
        False))
 
+(= (codex:file-system-sandbox-entries-contain-entry
+      ()
+      $entry)
+   False)
+
+(= (codex:file-system-sandbox-entries-contain-entry
+      $entries
+      $entry)
+   (let ($head $tail) (decons-atom $entries)
+     (if (== $head $entry)
+         True
+         (codex:file-system-sandbox-entries-contain-entry
+           $tail
+           $entry))))
+
+(= (codex:file-system-sandbox-entries-append-missing-deny-read-entries
+      $entries
+      ())
+   $entries)
+
+(= (codex:file-system-sandbox-entries-append-missing-deny-read-entries
+      $entries
+      $existing-entries)
+   (let ($head $tail) (decons-atom $existing-entries)
+     (if (== (codex:file-system-sandbox-entry-access $head)
+             (CodexFileSystemAccessModeNone))
+         (if (codex:file-system-sandbox-entries-contain-entry
+               $entries
+               $head)
+             (codex:file-system-sandbox-entries-append-missing-deny-read-entries
+               $entries
+               $tail)
+             (codex:file-system-sandbox-entries-append-missing-deny-read-entries
+               (list:append $entries ($head))
+               $tail))
+         (codex:file-system-sandbox-entries-append-missing-deny-read-entries
+           $entries
+           $tail))))
+
+; Rust mutates `self` in place. CeTTa returns the updated policy value instead,
+; while preserving the same visible result after the mutation would complete.
+(= (codex:file-system-sandbox-policy-preserve-deny-read-restrictions-from
+      (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+      (CodexFileSystemSandboxPolicy
+        $existing-kind
+        $existing-glob-scan-max-depth
+        $existing-entries))
+   (let $has-deny-read-entries
+     (codex:file-system-sandbox-entries-have-denied-read $existing-entries)
+     (let $normalized-policy
+       (if (and
+             (== $kind (CodexFileSystemSandboxKindUnrestricted))
+             $has-deny-read-entries)
+           (CodexFileSystemSandboxPolicy
+             (CodexFileSystemSandboxKindRestricted)
+             CodexAbsent
+             ((CodexFileSystemSandboxEntry
+                (CodexFileSystemPathSpecial
+                  (CodexFileSystemSpecialPathRoot))
+                (CodexFileSystemAccessModeWrite))))
+           (CodexFileSystemSandboxPolicy
+             $kind
+             $glob-scan-max-depth
+             $entries))
+       (codex:file-system-sandbox-policy-preserve-deny-read-restrictions-from-normalized
+         $normalized-policy
+         (CodexFileSystemSandboxPolicy
+           $existing-kind
+           $existing-glob-scan-max-depth
+           $existing-entries)))))
+
+(= (codex:file-system-sandbox-policy-preserve-deny-read-restrictions-from-normalized
+      (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+      (CodexFileSystemSandboxPolicy
+        $existing-kind
+        $existing-glob-scan-max-depth
+        $existing-entries))
+   (if (not (== $kind (CodexFileSystemSandboxKindRestricted)))
+       (CodexFileSystemSandboxPolicy
+         $kind
+         $glob-scan-max-depth
+         $entries)
+       (let $merged-glob-scan-max-depth
+         (if (== $glob-scan-max-depth CodexAbsent)
+             $existing-glob-scan-max-depth
+             $glob-scan-max-depth)
+         (let $merged-entries
+           (codex:file-system-sandbox-entries-append-missing-deny-read-entries
+             $entries
+             $existing-entries)
+           (CodexFileSystemSandboxPolicy
+             $kind
+             $merged-glob-scan-max-depth
+             $merged-entries)))))
+
 (= (codex:file-system-sandbox-policy-has-full-disk-read-access
       (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries))
    (if (== $kind (CodexFileSystemSandboxKindUnrestricted))
