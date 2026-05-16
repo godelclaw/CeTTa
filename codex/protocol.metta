@@ -43,6 +43,7 @@
 ; - ListSkillsResponseEvent / SkillsListEntry / SkillMetadata
 ; - RealtimeConversationStarted/Realtime/Closed/Sdp / RealtimeVoice
 ; - RealtimeAudioFrame / RealtimeEvent::AudioOut
+; - Op::RealtimeConversationStart/Audio/Text/Close/ListVoices
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
 ; - SessionSource / SubAgentSource
@@ -71,6 +72,11 @@
 ; Rust models `RealtimeEvent::ConversationItemAdded` as `serde_json::Value`.
 ; This slice carries that payload directly as the same JSON atom supplied by
 ; callers so the visible wire shape remains unchanged.
+;
+; Rust models `ConversationStartParams.prompt` as `Option<Option<String>>`.
+; This slice preserves the same visible wire behavior by using `CodexAbsent`
+; for the outer `None` (omit the field) and `JsonNull` for the inner `None`
+; (`"prompt": null`).
 ;
 ; Rust represents `PatchApply*Event.changes` as `HashMap<PathBuf, FileChange>`.
 ; This CeTTa slice models the same visible payload as an ordered list of keyed
@@ -813,6 +819,52 @@
 
 (= (codex:realtime-conversation-version-v2)
    (CodexRealtimeConversationVersionV2))
+
+(= (codex:realtime-output-modality-text)
+   (CodexRealtimeOutputModalityText))
+
+(= (codex:realtime-output-modality-audio)
+   (CodexRealtimeOutputModalityAudio))
+
+(= (codex:conversation-start-transport-websocket)
+   (CodexConversationStartTransportWebsocket))
+
+(= (codex:conversation-start-transport-webrtc $sdp)
+   (CodexConversationStartTransportWebrtc $sdp))
+
+(= (codex:conversation-start-params
+      $output-modality
+      $prompt
+      $session-id
+      $transport
+      $voice)
+   (CodexConversationStartParams
+     $output-modality
+     $prompt
+     $session-id
+     $transport
+     $voice))
+
+(= (codex:conversation-audio-params $frame)
+   (CodexConversationAudioParams $frame))
+
+(= (codex:conversation-text-params $text)
+   (CodexConversationTextParams $text))
+
+(= (codex:realtime-conversation-start-op $params)
+   (CodexOpRealtimeConversationStart $params))
+
+(= (codex:realtime-conversation-audio-op $params)
+   (CodexOpRealtimeConversationAudio $params))
+
+(= (codex:realtime-conversation-text-op $params)
+   (CodexOpRealtimeConversationText $params))
+
+(= (codex:realtime-conversation-close-op)
+   (CodexOpRealtimeConversationClose))
+
+(= (codex:realtime-conversation-list-voices-op)
+   (CodexOpRealtimeConversationListVoices))
 
 (= (codex:realtime-conversation-started-event $session-id $version)
    (CodexEventRealtimeConversationStarted $session-id $version))
@@ -3792,6 +3844,82 @@
       (CodexRealtimeConversationVersionV2))
    (JsonString "v2"))
 
+(= (codex:realtime-output-modality-json
+      (CodexRealtimeOutputModalityText))
+   (JsonString "text"))
+
+(= (codex:realtime-output-modality-json
+      (CodexRealtimeOutputModalityAudio))
+   (JsonString "audio"))
+
+(= (codex:conversation-start-transport-json
+      (CodexConversationStartTransportWebsocket))
+   (JsonObject
+     ((JsonPair "type" (JsonString "websocket")))))
+
+(= (codex:conversation-start-transport-json
+      (CodexConversationStartTransportWebrtc $sdp))
+   (JsonObject
+     ((JsonPair "type" (JsonString "webrtc"))
+      (JsonPair "sdp" (JsonString $sdp)))))
+
+(= (codex:conversation-start-params-json
+      (CodexConversationStartParams
+        $output-modality
+        $prompt
+        $session-id
+        $transport
+        $voice))
+   (let $pairs-1
+     ((JsonPair
+        "output_modality"
+        (codex:realtime-output-modality-json $output-modality)))
+     (let $pairs-2
+       (case $prompt
+         ((CodexAbsent $pairs-1)
+          (JsonNull
+            (codex:protocol-append-json-pair
+              $pairs-1
+              "prompt"
+              JsonNull))
+          ($text
+            (codex:protocol-append-json-pair
+              $pairs-1
+              "prompt"
+              (JsonString $text)))))
+       (let $pairs-3
+         (if (== $session-id CodexAbsent)
+             $pairs-2
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "session_id"
+               (JsonString $session-id)))
+         (let $pairs-4
+           (if (== $transport CodexAbsent)
+               $pairs-3
+               (codex:protocol-append-json-pair
+                 $pairs-3
+                 "transport"
+                 (codex:conversation-start-transport-json $transport)))
+           (let $pairs-5
+             (if (== $voice CodexAbsent)
+                 $pairs-4
+                 (codex:protocol-append-json-pair
+                   $pairs-4
+                   "voice"
+                   (codex:realtime-voice-json $voice)))
+             (JsonObject $pairs-5)))))))
+
+(= (codex:conversation-audio-params-json
+      (CodexConversationAudioParams $frame))
+   (JsonObject
+     ((JsonPair "frame" (codex:realtime-audio-frame-json $frame)))))
+
+(= (codex:conversation-text-params-json
+      (CodexConversationTextParams $text))
+   (JsonObject
+     ((JsonPair "text" (JsonString $text)))))
+
 (= (codex:realtime-audio-frame-json
       (CodexRealtimeAudioFrame
         $data
@@ -6135,6 +6263,99 @@
         "type"
         (JsonString "realtime_conversation_list_voices_response"))
       (JsonPair "voices" (codex:realtime-voices-list-json $voices)))))
+
+(= (codex:op-type
+      (CodexOpRealtimeConversationStart $params))
+   "realtime_conversation_start")
+
+(= (codex:op-type
+      (CodexOpRealtimeConversationAudio $params))
+   "realtime_conversation_audio")
+
+(= (codex:op-type
+      (CodexOpRealtimeConversationText $params))
+   "realtime_conversation_text")
+
+(= (codex:op-type
+      (CodexOpRealtimeConversationClose))
+   "realtime_conversation_close")
+
+(= (codex:op-type
+      (CodexOpRealtimeConversationListVoices))
+   "realtime_conversation_list_voices")
+
+(= (codex:op-json
+      (CodexOpRealtimeConversationStart
+        (CodexConversationStartParams
+          $output-modality
+          $prompt
+          $session-id
+          $transport
+          $voice)))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "realtime_conversation_start"))
+      (JsonPair
+        "output_modality"
+        (codex:realtime-output-modality-json $output-modality)))
+     (let $pairs-2
+       (case $prompt
+         ((CodexAbsent $pairs-1)
+          (JsonNull
+            (codex:protocol-append-json-pair
+              $pairs-1
+              "prompt"
+              JsonNull))
+          ($text
+            (codex:protocol-append-json-pair
+              $pairs-1
+              "prompt"
+              (JsonString $text)))))
+       (let $pairs-3
+         (if (== $session-id CodexAbsent)
+             $pairs-2
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "session_id"
+               (JsonString $session-id)))
+         (let $pairs-4
+           (if (== $transport CodexAbsent)
+               $pairs-3
+               (codex:protocol-append-json-pair
+                 $pairs-3
+                 "transport"
+                 (codex:conversation-start-transport-json $transport)))
+           (let $pairs-5
+             (if (== $voice CodexAbsent)
+                 $pairs-4
+                 (codex:protocol-append-json-pair
+                   $pairs-4
+                   "voice"
+                   (codex:realtime-voice-json $voice)))
+             (JsonObject $pairs-5)))))))
+
+(= (codex:op-json
+      (CodexOpRealtimeConversationAudio
+        (CodexConversationAudioParams $frame)))
+   (JsonObject
+     ((JsonPair "type" (JsonString "realtime_conversation_audio"))
+      (JsonPair "frame" (codex:realtime-audio-frame-json $frame)))))
+
+(= (codex:op-json
+      (CodexOpRealtimeConversationText
+        (CodexConversationTextParams $text)))
+   (JsonObject
+     ((JsonPair "type" (JsonString "realtime_conversation_text"))
+      (JsonPair "text" (JsonString $text)))))
+
+(= (codex:op-json
+      (CodexOpRealtimeConversationClose))
+   (JsonObject
+     ((JsonPair "type" (JsonString "realtime_conversation_close")))))
+
+(= (codex:op-json
+      (CodexOpRealtimeConversationListVoices))
+   (JsonObject
+     ((JsonPair "type" (JsonString "realtime_conversation_list_voices")))))
 
 (= (codex:item-json
       (CodexEventSessionConfigured
