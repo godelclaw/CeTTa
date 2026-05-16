@@ -29,6 +29,7 @@
 ; - TurnCompleteEvent / TokenCountEvent / StreamInfoEvent
 ; - AgentMessageEvent / UserMessageEvent
 ; - ViewImageToolCallEvent / BackgroundEventEvent / DeprecationNoticeEvent
+; - SkillsUpdateAvailable / ShutdownComplete
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -315,6 +316,12 @@
 
 (= (codex:deprecation-notice-event $summary $details)
    (CodexEventDeprecationNotice $summary $details))
+
+(= (codex:skills-update-available-event)
+   (CodexEventSkillsUpdateAvailable))
+
+(= (codex:shutdown-complete-event)
+   (CodexEventShutdownComplete))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -954,6 +961,14 @@
 (= (codex:item-type
       (CodexEventDeprecationNotice $summary $details))
    "deprecation_notice")
+
+(= (codex:item-type
+      (CodexEventSkillsUpdateAvailable))
+   "skills_update_available")
+
+(= (codex:item-type
+      (CodexEventShutdownComplete))
+   "shutdown_complete")
 
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
@@ -2287,6 +2302,16 @@
          ((JsonPair "type" (JsonString "deprecation_notice"))
           (JsonPair "summary" (JsonString $summary))
           (JsonPair "details" (JsonString $details))))))
+
+(= (codex:item-json
+      (CodexEventSkillsUpdateAvailable))
+   (JsonObject
+     ((JsonPair "type" (JsonString "skills_update_available")))))
+
+(= (codex:item-json
+      (CodexEventShutdownComplete))
+   (JsonObject
+     ((JsonPair "type" (JsonString "shutdown_complete")))))
 
 (= (codex:items-json $items)
    (function

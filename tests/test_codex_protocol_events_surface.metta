@@ -409,3 +409,25 @@
         "legacy profile support"
         "use he_extended instead")))
   ("{\"type\":\"deprecation_notice\",\"summary\":\"legacy profile support\",\"details\":\"use he_extended instead\"}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:skills-update-available-event))
+  ("skills_update_available"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:skills-update-available-event)))
+  ("{\"type\":\"skills_update_available\"}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:shutdown-complete-event))
+  ("shutdown_complete"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:shutdown-complete-event)))
+  ("{\"type\":\"shutdown_complete\"}"))
