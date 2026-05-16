@@ -26,8 +26,86 @@
 ;   path strings wherever Rust would already have a validated path buffer.
 ; - Rust also exposes FromStr via serde_json for these types. That parse-side
 ;   bridge is deferred until the deeper JSON-to-atom coercion layer lands.
+; - Rust resolves relative paths against the process cwd through
+;   `AbsolutePathBuf` helpers. This restart slice preserves the same visible
+;   absolute-path behavior with lexical `path-*` reducers plus narrow runtime
+;   reads of `$PWD` and `$TMPDIR`, because there is no fully equivalent
+;   in-language absolute-path runtime yet.
 
+!(import! &self fs)
 !(import! &self list)
+!(import! &self path)
+!(import! &self process)
+!(import! &self str)
+
+(= (codex:permissions-helper-cwd)
+   "/")
+
+(= (codex:permissions-helper-timeout-ms)
+   1000)
+
+(= (codex:permissions-helper-max-bytes)
+   1048576)
+
+(= (codex:permissions-current-dir)
+   (let $result
+     (process-run-shell-cwd-timeout-cap-bytes
+       "printf %s \"$PWD\""
+       (codex:permissions-helper-cwd)
+       (codex:permissions-helper-timeout-ms)
+       (codex:permissions-helper-max-bytes))
+     (if (== (process-result-exit-code $result) 0)
+         (path-normalize (process-result-stdout $result))
+         (codex:permissions-helper-cwd))))
+
+(= (codex:permissions-tmpdir-from-env)
+   (let $result
+     (process-run-shell-cwd-timeout-cap-bytes
+       "printf %s \"$TMPDIR\""
+       (codex:permissions-helper-cwd)
+       (codex:permissions-helper-timeout-ms)
+       (codex:permissions-helper-max-bytes))
+     (if (== (process-result-exit-code $result) 0)
+         (process-result-stdout $result)
+         "")))
+
+(= (codex:permissions-resolve-base-cwd $cwd)
+   (if (path-is-absolute? $cwd)
+       (path-normalize $cwd)
+       (path-normalize
+         (path-join
+           (codex:permissions-current-dir)
+           $cwd))))
+
+(= (codex:permissions-absolute-root-path-for-cwd $cwd)
+   "/")
+
+(= (codex:permissions-trim-trailing-slash-unless-root "/")
+   "/")
+
+(= (codex:permissions-trim-trailing-slash-unless-root $text)
+   (if (str-ends-with? $text "/")
+       (codex:permissions-trim-trailing-slash-unless-root
+         (str-slice $text 0 (- (str-length $text) 1)))
+       $text))
+
+(= (codex:permissions-path-starts-with-path $path $prefix)
+   (let $normalized-path
+     (codex:permissions-trim-trailing-slash-unless-root
+       (path-normalize $path))
+     (let $normalized-prefix
+       (codex:permissions-trim-trailing-slash-unless-root
+         (path-normalize $prefix))
+       (if (== (path-is-absolute? $normalized-path)
+               (path-is-absolute? $normalized-prefix))
+           (if (== $normalized-prefix "/")
+               True
+               (if (== $normalized-path $normalized-prefix)
+                   True
+                   (str-starts-with?
+                     $normalized-path
+                     (str-concat $normalized-prefix "/"))))
+           False))))
 
 (= (codex:network-sandbox-policy-restricted)
    (CodexNetworkSandboxPolicyRestricted))
@@ -645,3 +723,284 @@
                        (CodexFileSystemSandboxEntry
                          (CodexFileSystemPathSpecial $value)
                          $access))))))))
+
+(= (codex:resolved-file-system-entry $path $access)
+   (CodexResolvedFileSystemEntry $path $access))
+
+(= (codex:resolved-file-system-entry-path
+      (CodexResolvedFileSystemEntry $path $access))
+   $path)
+
+(= (codex:resolved-file-system-entry-access
+      (CodexResolvedFileSystemEntry $path $access))
+   $access)
+
+(= (codex:resolved-file-system-entry-specificity
+      (CodexResolvedFileSystemEntry $path $access))
+   (+ (list:len (path-parts $path))
+      (if (path-is-absolute? $path) 1 0)))
+
+(= (codex:file-system-resolve-special-path
+      (CodexFileSystemSpecialPathRoot)
+      $cwd)
+   CodexAbsent)
+
+(= (codex:file-system-resolve-special-path
+      (CodexFileSystemSpecialPathMinimal)
+      $cwd)
+   CodexAbsent)
+
+(= (codex:file-system-resolve-special-path
+      (CodexFileSystemSpecialPathCurrentWorkingDirectory)
+      $cwd)
+   (codex:permissions-resolve-base-cwd $cwd))
+
+(= (codex:file-system-resolve-special-path
+      (CodexFileSystemSpecialPathProjectRoots $subpath)
+      $cwd)
+   (if (== $subpath CodexAbsent)
+       (codex:permissions-resolve-base-cwd $cwd)
+       (path-normalize
+         (path-join
+           (codex:permissions-resolve-base-cwd $cwd)
+           $subpath))))
+
+(= (codex:file-system-resolve-special-path
+      (CodexFileSystemSpecialPathTmpdir)
+      $cwd)
+   (let $tmpdir (codex:permissions-tmpdir-from-env)
+     (if (or
+           (== $tmpdir "")
+           (not (path-is-absolute? $tmpdir)))
+         CodexAbsent
+         (path-normalize $tmpdir))))
+
+(= (codex:file-system-resolve-special-path
+      (CodexFileSystemSpecialPathSlashTmp)
+      $cwd)
+   (if (== (fs-path-kind "/tmp") "directory")
+       "/tmp"
+       CodexAbsent))
+
+(= (codex:file-system-resolve-special-path
+      (CodexFileSystemSpecialPathUnknown $path $subpath)
+      $cwd)
+   CodexAbsent)
+
+(= (codex:file-system-resolve-path
+      (CodexFileSystemPathPath $path)
+      $cwd)
+   (path-normalize $path))
+
+(= (codex:file-system-resolve-path
+      (CodexFileSystemPathGlobPattern $pattern)
+      $cwd)
+   CodexAbsent)
+
+(= (codex:file-system-resolve-path
+      (CodexFileSystemPathSpecial $value)
+      $cwd)
+   (codex:file-system-resolve-special-path $value $cwd))
+
+(= (codex:file-system-resolve-entry-path
+      (CodexFileSystemPathSpecial
+        (CodexFileSystemSpecialPathRoot))
+      $cwd)
+   (codex:permissions-absolute-root-path-for-cwd
+     (codex:permissions-resolve-base-cwd $cwd)))
+
+(= (codex:file-system-resolve-entry-path $path $cwd)
+   (codex:file-system-resolve-path $path $cwd))
+
+(= (codex:file-system-resolve-candidate-path $path $cwd)
+   (if (path-is-absolute? $path)
+       (path-normalize $path)
+       (path-normalize
+         (path-join
+           (codex:permissions-resolve-base-cwd $cwd)
+           $path))))
+
+(= (codex:file-system-resolved-entry-precedes? $candidate $best)
+   (let $candidate-specificity
+     (codex:resolved-file-system-entry-specificity $candidate)
+     (let $best-specificity
+       (codex:resolved-file-system-entry-specificity $best)
+       (if (> $candidate-specificity $best-specificity)
+           True
+           (if (< $candidate-specificity $best-specificity)
+               False
+               (> (codex:file-system-access-mode-ordinal
+                    (codex:resolved-file-system-entry-access $candidate))
+                  (codex:file-system-access-mode-ordinal
+                    (codex:resolved-file-system-entry-access $best))))))))
+
+(= (codex:file-system-resolved-entries-with-cwd
+      (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth ())
+      $cwd)
+   ())
+
+(= (codex:file-system-resolved-entries-with-cwd
+      (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+      $cwd)
+   (let ($head $tail) (decons-atom $entries)
+     (let $tail-resolved
+       (codex:file-system-resolved-entries-with-cwd
+         (CodexFileSystemSandboxPolicy
+           $kind
+           $glob-scan-max-depth
+           $tail)
+         $cwd)
+       (let $resolved-path
+         (codex:file-system-resolve-entry-path
+           (codex:file-system-sandbox-entry-path $head)
+           $cwd)
+         (if (== $resolved-path CodexAbsent)
+             $tail-resolved
+             (list:append
+               ((codex:resolved-file-system-entry
+                  $resolved-path
+                  (codex:file-system-sandbox-entry-access $head)))
+               $tail-resolved))))))
+
+(= (codex:file-system-best-resolved-entry-for-path () $candidate-path)
+   CodexAbsent)
+
+(= (codex:file-system-best-resolved-entry-for-path $entries $candidate-path)
+   (let ($head $tail) (decons-atom $entries)
+     (let $head-path
+       (codex:resolved-file-system-entry-path $head)
+       (let $best-tail
+         (codex:file-system-best-resolved-entry-for-path $tail $candidate-path)
+         (if (codex:permissions-path-starts-with-path $candidate-path $head-path)
+             (if (== $best-tail CodexAbsent)
+                 $head
+                 (if (codex:file-system-resolved-entry-precedes? $head $best-tail)
+                     $head
+                     $best-tail))
+             $best-tail)))))
+
+(= (codex:file-system-sandbox-policy-resolve-access-with-cwd
+      (CodexFileSystemSandboxPolicy
+        (CodexFileSystemSandboxKindUnrestricted)
+        $glob-scan-max-depth
+        $entries)
+      $path
+      $cwd)
+   (CodexFileSystemAccessModeWrite))
+
+(= (codex:file-system-sandbox-policy-resolve-access-with-cwd
+      (CodexFileSystemSandboxPolicy
+        (CodexFileSystemSandboxKindExternalSandbox)
+        $glob-scan-max-depth
+        $entries)
+      $path
+      $cwd)
+   (CodexFileSystemAccessModeWrite))
+
+(= (codex:file-system-sandbox-policy-resolve-access-with-cwd
+      (CodexFileSystemSandboxPolicy
+        (CodexFileSystemSandboxKindRestricted)
+        $glob-scan-max-depth
+        $entries)
+      $path
+      $cwd)
+   (let $candidate-path
+     (codex:file-system-resolve-candidate-path $path $cwd)
+     (let $best-entry
+       (codex:file-system-best-resolved-entry-for-path
+         (codex:file-system-resolved-entries-with-cwd
+           (CodexFileSystemSandboxPolicy
+             (CodexFileSystemSandboxKindRestricted)
+             $glob-scan-max-depth
+             $entries)
+           $cwd)
+         $candidate-path)
+       (if (== $best-entry CodexAbsent)
+           (CodexFileSystemAccessModeNone)
+           (codex:resolved-file-system-entry-access $best-entry)))))
+
+(= (codex:file-system-sandbox-policy-can-read-path-with-cwd
+      $policy
+      $path
+      $cwd)
+   (codex:file-system-access-mode-can-read
+     (codex:file-system-sandbox-policy-resolve-access-with-cwd
+       $policy
+       $path
+       $cwd)))
+
+(= (codex:file-system-sandbox-policy-can-write-path-with-cwd
+      $policy
+      $path
+      $cwd)
+   (codex:file-system-access-mode-can-write
+     (codex:file-system-sandbox-policy-resolve-access-with-cwd
+       $policy
+       $path
+       $cwd)))
+
+(= (codex:file-system-sandbox-policy-with-additional-readable-roots
+      (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+      $cwd
+      ()
+      )
+   (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries))
+
+(= (codex:file-system-sandbox-policy-with-additional-readable-roots
+      (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+      $cwd
+      $additional-readable-roots)
+   (if (codex:file-system-sandbox-policy-has-full-disk-read-access
+         (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries))
+       (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+       (let ($head $tail) (decons-atom $additional-readable-roots)
+         (if (codex:file-system-sandbox-policy-can-read-path-with-cwd
+               (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+               $head
+               $cwd)
+             (codex:file-system-sandbox-policy-with-additional-readable-roots
+               (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+               $cwd
+               $tail)
+             (codex:file-system-sandbox-policy-with-additional-readable-roots
+               (CodexFileSystemSandboxPolicy
+                 $kind
+                 $glob-scan-max-depth
+                 (list:append
+                   $entries
+                   ((CodexFileSystemSandboxEntry
+                      (CodexFileSystemPathPath (path-normalize $head))
+                      (CodexFileSystemAccessModeRead)))))
+               $cwd
+               $tail)))))
+
+(= (codex:file-system-sandbox-policy-with-additional-writable-roots
+      (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+      $cwd
+      ())
+   (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries))
+
+(= (codex:file-system-sandbox-policy-with-additional-writable-roots
+      (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+      $cwd
+      $additional-writable-roots)
+   (let ($head $tail) (decons-atom $additional-writable-roots)
+     (if (codex:file-system-sandbox-policy-can-write-path-with-cwd
+           (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+           $head
+           $cwd)
+         (codex:file-system-sandbox-policy-with-additional-writable-roots
+           (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+           $cwd
+           $tail)
+         (codex:file-system-sandbox-policy-with-additional-writable-roots
+           (CodexFileSystemSandboxPolicy
+             $kind
+             $glob-scan-max-depth
+             (list:append
+               $entries
+               ((CodexFileSystemSandboxEntry
+                  (CodexFileSystemPathPath (path-normalize $head))
+                  (CodexFileSystemAccessModeWrite)))))
+           $cwd
+           $tail))))
