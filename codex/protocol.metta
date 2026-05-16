@@ -42,6 +42,7 @@
 ; - GetHistoryEntryResponseEvent / HistoryEntry
 ; - ListSkillsResponseEvent / SkillsListEntry / SkillMetadata
 ; - RealtimeConversationListVoicesResponseEvent / RealtimeVoice
+; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
 ; - SessionSource / SubAgentSource
 ; - SessionConfiguredEvent / SessionNetworkProxyRuntime
@@ -949,6 +950,56 @@
 
 (= (codex:subagent-source-other $other)
    (CodexSubAgentSourceOther $other))
+
+(= (codex:compacted-item $message $replacement-history)
+   (CodexCompactedItem $message $replacement-history))
+
+(= (codex:compacted-item-to-response-item
+      (CodexCompactedItem $message $replacement-history))
+   ; Rust `From<CompactedItem> for ResponseItem` ignores
+   ; `replacement_history` and always returns an assistant `message` with a
+   ; single `output_text`.
+   (CodexResponseItemMessage
+     "assistant"
+     ((CodexOutputText $message))
+     CodexAbsent))
+
+(= (codex:turn-context-network-item $allowed-domains $denied-domains)
+   (CodexTurnContextNetworkItem $allowed-domains $denied-domains))
+
+(= (codex:truncation-policy-bytes $bytes)
+   (CodexTruncationPolicyBytes $bytes))
+
+(= (codex:truncation-policy-tokens $tokens)
+   (CodexTruncationPolicyTokens $tokens))
+
+(= (codex:truncation-policy-token-budget
+      (CodexTruncationPolicyBytes $bytes))
+   (trunc-math (ceil-math (/ $bytes 4))))
+
+(= (codex:truncation-policy-token-budget
+      (CodexTruncationPolicyTokens $tokens))
+   $tokens)
+
+(= (codex:truncation-policy-byte-budget
+      (CodexTruncationPolicyBytes $bytes))
+   $bytes)
+
+(= (codex:truncation-policy-byte-budget
+      (CodexTruncationPolicyTokens $tokens))
+   (* $tokens 4))
+
+(= (codex:truncation-policy-mul
+      (CodexTruncationPolicyBytes $bytes)
+      $multiplier)
+   (CodexTruncationPolicyBytes
+     (trunc-math (ceil-math (* $bytes $multiplier)))))
+
+(= (codex:truncation-policy-mul
+      (CodexTruncationPolicyTokens $tokens)
+      $multiplier)
+   (CodexTruncationPolicyTokens
+     (trunc-math (ceil-math (* $tokens $multiplier)))))
 
 (= (codex:session-approvals-reviewer-user)
    (CodexSessionApprovalsReviewerUser))
@@ -3609,6 +3660,42 @@
       (JsonPair "defaultV1" (codex:realtime-voice-json $default-v1))
       (JsonPair "defaultV2" (codex:realtime-voice-json $default-v2)))))
 
+(= (codex:compacted-item-json
+      (CodexCompactedItem $message $replacement-history))
+   (let $pairs
+     ((JsonPair "message" (JsonString $message)))
+     (JsonObject
+       (if (== $replacement-history CodexAbsent)
+           $pairs
+           (codex:protocol-append-json-pair
+             $pairs
+             "replacement_history"
+             (codex:items-json $replacement-history))))))
+
+(= (codex:turn-context-network-item-json
+      (CodexTurnContextNetworkItem $allowed-domains $denied-domains))
+   (JsonObject
+     ((JsonPair
+        "allowed_domains"
+        (JsonArray
+          (eval (map-atom $allowed-domains $domain (JsonString $domain)))))
+      (JsonPair
+        "denied_domains"
+        (JsonArray
+          (eval (map-atom $denied-domains $domain (JsonString $domain))))))))
+
+(= (codex:truncation-policy-json
+      (CodexTruncationPolicyBytes $bytes))
+   (JsonObject
+     ((JsonPair "mode" (JsonString "bytes"))
+      (JsonPair "limit" (JsonNumber $bytes)))))
+
+(= (codex:truncation-policy-json
+      (CodexTruncationPolicyTokens $tokens))
+   (JsonObject
+     ((JsonPair "mode" (JsonString "tokens"))
+      (JsonPair "limit" (JsonNumber $tokens)))))
+
 (= (codex:product-json
       (CodexProductChatgpt))
    (JsonString "chatgpt"))
@@ -5305,7 +5392,7 @@
              $pairs-3
              "prompt"
              (JsonString $prompt))
-           (let $pairs-5
+         (let $pairs-5
              (codex:protocol-append-json-pair
                $pairs-4
                "model"
