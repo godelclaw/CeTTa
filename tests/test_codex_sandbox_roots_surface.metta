@@ -71,3 +71,48 @@
         "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace")
       ())
   (True))
+
+!(assertEqualToResult
+  (== (codex:session-sandbox-policy-get-writable-roots-with-cwd
+        (codex:session-sandbox-policy-workspace-write
+          ("/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/outside"
+           "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace")
+          (codex:session-read-only-access-restricted
+            False
+            ("/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/docs"))
+          False
+          True
+          True)
+        "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace")
+      ((codex:writable-root
+         "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/outside"
+         ())
+       (codex:writable-root
+         "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace"
+         ("/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace/.git"
+          "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace/.agents"
+          "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace/.codex"))
+       (codex:writable-root
+         "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace"
+         ("/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace/.git"
+          "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace/.agents"
+          "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace/.codex"))))
+  (True))
+
+!(assertEqualToResult
+  (== (codex:session-sandbox-policy-get-readable-roots-with-cwd
+        (codex:session-sandbox-policy-workspace-write
+          ("/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/outside"
+           "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace")
+          (codex:session-read-only-access-restricted
+            False
+            ("/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/docs"
+             "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/outside"))
+          False
+          True
+          True)
+        "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace")
+      ("/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/docs"
+       "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/outside"
+       "/home/zarclaw/repos/CeTTa/runtime/codex-sandbox-roots/workspace"))
+  (True))

@@ -153,3 +153,135 @@
    (codex:session-read-only-access-get-readable-roots-with-cwd
      $access
      $cwd))
+
+(= (codex:sandbox-roots-workspace-write-root-paths-joined
+      $writable-roots
+      $exclude-tmpdir-env-var
+      $exclude-slash-tmp
+      $cwd)
+   (let $joined-0
+     (str-join "\n" $writable-roots)
+     (let $joined-1
+       (if (path-is-absolute? $cwd)
+           (codex:sandbox-roots-append-joined-line $joined-0 $cwd)
+           $joined-0)
+       (let $joined-2
+         (if $exclude-slash-tmp
+             $joined-1
+             (if (== (fs-path-kind "/tmp") "directory")
+                 (codex:sandbox-roots-append-joined-line $joined-1 "/tmp")
+                 $joined-1))
+         (let $tmpdir (codex:sandbox-roots-tmpdir-from-env)
+           (if (or
+                 $exclude-tmpdir-env-var
+                 (or
+                   (== $tmpdir "")
+                   (not (path-is-absolute? $tmpdir))))
+               $joined-2
+               (codex:sandbox-roots-append-joined-line
+                 $joined-2
+                 $tmpdir)))))))
+
+(= (codex:sandbox-roots-split-joined-lines "")
+   ())
+
+(= (codex:sandbox-roots-split-joined-lines $joined-items)
+   (str-split "\n" $joined-items))
+
+(= (codex:sandbox-roots-materialize-writable-root $root $cwd-root)
+   (let $protect-missing-dot-codex
+     (if (== $cwd-root CodexAbsent)
+         False
+         (== $cwd-root $root))
+     (let $read-only-subpaths
+       (eval
+         (codex:default-read-only-subpaths-for-writable-root
+           $root
+           $protect-missing-dot-codex))
+       (CodexWritableRoot $root $read-only-subpaths))))
+
+(= (codex:sandbox-roots-materialize-writable-roots $roots $cwd-root)
+   (function
+     (let $materialized
+       (eval
+         (map-atom
+           $roots
+           $root
+           (codex:sandbox-roots-materialize-writable-root
+             $root
+             $cwd-root)))
+       (return $materialized))))
+
+(= (codex:session-sandbox-policy-get-writable-roots-with-cwd
+      (CodexSessionSandboxPolicyDangerFullAccess)
+      $cwd)
+   ())
+
+(= (codex:session-sandbox-policy-get-writable-roots-with-cwd
+      (CodexSessionSandboxPolicyExternalSandbox $network-access)
+      $cwd)
+   ())
+
+(= (codex:session-sandbox-policy-get-writable-roots-with-cwd
+      (CodexSessionSandboxPolicyReadOnly $access $network-access)
+      $cwd)
+   ())
+
+(= (codex:session-sandbox-policy-get-writable-roots-with-cwd
+      (CodexSessionSandboxPolicyWorkspaceWrite
+        $writable-roots
+        $read-only-access
+        $network-access
+        $exclude-tmpdir-env-var
+        $exclude-slash-tmp)
+      $cwd)
+   (function
+     (let $joined-roots
+       (eval
+         (codex:sandbox-roots-workspace-write-root-paths-joined
+           $writable-roots
+           $exclude-tmpdir-env-var
+           $exclude-slash-tmp
+           $cwd))
+       (let $roots
+         (eval
+           (codex:sandbox-roots-split-joined-lines $joined-roots))
+         (let $materialized
+           (eval
+             (codex:sandbox-roots-materialize-writable-roots
+               $roots
+               (if (path-is-absolute? $cwd)
+                   $cwd
+                   CodexAbsent)))
+           (return $materialized))))))
+
+(= (codex:session-sandbox-policy-get-readable-roots-with-cwd
+      (CodexSessionSandboxPolicyWorkspaceWrite
+        $writable-roots
+        $read-only-access
+        $network-access
+        $exclude-tmpdir-env-var
+        $exclude-slash-tmp)
+      $cwd)
+   (function
+     (let $readable-roots
+       (eval
+         (codex:session-read-only-access-get-readable-roots-with-cwd
+           $read-only-access
+           $cwd))
+       (let $writable-joined
+         (eval
+           (codex:sandbox-roots-workspace-write-root-paths-joined
+             $writable-roots
+             $exclude-tmpdir-env-var
+             $exclude-slash-tmp
+             $cwd))
+         (let $joined-roots
+           (eval
+             (codex:sandbox-roots-merge-joined-lines
+               (str-join "\n" $readable-roots)
+               $writable-joined))
+           (let $deduped
+             (eval
+               (codex:sandbox-roots-dedup-joined $joined-roots))
+             (return $deduped)))))))
