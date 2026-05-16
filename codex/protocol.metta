@@ -40,6 +40,7 @@
 ; - ExitedReviewModeEvent / ReviewOutputEvent JSON projection
 ; - TurnDiffEvent
 ; - GetHistoryEntryResponseEvent / HistoryEntry
+; - ListSkillsResponseEvent / SkillsListEntry / SkillMetadata
 ; - PatchApplyBeginEvent / PatchApplyUpdatedEvent / PatchApplyEndEvent
 ; - HookStartedEvent / HookCompletedEvent / HookRunSummary
 ; - UndoStartedEvent / UndoCompletedEvent
@@ -491,6 +492,81 @@
 
 (= (codex:get-history-entry-response-event $offset $log-id $entry)
    (CodexEventGetHistoryEntryResponse $offset $log-id $entry))
+
+; CeTTa deviation: Rust uses `PathBuf`/`AbsolutePathBuf` for skill paths and
+; cwd. This protocol layer carries the same visible wire values as strings.
+(= (codex:skill-scope-user)
+   (CodexSkillScopeUser))
+
+(= (codex:skill-scope-repo)
+   (CodexSkillScopeRepo))
+
+(= (codex:skill-scope-system)
+   (CodexSkillScopeSystem))
+
+(= (codex:skill-scope-admin)
+   (CodexSkillScopeAdmin))
+
+(= (codex:skill-interface
+      $display-name
+      $short-description
+      $icon-small
+      $icon-large
+      $brand-color
+      $default-prompt)
+   (CodexSkillInterface
+     $display-name
+     $short-description
+     $icon-small
+     $icon-large
+     $brand-color
+     $default-prompt))
+
+(= (codex:skill-tool-dependency
+      $type
+      $value
+      $description
+      $transport
+      $command
+      $url)
+   (CodexSkillToolDependency
+     $type
+     $value
+     $description
+     $transport
+     $command
+     $url))
+
+(= (codex:skill-dependencies $tools)
+   (CodexSkillDependencies $tools))
+
+(= (codex:skill-metadata
+      $name
+      $description
+      $short-description
+      $interface
+      $dependencies
+      $path
+      $scope
+      $enabled)
+   (CodexSkillMetadata
+     $name
+     $description
+     $short-description
+     $interface
+     $dependencies
+     $path
+     $scope
+     $enabled))
+
+(= (codex:skill-error-info $path $message)
+   (CodexSkillErrorInfo $path $message))
+
+(= (codex:skills-list-entry $cwd $skills $errors)
+   (CodexSkillsListEntry $cwd $skills $errors))
+
+(= (codex:list-skills-response-event $skills)
+   (CodexEventListSkillsResponse $skills))
 
 (= (codex:patch-apply-file-change-add $path $content)
    (CodexProtocolPatchApplyFileChangeAdd $path $content))
@@ -1386,6 +1462,10 @@
 (= (codex:item-type
       (CodexEventGetHistoryEntryResponse $offset $log-id $entry))
    "get_history_entry_response")
+
+(= (codex:item-type
+      (CodexEventListSkillsResponse $skills))
+   "list_skills_response")
 
 (= (codex:item-type
       (CodexEventPatchApplyBegin
@@ -2339,6 +2419,180 @@
      ((JsonPair "conversation_id" (JsonString $conversation-id))
       (JsonPair "ts" (JsonNumber $ts))
       (JsonPair "text" (JsonString $text)))))
+
+(= (codex:append-item $items $item)
+   (list:append $items ($item)))
+
+(= (codex:append-json-pair $pairs $key $value)
+   (codex:append-item $pairs (JsonPair $key $value)))
+
+(= (codex:optional-string-json $value)
+   (if (== $value CodexAbsent)
+       JsonNull
+       (JsonString $value)))
+
+(= (codex:skill-scope-json
+      (CodexSkillScopeUser))
+   (JsonString "user"))
+
+(= (codex:skill-scope-json
+      (CodexSkillScopeRepo))
+   (JsonString "repo"))
+
+(= (codex:skill-scope-json
+      (CodexSkillScopeSystem))
+   (JsonString "system"))
+
+(= (codex:skill-scope-json
+      (CodexSkillScopeAdmin))
+   (JsonString "admin"))
+
+(= (codex:skill-interface-json
+      (CodexSkillInterface
+        $display-name
+        $short-description
+        $icon-small
+        $icon-large
+        $brand-color
+        $default-prompt))
+   (JsonObject
+     ((JsonPair "display_name" (codex:optional-string-json $display-name))
+      (JsonPair "short_description" (codex:optional-string-json $short-description))
+      (JsonPair "icon_small" (codex:optional-string-json $icon-small))
+      (JsonPair "icon_large" (codex:optional-string-json $icon-large))
+      (JsonPair "brand_color" (codex:optional-string-json $brand-color))
+      (JsonPair "default_prompt" (codex:optional-string-json $default-prompt)))))
+
+(= (codex:skill-tool-dependency-json-pairs
+      (CodexSkillToolDependency
+        $type
+        $value
+        $description
+        $transport
+        $command
+        $url))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString $type))
+      (JsonPair "value" (JsonString $value)))
+     (let $pairs-2
+       (if (== $description CodexAbsent)
+           $pairs-1
+           (codex:append-json-pair
+             $pairs-1
+             "description"
+             (JsonString $description)))
+       (let $pairs-3
+         (if (== $transport CodexAbsent)
+             $pairs-2
+             (codex:append-json-pair
+               $pairs-2
+               "transport"
+               (JsonString $transport)))
+         (let $pairs-4
+           (if (== $command CodexAbsent)
+               $pairs-3
+               (codex:append-json-pair
+                 $pairs-3
+                 "command"
+                 (JsonString $command)))
+           (if (== $url CodexAbsent)
+               $pairs-4
+               (codex:append-json-pair
+                 $pairs-4
+                 "url"
+                 (JsonString $url))))))))
+
+(= (codex:skill-tool-dependency-json $dependency)
+   (JsonObject (codex:skill-tool-dependency-json-pairs $dependency)))
+
+(= (codex:skill-tool-dependencies-json $dependencies)
+   (JsonArray
+     (map-atom
+       $dependencies
+       $item
+       (codex:skill-tool-dependency-json $item))))
+
+(= (codex:skill-dependencies-json
+      (CodexSkillDependencies $tools))
+   (JsonObject
+     ((JsonPair "tools" (codex:skill-tool-dependencies-json $tools)))))
+
+(= (codex:skill-metadata-json-pairs
+      (CodexSkillMetadata
+        $name
+        $description
+        $short-description
+        $interface
+        $dependencies
+        $path
+        $scope
+        $enabled))
+   (let $pairs-1
+     ((JsonPair "name" (JsonString $name))
+      (JsonPair "description" (JsonString $description)))
+     (let $pairs-2
+       (if (== $short-description CodexAbsent)
+           $pairs-1
+           (codex:append-json-pair
+             $pairs-1
+             "short_description"
+             (JsonString $short-description)))
+       (let $pairs-3
+         (if (== $interface CodexAbsent)
+             $pairs-2
+             (codex:append-json-pair
+               $pairs-2
+               "interface"
+               (codex:skill-interface-json $interface)))
+         (let $pairs-4
+           (if (== $dependencies CodexAbsent)
+               $pairs-3
+               (codex:append-json-pair
+                 $pairs-3
+                 "dependencies"
+                 (codex:skill-dependencies-json $dependencies)))
+           (let $pairs-5
+             (codex:append-json-pair
+               $pairs-4
+               "path"
+               (JsonString $path))
+             (let $pairs-6
+               (codex:append-json-pair
+                 $pairs-5
+                 "scope"
+                 (codex:skill-scope-json $scope))
+               (codex:append-json-pair
+                 $pairs-6
+                 "enabled"
+                 (JsonBool $enabled)))))))))
+
+(= (codex:skill-metadata-json $skill)
+   (JsonObject (codex:skill-metadata-json-pairs $skill)))
+
+(= (codex:skill-metadatas-json $skills)
+   (JsonArray
+     (map-atom $skills $item (codex:skill-metadata-json $item))))
+
+(= (codex:skill-error-info-json
+      (CodexSkillErrorInfo $path $message))
+   (JsonObject
+     ((JsonPair "path" (JsonString $path))
+      (JsonPair "message" (JsonString $message)))))
+
+(= (codex:skill-error-infos-json $errors)
+   (JsonArray
+     (map-atom $errors $item (codex:skill-error-info-json $item))))
+
+(= (codex:skills-list-entry-json
+      (CodexSkillsListEntry $cwd $skills $errors))
+   (JsonObject
+     ((JsonPair "cwd" (JsonString $cwd))
+      (JsonPair "skills" (codex:skill-metadatas-json $skills))
+      (JsonPair "errors" (codex:skill-error-infos-json $errors)))))
+
+(= (codex:skills-list-entries-json $entries)
+   (JsonArray
+     (map-atom $entries $item (codex:skills-list-entry-json $item))))
 
 (= (codex:patch-apply-file-change-json
       (CodexProtocolPatchApplyFileChangeAdd $path $content))
@@ -3510,6 +3764,12 @@
           (JsonPair "offset" (JsonNumber $offset))
           (JsonPair "log_id" (JsonNumber $log-id))
           (JsonPair "entry" (codex:history-entry-json $entry))))))
+
+(= (codex:item-json
+      (CodexEventListSkillsResponse $skills))
+   (JsonObject
+     ((JsonPair "type" (JsonString "list_skills_response"))
+      (JsonPair "skills" (codex:skills-list-entries-json $skills)))))
 
 (= (codex:item-json
       (CodexEventPatchApplyBegin
