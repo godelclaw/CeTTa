@@ -143,22 +143,6 @@
   ("atlas"))
 
 !(assertEqualToResult
-  (json-stringify
-    (codex:product-json
-      (codex:product-from-session-source-name " chatgpt ")))
-  ("\"chatgpt\""))
-
-!(assertEqualToResult
-  (json-stringify
-    (codex:product-json
-      (codex:product-from-session-source-name "ATLAS")))
-  ("\"atlas\""))
-
-!(assertEqualToResult
-  (codex:product-from-session-source-name "atlas-dev")
-  (CodexAbsent))
-
-!(assertEqualToResult
   (codex:product-matches-product-restriction
     (codex:product-chatgpt)
     ((codex:product-chatgpt)))

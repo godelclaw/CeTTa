@@ -48,6 +48,7 @@
 ; - Submission / W3cTraceContext / Event queue wrappers
 ; - Op::Interrupt / CleanBackgroundTerminals
 ; - Op::UserInput / UserInput / TurnEnvironmentSelection
+; - Op::UserInputWithTurnContext
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
 ; - Op::Compact / DropMemories / UpdateMemories
@@ -909,6 +910,108 @@
      $environments
      $final-output-json-schema
      $responsesapi-client-metadata))
+
+(= (codex:windows-sandbox-level-disabled)
+   (CodexWindowsSandboxLevelDisabled))
+
+(= (codex:windows-sandbox-level-restricted-token)
+   (CodexWindowsSandboxLevelRestrictedToken))
+
+(= (codex:windows-sandbox-level-elevated)
+   (CodexWindowsSandboxLevelElevated))
+
+(= (codex:reasoning-summary-auto)
+   (CodexReasoningSummaryAuto))
+
+(= (codex:reasoning-summary-concise)
+   (CodexReasoningSummaryConcise))
+
+(= (codex:reasoning-summary-detailed)
+   (CodexReasoningSummaryDetailed))
+
+(= (codex:reasoning-summary-none)
+   (CodexReasoningSummaryNone))
+
+(= (codex:personality-none)
+   (CodexPersonalityNone))
+
+(= (codex:personality-friendly)
+   (CodexPersonalityFriendly))
+
+(= (codex:personality-pragmatic)
+   (CodexPersonalityPragmatic))
+
+(= (codex:settings $model $reasoning-effort $developer-instructions)
+   (CodexSettings $model $reasoning-effort $developer-instructions))
+
+; Rust `ModeKind` also has hidden `PairProgramming` and `Execute` variants, but
+; they are skipped by serde in the protocol layer. This helper therefore keeps
+; only the visible wire surface used by `CollaborationMode`.
+(= (codex:collaboration-mode $mode $settings)
+   (CodexCollaborationMode $mode $settings))
+
+; CeTTa deviation: Rust stores `responsesapi_client_metadata` as
+; `HashMap<String, String>`. This slice uses ordered entry lists so the visible
+; JSON object shape remains deterministic under the evaluator.
+;
+; Rust also represents `effort` and `service_tier` here as nested `Option`s.
+; This slice preserves the same wire behavior using:
+; - `CodexAbsent` to omit the field
+; - `JsonNull` to serialize an explicit `null`
+; - a concrete enum value to serialize that value
+(= (codex:user-input-with-turn-context-op $items)
+   (CodexOpUserInputWithTurnContext
+     $items
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent))
+
+(= (codex:user-input-with-turn-context-op
+      $items
+      $environments
+      $final-output-json-schema
+      $responsesapi-client-metadata
+      $cwd
+      $approval-policy
+      $approvals-reviewer
+      $sandbox-policy
+      $permission-profile
+      $windows-sandbox-level
+      $model
+      $effort
+      $summary
+      $service-tier
+      $collaboration-mode
+      $personality)
+   (CodexOpUserInputWithTurnContext
+     $items
+     $environments
+     $final-output-json-schema
+     $responsesapi-client-metadata
+     $cwd
+     $approval-policy
+     $approvals-reviewer
+     $sandbox-policy
+     $permission-profile
+     $windows-sandbox-level
+     $model
+     $effort
+     $summary
+     $service-tier
+     $collaboration-mode
+     $personality))
 
 (= (codex:add-to-history-op $text)
    (CodexOpAddToHistory $text))
@@ -3375,6 +3478,81 @@
            (codex:responsesapi-client-metadata-entry-key $item)
            (JsonString
              (codex:responsesapi-client-metadata-entry-value $item)))))))
+
+(= (codex:windows-sandbox-level-json
+      (CodexWindowsSandboxLevelDisabled))
+   (JsonString "disabled"))
+
+(= (codex:windows-sandbox-level-json
+      (CodexWindowsSandboxLevelRestrictedToken))
+   (JsonString "restricted-token"))
+
+(= (codex:windows-sandbox-level-json
+      (CodexWindowsSandboxLevelElevated))
+   (JsonString "elevated"))
+
+(= (codex:reasoning-summary-json
+      (CodexReasoningSummaryAuto))
+   (JsonString "auto"))
+
+(= (codex:reasoning-summary-json
+      (CodexReasoningSummaryConcise))
+   (JsonString "concise"))
+
+(= (codex:reasoning-summary-json
+      (CodexReasoningSummaryDetailed))
+   (JsonString "detailed"))
+
+(= (codex:reasoning-summary-json
+      (CodexReasoningSummaryNone))
+   (JsonString "none"))
+
+(= (codex:personality-json
+      (CodexPersonalityNone))
+   (JsonString "none"))
+
+(= (codex:personality-json
+      (CodexPersonalityFriendly))
+   (JsonString "friendly"))
+
+(= (codex:personality-json
+      (CodexPersonalityPragmatic))
+   (JsonString "pragmatic"))
+
+(= (codex:settings-json
+      (CodexSettings $model $reasoning-effort $developer-instructions))
+   (JsonObject
+     ((JsonPair "model" (JsonString $model))
+      (JsonPair
+        "reasoning_effort"
+        (if (== $reasoning-effort CodexAbsent)
+            JsonNull
+            (codex:session-reasoning-effort-json $reasoning-effort)))
+      (JsonPair
+        "developer_instructions"
+        (if (== $developer-instructions CodexAbsent)
+            JsonNull
+            (JsonString $developer-instructions))))))
+
+(= (codex:collaboration-mode-json
+      (CodexCollaborationMode $mode $settings))
+   (JsonObject
+     ((JsonPair "mode" (codex:mode-kind-json $mode))
+      (JsonPair "settings" (codex:settings-json $settings)))))
+
+(= (codex:user-input-with-turn-context-effort-json $effort)
+   (if (== $effort CodexAbsent)
+       CodexAbsent
+       (if (== $effort JsonNull)
+           JsonNull
+           (codex:session-reasoning-effort-json $effort))))
+
+(= (codex:user-input-with-turn-context-service-tier-json $service-tier)
+   (if (== $service-tier CodexAbsent)
+       CodexAbsent
+       (if (== $service-tier JsonNull)
+           JsonNull
+           (codex:session-service-tier-json $service-tier))))
 
 (= (codex:turn-abort-reason-json
       (CodexTurnAbortReasonInterrupted))
@@ -6707,6 +6885,26 @@
    "user_input")
 
 (= (codex:op-type
+      (CodexOpUserInputWithTurnContext
+        $items
+        $environments
+        $final-output-json-schema
+        $responsesapi-client-metadata
+        $cwd
+        $approval-policy
+        $approvals-reviewer
+        $sandbox-policy
+        $permission-profile
+        $windows-sandbox-level
+        $model
+        $effort
+        $summary
+        $service-tier
+        $collaboration-mode
+        $personality))
+   "user_input_with_turn_context")
+
+(= (codex:op-type
       (CodexOpRefreshMcpServers $config))
    "refresh_mcp_servers")
 
@@ -7206,8 +7404,132 @@
                (codex:protocol-append-json-pair
                  $pairs-3
                  "responsesapi_client_metadata"
+               (codex:responsesapi-client-metadata-json
+                 $responsesapi-client-metadata))))))))
+
+(= (codex:op-json
+      (CodexOpUserInputWithTurnContext
+        $items
+        $environments
+        $final-output-json-schema
+        $responsesapi-client-metadata
+        $cwd
+        $approval-policy
+        $approvals-reviewer
+        $sandbox-policy
+        $permission-profile
+        $windows-sandbox-level
+        $model
+        $effort
+        $summary
+        $service-tier
+        $collaboration-mode
+        $personality))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "user_input_with_turn_context"))
+      (JsonPair "items" (codex:user-inputs-json $items)))
+     (let $pairs-2
+       (if (== $environments CodexAbsent)
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "environments"
+             (codex:turn-environment-selections-json $environments)))
+       (let $pairs-3
+         (if (== $final-output-json-schema CodexAbsent)
+             $pairs-2
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "final_output_json_schema"
+               $final-output-json-schema))
+         (let $pairs-4
+           (if (== $responsesapi-client-metadata CodexAbsent)
+               $pairs-3
+               (codex:protocol-append-json-pair
+                 $pairs-3
+                 "responsesapi_client_metadata"
                  (codex:responsesapi-client-metadata-json
-                   $responsesapi-client-metadata))))))))
+                   $responsesapi-client-metadata)))
+           (let $pairs-5
+             (codex:append-optional-json-string-pair
+               $pairs-4
+               "cwd"
+               $cwd)
+             (let $pairs-6
+               (codex:append-optional-json-value-pair
+                 $pairs-5
+                 "approval_policy"
+                 (if (== $approval-policy CodexAbsent)
+                     CodexAbsent
+                     (codex:session-approval-policy-json $approval-policy)))
+               (let $pairs-7
+                 (codex:append-optional-json-value-pair
+                   $pairs-6
+                   "approvals_reviewer"
+                   (if (== $approvals-reviewer CodexAbsent)
+                       CodexAbsent
+                       (codex:session-approvals-reviewer-json
+                         $approvals-reviewer)))
+                 (let $pairs-8
+                   (codex:append-optional-json-value-pair
+                     $pairs-7
+                     "sandbox_policy"
+                     (if (== $sandbox-policy CodexAbsent)
+                         CodexAbsent
+                         (codex:session-sandbox-policy-json $sandbox-policy)))
+                   (let $pairs-9
+                     (codex:append-optional-json-value-pair
+                       $pairs-8
+                       "permission_profile"
+                       $permission-profile)
+                     (let $pairs-10
+                       (codex:append-optional-json-value-pair
+                         $pairs-9
+                         "windows_sandbox_level"
+                         (if (== $windows-sandbox-level CodexAbsent)
+                             CodexAbsent
+                             (codex:windows-sandbox-level-json
+                               $windows-sandbox-level)))
+                       (let $pairs-11
+                         (codex:append-optional-json-string-pair
+                           $pairs-10
+                           "model"
+                           $model)
+                         (let $pairs-12
+                           (codex:append-optional-json-value-pair
+                             $pairs-11
+                             "effort"
+                             (codex:user-input-with-turn-context-effort-json
+                               $effort))
+                           (let $pairs-13
+                             (codex:append-optional-json-value-pair
+                               $pairs-12
+                               "summary"
+                               (if (== $summary CodexAbsent)
+                                   CodexAbsent
+                                   (codex:reasoning-summary-json $summary)))
+                             (let $pairs-14
+                               (codex:append-optional-json-value-pair
+                                 $pairs-13
+                                 "service_tier"
+                                 (codex:user-input-with-turn-context-service-tier-json
+                                   $service-tier))
+                               (let $pairs-15
+                                 (codex:append-optional-json-value-pair
+                                   $pairs-14
+                                   "collaboration_mode"
+                                   (if (== $collaboration-mode CodexAbsent)
+                                       CodexAbsent
+                                       (codex:collaboration-mode-json
+                                         $collaboration-mode)))
+                                 (JsonObject
+                                   (codex:append-optional-json-value-pair
+                                     $pairs-15
+                                     "personality"
+                                     (if (== $personality CodexAbsent)
+                                         CodexAbsent
+                                         (codex:personality-json
+                                           $personality))))))))))))))))))))
 
 (= (codex:op-json
       (CodexOpRefreshMcpServers $config))
