@@ -42,6 +42,7 @@
 ; - GetHistoryEntryResponseEvent / HistoryEntry
 ; - ListSkillsResponseEvent / SkillsListEntry / SkillMetadata
 ; - RealtimeConversationStarted/Realtime/Closed/Sdp / RealtimeVoice
+; - RealtimeAudioFrame / RealtimeEvent::AudioOut
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
 ; - SessionSource / SubAgentSource
@@ -816,6 +817,19 @@
 (= (codex:realtime-conversation-started-event $session-id $version)
    (CodexEventRealtimeConversationStarted $session-id $version))
 
+(= (codex:realtime-audio-frame
+      $data
+      $sample-rate
+      $num-channels
+      $samples-per-channel
+      $item-id)
+   (CodexRealtimeAudioFrame
+     $data
+     $sample-rate
+     $num-channels
+     $samples-per-channel
+     $item-id))
+
 (= (codex:realtime-transcript-delta $delta)
    (CodexRealtimeTranscriptDelta $delta))
 
@@ -868,6 +882,9 @@
 
 (= (codex:realtime-event-output-transcript-done $event)
    (CodexRealtimeEventOutputTranscriptDone $event))
+
+(= (codex:realtime-event-audio-out $event)
+   (CodexRealtimeEventAudioOut $event))
 
 (= (codex:realtime-event-response-created $event)
    (CodexRealtimeEventResponseCreated $event))
@@ -3775,6 +3792,33 @@
       (CodexRealtimeConversationVersionV2))
    (JsonString "v2"))
 
+(= (codex:realtime-audio-frame-json
+      (CodexRealtimeAudioFrame
+        $data
+        $sample-rate
+        $num-channels
+        $samples-per-channel
+        $item-id))
+   (let $pairs-1
+     ((JsonPair "data" (JsonString $data))
+      (JsonPair "sample_rate" (JsonNumber $sample-rate))
+      (JsonPair "num_channels" (JsonNumber $num-channels)))
+     (let $pairs-2
+       (if (== $samples-per-channel CodexAbsent)
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "samples_per_channel"
+             (JsonNumber $samples-per-channel)))
+       (let $pairs-3
+         (if (== $item-id CodexAbsent)
+             $pairs-2
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "item_id"
+               (JsonString $item-id)))
+         (JsonObject $pairs-3)))))
+
 (= (codex:realtime-transcript-delta-json
       (CodexRealtimeTranscriptDelta $delta))
    (JsonObject
@@ -3900,6 +3944,13 @@
         (codex:realtime-transcript-done-json $event)))))
 
 (= (codex:realtime-event-json
+      (CodexRealtimeEventAudioOut $event))
+   (JsonObject
+     ((JsonPair
+        "AudioOut"
+        (codex:realtime-audio-frame-json $event)))))
+
+(= (codex:realtime-event-json
       (CodexRealtimeEventResponseCreated $event))
    (JsonObject
      ((JsonPair
@@ -3999,7 +4050,7 @@
 ; CeTTa evaluator detail: normalize the incoming product first so nested callers
 ; like `product-json (product-from-session-source-name ...)` reduce to the same
 ; Rust-visible wire string as already-materialized constructors.
-(= (codex:product-json
+(= (codex:product-json-unresolved
       (codex:product-from-session-source-name $value))
    (let $normalized (codex:product-ascii-lower-text (str-trim $value))
      (if (== $normalized "chatgpt")
@@ -4015,7 +4066,8 @@
      (case $resolved
        (((CodexProductChatgpt) (JsonString "chatgpt"))
         ((CodexProductCodex) (JsonString "codex"))
-        ((CodexProductAtlas) (JsonString "atlas"))))))
+        ((CodexProductAtlas) (JsonString "atlas"))
+        ($other (codex:product-json-unresolved $product))))))
 
 (= (codex:product-to-app-platform
       (CodexProductChatgpt))
