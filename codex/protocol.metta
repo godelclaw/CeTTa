@@ -46,7 +46,8 @@
 ; - Op::RealtimeConversationStart/Audio/Text/Close/ListVoices
 ; - Submission / W3cTraceContext / Event queue wrappers
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
-; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills / McpServerRefreshConfig
+; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
+; - Op::Compact / DropMemories / UpdateMemories / McpServerRefreshConfig
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
 ; - SessionSource / SubAgentSource
@@ -857,6 +858,15 @@
 
 (= (codex:reload-user-config-op)
    (CodexOpReloadUserConfig))
+
+(= (codex:compact-op)
+   (CodexOpCompact))
+
+(= (codex:drop-memories-op)
+   (CodexOpDropMemories))
+
+(= (codex:update-memories-op)
+   (CodexOpUpdateMemories))
 
 (= (codex:realtime-conversation-version-v1)
    (CodexRealtimeConversationVersionV1))
@@ -3919,18 +3929,17 @@
         "output_modality"
         (codex:realtime-output-modality-json $output-modality)))
      (let $pairs-2
-       (case $prompt
-         ((CodexAbsent $pairs-1)
-          (JsonNull
-            (codex:protocol-append-json-pair
-              $pairs-1
-              "prompt"
-              JsonNull))
-          ($text
-            (codex:protocol-append-json-pair
-              $pairs-1
-              "prompt"
-              (JsonString $text)))))
+       (if (== $prompt CodexAbsent)
+           $pairs-1
+           (if (== $prompt JsonNull)
+               (codex:protocol-append-json-pair
+                 $pairs-1
+                 "prompt"
+                 JsonNull)
+               (codex:protocol-append-json-pair
+                 $pairs-1
+                 "prompt"
+                 (JsonString $prompt))))
        (let $pairs-3
          (if (== $session-id CodexAbsent)
              $pairs-2
@@ -6352,6 +6361,18 @@
       (CodexOpListSkills $cwds $force-reload))
    "list_skills")
 
+(= (codex:op-type
+      (CodexOpCompact))
+   "compact")
+
+(= (codex:op-type
+      (CodexOpDropMemories))
+   "drop_memories")
+
+(= (codex:op-type
+      (CodexOpUpdateMemories))
+   "update_memories")
+
 (= (codex:w3c-trace-context-json
       (CodexW3cTraceContext $traceparent $tracestate))
    (let $pairs-1 ()
@@ -6395,18 +6416,17 @@
         "output_modality"
         (codex:realtime-output-modality-json $output-modality)))
      (let $pairs-2
-       (case $prompt
-         ((CodexAbsent $pairs-1)
-          (JsonNull
-            (codex:protocol-append-json-pair
-              $pairs-1
-              "prompt"
-              JsonNull))
-          ($text
-            (codex:protocol-append-json-pair
-              $pairs-1
-              "prompt"
-              (JsonString $text)))))
+       (if (== $prompt CodexAbsent)
+           $pairs-1
+           (if (== $prompt JsonNull)
+               (codex:protocol-append-json-pair
+                 $pairs-1
+                 "prompt"
+                 JsonNull)
+               (codex:protocol-append-json-pair
+                 $pairs-1
+                 "prompt"
+                 (JsonString $prompt))))
        (let $pairs-3
          (if (== $session-id CodexAbsent)
              $pairs-2
@@ -6503,17 +6523,66 @@
                "force_reload"
                (JsonBool $force-reload)))))))
 
+(= (codex:op-json
+      (CodexOpCompact))
+   (JsonObject
+     ((JsonPair "type" (JsonString "compact")))))
+
+(= (codex:op-json
+      (CodexOpDropMemories))
+   (JsonObject
+     ((JsonPair "type" (JsonString "drop_memories")))))
+
+(= (codex:op-json
+      (CodexOpUpdateMemories))
+   (JsonObject
+     ((JsonPair "type" (JsonString "update_memories")))))
+
+; CeTTa evaluator detail: the generic `Submission` wrapper path below works
+; for the simple already-landed op subset, but the structured realtime-start
+; op currently reduces to `Empty` when routed through that generic boundary.
+; This direct branch covers the currently landed submission-wrapper surface for
+; `Op::RealtimeConversationStart` with string `prompt` / `session_id` and no
+; transport, voice, or trace, while leaving the generic wrapper untouched for
+; the remaining restart subset.
+(= (codex:submission-json
+      (CodexSubmission
+        $id
+        (CodexOpRealtimeConversationStart
+          (CodexConversationStartParams
+            $output-modality
+            $prompt
+            $session-id
+            CodexAbsent
+            CodexAbsent))
+        CodexAbsent))
+   (let $prompt-len (str-length $prompt)
+     (let $session-id-len (str-length $session-id)
+       (JsonObject
+         ((JsonPair "id" (JsonString $id))
+          (JsonPair
+            "op"
+            (JsonObject
+              ((JsonPair "type" (JsonString "realtime_conversation_start"))
+               (JsonPair
+                 "output_modality"
+                 (codex:realtime-output-modality-json $output-modality))
+               (JsonPair "prompt" (JsonString $prompt))
+               (JsonPair "session_id" (JsonString $session-id))))))))))
+
+; The remaining restart subset still projects correctly through the generic
+; wrapper: `Submission { id, op, trace }` with the currently landed simple op
+; family and unit requests.
 (= (codex:submission-json
       (CodexSubmission $id $op $trace))
-   (let $resolved-op (once $op)
-     (if (== $trace CodexAbsent)
-         (JsonObject
-           ((JsonPair "id" (JsonString $id))
-            (JsonPair "op" (codex:op-json $resolved-op))))
-         (JsonObject
-           ((JsonPair "id" (JsonString $id))
-            (JsonPair "op" (codex:op-json $resolved-op))
-            (JsonPair "trace" (codex:w3c-trace-context-json $trace)))))))
+   (if (== $trace CodexAbsent)
+       (JsonObject
+         ((JsonPair "id" (JsonString $id))
+          (JsonPair "op" (codex:op-json $op))))
+       (JsonObject
+         ((JsonPair "id" (JsonString $id))
+          (JsonPair "op" (codex:op-json $op))
+          (JsonPair "trace" (codex:w3c-trace-context-json $trace))))))
 
 (= (codex:event-envelope-json
       (CodexProtocolEvent $id $msg))
