@@ -68,6 +68,7 @@
 ; - SessionSource / SubAgentSource
 ; - GranularApprovalConfig / NetworkAccess / ReadOnlyAccess /
 ;   SandboxPolicy boolean helper methods
+; - WritableRoot / WritableRoot::is_path_writable
 ; - SessionConfiguredEvent / SessionNetworkProxyRuntime
 ; - ExecPolicyAmendment / ReviewDecision
 ; - FileChange / Chunk
@@ -132,6 +133,13 @@
 ; fully porting the nested `permissions.rs` filesystem-entry record tranche in
 ; the same increment. This preserves the exact wire shape for the restarted
 ; `session_configured` event while that lower slice is still pending.
+;
+; CeTTa deviation: Rust `WritableRoot` uses `AbsolutePathBuf` and
+; `Path::starts_with` component semantics. The restarted helper below carries
+; the same visible root/subpath strings and mirrors the visible prefix
+; behavior through the same exact-root or `root/child` string check already
+; used by the restarted sandbox helpers, because the current path builtins are
+; still reducer-fragile when given symbolic string values.
 
 !(import! &self json)
 !(import! &self list)
@@ -1864,6 +1872,75 @@
 
 (= (codex:session-network-proxy-runtime $http-addr $socks-addr)
    (CodexSessionNetworkProxyRuntime $http-addr $socks-addr))
+
+(= (codex:writable-root $root $read-only-subpaths)
+   (CodexWritableRoot $root $read-only-subpaths))
+
+(= (codex:writable-root-root
+      (CodexWritableRoot $root $read-only-subpaths))
+   $root)
+
+(= (codex:writable-root-read-only-subpaths
+      (CodexWritableRoot $root $read-only-subpaths))
+   $read-only-subpaths)
+
+(= (codex:protocol-trim-trailing-slash-unless-root $text)
+   (if (== $text "/")
+       "/"
+       (if (str-ends-with? $text "/")
+           (codex:protocol-trim-trailing-slash-unless-root
+             (str-slice $text 0 (- (str-length $text) 1)))
+           $text)))
+
+(= (codex:protocol-is-unix-absolute-path $path)
+   (str-starts-with? $path "/"))
+
+(= (codex:path-starts-with-path $path $prefix)
+   (let $normalized-path
+     (codex:protocol-trim-trailing-slash-unless-root $path)
+     (let $normalized-prefix
+       (codex:protocol-trim-trailing-slash-unless-root $prefix)
+       (if (== (codex:protocol-is-unix-absolute-path $normalized-path)
+               (codex:protocol-is-unix-absolute-path $normalized-prefix))
+           (if (== $normalized-prefix "/")
+               True
+               (if (== $normalized-path $normalized-prefix)
+                   True
+                   (str-starts-with?
+                     $normalized-path
+                     (str-concat $normalized-prefix "/"))))
+           False))))
+
+(= (codex:writable-root-blocks-path $path $read-only-subpaths)
+   (codex:writable-root-blocks-path-loop
+     $path
+     (eval $read-only-subpaths)
+     False))
+
+(= (codex:writable-root-blocks-path-loop $path $read-only-subpaths $blocked)
+   (let $resolved-blocked (eval $blocked)
+     (if $resolved-blocked
+         True
+         (if (== $read-only-subpaths ())
+             False
+             (let $head (list:first $read-only-subpaths)
+               (let $tail (list:rest $read-only-subpaths)
+                 (codex:writable-root-blocks-path-loop
+                   $path
+                   $tail
+                   (codex:path-starts-with-path $path $head))))))))
+
+(= (codex:writable-root-is-path-writable
+      (CodexWritableRoot $root $read-only-subpaths)
+      $path)
+   (let $within-root (eval (codex:path-starts-with-path $path $root))
+     (if $within-root
+         (let $blocked
+           (eval (codex:writable-root-blocks-path $path $read-only-subpaths))
+           (if $blocked
+               False
+               True))
+         False)))
 
 (= (codex:session-granular-approval-config-allows-sandbox-approval
       (CodexSessionGranularApprovalConfig
