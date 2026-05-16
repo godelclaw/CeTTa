@@ -44,6 +44,7 @@
 ; - RealtimeConversationStarted/Realtime/Closed/Sdp / RealtimeVoice
 ; - RealtimeAudioFrame / RealtimeEvent::AudioOut
 ; - Op::RealtimeConversationStart/Audio/Text/Close/ListVoices
+; - Submission / W3cTraceContext / Event queue wrappers
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
 ; - SessionSource / SubAgentSource
@@ -77,6 +78,11 @@
 ; This slice preserves the same visible wire behavior by using `CodexAbsent`
 ; for the outer `None` (omit the field) and `JsonNull` for the inner `None`
 ; (`"prompt": null`).
+;
+; `Submission.op` and `Event.msg` remain generic in Rust. This restart subset
+; projects those wrappers through the currently ported `op-json` and `item-json`
+; surfaces, preserving the same visible queue-envelope JSON for the supported
+; subset.
 ;
 ; Rust represents `PatchApply*Event.changes` as `HashMap<PathBuf, FileChange>`.
 ; This CeTTa slice models the same visible payload as an ordered list of keyed
@@ -813,6 +819,15 @@
 
 (= (codex:list-skills-response-event $skills)
    (CodexEventListSkillsResponse $skills))
+
+(= (codex:w3c-trace-context $traceparent $tracestate)
+   (CodexW3cTraceContext $traceparent $tracestate))
+
+(= (codex:submission $id $op $trace)
+   (CodexSubmission $id $op $trace))
+
+(= (codex:event-envelope $id $msg)
+   (CodexProtocolEvent $id $msg))
 
 (= (codex:realtime-conversation-version-v1)
    (CodexRealtimeConversationVersionV1))
@@ -6284,6 +6299,25 @@
       (CodexOpRealtimeConversationListVoices))
    "realtime_conversation_list_voices")
 
+(= (codex:w3c-trace-context-json
+      (CodexW3cTraceContext $traceparent $tracestate))
+   (let $pairs-1 ()
+     (let $pairs-2
+       (if (== $traceparent CodexAbsent)
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "traceparent"
+             (JsonString $traceparent)))
+       (let $pairs-3
+         (if (== $tracestate CodexAbsent)
+             $pairs-2
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "tracestate"
+               (JsonString $tracestate)))
+         (JsonObject $pairs-3)))))
+
 (= (codex:op-json
       (CodexOpRealtimeConversationStart
         (CodexConversationStartParams
@@ -6356,6 +6390,25 @@
       (CodexOpRealtimeConversationListVoices))
    (JsonObject
      ((JsonPair "type" (JsonString "realtime_conversation_list_voices")))))
+
+(= (codex:submission-json
+      (CodexSubmission $id $op $trace))
+   (let $pairs-1
+     ((JsonPair "id" (JsonString $id))
+      (JsonPair "op" (codex:op-json $op)))
+     (JsonObject
+       (if (== $trace CodexAbsent)
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "trace"
+             (codex:w3c-trace-context-json $trace))))))
+
+(= (codex:event-envelope-json
+      (CodexProtocolEvent $id $msg))
+   (JsonObject
+     ((JsonPair "id" (JsonString $id))
+      (JsonPair "msg" (codex:item-json $msg)))))
 
 (= (codex:item-json
       (CodexEventSessionConfigured
