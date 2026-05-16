@@ -1004,3 +1004,245 @@
                   (CodexFileSystemAccessModeWrite)))))
            $cwd
            $tail))))
+
+; Rust canonicalizes effective absolute paths before deduping readable and
+; unreadable root projections. The restart slice uses `realpath -m` to
+; preserve the same visible absolute-path behavior across existing ancestors
+; while still tolerating missing suffixes.
+(= (codex:permissions-normalize-effective-absolute-path $path)
+   (let $result
+     (process-run-cmd-cwd-env-timeout-cap-bytes
+       ("/usr/bin/realpath" "-m" "--" $path)
+       (codex:permissions-helper-cwd)
+       ()
+       (codex:permissions-helper-timeout-ms)
+       (codex:permissions-helper-max-bytes))
+     (if (== (process-result-exit-code $result) 0)
+         (str-trim (process-result-stdout $result))
+         (path-normalize $path))))
+
+(= (codex:permissions-string-list-contains $needle ())
+   False)
+
+(= (codex:permissions-string-list-contains $needle $items)
+   (let ($head $tail) (decons-atom $items)
+     (if (== $needle $head)
+         True
+         (codex:permissions-string-list-contains $needle $tail))))
+
+(= (codex:permissions-dedup-absolute-paths () $normalize-effective-paths)
+   ())
+
+(= (codex:permissions-dedup-absolute-paths $paths $normalize-effective-paths)
+   (codex:permissions-dedup-absolute-paths-acc
+     $paths
+     $normalize-effective-paths
+     ()))
+
+(= (codex:permissions-dedup-absolute-paths-acc
+      ()
+      $normalize-effective-paths
+      $acc)
+   $acc)
+
+(= (codex:permissions-dedup-absolute-paths-acc
+      $paths
+      $normalize-effective-paths
+      $acc)
+   (let ($head $tail) (decons-atom $paths)
+     (let $dedup-path
+       (if $normalize-effective-paths
+           (codex:permissions-normalize-effective-absolute-path $head)
+           $head)
+       (codex:permissions-dedup-absolute-paths-acc
+         $tail
+         $normalize-effective-paths
+         (if (codex:permissions-string-list-contains $dedup-path $acc)
+             $acc
+             (list:append $acc ($dedup-path)))))))
+
+(= (codex:file-system-sandbox-policy-readable-root-paths
+      $policy
+      ()
+      $cwd)
+   ())
+
+(= (codex:file-system-sandbox-policy-readable-root-paths
+      $policy
+      $resolved-entries
+      $cwd)
+   (let ($head $tail) (decons-atom $resolved-entries)
+     (let $tail-paths
+       (codex:file-system-sandbox-policy-readable-root-paths
+         $policy
+         $tail
+         $cwd)
+       (if (and
+             (codex:file-system-access-mode-can-read
+               (codex:resolved-file-system-entry-access $head))
+             (codex:file-system-sandbox-policy-can-read-path-with-cwd
+               $policy
+               (codex:resolved-file-system-entry-path $head)
+               $cwd))
+           (list:append
+             ((codex:resolved-file-system-entry-path $head))
+             $tail-paths)
+           $tail-paths))))
+
+(= (codex:file-system-sandbox-policy-get-readable-roots-with-cwd
+      (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+      $cwd)
+   (once
+     (if (codex:file-system-sandbox-policy-has-full-disk-read-access
+           (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries))
+         ()
+         (codex:permissions-dedup-absolute-paths
+           (codex:file-system-sandbox-policy-readable-root-paths
+             (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+             (codex:file-system-resolved-entries-with-cwd
+               (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+               $cwd)
+             $cwd)
+           True))))
+
+(= (codex:file-system-sandbox-policy-unreadable-root-paths
+      $policy
+      ()
+      $cwd
+      $root)
+   ())
+
+(= (codex:file-system-sandbox-policy-unreadable-root-paths
+      $policy
+      $resolved-entries
+      $cwd
+      $root)
+   (let ($head $tail) (decons-atom $resolved-entries)
+     (let $tail-paths
+       (codex:file-system-sandbox-policy-unreadable-root-paths
+         $policy
+         $tail
+         $cwd
+       $root)
+       (let $head-path
+         (codex:resolved-file-system-entry-path $head)
+         (if (and
+               (== (codex:resolved-file-system-entry-access $head)
+                   (CodexFileSystemAccessModeNone))
+               (and
+                 (not
+                   (codex:file-system-sandbox-policy-can-read-path-with-cwd
+                     $policy
+                     $head-path
+                     $cwd))
+                 (not (== $head-path $root))))
+             (list:append ($head-path) $tail-paths)
+             $tail-paths)))))
+
+(= (codex:file-system-sandbox-policy-get-unreadable-roots-with-cwd
+      (CodexFileSystemSandboxPolicy
+        (CodexFileSystemSandboxKindUnrestricted)
+        $glob-scan-max-depth
+        $entries)
+      $cwd)
+   ())
+
+(= (codex:file-system-sandbox-policy-get-unreadable-roots-with-cwd
+      (CodexFileSystemSandboxPolicy
+        (CodexFileSystemSandboxKindExternalSandbox)
+        $glob-scan-max-depth
+        $entries)
+      $cwd)
+   ())
+
+(= (codex:file-system-sandbox-policy-get-unreadable-roots-with-cwd
+      (CodexFileSystemSandboxPolicy
+        (CodexFileSystemSandboxKindRestricted)
+        $glob-scan-max-depth
+        $entries)
+      $cwd)
+   (once
+     (codex:permissions-dedup-absolute-paths
+       (codex:file-system-sandbox-policy-unreadable-root-paths
+         (CodexFileSystemSandboxPolicy
+           (CodexFileSystemSandboxKindRestricted)
+           $glob-scan-max-depth
+           $entries)
+         (codex:file-system-resolved-entries-with-cwd
+           (CodexFileSystemSandboxPolicy
+             (CodexFileSystemSandboxKindRestricted)
+             $glob-scan-max-depth
+             $entries)
+           $cwd)
+         $cwd
+         (codex:permissions-absolute-root-path-for-cwd
+           (codex:permissions-resolve-base-cwd $cwd)))
+       True)))
+
+(= (codex:permissions-resolve-glob-pattern-with-cwd $pattern $cwd)
+   (if (path-is-absolute? $pattern)
+       (path-normalize $pattern)
+       (path-normalize
+         (path-join
+           (codex:permissions-resolve-base-cwd $cwd)
+           $pattern))))
+
+(= (codex:file-system-sandbox-policy-unreadable-glob-patterns () $cwd)
+   ())
+
+(= (codex:file-system-sandbox-policy-unreadable-glob-patterns $entries $cwd)
+   (let ($head $tail) (decons-atom $entries)
+     (let $tail-patterns
+       (codex:file-system-sandbox-policy-unreadable-glob-patterns
+         $tail
+         $cwd)
+       (if (and
+             (== (codex:file-system-sandbox-entry-access $head)
+                 (CodexFileSystemAccessModeNone))
+             (== (codex:file-system-path-tag
+                   (codex:file-system-sandbox-entry-path $head))
+                 "glob_pattern"))
+           (list:append
+             ((codex:permissions-resolve-glob-pattern-with-cwd
+                (codex:file-system-path-glob-pattern-value
+                  (codex:file-system-sandbox-entry-path $head))
+                $cwd))
+             $tail-patterns)
+           $tail-patterns))))
+
+(= (codex:permissions-sort-unique-lines ())
+   ())
+
+(= (codex:permissions-sort-unique-lines $items)
+   (let $result
+     (process-run-cmd-cwd-env-timeout-cap-bytes
+       ("/bin/sh"
+        "-c"
+        "printf '%s\n' \"$CODEX_PERMISSION_ITEMS\" | sed '/^$/d' | LC_ALL=C sort -u")
+       (codex:permissions-helper-cwd)
+       ((Env "CODEX_PERMISSION_ITEMS" (str-join "\n" $items)))
+       (codex:permissions-helper-timeout-ms)
+       (codex:permissions-helper-max-bytes))
+     (if (== (process-result-exit-code $result) 0)
+         (let $stdout (str-trim (process-result-stdout $result))
+           (if (== $stdout "")
+               ()
+               (str-split "\n" $stdout)))
+         $items)))
+
+(= (codex:file-system-sandbox-policy-get-unreadable-globs-with-cwd
+      (CodexFileSystemSandboxPolicy
+        (CodexFileSystemSandboxKindRestricted)
+        $glob-scan-max-depth
+        $entries)
+      $cwd)
+   (once
+     (codex:permissions-sort-unique-lines
+       (codex:file-system-sandbox-policy-unreadable-glob-patterns
+         $entries
+         $cwd))))
+
+(= (codex:file-system-sandbox-policy-get-unreadable-globs-with-cwd
+      (CodexFileSystemSandboxPolicy $kind $glob-scan-max-depth $entries)
+      $cwd)
+   ())
