@@ -30,6 +30,7 @@
 ; - AgentMessageEvent / UserMessageEvent
 ; - ViewImageToolCallEvent / BackgroundEventEvent / DeprecationNoticeEvent
 ; - SkillsUpdateAvailable / ShutdownComplete
+; - PlanUpdate(UpdatePlanArgs)
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -322,6 +323,9 @@
 
 (= (codex:shutdown-complete-event)
    (CodexEventShutdownComplete))
+
+(= (codex:plan-update-event $explanation $plan)
+   (CodexUpdatePlanArgs $explanation $plan))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -970,6 +974,10 @@
       (CodexEventShutdownComplete))
    "shutdown_complete")
 
+(= (codex:item-type
+      (CodexUpdatePlanArgs $explanation $plan))
+   "plan_update")
+
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
 
@@ -1584,6 +1592,28 @@
        (JsonObject
          ((JsonPair "byte_range" (codex:byte-range-json $byte-range))
           (JsonPair "placeholder" (JsonString $placeholder))))))
+
+(= (codex:plan-update-step-status-json
+      (CodexUpdatePlanStepStatusPending))
+   (JsonString "pending"))
+
+(= (codex:plan-update-step-status-json
+      (CodexUpdatePlanStepStatusInProgress))
+   (JsonString "in_progress"))
+
+(= (codex:plan-update-step-status-json
+      (CodexUpdatePlanStepStatusCompleted))
+   (JsonString "completed"))
+
+(= (codex:plan-update-step-json
+      (CodexUpdatePlanStep $step $status))
+   (JsonObject
+     ((JsonPair "step" (JsonString $step))
+      (JsonPair "status" (codex:plan-update-step-status-json $status)))))
+
+(= (codex:plan-update-steps-json $steps)
+   (JsonArray
+     (map-atom $steps $item (codex:plan-update-step-json $item))))
 
 (= (codex:token-usage-json
       (CodexTokenUsage
@@ -2312,6 +2342,17 @@
       (CodexEventShutdownComplete))
    (JsonObject
      ((JsonPair "type" (JsonString "shutdown_complete")))))
+
+(= (codex:item-json
+      (CodexUpdatePlanArgs $explanation $plan))
+   (JsonObject
+     ((JsonPair "type" (JsonString "plan_update"))
+      (JsonPair
+        "explanation"
+        (if (== $explanation CodexAbsent)
+            JsonNull
+            (JsonString $explanation)))
+      (JsonPair "plan" (codex:plan-update-steps-json $plan)))))
 
 (= (codex:items-json $items)
    (function

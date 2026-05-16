@@ -431,3 +431,36 @@
     (codex:item-json
       (codex:shutdown-complete-event)))
   ("{\"type\":\"shutdown_complete\"}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:plan-update-event
+      "Tool harness check"
+      ((CodexUpdatePlanStep
+         "Inspect workspace"
+         (CodexUpdatePlanStepStatusInProgress))
+       (CodexUpdatePlanStep
+         "Report results"
+         (CodexUpdatePlanStepStatusPending)))))
+  ("plan_update"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:plan-update-event
+        "Tool harness check"
+        ((CodexUpdatePlanStep
+           "Inspect workspace"
+           (CodexUpdatePlanStepStatusInProgress))
+         (CodexUpdatePlanStep
+           "Report results"
+           (CodexUpdatePlanStepStatusPending))))))
+  ("{\"type\":\"plan_update\",\"explanation\":\"Tool harness check\",\"plan\":[{\"step\":\"Inspect workspace\",\"status\":\"in_progress\"},{\"step\":\"Report results\",\"status\":\"pending\"}]}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:plan-update-event
+        CodexAbsent
+        ())))
+  ("{\"type\":\"plan_update\",\"explanation\":null,\"plan\":[]}"))
