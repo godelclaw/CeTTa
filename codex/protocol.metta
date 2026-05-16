@@ -27,6 +27,7 @@
 ; - ModelVerificationEvent
 ; - TurnStartedEvent
 ; - TurnCompleteEvent / TokenCountEvent / StreamInfoEvent
+; - AgentMessageEvent / UserMessageEvent
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -139,6 +140,38 @@
 
 (= (codex:terminal-interaction-event $call_id $process_id $stdin)
    (CodexEventTerminalInteraction $call_id $process_id $stdin))
+
+(= (codex:message-phase-commentary)
+   (CodexMessagePhaseCommentary))
+
+(= (codex:message-phase-final-answer)
+   (CodexMessagePhaseFinalAnswer))
+
+(= (codex:memory-citation-entry $path $line-start $line-end $note)
+   (CodexMemoryCitationEntry $path $line-start $line-end $note))
+
+(= (codex:memory-citation $entries $rollout-ids)
+   (CodexMemoryCitation $entries $rollout-ids))
+
+(= (codex:byte-range $start $end)
+   (CodexByteRange $start $end))
+
+(= (codex:text-element $byte-range $placeholder)
+   (CodexTextElement $byte-range $placeholder))
+
+(= (codex:agent-message-event $message $phase $memory-citation)
+   (CodexEventAgentMessage $message $phase $memory-citation))
+
+(= (codex:user-message-event
+      $message
+      $images
+      $local-images
+      $text-elements)
+   (CodexEventUserMessage
+     $message
+     $images
+     $local-images
+     $text-elements))
 
 (= (codex:agent-message-delta-event $delta)
    (CodexEventAgentMessageDelta $delta))
@@ -771,6 +804,18 @@
    "terminal_interaction")
 
 (= (codex:item-type
+      (CodexEventAgentMessage $message $phase $memory-citation))
+   "agent_message")
+
+(= (codex:item-type
+      (CodexEventUserMessage
+        $message
+        $images
+        $local-images
+        $text-elements))
+   "user_message")
+
+(= (codex:item-type
       (CodexEventAgentMessageDelta $delta))
    "agent_message_delta")
 
@@ -994,6 +1039,90 @@
 (= (codex:terminal-interaction-stdin
       (CodexEventTerminalInteraction $call_id $process_id $stdin))
    $stdin)
+
+(= (codex:memory-citation-entry-path
+      (CodexMemoryCitationEntry $path $line-start $line-end $note))
+   $path)
+
+(= (codex:memory-citation-entry-line-start
+      (CodexMemoryCitationEntry $path $line-start $line-end $note))
+   $line-start)
+
+(= (codex:memory-citation-entry-line-end
+      (CodexMemoryCitationEntry $path $line-start $line-end $note))
+   $line-end)
+
+(= (codex:memory-citation-entry-note
+      (CodexMemoryCitationEntry $path $line-start $line-end $note))
+   $note)
+
+(= (codex:memory-citation-entries
+      (CodexMemoryCitation $entries $rollout-ids))
+   $entries)
+
+(= (codex:memory-citation-rollout-ids
+      (CodexMemoryCitation $entries $rollout-ids))
+   $rollout-ids)
+
+(= (codex:byte-range-start
+      (CodexByteRange $start $end))
+   $start)
+
+(= (codex:byte-range-end
+      (CodexByteRange $start $end))
+   $end)
+
+(= (codex:text-element-byte-range
+      (CodexTextElement $byte-range $placeholder))
+   $byte-range)
+
+(= (codex:text-element-placeholder
+      (CodexTextElement $byte-range $placeholder))
+   (if (== $placeholder CodexAbsent) Empty $placeholder))
+
+(= (codex:agent-message-event-message
+      (CodexEventAgentMessage $message $phase $memory-citation))
+   $message)
+
+(= (codex:agent-message-event-phase
+      (CodexEventAgentMessage $message $phase $memory-citation))
+   (if (== $phase CodexAbsent) Empty $phase))
+
+(= (codex:agent-message-event-memory-citation
+      (CodexEventAgentMessage $message $phase $memory-citation))
+   (if (== $memory-citation CodexAbsent) Empty $memory-citation))
+
+(= (codex:user-message-event-message
+      (CodexEventUserMessage
+        $message
+        $images
+        $local-images
+        $text-elements))
+   $message)
+
+(= (codex:user-message-event-images
+      (CodexEventUserMessage
+        $message
+        $images
+        $local-images
+        $text-elements))
+   (if (== $images CodexAbsent) Empty $images))
+
+(= (codex:user-message-event-local-images
+      (CodexEventUserMessage
+        $message
+        $images
+        $local-images
+        $text-elements))
+   $local-images)
+
+(= (codex:user-message-event-text-elements
+      (CodexEventUserMessage
+        $message
+        $images
+        $local-images
+        $text-elements))
+   $text-elements)
 
 (= (codex:agent-message-delta-text
       (CodexEventAgentMessageDelta $delta))
@@ -1355,6 +1484,50 @@
       (CodexModeKindDefault))
    (JsonString "default"))
 
+(= (codex:message-phase-json
+      (CodexMessagePhaseCommentary))
+   (JsonString "commentary"))
+
+(= (codex:message-phase-json
+      (CodexMessagePhaseFinalAnswer))
+   (JsonString "final_answer"))
+
+(= (codex:memory-citation-entry-json
+      (CodexMemoryCitationEntry $path $line-start $line-end $note))
+   (JsonObject
+     ((JsonPair "path" (JsonString $path))
+      (JsonPair "lineStart" (JsonNumber $line-start))
+      (JsonPair "lineEnd" (JsonNumber $line-end))
+      (JsonPair "note" (JsonString $note)))))
+
+(= (codex:memory-citation-json
+      (CodexMemoryCitation $entries $rollout-ids))
+   (JsonObject
+     ((JsonPair
+        "entries"
+        (JsonArray
+          (map-atom $entries $item (codex:memory-citation-entry-json $item))))
+      (JsonPair
+        "rolloutIds"
+        (JsonArray
+          (map-atom $rollout-ids $item (JsonString $item)))))))
+
+(= (codex:byte-range-json
+      (CodexByteRange $start $end))
+   (JsonObject
+     ((JsonPair "start" (JsonNumber $start))
+      (JsonPair "end" (JsonNumber $end)))))
+
+(= (codex:text-element-json
+      (CodexTextElement $byte-range $placeholder))
+   (if (== $placeholder CodexAbsent)
+       (JsonObject
+         ((JsonPair "byte_range" (codex:byte-range-json $byte-range))
+          (JsonPair "placeholder" JsonNull)))
+       (JsonObject
+         ((JsonPair "byte_range" (codex:byte-range-json $byte-range))
+          (JsonPair "placeholder" (JsonString $placeholder))))))
+
 (= (codex:token-usage-json
       (CodexTokenUsage
         $input-tokens
@@ -1607,6 +1780,56 @@
       (JsonPair "call_id" (JsonString $call_id))
       (JsonPair "process_id" (JsonString $process_id))
       (JsonPair "stdin" (JsonString $stdin)))))
+
+(= (codex:item-json
+      (CodexEventAgentMessage $message $phase $memory-citation))
+   (JsonObject
+     ((JsonPair "type" (JsonString "agent_message"))
+      (JsonPair "message" (JsonString $message))
+      (JsonPair
+        "phase"
+        (if (== $phase CodexAbsent)
+            JsonNull
+            (codex:message-phase-json $phase)))
+      (JsonPair
+        "memory_citation"
+        (if (== $memory-citation CodexAbsent)
+            JsonNull
+            (codex:memory-citation-json $memory-citation))))))
+
+(= (codex:item-json
+      (CodexEventUserMessage
+        $message
+        $images
+        $local-images
+        $text-elements))
+   (if (== $images CodexAbsent)
+       (JsonObject
+         ((JsonPair "type" (JsonString "user_message"))
+          (JsonPair "message" (JsonString $message))
+          (JsonPair
+            "local_images"
+            (JsonArray
+              (map-atom $local-images $item (JsonString $item))))
+          (JsonPair
+            "text_elements"
+            (JsonArray
+              (map-atom $text-elements $item (codex:text-element-json $item))))))
+       (JsonObject
+         ((JsonPair "type" (JsonString "user_message"))
+          (JsonPair "message" (JsonString $message))
+          (JsonPair
+            "images"
+            (JsonArray
+              (map-atom $images $item (JsonString $item))))
+          (JsonPair
+            "local_images"
+            (JsonArray
+              (map-atom $local-images $item (JsonString $item))))
+          (JsonPair
+            "text_elements"
+            (JsonArray
+              (map-atom $text-elements $item (codex:text-element-json $item))))))))
 
 (= (codex:item-json
       (CodexEventAgentMessageDelta $delta))

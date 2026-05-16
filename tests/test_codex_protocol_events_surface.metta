@@ -22,6 +22,65 @@
 
 !(assertEqualToResult
   (codex:item-type
+    (codex:agent-message-event
+      "Inspecting the workspace."
+      CodexAbsent
+      CodexAbsent))
+  ("agent_message"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:agent-message-event
+        "Inspecting the workspace."
+        (codex:message-phase-commentary)
+        (codex:memory-citation
+          ((codex:memory-citation-entry "MEMORY.md" 1 2 "summary"))
+          ("rollout-1")))))
+  ("{\"type\":\"agent_message\",\"message\":\"Inspecting the workspace.\",\"phase\":\"commentary\",\"memory_citation\":{\"entries\":[{\"path\":\"MEMORY.md\",\"lineStart\":1,\"lineEnd\":2,\"note\":\"summary\"}],\"rolloutIds\":[\"rollout-1\"]}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:agent-message-event
+        "Done."
+        CodexAbsent
+        CodexAbsent)))
+  ("{\"type\":\"agent_message\",\"message\":\"Done.\",\"phase\":null,\"memory_citation\":null}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:user-message-event
+      "hello"
+      CodexAbsent
+      ()
+      ()))
+  ("user_message"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:user-message-event
+        "hello"
+        CodexAbsent
+        ()
+        ())))
+  ("{\"type\":\"user_message\",\"message\":\"hello\",\"local_images\":[],\"text_elements\":[]}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:user-message-event
+        "look here [Image #1]"
+        ("data:image/png;base64,AAA")
+        ("/tmp/local.png")
+        ((codex:text-element
+           (codex:byte-range 10 19)
+           CodexAbsent)))))
+  ("{\"type\":\"user_message\",\"message\":\"look here [Image #1]\",\"images\":[\"data:image/png;base64,AAA\"],\"local_images\":[\"/tmp/local.png\"],\"text_elements\":[{\"byte_range\":{\"start\":10,\"end\":19},\"placeholder\":null}]}"))
+
+!(assertEqualToResult
+  (codex:item-type
     (codex:terminal-interaction-event "exec-call-45" "45" "exit\n"))
   ("terminal_interaction"))
 
