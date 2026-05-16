@@ -52,6 +52,7 @@
 ; - Op::UserTurn
 ; - Op::OverrideTurnContext
 ; - Op::ResolveElicitation / RequestId / ElicitationAction
+; - Op::UserInputAnswer / RequestUserInputResponse
 ; - Op::InterAgentCommunication / InterAgentCommunication
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
@@ -1170,6 +1171,18 @@
      $decision
      $content
      $meta))
+
+(= (codex:protocol-request-user-input-answer $answers)
+   (CodexRequestUserInputAnswer $answers))
+
+(= (codex:protocol-request-user-input-response-entry $id $answer)
+   (CodexRequestUserInputResponseEntry $id $answer))
+
+(= (codex:protocol-request-user-input-response $answers)
+   (CodexRequestUserInputResponse $answers))
+
+(= (codex:user-input-answer-op $id $response)
+   (CodexOpUserInputAnswer $id $response))
 
 (= (codex:inter-agent-communication
       $author
@@ -4241,6 +4254,45 @@
       (CodexElicitationActionCancel))
    (JsonString "cancel"))
 
+(= (codex:protocol-request-user-input-string-array-json $items)
+   (JsonArray
+     (eval (map-atom $items $item (JsonString $item)))))
+
+(= (codex:protocol-request-user-input-answer-json
+      (CodexRequestUserInputAnswer $answers))
+   (JsonObject
+     ((JsonPair
+        "answers"
+        (codex:protocol-request-user-input-string-array-json $answers)))))
+
+(= (codex:protocol-request-user-input-response-entry-id
+      (CodexRequestUserInputResponseEntry $id $answer))
+   $id)
+
+(= (codex:protocol-request-user-input-response-entry-answer
+      (CodexRequestUserInputResponseEntry $id $answer))
+   $answer)
+
+(= (codex:protocol-request-user-input-response-answer-pairs $entries)
+   (eval
+     (map-atom
+       $entries
+       $entry
+       (JsonPair
+         (codex:protocol-request-user-input-response-entry-id $entry)
+         (codex:protocol-request-user-input-answer-json
+           (codex:protocol-request-user-input-response-entry-answer
+             $entry))))))
+
+(= (codex:protocol-request-user-input-response-json
+      (CodexRequestUserInputResponse $entries))
+   (JsonObject
+     ((JsonPair
+        "answers"
+        (JsonObject
+          (codex:protocol-request-user-input-response-answer-pairs
+            $entries))))))
+
 (= (codex:review-decisions-json $decisions)
    (JsonArray
      (map-atom $decisions $item (codex:review-decision-json $item))))
@@ -7176,6 +7228,10 @@
    "resolve_elicitation")
 
 (= (codex:op-type
+      (CodexOpUserInputAnswer $id $response))
+   "user_input_answer")
+
+(= (codex:op-type
       (CodexOpInterAgentCommunication $communication))
    "inter_agent_communication")
 
@@ -8043,6 +8099,15 @@
            $pairs-2
            "meta"
            $meta)))))
+
+(= (codex:op-json
+      (CodexOpUserInputAnswer $id $response))
+   (JsonObject
+     ((JsonPair "type" (JsonString "user_input_answer"))
+      (JsonPair "id" (JsonString $id))
+      (JsonPair
+        "response"
+        (codex:protocol-request-user-input-response-json $response)))))
 
 (= (codex:op-json
       (CodexOpInterAgentCommunication $communication))
