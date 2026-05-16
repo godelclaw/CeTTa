@@ -45,6 +45,7 @@
 ; - RealtimeAudioFrame / RealtimeEvent::AudioOut
 ; - Op::RealtimeConversationStart/Audio/Text/Close/ListVoices
 ; - Submission / W3cTraceContext / Event queue wrappers
+; - Op::RefreshMcpServers / McpServerRefreshConfig
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
 ; - SessionSource / SubAgentSource
@@ -828,6 +829,16 @@
 
 (= (codex:event-envelope $id $msg)
    (CodexProtocolEvent $id $msg))
+
+(= (codex:mcp-server-refresh-config
+      $mcp-servers
+      $mcp-oauth-credentials-store-mode)
+   (CodexMcpServerRefreshConfig
+     $mcp-servers
+     $mcp-oauth-credentials-store-mode))
+
+(= (codex:refresh-mcp-servers-op $config)
+   (CodexOpRefreshMcpServers $config))
 
 (= (codex:realtime-conversation-version-v1)
    (CodexRealtimeConversationVersionV1))
@@ -6299,6 +6310,10 @@
       (CodexOpRealtimeConversationListVoices))
    "realtime_conversation_list_voices")
 
+(= (codex:op-type
+      (CodexOpRefreshMcpServers $config))
+   "refresh_mcp_servers")
+
 (= (codex:w3c-trace-context-json
       (CodexW3cTraceContext $traceparent $tracestate))
    (let $pairs-1 ()
@@ -6317,6 +6332,16 @@
                "tracestate"
                (JsonString $tracestate)))
          (JsonObject $pairs-3)))))
+
+(= (codex:mcp-server-refresh-config-json
+      (CodexMcpServerRefreshConfig
+        $mcp-servers
+        $mcp-oauth-credentials-store-mode))
+   (JsonObject
+     ((JsonPair "mcp_servers" $mcp-servers)
+      (JsonPair
+        "mcp_oauth_credentials_store_mode"
+        $mcp-oauth-credentials-store-mode))))
 
 (= (codex:op-json
       (CodexOpRealtimeConversationStart
@@ -6391,24 +6416,32 @@
    (JsonObject
      ((JsonPair "type" (JsonString "realtime_conversation_list_voices")))))
 
+(= (codex:op-json
+      (CodexOpRefreshMcpServers $config))
+   (JsonObject
+     ((JsonPair "type" (JsonString "refresh_mcp_servers"))
+      (JsonPair "config" (codex:mcp-server-refresh-config-json $config)))))
+
 (= (codex:submission-json
       (CodexSubmission $id $op $trace))
-   (let $pairs-1
-     ((JsonPair "id" (JsonString $id))
-      (JsonPair "op" (codex:op-json $op)))
-     (JsonObject
-       (if (== $trace CodexAbsent)
-           $pairs-1
-           (codex:protocol-append-json-pair
+   (let $resolved-op (once $op)
+     (let $pairs-1
+       ((JsonPair "id" (JsonString $id))
+        (JsonPair "op" (codex:op-json $resolved-op)))
+       (JsonObject
+         (if (== $trace CodexAbsent)
              $pairs-1
-             "trace"
-             (codex:w3c-trace-context-json $trace))))))
+             (codex:protocol-append-json-pair
+               $pairs-1
+               "trace"
+               (codex:w3c-trace-context-json $trace)))))))
 
 (= (codex:event-envelope-json
       (CodexProtocolEvent $id $msg))
-   (JsonObject
-     ((JsonPair "id" (JsonString $id))
-      (JsonPair "msg" (codex:item-json $msg)))))
+   (let $resolved-msg (once $msg)
+     (JsonObject
+       ((JsonPair "id" (JsonString $id))
+        (JsonPair "msg" (codex:item-json $resolved-msg))))))
 
 (= (codex:item-json
       (CodexEventSessionConfigured
