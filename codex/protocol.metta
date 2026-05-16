@@ -54,6 +54,7 @@
 ; - Op::ResolveElicitation / RequestId / ElicitationAction
 ; - Op::UserInputAnswer / RequestUserInputResponse
 ; - Op::RequestPermissionsResponse / RequestPermissionsResponse
+; - Op::DynamicToolResponse / DynamicToolResponse
 ; - Op::InterAgentCommunication / InterAgentCommunication
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
@@ -1211,6 +1212,18 @@
 
 (= (codex:request-permissions-response-op $id $response)
    (CodexOpRequestPermissionsResponse $id $response))
+
+(= (codex:protocol-dynamic-tool-output-item-input-text $text)
+   (CodexDynamicToolCallOutputContentItemInputText $text))
+
+(= (codex:protocol-dynamic-tool-output-item-input-image $image-url)
+   (CodexDynamicToolCallOutputContentItemInputImage $image-url))
+
+(= (codex:protocol-dynamic-tool-response $content-items $success)
+   (CodexDynamicToolResponse $content-items $success))
+
+(= (codex:dynamic-tool-response-op $id $response)
+   (CodexOpDynamicToolResponse $id $response))
 
 (= (codex:inter-agent-communication
       $author
@@ -4354,6 +4367,34 @@
             (codex:protocol-request-permission-profile-json $permissions))
           (JsonPair "scope" (JsonString $scope))))))
 
+(= (codex:protocol-dynamic-tool-output-item-json
+      (CodexDynamicToolCallOutputContentItemInputText $text))
+   (JsonObject
+     ((JsonPair "type" (JsonString "inputText"))
+      (JsonPair "text" (JsonString $text)))))
+
+(= (codex:protocol-dynamic-tool-output-item-json
+      (CodexDynamicToolCallOutputContentItemInputImage $image-url))
+   (JsonObject
+     ((JsonPair "type" (JsonString "inputImage"))
+      (JsonPair "imageUrl" (JsonString $image-url)))))
+
+(= (codex:protocol-dynamic-tool-output-items-json $items)
+   (JsonArray
+     (eval
+       (map-atom
+         $items
+         $item
+         (codex:protocol-dynamic-tool-output-item-json $item)))))
+
+(= (codex:protocol-dynamic-tool-response-json
+      (CodexDynamicToolResponse $content-items $success))
+   (JsonObject
+     ((JsonPair
+        "contentItems"
+        (codex:protocol-dynamic-tool-output-items-json $content-items))
+      (JsonPair "success" (JsonBool $success)))))
+
 (= (codex:review-decisions-json $decisions)
    (JsonArray
      (map-atom $decisions $item (codex:review-decision-json $item))))
@@ -7297,6 +7338,10 @@
    "request_permissions_response")
 
 (= (codex:op-type
+      (CodexOpDynamicToolResponse $id $response))
+   "dynamic_tool_response")
+
+(= (codex:op-type
       (CodexOpInterAgentCommunication $communication))
    "inter_agent_communication")
 
@@ -8182,6 +8227,15 @@
       (JsonPair
         "response"
         (codex:protocol-request-permissions-response-json $response)))))
+
+(= (codex:op-json
+      (CodexOpDynamicToolResponse $id $response))
+   (JsonObject
+     ((JsonPair "type" (JsonString "dynamic_tool_response"))
+      (JsonPair "id" (JsonString $id))
+      (JsonPair
+        "response"
+        (codex:protocol-dynamic-tool-response-json $response)))))
 
 (= (codex:op-json
       (CodexOpInterAgentCommunication $communication))
