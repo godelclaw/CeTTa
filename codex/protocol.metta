@@ -41,6 +41,7 @@
 ; - TurnDiffEvent
 ; - GetHistoryEntryResponseEvent / HistoryEntry
 ; - ListSkillsResponseEvent / SkillsListEntry / SkillMetadata
+; - RealtimeConversationListVoicesResponseEvent / RealtimeVoice
 ; - PatchApplyBeginEvent / PatchApplyUpdatedEvent / PatchApplyEndEvent
 ; - HookStartedEvent / HookCompletedEvent / HookRunSummary
 ; - UndoStartedEvent / UndoCompletedEvent
@@ -567,6 +568,93 @@
 
 (= (codex:list-skills-response-event $skills)
    (CodexEventListSkillsResponse $skills))
+
+(= (codex:realtime-voice-alloy)
+   (CodexRealtimeVoiceAlloy))
+
+(= (codex:realtime-voice-arbor)
+   (CodexRealtimeVoiceArbor))
+
+(= (codex:realtime-voice-ash)
+   (CodexRealtimeVoiceAsh))
+
+(= (codex:realtime-voice-ballad)
+   (CodexRealtimeVoiceBallad))
+
+(= (codex:realtime-voice-breeze)
+   (CodexRealtimeVoiceBreeze))
+
+(= (codex:realtime-voice-cedar)
+   (CodexRealtimeVoiceCedar))
+
+(= (codex:realtime-voice-coral)
+   (CodexRealtimeVoiceCoral))
+
+(= (codex:realtime-voice-cove)
+   (CodexRealtimeVoiceCove))
+
+(= (codex:realtime-voice-echo)
+   (CodexRealtimeVoiceEcho))
+
+(= (codex:realtime-voice-ember)
+   (CodexRealtimeVoiceEmber))
+
+(= (codex:realtime-voice-juniper)
+   (CodexRealtimeVoiceJuniper))
+
+(= (codex:realtime-voice-maple)
+   (CodexRealtimeVoiceMaple))
+
+(= (codex:realtime-voice-marin)
+   (CodexRealtimeVoiceMarin))
+
+(= (codex:realtime-voice-sage)
+   (CodexRealtimeVoiceSage))
+
+(= (codex:realtime-voice-shimmer)
+   (CodexRealtimeVoiceShimmer))
+
+(= (codex:realtime-voice-sol)
+   (CodexRealtimeVoiceSol))
+
+(= (codex:realtime-voice-spruce)
+   (CodexRealtimeVoiceSpruce))
+
+(= (codex:realtime-voice-vale)
+   (CodexRealtimeVoiceVale))
+
+(= (codex:realtime-voice-verse)
+   (CodexRealtimeVoiceVerse))
+
+(= (codex:realtime-voices-list $v1 $v2 $default-v1 $default-v2)
+   (CodexRealtimeVoicesList $v1 $v2 $default-v1 $default-v2))
+
+(= (codex:realtime-voices-list-builtin)
+   (CodexRealtimeVoicesList
+     ((CodexRealtimeVoiceJuniper)
+      (CodexRealtimeVoiceMaple)
+      (CodexRealtimeVoiceSpruce)
+      (CodexRealtimeVoiceEmber)
+      (CodexRealtimeVoiceVale)
+      (CodexRealtimeVoiceBreeze)
+      (CodexRealtimeVoiceArbor)
+      (CodexRealtimeVoiceSol)
+      (CodexRealtimeVoiceCove))
+     ((CodexRealtimeVoiceAlloy)
+      (CodexRealtimeVoiceAsh)
+      (CodexRealtimeVoiceBallad)
+      (CodexRealtimeVoiceCoral)
+      (CodexRealtimeVoiceEcho)
+      (CodexRealtimeVoiceSage)
+      (CodexRealtimeVoiceShimmer)
+      (CodexRealtimeVoiceVerse)
+      (CodexRealtimeVoiceMarin)
+      (CodexRealtimeVoiceCedar))
+     (CodexRealtimeVoiceCove)
+     (CodexRealtimeVoiceMarin)))
+
+(= (codex:realtime-conversation-list-voices-response-event $voices)
+   (CodexEventRealtimeConversationListVoicesResponse $voices))
 
 (= (codex:patch-apply-file-change-add $path $content)
    (CodexProtocolPatchApplyFileChangeAdd $path $content))
@@ -1466,6 +1554,10 @@
 (= (codex:item-type
       (CodexEventListSkillsResponse $skills))
    "list_skills_response")
+
+(= (codex:item-type
+      (CodexEventRealtimeConversationListVoicesResponse $voices))
+   "realtime_conversation_list_voices_response")
 
 (= (codex:item-type
       (CodexEventPatchApplyBegin
@@ -2593,6 +2685,94 @@
 (= (codex:skills-list-entries-json $entries)
    (JsonArray
      (map-atom $entries $item (codex:skills-list-entry-json $item))))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceAlloy))
+   (JsonString "alloy"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceArbor))
+   (JsonString "arbor"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceAsh))
+   (JsonString "ash"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceBallad))
+   (JsonString "ballad"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceBreeze))
+   (JsonString "breeze"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceCedar))
+   (JsonString "cedar"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceCoral))
+   (JsonString "coral"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceCove))
+   (JsonString "cove"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceEcho))
+   (JsonString "echo"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceEmber))
+   (JsonString "ember"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceJuniper))
+   (JsonString "juniper"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceMaple))
+   (JsonString "maple"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceMarin))
+   (JsonString "marin"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceSage))
+   (JsonString "sage"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceShimmer))
+   (JsonString "shimmer"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceSol))
+   (JsonString "sol"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceSpruce))
+   (JsonString "spruce"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceVale))
+   (JsonString "vale"))
+
+(= (codex:realtime-voice-json
+      (CodexRealtimeVoiceVerse))
+   (JsonString "verse"))
+
+(= (codex:realtime-voices-json $voices)
+   (JsonArray
+     (map-atom $voices $item (codex:realtime-voice-json $item))))
+
+(= (codex:realtime-voices-list-json
+      (CodexRealtimeVoicesList $v1 $v2 $default-v1 $default-v2))
+   (JsonObject
+     ((JsonPair "v1" (codex:realtime-voices-json $v1))
+      (JsonPair "v2" (codex:realtime-voices-json $v2))
+      (JsonPair "defaultV1" (codex:realtime-voice-json $default-v1))
+      (JsonPair "defaultV2" (codex:realtime-voice-json $default-v2)))))
 
 (= (codex:patch-apply-file-change-json
       (CodexProtocolPatchApplyFileChangeAdd $path $content))
@@ -3770,6 +3950,14 @@
    (JsonObject
      ((JsonPair "type" (JsonString "list_skills_response"))
       (JsonPair "skills" (codex:skills-list-entries-json $skills)))))
+
+(= (codex:item-json
+      (CodexEventRealtimeConversationListVoicesResponse $voices))
+   (JsonObject
+     ((JsonPair
+        "type"
+        (JsonString "realtime_conversation_list_voices_response"))
+      (JsonPair "voices" (codex:realtime-voices-list-json $voices)))))
 
 (= (codex:item-json
       (CodexEventPatchApplyBegin

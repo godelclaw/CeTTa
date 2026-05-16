@@ -778,6 +778,19 @@
 
 !(assertEqualToResult
   (codex:item-type
+    (codex:realtime-conversation-list-voices-response-event
+      (codex:realtime-voices-list-builtin)))
+  ("realtime_conversation_list_voices_response"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:realtime-conversation-list-voices-response-event
+        (codex:realtime-voices-list-builtin))))
+  ("{\"type\":\"realtime_conversation_list_voices_response\",\"voices\":{\"v1\":[\"juniper\",\"maple\",\"spruce\",\"ember\",\"vale\",\"breeze\",\"arbor\",\"sol\",\"cove\"],\"v2\":[\"alloy\",\"ash\",\"ballad\",\"coral\",\"echo\",\"sage\",\"shimmer\",\"verse\",\"marin\",\"cedar\"],\"defaultV1\":\"cove\",\"defaultV2\":\"marin\"}}"))
+
+!(assertEqualToResult
+  (codex:item-type
     (codex:patch-apply-begin-event
       "patch-1"
       "turn-1"
