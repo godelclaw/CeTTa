@@ -226,6 +226,39 @@
   ("{\"type\":\"task_complete\",\"turn_id\":\"turn-9\",\"last_agent_message\":\"final answer\",\"completed_at\":1712345678,\"duration_ms\":240,\"time_to_first_token_ms\":80}"))
 
 !(assertEqualToResult
+  (codex:item-type
+    (codex:token-count-event
+      CodexAbsent
+      CodexAbsent))
+  ("token_count"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:token-count-event
+        (codex:token-usage-info
+          (codex:token-usage 100 20 30 4 130)
+          (codex:token-usage 10 2 3 1 13)
+          32000)
+        (codex:rate-limit-snapshot
+          "limit-1"
+          "gpt-5"
+          (codex:rate-limit-window 50.0 60 1712349999)
+          CodexAbsent
+          (codex:credits-snapshot True False "$12.34")
+          "plus"
+          (codex:rate-limit-reached-type-rate-limit-reached)))))
+  ("{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":100,\"cached_input_tokens\":20,\"output_tokens\":30,\"reasoning_output_tokens\":4,\"total_tokens\":130},\"last_token_usage\":{\"input_tokens\":10,\"cached_input_tokens\":2,\"output_tokens\":3,\"reasoning_output_tokens\":1,\"total_tokens\":13},\"model_context_window\":32000},\"rate_limits\":{\"limit_id\":\"limit-1\",\"limit_name\":\"gpt-5\",\"primary\":{\"used_percent\":50,\"window_minutes\":60,\"resets_at\":1712349999},\"secondary\":null,\"credits\":{\"has_credits\":true,\"unlimited\":false,\"balance\":\"$12.34\"},\"plan_type\":\"plus\",\"rate_limit_reached_type\":\"rate_limit_reached\"}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:token-count-event
+        CodexAbsent
+        CodexAbsent)))
+  ("{\"type\":\"token_count\",\"info\":null,\"rate_limits\":null}"))
+
+!(assertEqualToResult
   (json-stringify
     (codex:item-json
       (codex:stream-info-event "retrying model stream")))

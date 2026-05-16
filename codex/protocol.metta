@@ -26,7 +26,7 @@
 ; - WarningEvent / ModelRerouteEvent / ContextCompactedEvent
 ; - ModelVerificationEvent
 ; - TurnStartedEvent
-; - TurnCompleteEvent / StreamInfoEvent
+; - TurnCompleteEvent / TokenCountEvent / StreamInfoEvent
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -852,6 +852,10 @@
    "task_complete")
 
 (= (codex:item-type
+      (CodexTokenCountEvent $info $rate-limits))
+   "token_count")
+
+(= (codex:item-type
       (CodexEventStreamInfo $message))
    "stream_info")
 
@@ -1351,6 +1355,122 @@
       (CodexModeKindDefault))
    (JsonString "default"))
 
+(= (codex:token-usage-json
+      (CodexTokenUsage
+        $input-tokens
+        $cached-input-tokens
+        $output-tokens
+        $reasoning-output-tokens
+        $total-tokens))
+   (JsonObject
+     ((JsonPair "input_tokens" (JsonNumber $input-tokens))
+      (JsonPair "cached_input_tokens" (JsonNumber $cached-input-tokens))
+      (JsonPair "output_tokens" (JsonNumber $output-tokens))
+      (JsonPair "reasoning_output_tokens" (JsonNumber $reasoning-output-tokens))
+      (JsonPair "total_tokens" (JsonNumber $total-tokens)))))
+
+(= (codex:token-usage-info-json
+      (CodexTokenUsageInfo
+        $total-token-usage
+        $last-token-usage
+        $model-context-window))
+   (if (== $model-context-window CodexAbsent)
+       (JsonObject
+         ((JsonPair
+            "total_token_usage"
+            (codex:token-usage-json $total-token-usage))
+          (JsonPair
+            "last_token_usage"
+            (codex:token-usage-json $last-token-usage))
+          (JsonPair "model_context_window" JsonNull)))
+       (JsonObject
+         ((JsonPair
+            "total_token_usage"
+            (codex:token-usage-json $total-token-usage))
+          (JsonPair
+            "last_token_usage"
+            (codex:token-usage-json $last-token-usage))
+          (JsonPair
+            "model_context_window"
+            (JsonNumber $model-context-window))))))
+
+(= (codex:rate-limit-window-json
+      (CodexRateLimitWindow $used-percent $window-minutes $resets-at))
+   (if (== $window-minutes CodexAbsent)
+       (if (== $resets-at CodexAbsent)
+           (JsonObject
+             ((JsonPair "used_percent" (JsonNumber $used-percent))
+              (JsonPair "window_minutes" JsonNull)
+              (JsonPair "resets_at" JsonNull)))
+           (JsonObject
+             ((JsonPair "used_percent" (JsonNumber $used-percent))
+              (JsonPair "window_minutes" JsonNull)
+              (JsonPair "resets_at" (JsonNumber $resets-at)))))
+       (if (== $resets-at CodexAbsent)
+           (JsonObject
+             ((JsonPair "used_percent" (JsonNumber $used-percent))
+              (JsonPair "window_minutes" (JsonNumber $window-minutes))
+              (JsonPair "resets_at" JsonNull)))
+           (JsonObject
+             ((JsonPair "used_percent" (JsonNumber $used-percent))
+              (JsonPair "window_minutes" (JsonNumber $window-minutes))
+              (JsonPair "resets_at" (JsonNumber $resets-at)))))))
+
+(= (codex:credits-snapshot-json
+      (CodexCreditsSnapshot $has-credits $unlimited $balance))
+   (if (== $balance CodexAbsent)
+       (JsonObject
+         ((JsonPair "has_credits" (JsonBool $has-credits))
+          (JsonPair "unlimited" (JsonBool $unlimited))
+          (JsonPair "balance" JsonNull)))
+       (JsonObject
+         ((JsonPair "has_credits" (JsonBool $has-credits))
+          (JsonPair "unlimited" (JsonBool $unlimited))
+          (JsonPair "balance" (JsonString $balance))))))
+
+(= (codex:rate-limit-reached-type-json $text)
+   (JsonString $text))
+
+(= (codex:rate-limit-snapshot-json
+      (CodexRateLimitSnapshot
+        $limit-id
+        $limit-name
+        $primary
+        $secondary
+        $credits
+        $plan-type
+        $rate-limit-reached-type))
+   (JsonObject
+     ((JsonPair
+        "limit_id"
+        (if (== $limit-id CodexAbsent) JsonNull (JsonString $limit-id)))
+      (JsonPair
+        "limit_name"
+        (if (== $limit-name CodexAbsent) JsonNull (JsonString $limit-name)))
+      (JsonPair
+        "primary"
+        (if (== $primary CodexAbsent)
+            JsonNull
+            (codex:rate-limit-window-json $primary)))
+      (JsonPair
+        "secondary"
+        (if (== $secondary CodexAbsent)
+            JsonNull
+            (codex:rate-limit-window-json $secondary)))
+      (JsonPair
+        "credits"
+        (if (== $credits CodexAbsent)
+            JsonNull
+            (codex:credits-snapshot-json $credits)))
+      (JsonPair
+        "plan_type"
+        (if (== $plan-type CodexAbsent) JsonNull (JsonString $plan-type)))
+      (JsonPair
+        "rate_limit_reached_type"
+        (if (== $rate-limit-reached-type CodexAbsent)
+            JsonNull
+            (codex:rate-limit-reached-type-json $rate-limit-reached-type))))))
+
 (= (codex:content-item-json (CodexInputText $text))
    (JsonObject
      ((JsonPair "type" (JsonString "input_text"))
@@ -1779,9 +1899,24 @@
                         (JsonString $last_agent_message))
                       (JsonPair "completed_at" (JsonNumber $completed_at))
                       (JsonPair "duration_ms" (JsonNumber $duration_ms))
-                      (JsonPair
+                     (JsonPair
                         "time_to_first_token_ms"
                         (JsonNumber $time_to_first_token_ms)))))))))
+
+(= (codex:item-json
+      (CodexTokenCountEvent $info $rate-limits))
+   (JsonObject
+     ((JsonPair "type" (JsonString "token_count"))
+      (JsonPair
+        "info"
+        (if (== $info CodexAbsent)
+            JsonNull
+            (codex:token-usage-info-json $info)))
+      (JsonPair
+        "rate_limits"
+        (if (== $rate-limits CodexAbsent)
+            JsonNull
+            (codex:rate-limit-snapshot-json $rate-limits))))))
 
 (= (codex:item-json
       (CodexEventStreamInfo $message))
