@@ -32,6 +32,7 @@
 ; - SkillsUpdateAvailable / ShutdownComplete
 ; - PlanUpdate(UpdatePlanArgs)
 ; - TurnAbortedEvent
+; - StreamErrorEvent / CodexErrorInfo / NonSteerableTurnKind
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -339,6 +340,60 @@
 
 (= (codex:turn-aborted-event $turn-id $reason $completed-at $duration-ms)
    (CodexEventTurnAborted $turn-id $reason $completed-at $duration-ms))
+
+(= (codex:non-steerable-turn-kind-review)
+   (CodexNonSteerableTurnKindReview))
+
+(= (codex:non-steerable-turn-kind-compact)
+   (CodexNonSteerableTurnKindCompact))
+
+(= (codex:codex-error-info-context-window-exceeded)
+   (CodexErrorInfoContextWindowExceeded))
+
+(= (codex:codex-error-info-usage-limit-exceeded)
+   (CodexErrorInfoUsageLimitExceeded))
+
+(= (codex:codex-error-info-server-overloaded)
+   (CodexErrorInfoServerOverloaded))
+
+(= (codex:codex-error-info-cyber-policy)
+   (CodexErrorInfoCyberPolicy))
+
+(= (codex:codex-error-info-http-connection-failed $http-status-code)
+   (CodexErrorInfoHttpConnectionFailed $http-status-code))
+
+(= (codex:codex-error-info-response-stream-connection-failed $http-status-code)
+   (CodexErrorInfoResponseStreamConnectionFailed $http-status-code))
+
+(= (codex:codex-error-info-internal-server-error)
+   (CodexErrorInfoInternalServerError))
+
+(= (codex:codex-error-info-unauthorized)
+   (CodexErrorInfoUnauthorized))
+
+(= (codex:codex-error-info-bad-request)
+   (CodexErrorInfoBadRequest))
+
+(= (codex:codex-error-info-sandbox-error)
+   (CodexErrorInfoSandboxError))
+
+(= (codex:codex-error-info-response-stream-disconnected $http-status-code)
+   (CodexErrorInfoResponseStreamDisconnected $http-status-code))
+
+(= (codex:codex-error-info-response-too-many-failed-attempts $http-status-code)
+   (CodexErrorInfoResponseTooManyFailedAttempts $http-status-code))
+
+(= (codex:codex-error-info-active-turn-not-steerable $turn-kind)
+   (CodexErrorInfoActiveTurnNotSteerable $turn-kind))
+
+(= (codex:codex-error-info-thread-rollback-failed)
+   (CodexErrorInfoThreadRollbackFailed))
+
+(= (codex:codex-error-info-other)
+   (CodexErrorInfoOther))
+
+(= (codex:stream-error-event $message $codex-error-info $additional-details)
+   (CodexEventStreamError $message $codex-error-info $additional-details))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -995,6 +1050,10 @@
       (CodexEventTurnAborted $turn-id $reason $completed-at $duration-ms))
    "turn_aborted")
 
+(= (codex:item-type
+      (CodexEventStreamError $message $codex-error-info $additional-details))
+   "stream_error")
+
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
 
@@ -1621,6 +1680,109 @@
 (= (codex:turn-abort-reason-json
       (CodexTurnAbortReasonReviewEnded))
    (JsonString "review_ended"))
+
+(= (codex:non-steerable-turn-kind-json
+      (CodexNonSteerableTurnKindReview))
+   (JsonString "review"))
+
+(= (codex:non-steerable-turn-kind-json
+      (CodexNonSteerableTurnKindCompact))
+   (JsonString "compact"))
+
+(= (codex:optional-http-status-code-json $http-status-code)
+   (if (== $http-status-code CodexAbsent)
+       JsonNull
+       (JsonNumber $http-status-code)))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoContextWindowExceeded))
+   (JsonString "context_window_exceeded"))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoUsageLimitExceeded))
+   (JsonString "usage_limit_exceeded"))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoServerOverloaded))
+   (JsonString "server_overloaded"))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoCyberPolicy))
+   (JsonString "cyber_policy"))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoHttpConnectionFailed $http-status-code))
+   (JsonObject
+     ((JsonPair
+        "http_connection_failed"
+        (JsonObject
+          ((JsonPair
+             "http_status_code"
+             (codex:optional-http-status-code-json $http-status-code))))))))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoResponseStreamConnectionFailed $http-status-code))
+   (JsonObject
+     ((JsonPair
+        "response_stream_connection_failed"
+        (JsonObject
+          ((JsonPair
+             "http_status_code"
+             (codex:optional-http-status-code-json $http-status-code))))))))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoInternalServerError))
+   (JsonString "internal_server_error"))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoUnauthorized))
+   (JsonString "unauthorized"))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoBadRequest))
+   (JsonString "bad_request"))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoSandboxError))
+   (JsonString "sandbox_error"))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoResponseStreamDisconnected $http-status-code))
+   (JsonObject
+     ((JsonPair
+        "response_stream_disconnected"
+        (JsonObject
+          ((JsonPair
+             "http_status_code"
+             (codex:optional-http-status-code-json $http-status-code))))))))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoResponseTooManyFailedAttempts $http-status-code))
+   (JsonObject
+     ((JsonPair
+        "response_too_many_failed_attempts"
+        (JsonObject
+          ((JsonPair
+             "http_status_code"
+             (codex:optional-http-status-code-json $http-status-code))))))))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoActiveTurnNotSteerable $turn-kind))
+   (JsonObject
+     ((JsonPair
+        "active_turn_not_steerable"
+        (JsonObject
+          ((JsonPair
+             "turn_kind"
+             (codex:non-steerable-turn-kind-json $turn-kind))))))))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoThreadRollbackFailed))
+   (JsonString "thread_rollback_failed"))
+
+(= (codex:codex-error-info-json
+      (CodexErrorInfoOther))
+   (JsonString "other"))
 
 (= (codex:plan-update-step-status-json
       (CodexUpdatePlanStepStatusPending))
@@ -2428,6 +2590,22 @@
                   (JsonPair "reason" (codex:turn-abort-reason-json $reason))
                   (JsonPair "completed_at" (JsonNumber $completed-at))
                   (JsonPair "duration_ms" (JsonNumber $duration-ms))))))))
+
+(= (codex:item-json
+      (CodexEventStreamError $message $codex-error-info $additional-details))
+   (JsonObject
+     ((JsonPair "type" (JsonString "stream_error"))
+      (JsonPair "message" (JsonString $message))
+      (JsonPair
+        "codex_error_info"
+        (if (== $codex-error-info CodexAbsent)
+            JsonNull
+            (codex:codex-error-info-json $codex-error-info)))
+      (JsonPair
+        "additional_details"
+        (if (== $additional-details CodexAbsent)
+            JsonNull
+            (JsonString $additional-details))))))
 
 (= (codex:items-json $items)
    (function

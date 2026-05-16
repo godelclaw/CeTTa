@@ -493,3 +493,39 @@
         1712346000
         250)))
   ("{\"type\":\"turn_aborted\",\"turn_id\":\"turn-42\",\"reason\":\"review_ended\",\"completed_at\":1712346000,\"duration_ms\":250}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:stream-error-event
+      "retrying model stream"
+      CodexAbsent
+      CodexAbsent))
+  ("stream_error"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:stream-error-event
+        "retrying model stream"
+        CodexAbsent
+        CodexAbsent)))
+  ("{\"type\":\"stream_error\",\"message\":\"retrying model stream\",\"codex_error_info\":null,\"additional_details\":null}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:stream-error-event
+        "cannot steer this turn"
+        (codex:codex-error-info-active-turn-not-steerable
+          (codex:non-steerable-turn-kind-review))
+        "wait for the review turn to finish")))
+  ("{\"type\":\"stream_error\",\"message\":\"cannot steer this turn\",\"codex_error_info\":{\"active_turn_not_steerable\":{\"turn_kind\":\"review\"}},\"additional_details\":\"wait for the review turn to finish\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:stream-error-event
+        "connection dropped"
+        (codex:codex-error-info-response-stream-disconnected CodexAbsent)
+        CodexAbsent)))
+  ("{\"type\":\"stream_error\",\"message\":\"connection dropped\",\"codex_error_info\":{\"response_stream_disconnected\":{\"http_status_code\":null}},\"additional_details\":null}"))
