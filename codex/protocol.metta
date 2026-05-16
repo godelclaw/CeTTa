@@ -3737,6 +3737,9 @@
       (CodexSessionSourceUnknown))
    "unknown")
 
+; CeTTa evaluator detail: this public constructor boundary is forced through
+; `once` to collapse duplicate equivalent reductions from the recursive
+; normalization path. The visible Rust result surface is unchanged.
 (= (codex:session-source-from-startup-arg $value)
    (once
      (let $trimmed (str-trim $value)
