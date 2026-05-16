@@ -128,16 +128,14 @@
       ($other $other))))
 
 (= (codex:ascii-lower-text $text)
-   (if (== $text "")
-       ""
-       (str-concat
-         (codex:ascii-lower-char (str-slice $text 0 1))
-         (codex:ascii-lower-text
-           (str-slice $text 1 (str-length $text))))))
+   ; CeTTa reduction detail: reuse the protocol slice's already-stable ASCII
+   ; lower helper. The visible ASCII-only behavior matches Rust.
+   (codex:product-ascii-lower-text $text))
 
 (= (codex:text-equals-ignore-ascii-case $lhs $rhs)
-   (== (codex:ascii-lower-text $lhs)
-       (codex:ascii-lower-text $rhs)))
+   (let $lhs-lower (codex:ascii-lower-text $lhs)
+     (let $rhs-lower (codex:ascii-lower-text $rhs)
+       (== $lhs-lower $rhs-lower))))
 
 (= (codex:contextual-fragment-matches-markers $start-marker $end-marker $text)
    (if (== $start-marker "")
@@ -271,10 +269,13 @@
          (str-concat $text "\n")))))
 
 (= (codex:user-instructions-matches-text $text)
-   (codex:contextual-fragment-matches-markers
-     (codex:user-instructions-start-marker)
-     (codex:user-instructions-end-marker)
-     $text))
+   (case
+     (codex:contextual-fragment-matches-markers
+       (codex:user-instructions-start-marker)
+       (codex:user-instructions-end-marker)
+       $text)
+     ((True True)
+      (False False))))
 
 (= (codex:user-shell-command-role)
    "user")
@@ -298,10 +299,13 @@
         $output))))
 
 (= (codex:user-shell-command-matches-text $text)
-   (codex:contextual-fragment-matches-markers
-     (codex:user-shell-command-start-marker)
-     (codex:user-shell-command-end-marker)
-     $text))
+   (case
+     (codex:contextual-fragment-matches-markers
+       (codex:user-shell-command-start-marker)
+       (codex:user-shell-command-end-marker)
+       $text)
+     ((True True)
+      (False False))))
 
 (= (codex:turn-aborted-role)
    "user")
@@ -325,10 +329,13 @@
        (str-concat $guidance "\n"))))
 
 (= (codex:turn-aborted-matches-text $text)
-   (codex:contextual-fragment-matches-markers
-     (codex:turn-aborted-start-marker)
-     (codex:turn-aborted-end-marker)
-     $text))
+   (case
+     (codex:contextual-fragment-matches-markers
+       (codex:turn-aborted-start-marker)
+       (codex:turn-aborted-end-marker)
+       $text)
+     ((True True)
+      (False False))))
 
 (= (codex:environment-context-role)
    "user")
@@ -699,10 +706,13 @@
        ((codex:environment-context-body-text $context)))))
 
 (= (codex:environment-context-matches-text $text)
-   (codex:contextual-fragment-matches-markers
-     (codex:environment-context-start-marker)
-     (codex:environment-context-end-marker)
-     $text))
+   (case
+     (codex:contextual-fragment-matches-markers
+       (codex:environment-context-start-marker)
+       (codex:environment-context-end-marker)
+       $text)
+     ((True True)
+      (False False))))
 
 (= (codex:hook-prompt-fragment $text $hook-run-id)
    (CodexHookPromptFragment $text $hook-run-id))
@@ -874,10 +884,13 @@
        ($name $path $contents))))
 
 (= (codex:skill-instructions-matches-text $text)
-   (codex:contextual-fragment-matches-markers
-     (codex:skill-instructions-start-marker)
-     (codex:skill-instructions-end-marker)
-     $text))
+   (case
+     (codex:contextual-fragment-matches-markers
+       (codex:skill-instructions-start-marker)
+       (codex:skill-instructions-end-marker)
+       $text)
+     ((True True)
+      (False False))))
 
 (= (codex:agent-status-pending-init)
    (CodexAgentStatusPendingInit))
@@ -952,10 +965,13 @@
              (JsonPair "status" (codex:agent-status-json $status)))))))))
 
 (= (codex:subagent-notification-matches-text $text)
-   (codex:contextual-fragment-matches-markers
-     (codex:subagent-notification-start-marker)
-     (codex:subagent-notification-end-marker)
-     $text))
+   (case
+     (codex:contextual-fragment-matches-markers
+       (codex:subagent-notification-start-marker)
+       (codex:subagent-notification-end-marker)
+       $text)
+     ((True True)
+      (False False))))
 
 (= (codex:permissions-contextual-fragment $instructions)
    (codex:contextual-fragment
@@ -1357,10 +1373,13 @@
        ((codex:realtime-end-instructions-text) $reason))))
 
 (= (codex:realtime-conversation-matches-text $text)
-   (codex:contextual-fragment-matches-markers
-     (codex:realtime-conversation-start-marker)
-     (codex:realtime-conversation-end-marker)
-     $text))
+   (case
+     (codex:contextual-fragment-matches-markers
+       (codex:realtime-conversation-start-marker)
+       (codex:realtime-conversation-end-marker)
+       $text)
+     ((True True)
+      (False False))))
 
 (= (codex:available-skills-instructions-role)
    "developer")
@@ -1381,32 +1400,15 @@
 (= (codex:available-skills-instructions-guidance)
    "- Discovery: The list above is the skills available in this session (name + description + file path). Skill bodies live on disk at the listed paths.\n- Trigger rules: If the user names a skill (with `$SkillName` or plain text) OR the task clearly matches a skill's description shown above, you must use that skill for that turn. Multiple mentions mean use them all. Do not carry skills across turns unless re-mentioned.\n- Missing/blocked: If a named skill isn't in the list or the path can't be read, say so briefly and continue with the best fallback.\n- How to use a skill (progressive disclosure):\n  1) After deciding to use a skill, open its `SKILL.md`. Read only enough to follow the workflow.\n  2) When `SKILL.md` references relative paths (e.g., `scripts/foo.py`), resolve them relative to the skill directory listed above first, and only consider other paths if needed.\n  3) If `SKILL.md` points to extra folders such as `references/`, load only the specific files needed for the request; don't bulk-load everything.\n  4) If `scripts/` exist, prefer running or patching them instead of retyping large code blocks.\n  5) If `assets/` or templates exist, reuse them instead of recreating from scratch.\n- Coordination and sequencing:\n  - If multiple skills apply, choose the minimal set that covers the request and state the order you'll use them.\n  - Announce which skill(s) you're using and why (one short line). If you skip an obvious skill, say why.\n- Context hygiene:\n  - Keep context small: summarize long sections instead of pasting them; only load extra files when needed.\n  - Avoid deep reference-chasing: prefer opening only files directly linked from `SKILL.md` unless you're blocked.\n  - When variants exist (frameworks, providers, domains), pick only the relevant reference file(s) and note that choice.\n- Safety and fallback: If a skill can't be applied cleanly (missing files, unclear instructions), state the issue, pick the next-best approach, and continue.")
 
-(= (codex:available-skills-instructions-lines $skill-lines)
-   (let $lines-0
-     (codex:append-item () "## Skills")
-     (let $lines-1
-       (codex:append-item
-         $lines-0
-         "A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used. Each entry includes a name, description, and file path so you can open the source for full instructions when using a specific skill.")
-       (let $lines-2
-         (codex:append-item $lines-1 "### Available skills")
-         (let $lines-3 (list:append $lines-2 $skill-lines)
-           (let $lines-4
-             (codex:append-item $lines-3 "### How to use skills")
-             (codex:append-item
-               $lines-4
-               (codex:available-skills-instructions-guidance))))))))
-
 (= (codex:available-skills-instructions $skill-lines)
    (codex:contextual-fragment
      (codex:available-skills-instructions-role)
      (codex:available-skills-instructions-start-marker)
      (codex:available-skills-instructions-end-marker)
      (format-args
-       "\n{}\n"
-       ((str-join
-          "\n"
-          (codex:available-skills-instructions-lines $skill-lines))))))
+       "\n## Skills\nA skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used. Each entry includes a name, description, and file path so you can open the source for full instructions when using a specific skill.\n### Available skills\n{}\n### How to use skills\n{}\n"
+       ((str-join "\n" (once $skill-lines))
+        (codex:available-skills-instructions-guidance)))))
 
 ; CeTTa reduction detail: forcing the helper accessor through `eval` avoids a
 ; nested reduction hole here while preserving Rust's visible behavior.
@@ -1418,10 +1420,13 @@
          (codex:available-skills-instructions $skill-lines)))))
 
 (= (codex:available-skills-instructions-matches-text $text)
-   (codex:contextual-fragment-matches-markers
-     (codex:available-skills-instructions-start-marker)
-     (codex:available-skills-instructions-end-marker)
-     $text))
+   (case
+     (codex:contextual-fragment-matches-markers
+       (codex:available-skills-instructions-start-marker)
+       (codex:available-skills-instructions-end-marker)
+       $text)
+     ((True True)
+      (False False))))
 
 (= (codex:app-connector-id $text)
    (CodexAppConnectorId $text))
@@ -1524,32 +1529,10 @@
            (format-args "- `{}`: {}" ($display-name $description))))))
 
 (= (codex:available-plugins-summary-lines $plugins)
-   (if (== $plugins ())
-       ()
-       (let $head (list:first $plugins)
-         (let $tail (list:rest $plugins)
-           (cons-atom
-             (codex:available-plugins-summary-line $head)
-             (codex:available-plugins-summary-lines $tail))))))
-
-(= (codex:available-plugins-instructions-lines $plugins)
-   (let $lines-0
-     (codex:append-item () "## Plugins")
-     (let $lines-1
-       (codex:append-item
-         $lines-0
-         "A plugin is a local bundle of skills, MCP servers, and apps. Below is the list of plugins that are enabled and available in this session.")
-       (let $lines-2
-         (codex:append-item $lines-1 "### Available plugins")
-         (let $lines-3
-           (list:append
-             $lines-2
-             (codex:available-plugins-summary-lines $plugins))
-           (let $lines-4
-             (codex:append-item $lines-3 "### How to use plugins")
-             (codex:append-item
-               $lines-4
-               (codex:available-plugins-instructions-guidance))))))))
+   (map-atom
+     $plugins
+     $plugin
+     (codex:available-plugins-summary-line $plugin)))
 
 (= (codex:available-plugins-instructions $plugins)
    (codex:contextual-fragment
@@ -1557,10 +1540,9 @@
      (codex:available-plugins-instructions-start-marker)
      (codex:available-plugins-instructions-end-marker)
      (format-args
-       "\n{}\n"
-       ((str-join
-          "\n"
-          (codex:available-plugins-instructions-lines $plugins))))))
+       "\n## Plugins\nA plugin is a local bundle of skills, MCP servers, and apps. Below is the list of plugins that are enabled and available in this session.\n### Available plugins\n{}\n### How to use plugins\n{}\n"
+       ((str-join "\n" (codex:available-plugins-summary-lines $plugins))
+        (codex:available-plugins-instructions-guidance)))))
 
 (= (codex:available-plugins-instructions-from-plugins $plugins)
    (if (== $plugins ())
@@ -1568,10 +1550,13 @@
        (codex:available-plugins-instructions $plugins)))
 
 (= (codex:available-plugins-instructions-matches-text $text)
-   (codex:contextual-fragment-matches-markers
-     (codex:available-plugins-instructions-start-marker)
-     (codex:available-plugins-instructions-end-marker)
-     $text))
+   (case
+     (codex:contextual-fragment-matches-markers
+       (codex:available-plugins-instructions-start-marker)
+       (codex:available-plugins-instructions-end-marker)
+       $text)
+     ((True True)
+      (False False))))
 
 (= (codex:is-standard-contextual-user-text $text)
    (if (codex:user-instructions-matches-text $text)
@@ -1596,16 +1581,18 @@
            False)))
 
 (= (codex:is-contextual-user-fragment $content-item)
-   (case $content-item
+   (let $resolved-content-item (once $content-item)
+     (case $resolved-content-item
      (((CodexInputText $text)
        (let $fragment (codex:parse-hook-prompt-fragment $text)
          (if (== $fragment Empty)
              (codex:is-standard-contextual-user-text $text)
              True)))
-      ($other False))))
+      ($other False)))))
 
 (= (codex:is-memory-excluded-contextual-user-fragment $content-item)
-   (case $content-item
+   (let $resolved-content-item (once $content-item)
+     (case $resolved-content-item
      (((CodexInputText $text)
        (codex:is-memory-excluded-standard-contextual-user-text $text))
-      ($other False))))
+      ($other False)))))

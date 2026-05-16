@@ -45,16 +45,21 @@
    False)
 
 (= (codex:is-contextual-user-message-content $message)
-   (let $head (list:first $message)
-     (let $tail (list:rest $message)
+   (let $resolved-message (once $message)
+     (let $head (list:first $resolved-message)
+       (let $tail (list:rest $resolved-message)
        (if (codex:is-contextual-user-fragment $head)
            True
            (if (== $tail ())
                False
-               (codex:is-contextual-user-message-content $tail))))))
+               (case
+                 (codex:is-contextual-user-message-content $tail)
+                 ((True True)
+                  (False False)))))))))
 
 (= (codex:is-contextual-dev-fragment $item)
-   (case $item
+   (let $resolved-item (once $item)
+     (case $resolved-item
      (((CodexInputText $text)
        (let $trimmed-lower
          (codex:ascii-lower-text (codex:trim-start-basic $text))
@@ -68,31 +73,39 @@
                  (str-starts-with? $trimmed-lower "<realtime_conversation>")
                  (str-starts-with? $trimmed-lower "<personality_spec>")))))))
       ($other
-       False))))
+       False)))))
 
 (= (codex:is-contextual-dev-message-content ())
    False)
 
 (= (codex:is-contextual-dev-message-content $message)
-   (let $head (list:first $message)
-     (let $tail (list:rest $message)
+   (let $resolved-message (once $message)
+     (let $head (list:first $resolved-message)
+       (let $tail (list:rest $resolved-message)
        (if (codex:is-contextual-dev-fragment $head)
            True
            (if (== $tail ())
                False
-               (codex:is-contextual-dev-message-content $tail))))))
+               (case
+                 (codex:is-contextual-dev-message-content $tail)
+                 ((True True)
+                  (False False)))))))))
 
 (= (codex:has-non-contextual-dev-message-content ())
    False)
 
 (= (codex:has-non-contextual-dev-message-content $message)
-   (let $head (list:first $message)
-     (let $tail (list:rest $message)
+   (let $resolved-message (once $message)
+     (let $head (list:first $resolved-message)
+       (let $tail (list:rest $resolved-message)
        (if (codex:is-contextual-dev-fragment $head)
            (if (== $tail ())
                False
-               (codex:has-non-contextual-dev-message-content $tail))
-           True))))
+               (case
+                 (codex:has-non-contextual-dev-message-content $tail)
+                 ((True True)
+                  (False False))))
+           True)))))
 
 (= (codex:turn-user-input-text $text)
    (CodexTurnUserInputText $text))

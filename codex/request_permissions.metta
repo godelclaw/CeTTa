@@ -1258,10 +1258,13 @@
       $action
       $effective-file-system-sandbox-policy
       $granted-permissions)
-   (codex:is-write-patch-constrained-to-writable-paths
-     $action
-     $effective-file-system-sandbox-policy
-     (codex:apply-patch-action-cwd $action)))
+   (case
+     (codex:is-write-patch-constrained-to-writable-paths
+       $action
+       $effective-file-system-sandbox-policy
+       (codex:apply-patch-action-cwd $action))
+     ((True True)
+      (False False))))
 
 (= (codex:request-permissions-effective-file-system-sandbox-policy-for-apply-patch
       (CodexRequestPermissionsState

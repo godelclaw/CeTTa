@@ -174,6 +174,18 @@
       (CodexApplyPatchFileChangeUpdate $path $unified-diff $move-path $new-content))
    $path)
 
+(= (codex:apply-patch-change-type
+      (CodexApplyPatchFileChangeAdd $path $content))
+   "add")
+
+(= (codex:apply-patch-change-type
+      (CodexApplyPatchFileChangeDelete $path $content))
+   "delete")
+
+(= (codex:apply-patch-change-type
+      (CodexApplyPatchFileChangeUpdate $path $unified-diff $move-path $new-content))
+   "update")
+
 (= (codex:apply-patch-change-move-path
       (CodexApplyPatchFileChangeUpdate $path $unified-diff $move-path $new-content))
    $move-path)
@@ -254,14 +266,23 @@
 (= (codex:patch-changes-to-codex ())
    ())
 
+; CeTTa's evaluator may leave recursive list-builder arguments suspended inside
+; cons-atom/outer constructors. Materialize the converted head/tail first so
+; the visible PatchAction change list matches the Rust slice exactly.
 (= (codex:patch-changes-to-codex $changes)
    (let ($head $tail) (decons-atom $changes)
-     (cons-atom
+     (let $converted-head
        (codex:patch-change-to-codex $head)
-       (codex:patch-changes-to-codex $tail))))
+       (let $converted-tail
+         (codex:patch-changes-to-codex $tail)
+         (cons-atom
+           $converted-head
+           $converted-tail)))))
 
 (= (codex:patch-action-to-codex-action (PatchAction $cwd $changes))
-   (CodexApplyPatchAction $cwd (codex:patch-changes-to-codex $changes)))
+   (let $converted-changes
+     (codex:patch-changes-to-codex $changes)
+     (CodexApplyPatchAction $cwd $converted-changes)))
 
 (= (codex:maybe-parse-apply-patch-input $cwd $input)
    (let $patch-text (codex:decode-apply-patch-input $input)
@@ -341,14 +362,36 @@
            True
            False)))
 
+; CeTTa's path builtins in this profile do not reduce reliably when given
+; symbolic string values (for example list/accessor-derived paths). The current
+; restarted apply_patch slice only needs already-normalized Unix-style absolute
+; roots plus relative patch paths from patch-inspect, so use string-based path
+; normalization here to preserve the Rust-visible behavior for that surface.
+(= (codex:trim-trailing-slash-unless-root $text)
+   (if (== $text "/")
+       "/"
+       (if (str-ends-with? $text "/")
+           (codex:trim-trailing-slash-unless-root
+             (str-slice $text 0 (- (str-length $text) 1)))
+           $text)))
+
+(= (codex:is-unix-absolute-path $path)
+   (str-starts-with? $path "/"))
+
 (= (codex:normalized-policy-path $cwd $path)
-   (if (path-is-absolute? $path)
-       (path-normalize $path)
-       (path-join $cwd $path)))
+   (let $resolved-cwd $cwd
+     (let $resolved-path $path
+       (if (codex:is-unix-absolute-path $resolved-path)
+           (codex:trim-trailing-slash-unless-root $resolved-path)
+           (str-concat
+             (str-concat
+               (codex:trim-trailing-slash-unless-root $resolved-cwd)
+               "/")
+             $resolved-path)))))
 
 (= (codex:is-path-within-root $path $root)
-   (let $norm-path (path-normalize $path)
-     (let $norm-root (path-normalize $root)
+   (let $norm-path (codex:trim-trailing-slash-unless-root $path)
+     (let $norm-root (codex:trim-trailing-slash-unless-root $root)
        (if (== $norm-root "/")
            True
            (if (== $norm-path $norm-root)
@@ -357,99 +400,95 @@
                  $norm-path
                  (str-concat $norm-root "/")))))))
 
-(= (codex:is-path-within-any-root $path ())
-   False)
-
 (= (codex:is-path-within-any-root $path $roots)
-   (let ($head $tail) (decons-atom $roots)
-     (if (codex:is-path-within-root $path $head)
-         True
-         (codex:is-path-within-any-root $path $tail))))
+   (let $resolved-roots (eval $roots)
+     (if (== $resolved-roots ())
+         False
+         (let $head (list:first $resolved-roots)
+           (let $tail (list:rest $resolved-roots)
+             (if (codex:is-path-within-root $path $head)
+                 True
+                 (case
+                   (codex:is-path-within-any-root $path $tail)
+                   ((True True)
+                    (False False)))))))))
 
 (= (codex:fs-policy-can-write-path-with-cwd
-      (CodexPatchFileSystemSandboxPolicy
-        $writable-roots
-        $read-only-roots
-        $blocked-roots)
+      $file-system-sandbox-policy
       $path
       $cwd)
-   (let $abs-path (codex:normalized-policy-path $cwd $path)
-     (if (codex:is-path-within-any-root $abs-path $blocked-roots)
-         False
-         (if (codex:is-path-within-any-root $abs-path $read-only-roots)
-             False
-             (codex:is-path-within-any-root $abs-path $writable-roots)))))
+   (let $writable-roots
+     (codex:patch-fs-policy-writable-roots $file-system-sandbox-policy)
+     (let $read-only-roots
+       (codex:patch-fs-policy-read-only-roots $file-system-sandbox-policy)
+       (let $blocked-roots
+         (codex:patch-fs-policy-blocked-roots $file-system-sandbox-policy)
+         (let $abs-path (codex:normalized-policy-path $cwd $path)
+           (if (codex:is-path-within-any-root $abs-path $blocked-roots)
+               False
+               (if (codex:is-path-within-any-root $abs-path $read-only-roots)
+                   False
+                   (codex:is-path-within-any-root
+                     $abs-path
+                     $writable-roots))))))))
 
 (= (codex:is-apply-patch-change-writable?
-      (CodexApplyPatchFileChangeAdd $path $content)
+      $change
       $file-system-sandbox-policy
       $cwd)
-   (codex:fs-policy-can-write-path-with-cwd
-     $file-system-sandbox-policy
-     $path
-     $cwd))
-
-(= (codex:is-apply-patch-change-writable?
-      (CodexApplyPatchFileChangeDelete $path $content)
-      $file-system-sandbox-policy
-      $cwd)
-   (codex:fs-policy-can-write-path-with-cwd
-     $file-system-sandbox-policy
-     $path
-     $cwd))
-
-(= (codex:is-apply-patch-change-writable?
-      (CodexApplyPatchFileChangeUpdate $path CodexAbsent $move-path $new-content)
-      $file-system-sandbox-policy
-      $cwd)
-   (if (codex:fs-policy-can-write-path-with-cwd
-          $file-system-sandbox-policy
-          $path
-          $cwd)
-       (if (== $move-path CodexAbsent)
-           True
-           (codex:fs-policy-can-write-path-with-cwd
-             $file-system-sandbox-policy
-             $move-path
-             $cwd))
-       False))
-
-(= (codex:is-apply-patch-change-writable?
-      (CodexApplyPatchFileChangeUpdate $path $unified-diff $move-path $new-content)
-      $file-system-sandbox-policy
-      $cwd)
-   (if (codex:fs-policy-can-write-path-with-cwd
-          $file-system-sandbox-policy
-          $path
-          $cwd)
-       (if (== $move-path CodexAbsent)
-           True
-           (codex:fs-policy-can-write-path-with-cwd
-             $file-system-sandbox-policy
-             $move-path
-             $cwd))
-       False))
+   (let $change-type (codex:apply-patch-change-type $change)
+     (let $path (codex:apply-patch-change-path $change)
+       (if (== $change-type "update")
+           (case
+             (codex:fs-policy-can-write-path-with-cwd
+               $file-system-sandbox-policy
+               $path
+               $cwd)
+             ((True
+               (case
+                 (codex:apply-patch-change-has-move-path $change)
+                 ((True
+                   (case
+                     (codex:fs-policy-can-write-path-with-cwd
+                       $file-system-sandbox-policy
+                       (codex:apply-patch-change-move-path $change)
+                       $cwd)
+                     ((True True)
+                      (False False))))
+                  (False True))))
+              (False False)))
+           (case
+             (codex:fs-policy-can-write-path-with-cwd
+               $file-system-sandbox-policy
+               $path
+               $cwd)
+             ((True True)
+              (False False)))))))
 
 (= (codex:is-write-patch-constrained-to-writable-paths
-      (CodexApplyPatchAction $action-cwd ())
+      $action
       $file-system-sandbox-policy
       $cwd)
-   True)
-
-(= (codex:is-write-patch-constrained-to-writable-paths
-      (CodexApplyPatchAction $action-cwd $changes)
-      $file-system-sandbox-policy
-      $cwd)
-   (let ($head $tail) (decons-atom $changes)
-     (if (codex:is-apply-patch-change-writable?
-            $head
-            $file-system-sandbox-policy
-            $cwd)
-         (codex:is-write-patch-constrained-to-writable-paths
-           (CodexApplyPatchAction $action-cwd $tail)
-           $file-system-sandbox-policy
-           $cwd)
-         False)))
+   (let $action-cwd (codex:apply-patch-action-cwd $action)
+     (let $changes (codex:apply-patch-action-changes $action)
+       (if (== $changes ())
+           True
+           (let $head (list:first $changes)
+             (let $tail (list:rest $changes)
+               (case
+                 (codex:is-apply-patch-change-writable?
+                   $head
+                   $file-system-sandbox-policy
+                   $cwd)
+                 ((True
+                   (case
+                     (codex:is-write-patch-constrained-to-writable-paths
+                       (CodexApplyPatchAction $action-cwd $tail)
+                       $file-system-sandbox-policy
+                       $cwd)
+                     ((True True)
+                      (False False))))
+                  (False False)))))))))
 
 (= (codex:is-apply-patch-action-empty? $action)
    (if (== (codex:apply-patch-action-changes $action) ())
