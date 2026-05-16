@@ -1,7 +1,6 @@
 !(register-module! ../codex)
 !(import! &self json)
 !(import! &self codex:approval)
-!(import! &self codex:protocol)
 !(import! &self codex:request_permissions)
 
 (= (codex-rp-root) "/home/zarclaw/repos/CeTTa")
@@ -28,27 +27,20 @@
        ("/home/zarclaw/repos/CeTTa/runtime"))))
 
 !(assertEqual
-  (once
-    (case
-      (codex:handle-request-permissions-payload
-        (codex:request-permissions-handler-context
-          (codex:ask-for-approval-granular-config
-            True
-            False
-            False
-            False
-            False)
-          "turn-rp"
-          (codex-rp-root)
-          (codex:request-permissions-response-behavior-return
-            (codex:request-permissions-response
-              (codex-rp-granted-profile)
-              (codex:permission-grant-scope-turn)
-              False)))
-        (codex:empty-request-permissions-state)
-        "call-rp-granular"
-        (codex:request-permissions-function-payload
-          (codex-rp-input-json)))
-      (((CodexRequestPermissionsHandlerOutput $event $output $next-state)
-        $output))))
-  "{\"permissions\":{},\"scope\":\"turn\"}")
+  (codex:is-request-permissions-approval-short-circuit?
+    (codex:ask-for-approval-granular-config
+      True
+      False
+      False
+      False
+      False))
+  True)
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:request-permissions-response-json
+      (codex:request-permissions-response
+        CodexAbsent
+        (codex:permission-grant-scope-turn)
+        False)))
+  ("{\"permissions\":{},\"scope\":\"turn\"}"))

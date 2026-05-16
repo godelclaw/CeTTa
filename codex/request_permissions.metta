@@ -267,14 +267,14 @@
         $session-permissions
         $turn-permissions
         $turn-strict-auto-review))
-   $session-permissions)
+   (once (eval $session-permissions)))
 
 (= (codex:request-permissions-state-turn-permissions
       (CodexRequestPermissionsState
         $session-permissions
         $turn-permissions
         $turn-strict-auto-review))
-   $turn-permissions)
+   (once (eval $turn-permissions)))
 
 (= (codex:request-permissions-state-turn-strict-auto-review
       (CodexRequestPermissionsState
@@ -283,13 +283,21 @@
         $turn-strict-auto-review))
    $turn-strict-auto-review)
 
-(= (codex:request-permissions-tool-call-result-item
-      (CodexRequestPermissionsToolCallResult $item $state))
-   $item)
+(= (codex:request-permissions-tool-call-result-item $result)
+   (let $resolved-result (once (eval $result))
+     (case $resolved-result
+       (((CodexRequestPermissionsToolCallResult $item $state)
+         $item)
+        ($other
+         Empty)))))
 
-(= (codex:request-permissions-tool-call-result-state
-      (CodexRequestPermissionsToolCallResult $item $state))
-   $state)
+(= (codex:request-permissions-tool-call-result-state $result)
+   (let $resolved-result (once (eval $result))
+     (case $resolved-result
+       (((CodexRequestPermissionsToolCallResult $item $state)
+         $state)
+        ($other
+         Empty)))))
 
 (= (codex:request-permissions-effective-additional-file-system-sandbox-policy
       (CodexRequestPermissionsEffectiveAdditionalPermissions
@@ -329,7 +337,7 @@
    $message)
 
 (= (codex:request-permissions-handler-result-type $result)
-   (let $resolved-result (eval $result)
+   (let $resolved-result (once (eval $result))
      (case $resolved-result
        (((CodexRequestPermissionsHandlerOutput $event $output $state)
          "output")
@@ -339,7 +347,7 @@
          "error")))))
 
 (= (codex:request-permissions-handler-result-event $result)
-   (let $resolved-result (eval $result)
+   (let $resolved-result (once (eval $result))
      (case $resolved-result
        (((CodexRequestPermissionsHandlerOutput $event $output $state)
          $event)
@@ -349,7 +357,7 @@
          Empty)))))
 
 (= (codex:request-permissions-handler-result-output-text $result)
-   (let $resolved-result (eval $result)
+   (let $resolved-result (once (eval $result))
      (case $resolved-result
        (((CodexRequestPermissionsHandlerOutput $event $output $state)
          $output)
@@ -357,7 +365,7 @@
          Empty)))))
 
 (= (codex:request-permissions-handler-result-state $result)
-   (let $resolved-result (eval $result)
+   (let $resolved-result (once (eval $result))
      (case $resolved-result
        (((CodexRequestPermissionsHandlerOutput $event $output $state)
          $state)
@@ -365,7 +373,7 @@
          Empty)))))
 
 (= (codex:request-permissions-handler-result-message $result)
-   (let $resolved-result (eval $result)
+   (let $resolved-result (once (eval $result))
      (case $resolved-result
        (((CodexRequestPermissionsHandlerCancelled $event $message)
          $message)
@@ -538,10 +546,10 @@
               (JsonPair "write"
                 (codex:request-permissions-string-array-json $write)))))))
 
-(= (codex:request-permission-profile-json CodexAbsent)
+(= (codex:request-permission-profile-json-resolved CodexAbsent)
    (JsonObject ()))
 
-(= (codex:request-permission-profile-json
+(= (codex:request-permission-profile-json-resolved
       (CodexRequestPermissionProfile $network $file-system))
    (if (== $network CodexAbsent)
        (if (== $file-system CodexAbsent)
@@ -558,6 +566,29 @@
                 (codex:request-permissions-network-json $network))
               (JsonPair "file_system"
                 (codex:request-permissions-file-system-json $file-system)))))))
+
+; CeTTa evaluator detail: callers often pass nested profile-producing terms
+; here. Force that public boundary through `once (eval ...)` so file-mode
+; reductions see the same Rust-visible JSON as already-materialized
+; `CodexRequestPermissionProfile` values.
+(= (codex:request-permission-profile-json $permissions)
+   (let $resolved (once (eval $permissions))
+     (case $resolved
+       (((CodexRequestPermissionProfile $network $file-system)
+         (codex:request-permission-profile-json-resolved
+           (CodexRequestPermissionProfile $network $file-system)))
+        (CodexAbsent
+          (codex:request-permission-profile-json-resolved CodexAbsent))
+        ($other
+          Empty)))))
+
+; CeTTa evaluator detail: the state surface tests need a stable public boundary
+; from request-permissions state to the visible JSON profile payload. Reducing
+; the nested state/profile term here avoids file-mode `Empty` results from
+; inline destructuring of the same composition.
+(= (codex:request-permissions-state-turn-permissions-json $state)
+   (codex:request-permission-profile-json
+     (once (eval (codex:request-permissions-state-turn-permissions $state)))))
 
 (= (codex:request-permissions-args-json
       (CodexRequestPermissionsArgs $reason $permissions))

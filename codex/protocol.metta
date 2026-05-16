@@ -50,6 +50,7 @@
 ; - Op::Compact / DropMemories / UpdateMemories
 ; - Op::SetThreadName / SetThreadMemoryMode / Undo / ThreadRollback
 ; - Op::Review / Shutdown / RunUserShellCommand / ListModels
+; - Op::ApproveGuardianDeniedAction / GuardianAssessmentEvent
 ; - McpServerRefreshConfig
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
@@ -70,6 +71,13 @@
 ;
 ; CeTTa detail: `Empty` is a reduction sentinel, so omitted optional protocol
 ; fields use the internal tag `CodexAbsent` until projected back out.
+
+; CeTTa deviation: Rust carries several guardian/approval path fields as
+; `AbsolutePathBuf` and imports `RequestPermissionProfile` from the separate
+; request_permissions surface. This protocol slice mirrors the same visible
+; JSON using plain path strings plus a narrow local profile projector so the
+; request-side guardian op can stay self-contained without introducing a
+; protocol/request_permissions import cycle.
 ;
 ; Rust uses `Result<SessionSource, &'static str>` and `Option<...>` in the
 ; `SessionSource` helper tranche. This slice preserves the same visible
@@ -900,6 +908,114 @@
 
 (= (codex:list-models-op)
    (CodexOpListModels))
+
+(= (codex:guardian-risk-level-low)
+   (CodexGuardianRiskLevelLow))
+
+(= (codex:guardian-risk-level-medium)
+   (CodexGuardianRiskLevelMedium))
+
+(= (codex:guardian-risk-level-high)
+   (CodexGuardianRiskLevelHigh))
+
+(= (codex:guardian-risk-level-critical)
+   (CodexGuardianRiskLevelCritical))
+
+(= (codex:guardian-user-authorization-unknown)
+   (CodexGuardianUserAuthorizationUnknown))
+
+(= (codex:guardian-user-authorization-low)
+   (CodexGuardianUserAuthorizationLow))
+
+(= (codex:guardian-user-authorization-medium)
+   (CodexGuardianUserAuthorizationMedium))
+
+(= (codex:guardian-user-authorization-high)
+   (CodexGuardianUserAuthorizationHigh))
+
+(= (codex:guardian-assessment-status-in-progress)
+   (CodexGuardianAssessmentStatusInProgress))
+
+(= (codex:guardian-assessment-status-approved)
+   (CodexGuardianAssessmentStatusApproved))
+
+(= (codex:guardian-assessment-status-denied)
+   (CodexGuardianAssessmentStatusDenied))
+
+(= (codex:guardian-assessment-status-timed-out)
+   (CodexGuardianAssessmentStatusTimedOut))
+
+(= (codex:guardian-assessment-status-aborted)
+   (CodexGuardianAssessmentStatusAborted))
+
+(= (codex:guardian-assessment-decision-source-agent)
+   (CodexGuardianAssessmentDecisionSourceAgent))
+
+(= (codex:guardian-command-source-shell)
+   (CodexGuardianCommandSourceShell))
+
+(= (codex:guardian-command-source-unified-exec)
+   (CodexGuardianCommandSourceUnifiedExec))
+
+(= (codex:guardian-assessment-action-command $source $command $cwd)
+   (CodexGuardianAssessmentActionCommand $source $command $cwd))
+
+(= (codex:guardian-assessment-action-execve $source $program $argv $cwd)
+   (CodexGuardianAssessmentActionExecve $source $program $argv $cwd))
+
+(= (codex:guardian-assessment-action-apply-patch $cwd $files)
+   (CodexGuardianAssessmentActionApplyPatch $cwd $files))
+
+(= (codex:guardian-assessment-action-network-access
+      $target
+      $host
+      $protocol
+      $port)
+   (CodexGuardianAssessmentActionNetworkAccess
+     $target
+     $host
+     $protocol
+     $port))
+
+(= (codex:guardian-assessment-action-mcp-tool-call
+      $server
+      $tool-name
+      $connector-id
+      $connector-name
+      $tool-title)
+   (CodexGuardianAssessmentActionMcpToolCall
+     $server
+     $tool-name
+     $connector-id
+     $connector-name
+     $tool-title))
+
+(= (codex:guardian-assessment-action-request-permissions $reason $permissions)
+   (CodexGuardianAssessmentActionRequestPermissions $reason $permissions))
+
+(= (codex:guardian-assessment-event
+      $id
+      $target-item-id
+      $turn-id
+      $status
+      $risk-level
+      $user-authorization
+      $rationale
+      $decision-source
+      $action)
+   (CodexGuardianAssessmentEvent
+     $id
+     $target-item-id
+     $turn-id
+     $status
+     $risk-level
+     $user-authorization
+     $rationale
+     $decision-source
+     $action))
+
+(= (codex:approve-guardian-denied-action-op $event)
+   (CodexOpApproveGuardianDeniedAction $event))
 
 (= (codex:realtime-conversation-version-v1)
    (CodexRealtimeConversationVersionV1))
@@ -6438,6 +6554,10 @@
       (CodexOpListModels))
    "list_models")
 
+(= (codex:op-type
+      (CodexOpApproveGuardianDeniedAction $event))
+   "approve_guardian_denied_action")
+
 (= (codex:w3c-trace-context-json
       (CodexW3cTraceContext $traceparent $tracestate))
    (let $pairs-1 ()
@@ -6464,6 +6584,273 @@
 (= (codex:thread-memory-mode-json
       (CodexThreadMemoryModeDisabled))
    (JsonString "disabled"))
+
+(= (codex:guardian-risk-level-json
+      (CodexGuardianRiskLevelLow))
+   (JsonString "low"))
+
+(= (codex:guardian-risk-level-json
+      (CodexGuardianRiskLevelMedium))
+   (JsonString "medium"))
+
+(= (codex:guardian-risk-level-json
+      (CodexGuardianRiskLevelHigh))
+   (JsonString "high"))
+
+(= (codex:guardian-risk-level-json
+      (CodexGuardianRiskLevelCritical))
+   (JsonString "critical"))
+
+(= (codex:guardian-user-authorization-json
+      (CodexGuardianUserAuthorizationUnknown))
+   (JsonString "unknown"))
+
+(= (codex:guardian-user-authorization-json
+      (CodexGuardianUserAuthorizationLow))
+   (JsonString "low"))
+
+(= (codex:guardian-user-authorization-json
+      (CodexGuardianUserAuthorizationMedium))
+   (JsonString "medium"))
+
+(= (codex:guardian-user-authorization-json
+      (CodexGuardianUserAuthorizationHigh))
+   (JsonString "high"))
+
+(= (codex:guardian-assessment-status-json
+      (CodexGuardianAssessmentStatusInProgress))
+   (JsonString "in_progress"))
+
+(= (codex:guardian-assessment-status-json
+      (CodexGuardianAssessmentStatusApproved))
+   (JsonString "approved"))
+
+(= (codex:guardian-assessment-status-json
+      (CodexGuardianAssessmentStatusDenied))
+   (JsonString "denied"))
+
+(= (codex:guardian-assessment-status-json
+      (CodexGuardianAssessmentStatusTimedOut))
+   (JsonString "timed_out"))
+
+(= (codex:guardian-assessment-status-json
+      (CodexGuardianAssessmentStatusAborted))
+   (JsonString "aborted"))
+
+(= (codex:guardian-assessment-decision-source-json
+      (CodexGuardianAssessmentDecisionSourceAgent))
+   (JsonString "agent"))
+
+(= (codex:guardian-command-source-json
+      (CodexGuardianCommandSourceShell))
+   (JsonString "shell"))
+
+(= (codex:guardian-command-source-json
+      (CodexGuardianCommandSourceUnifiedExec))
+   (JsonString "unified_exec"))
+
+(= (codex:guardian-request-permissions-string-array-json ())
+   (JsonArray ()))
+
+(= (codex:guardian-request-permissions-string-array-json $items)
+   (JsonArray
+     (eval (map-atom $items $item (JsonString $item)))))
+
+(= (codex:guardian-request-permissions-network-json
+      (CodexRequestPermissionsNetwork $enabled))
+   (JsonBool $enabled))
+
+(= (codex:guardian-request-permissions-file-system-json
+      (CodexRequestPermissionsFileSystem $read $write))
+   (if (== $read ())
+       (if (== $write ())
+           (JsonObject ())
+           (JsonObject
+             ((JsonPair "write"
+                (codex:guardian-request-permissions-string-array-json $write)))))
+       (if (== $write ())
+           (JsonObject
+             ((JsonPair "read"
+                (codex:guardian-request-permissions-string-array-json $read))))
+           (JsonObject
+             ((JsonPair "read"
+                (codex:guardian-request-permissions-string-array-json $read))
+              (JsonPair "write"
+                (codex:guardian-request-permissions-string-array-json $write)))))))
+
+(= (codex:guardian-request-permission-profile-json CodexAbsent)
+   (JsonObject ()))
+
+(= (codex:guardian-request-permission-profile-json
+      (CodexRequestPermissionProfile $network $file-system))
+   (if (== $network CodexAbsent)
+       (if (== $file-system CodexAbsent)
+           (JsonObject ())
+           (JsonObject
+             ((JsonPair "file_system"
+                (codex:guardian-request-permissions-file-system-json $file-system)))))
+       (if (== $file-system CodexAbsent)
+           (JsonObject
+             ((JsonPair "network"
+                (codex:guardian-request-permissions-network-json $network))))
+           (JsonObject
+             ((JsonPair "network"
+                (codex:guardian-request-permissions-network-json $network))
+              (JsonPair "file_system"
+                (codex:guardian-request-permissions-file-system-json $file-system)))))))
+
+(= (codex:guardian-network-approval-protocol-json
+      (CodexNetworkApprovalProtocolHttp))
+   (JsonString "http"))
+
+(= (codex:guardian-network-approval-protocol-json
+      (CodexNetworkApprovalProtocolHttps))
+   (JsonString "https"))
+
+(= (codex:guardian-network-approval-protocol-json
+      (CodexNetworkApprovalProtocolSocks5Tcp))
+   (JsonString "socks5_tcp"))
+
+(= (codex:guardian-network-approval-protocol-json
+      (CodexNetworkApprovalProtocolSocks5Udp))
+   (JsonString "socks5_udp"))
+
+(= (codex:guardian-assessment-action-json
+      (CodexGuardianAssessmentActionCommand $source $command $cwd))
+   (JsonObject
+     ((JsonPair "type" (JsonString "command"))
+      (JsonPair "source" (codex:guardian-command-source-json $source))
+      (JsonPair "command" (JsonString $command))
+      (JsonPair "cwd" (JsonString $cwd)))))
+
+(= (codex:guardian-assessment-action-json
+      (CodexGuardianAssessmentActionExecve $source $program $argv $cwd))
+   (JsonObject
+     ((JsonPair "type" (JsonString "execve"))
+      (JsonPair "source" (codex:guardian-command-source-json $source))
+      (JsonPair "program" (JsonString $program))
+      (JsonPair "argv" (codex:json-string-array $argv))
+      (JsonPair "cwd" (JsonString $cwd)))))
+
+(= (codex:guardian-assessment-action-json
+      (CodexGuardianAssessmentActionApplyPatch $cwd $files))
+   (JsonObject
+     ((JsonPair "type" (JsonString "apply_patch"))
+      (JsonPair "cwd" (JsonString $cwd))
+      (JsonPair "files" (codex:json-string-array $files)))))
+
+(= (codex:guardian-assessment-action-json
+      (CodexGuardianAssessmentActionNetworkAccess
+        $target
+        $host
+        $protocol
+        $port))
+   (JsonObject
+     ((JsonPair "type" (JsonString "network_access"))
+      (JsonPair "target" (JsonString $target))
+      (JsonPair "host" (JsonString $host))
+      (JsonPair "protocol" (codex:guardian-network-approval-protocol-json $protocol))
+      (JsonPair "port" (JsonNumber $port)))))
+
+(= (codex:guardian-assessment-action-json
+      (CodexGuardianAssessmentActionMcpToolCall
+        $server
+        $tool-name
+        $connector-id
+        $connector-name
+        $tool-title))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "mcp_tool_call"))
+      (JsonPair "server" (JsonString $server))
+      (JsonPair "tool_name" (JsonString $tool-name)))
+     (let $pairs-2
+       (if (== $connector-id CodexAbsent)
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "connector_id"
+             (JsonString $connector-id)))
+       (let $pairs-3
+         (if (== $connector-name CodexAbsent)
+             $pairs-2
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "connector_name"
+               (JsonString $connector-name)))
+         (JsonObject
+           (if (== $tool-title CodexAbsent)
+               $pairs-3
+               (codex:protocol-append-json-pair
+                 $pairs-3
+                 "tool_title"
+                 (JsonString $tool-title))))))))
+
+(= (codex:guardian-assessment-action-json
+      (CodexGuardianAssessmentActionRequestPermissions $reason $permissions))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "request_permissions"))
+      (JsonPair
+        "permissions"
+        (codex:guardian-request-permission-profile-json $permissions)))
+     (JsonObject
+       (if (== $reason CodexAbsent)
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "reason"
+             (JsonString $reason))))))
+
+(= (codex:guardian-assessment-event-json
+      (CodexGuardianAssessmentEvent
+        $id
+        $target-item-id
+        $turn-id
+        $status
+        $risk-level
+        $user-authorization
+        $rationale
+        $decision-source
+        $action))
+   (let $pairs-1
+     ((JsonPair "id" (JsonString $id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair "status" (codex:guardian-assessment-status-json $status))
+      (JsonPair "action" (codex:guardian-assessment-action-json $action)))
+     (let $pairs-2
+       (if (== $target-item-id CodexAbsent)
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "target_item_id"
+             (JsonString $target-item-id)))
+       (let $pairs-3
+         (if (== $risk-level CodexAbsent)
+             $pairs-2
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "risk_level"
+               (codex:guardian-risk-level-json $risk-level)))
+         (let $pairs-4
+           (if (== $user-authorization CodexAbsent)
+               $pairs-3
+               (codex:protocol-append-json-pair
+                 $pairs-3
+                 "user_authorization"
+                 (codex:guardian-user-authorization-json $user-authorization)))
+           (let $pairs-5
+             (if (== $rationale CodexAbsent)
+                 $pairs-4
+                 (codex:protocol-append-json-pair
+                   $pairs-4
+                   "rationale"
+                   (JsonString $rationale)))
+             (JsonObject
+               (if (== $decision-source CodexAbsent)
+                   $pairs-5
+                   (codex:protocol-append-json-pair
+                     $pairs-5
+                     "decision_source"
+                     (codex:guardian-assessment-decision-source-json $decision-source))))))))))
 
 (= (codex:mcp-server-refresh-config-json
       (CodexMcpServerRefreshConfig
@@ -6657,6 +7044,12 @@
       (CodexOpListModels))
    (JsonObject
      ((JsonPair "type" (JsonString "list_models")))))
+
+(= (codex:op-json
+      (CodexOpApproveGuardianDeniedAction $event))
+   (JsonObject
+     ((JsonPair "type" (JsonString "approve_guardian_denied_action"))
+      (JsonPair "event" (codex:guardian-assessment-event-json $event)))))
 
 ; CeTTa evaluator detail: the generic `Submission` wrapper path below works
 ; for the simple already-landed op subset, but the structured realtime-start

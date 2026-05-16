@@ -1,7 +1,6 @@
 !(register-module! ../codex)
 !(import! &self json)
 !(import! &self codex:approval)
-!(import! &self codex:protocol)
 !(import! &self codex:request_permissions)
 
 (= (codex-rp-root) "/home/zarclaw/repos/CeTTa")
@@ -29,8 +28,8 @@
      (codex-rp-root)))
 
 !(assertEqualToResult
-  (case
-    (codex:request-permissions-state-turn-permissions
+  (json-stringify
+    (codex:request-permissions-state-turn-permissions-json
       (codex:request-permissions-handler-result-state
         (codex:request-permissions-handler-response-result
           (codex:empty-request-permissions-state)
@@ -41,9 +40,5 @@
             (codex:request-permissions-response
               (codex-rp-granted-profile)
               (codex:permission-grant-scope-turn)
-              False)))))
-    (((CodexRequestPermissionProfile $network $file-system)
-      (json-stringify
-        (codex:request-permission-profile-json
-          (CodexRequestPermissionProfile $network $file-system))))))
+              False))))))
   ("{\"file_system\":{\"write\":[\"/home/zarclaw/repos/CeTTa/runtime\"]}}"))

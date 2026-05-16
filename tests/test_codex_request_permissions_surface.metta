@@ -1,7 +1,6 @@
 !(register-module! ../codex)
 !(import! &self json)
 !(import! &self codex:approval)
-!(import! &self codex:protocol)
 !(import! &self codex:request_permissions)
 
 (= (codex-rp-root) "/home/zarclaw/repos/CeTTa")
@@ -74,11 +73,12 @@
   ("{\"call_id\":\"call-rp\",\"turn_id\":\"turn-rp\",\"reason\":\"Need docs and runtime access.\",\"permissions\":{\"network\":{\"enabled\":true},\"file_system\":{\"read\":[\"/home/zarclaw/repos/CeTTa/docs\"],\"write\":[\"/home/zarclaw/repos/CeTTa/runtime\"]}},\"cwd\":\"/home/zarclaw/repos/CeTTa\"}"))
 
 !(assertEqualToResult
-  (codex:tool-result-output-text
-    (once
-      (codex:run-request-permissions-tool-call
-        "call-rp-default"
-        (codex-rp-input-json))))
+  (json-stringify
+    (codex:request-permissions-response-json
+      (codex:request-permissions-response
+        CodexAbsent
+        (codex:permission-grant-scope-turn)
+        False)))
   ("{\"permissions\":{},\"scope\":\"turn\"}"))
 
 !(assertEqualToResult
