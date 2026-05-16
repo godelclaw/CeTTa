@@ -41,6 +41,7 @@
 ; - TurnDiffEvent
 ; - GetHistoryEntryResponseEvent / HistoryEntry
 ; - PatchApplyBeginEvent / PatchApplyUpdatedEvent / PatchApplyEndEvent
+; - HookStartedEvent / HookCompletedEvent / HookRunSummary
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -535,6 +536,139 @@
      $success
      $changes
      $status))
+
+(= (codex:hook-event-name-pre-tool-use)
+   (CodexHookEventNamePreToolUse))
+
+(= (codex:hook-event-name-permission-request)
+   (CodexHookEventNamePermissionRequest))
+
+(= (codex:hook-event-name-post-tool-use)
+   (CodexHookEventNamePostToolUse))
+
+(= (codex:hook-event-name-session-start)
+   (CodexHookEventNameSessionStart))
+
+(= (codex:hook-event-name-user-prompt-submit)
+   (CodexHookEventNameUserPromptSubmit))
+
+(= (codex:hook-event-name-stop)
+   (CodexHookEventNameStop))
+
+(= (codex:hook-handler-type-command)
+   (CodexHookHandlerTypeCommand))
+
+(= (codex:hook-handler-type-prompt)
+   (CodexHookHandlerTypePrompt))
+
+(= (codex:hook-handler-type-agent)
+   (CodexHookHandlerTypeAgent))
+
+(= (codex:hook-execution-mode-sync)
+   (CodexHookExecutionModeSync))
+
+(= (codex:hook-execution-mode-async)
+   (CodexHookExecutionModeAsync))
+
+(= (codex:hook-scope-thread)
+   (CodexHookScopeThread))
+
+(= (codex:hook-scope-turn)
+   (CodexHookScopeTurn))
+
+(= (codex:hook-source-system)
+   (CodexHookSourceSystem))
+
+(= (codex:hook-source-user)
+   (CodexHookSourceUser))
+
+(= (codex:hook-source-project)
+   (CodexHookSourceProject))
+
+(= (codex:hook-source-mdm)
+   (CodexHookSourceMdm))
+
+(= (codex:hook-source-session-flags)
+   (CodexHookSourceSessionFlags))
+
+(= (codex:hook-source-legacy-managed-config-file)
+   (CodexHookSourceLegacyManagedConfigFile))
+
+(= (codex:hook-source-legacy-managed-config-mdm)
+   (CodexHookSourceLegacyManagedConfigMdm))
+
+(= (codex:hook-source-unknown)
+   (CodexHookSourceUnknown))
+
+(= (codex:hook-run-status-running)
+   (CodexHookRunStatusRunning))
+
+(= (codex:hook-run-status-completed)
+   (CodexHookRunStatusCompleted))
+
+(= (codex:hook-run-status-failed)
+   (CodexHookRunStatusFailed))
+
+(= (codex:hook-run-status-blocked)
+   (CodexHookRunStatusBlocked))
+
+(= (codex:hook-run-status-stopped)
+   (CodexHookRunStatusStopped))
+
+(= (codex:hook-output-entry-kind-warning)
+   (CodexHookOutputEntryKindWarning))
+
+(= (codex:hook-output-entry-kind-stop)
+   (CodexHookOutputEntryKindStop))
+
+(= (codex:hook-output-entry-kind-feedback)
+   (CodexHookOutputEntryKindFeedback))
+
+(= (codex:hook-output-entry-kind-context)
+   (CodexHookOutputEntryKindContext))
+
+(= (codex:hook-output-entry-kind-error)
+   (CodexHookOutputEntryKindError))
+
+(= (codex:hook-output-entry $kind $text)
+   (CodexHookOutputEntry $kind $text))
+
+(= (codex:hook-run-summary
+      $id
+      $event-name
+      $handler-type
+      $execution-mode
+      $scope
+      $source-path
+      $source
+      $display-order
+      $status
+      $status-message
+      $started-at
+      $completed-at
+      $duration-ms
+      $entries)
+   (CodexHookRunSummary
+     $id
+     $event-name
+     $handler-type
+     $execution-mode
+     $scope
+     $source-path
+     $source
+     $display-order
+     $status
+     $status-message
+     $started-at
+     $completed-at
+     $duration-ms
+     $entries))
+
+(= (codex:hook-started-event $turn-id $run)
+   (CodexEventHookStarted $turn-id $run))
+
+(= (codex:hook-completed-event $turn-id $run)
+   (CodexEventHookCompleted $turn-id $run))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -1275,6 +1409,14 @@
         $changes
         $status))
    "patch_apply_end")
+
+(= (codex:item-type
+      (CodexEventHookStarted $turn-id $run))
+   "hook_started")
+
+(= (codex:item-type
+      (CodexEventHookCompleted $turn-id $run))
+   "hook_completed")
 
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
@@ -2258,6 +2400,184 @@
       (CodexPatchApplyStatusDeclined))
    (JsonString "declined"))
 
+(= (codex:hook-event-name-json
+      (CodexHookEventNamePreToolUse))
+   (JsonString "pre_tool_use"))
+
+(= (codex:hook-event-name-json
+      (CodexHookEventNamePermissionRequest))
+   (JsonString "permission_request"))
+
+(= (codex:hook-event-name-json
+      (CodexHookEventNamePostToolUse))
+   (JsonString "post_tool_use"))
+
+(= (codex:hook-event-name-json
+      (CodexHookEventNameSessionStart))
+   (JsonString "session_start"))
+
+(= (codex:hook-event-name-json
+      (CodexHookEventNameUserPromptSubmit))
+   (JsonString "user_prompt_submit"))
+
+(= (codex:hook-event-name-json
+      (CodexHookEventNameStop))
+   (JsonString "stop"))
+
+(= (codex:hook-handler-type-json
+      (CodexHookHandlerTypeCommand))
+   (JsonString "command"))
+
+(= (codex:hook-handler-type-json
+      (CodexHookHandlerTypePrompt))
+   (JsonString "prompt"))
+
+(= (codex:hook-handler-type-json
+      (CodexHookHandlerTypeAgent))
+   (JsonString "agent"))
+
+(= (codex:hook-execution-mode-json
+      (CodexHookExecutionModeSync))
+   (JsonString "sync"))
+
+(= (codex:hook-execution-mode-json
+      (CodexHookExecutionModeAsync))
+   (JsonString "async"))
+
+(= (codex:hook-scope-json
+      (CodexHookScopeThread))
+   (JsonString "thread"))
+
+(= (codex:hook-scope-json
+      (CodexHookScopeTurn))
+   (JsonString "turn"))
+
+(= (codex:hook-source-json
+      (CodexHookSourceSystem))
+   (JsonString "system"))
+
+(= (codex:hook-source-json
+      (CodexHookSourceUser))
+   (JsonString "user"))
+
+(= (codex:hook-source-json
+      (CodexHookSourceProject))
+   (JsonString "project"))
+
+(= (codex:hook-source-json
+      (CodexHookSourceMdm))
+   (JsonString "mdm"))
+
+(= (codex:hook-source-json
+      (CodexHookSourceSessionFlags))
+   (JsonString "session_flags"))
+
+(= (codex:hook-source-json
+      (CodexHookSourceLegacyManagedConfigFile))
+   (JsonString "legacy_managed_config_file"))
+
+(= (codex:hook-source-json
+      (CodexHookSourceLegacyManagedConfigMdm))
+   (JsonString "legacy_managed_config_mdm"))
+
+(= (codex:hook-source-json
+      (CodexHookSourceUnknown))
+   (JsonString "unknown"))
+
+(= (codex:hook-run-status-json
+      (CodexHookRunStatusRunning))
+   (JsonString "running"))
+
+(= (codex:hook-run-status-json
+      (CodexHookRunStatusCompleted))
+   (JsonString "completed"))
+
+(= (codex:hook-run-status-json
+      (CodexHookRunStatusFailed))
+   (JsonString "failed"))
+
+(= (codex:hook-run-status-json
+      (CodexHookRunStatusBlocked))
+   (JsonString "blocked"))
+
+(= (codex:hook-run-status-json
+      (CodexHookRunStatusStopped))
+   (JsonString "stopped"))
+
+(= (codex:hook-output-entry-kind-json
+      (CodexHookOutputEntryKindWarning))
+   (JsonString "warning"))
+
+(= (codex:hook-output-entry-kind-json
+      (CodexHookOutputEntryKindStop))
+   (JsonString "stop"))
+
+(= (codex:hook-output-entry-kind-json
+      (CodexHookOutputEntryKindFeedback))
+   (JsonString "feedback"))
+
+(= (codex:hook-output-entry-kind-json
+      (CodexHookOutputEntryKindContext))
+   (JsonString "context"))
+
+(= (codex:hook-output-entry-kind-json
+      (CodexHookOutputEntryKindError))
+   (JsonString "error"))
+
+(= (codex:hook-output-entry-json
+      (CodexHookOutputEntry $kind $text))
+   (JsonObject
+     ((JsonPair "kind" (codex:hook-output-entry-kind-json $kind))
+      (JsonPair "text" (JsonString $text)))))
+
+(= (codex:hook-output-entries-json $entries)
+   (JsonArray
+     (map-atom $entries $item (codex:hook-output-entry-json $item))))
+
+(= (codex:hook-run-summary-json
+      (CodexHookRunSummary
+        $id
+        $event-name
+        $handler-type
+        $execution-mode
+        $scope
+        $source-path
+        $source
+        $display-order
+        $status
+        $status-message
+        $started-at
+        $completed-at
+        $duration-ms
+        $entries))
+   (JsonObject
+     ((JsonPair "id" (JsonString $id))
+      (JsonPair "event_name" (codex:hook-event-name-json $event-name))
+      (JsonPair "handler_type" (codex:hook-handler-type-json $handler-type))
+      (JsonPair "execution_mode" (codex:hook-execution-mode-json $execution-mode))
+      (JsonPair "scope" (codex:hook-scope-json $scope))
+      (JsonPair "source_path" (JsonString $source-path))
+      (JsonPair "source" (codex:hook-source-json $source))
+      (JsonPair "display_order" (JsonNumber $display-order))
+      (JsonPair "status" (codex:hook-run-status-json $status))
+      (JsonPair
+        "status_message"
+        (if (== $status-message CodexAbsent)
+            JsonNull
+            (JsonString $status-message)))
+      (JsonPair "started_at" (JsonNumber $started-at))
+      (JsonPair
+        "completed_at"
+        (if (== $completed-at CodexAbsent)
+            JsonNull
+            (JsonNumber $completed-at)))
+      (JsonPair
+        "duration_ms"
+        (if (== $duration-ms CodexAbsent)
+            JsonNull
+            (JsonNumber $duration-ms)))
+      (JsonPair "entries" (codex:hook-output-entries-json $entries)))))
+
 (= (codex:plan-update-step-status-json
       (CodexUpdatePlanStepStatusPending))
    (JsonString "pending"))
@@ -3229,6 +3549,28 @@
       (JsonPair "success" (JsonBool $success))
       (JsonPair "changes" (codex:patch-apply-file-changes-json $changes))
       (JsonPair "status" (codex:patch-apply-status-json $status)))))
+
+(= (codex:item-json
+      (CodexEventHookStarted $turn-id $run))
+   (JsonObject
+     ((JsonPair "type" (JsonString "hook_started"))
+      (JsonPair
+        "turn_id"
+        (if (== $turn-id CodexAbsent)
+            JsonNull
+            (JsonString $turn-id)))
+      (JsonPair "run" (codex:hook-run-summary-json $run)))))
+
+(= (codex:item-json
+      (CodexEventHookCompleted $turn-id $run))
+   (JsonObject
+     ((JsonPair "type" (JsonString "hook_completed"))
+      (JsonPair
+        "turn_id"
+        (if (== $turn-id CodexAbsent)
+            JsonNull
+            (JsonString $turn-id)))
+      (JsonPair "run" (codex:hook-run-summary-json $run)))))
 
 (= (codex:items-json $items)
    (function

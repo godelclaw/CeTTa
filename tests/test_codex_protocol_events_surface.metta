@@ -781,3 +781,71 @@
            "/tmp/d.txt"))
         (codex:patch-apply-status-completed))))
   ("{\"type\":\"patch_apply_end\",\"call_id\":\"patch-1\",\"turn_id\":\"turn-1\",\"stdout\":\"Applied patch.\",\"stderr\":\"\",\"success\":true,\"changes\":{\"/tmp/c.txt\":{\"type\":\"update\",\"unified_diff\":\"@@ -1 +1 @@\\n-a\\n+b\\n\",\"move_path\":\"/tmp/d.txt\"}},\"status\":\"completed\"}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:hook-started-event
+      CodexAbsent
+      (codex:hook-run-summary
+        "hook-run-1"
+        (codex:hook-event-name-pre-tool-use)
+        (codex:hook-handler-type-command)
+        (codex:hook-execution-mode-sync)
+        (codex:hook-scope-turn)
+        "/tmp/hook.sh"
+        (codex:hook-source-project)
+        1
+        (codex:hook-run-status-running)
+        CodexAbsent
+        1712345600
+        CodexAbsent
+        CodexAbsent
+        ())
+      ))
+  ("hook_started"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:hook-started-event
+        CodexAbsent
+        (codex:hook-run-summary
+          "hook-run-1"
+          (codex:hook-event-name-pre-tool-use)
+          (codex:hook-handler-type-command)
+          (codex:hook-execution-mode-sync)
+          (codex:hook-scope-turn)
+          "/tmp/hook.sh"
+          (codex:hook-source-project)
+          1
+          (codex:hook-run-status-running)
+          CodexAbsent
+          1712345600
+          CodexAbsent
+          CodexAbsent
+          ()))))
+  ("{\"type\":\"hook_started\",\"turn_id\":null,\"run\":{\"id\":\"hook-run-1\",\"event_name\":\"pre_tool_use\",\"handler_type\":\"command\",\"execution_mode\":\"sync\",\"scope\":\"turn\",\"source_path\":\"/tmp/hook.sh\",\"source\":\"project\",\"display_order\":1,\"status\":\"running\",\"status_message\":null,\"started_at\":1712345600,\"completed_at\":null,\"duration_ms\":null,\"entries\":[]}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:hook-completed-event
+        "turn-9"
+        (codex:hook-run-summary
+          "hook-run-2"
+          (codex:hook-event-name-post-tool-use)
+          (codex:hook-handler-type-agent)
+          (codex:hook-execution-mode-async)
+          (codex:hook-scope-thread)
+          "/tmp/post-hook.py"
+          (codex:hook-source-system)
+          2
+          (codex:hook-run-status-completed)
+          "ok"
+          1712345601
+          1712345604
+          3000
+          ((codex:hook-output-entry
+             (codex:hook-output-entry-kind-feedback)
+             "All good."))))))
+  ("{\"type\":\"hook_completed\",\"turn_id\":\"turn-9\",\"run\":{\"id\":\"hook-run-2\",\"event_name\":\"post_tool_use\",\"handler_type\":\"agent\",\"execution_mode\":\"async\",\"scope\":\"thread\",\"source_path\":\"/tmp/post-hook.py\",\"source\":\"system\",\"display_order\":2,\"status\":\"completed\",\"status_message\":\"ok\",\"started_at\":1712345601,\"completed_at\":1712345604,\"duration_ms\":3000,\"entries\":[{\"kind\":\"feedback\",\"text\":\"All good.\"}]}}"))
