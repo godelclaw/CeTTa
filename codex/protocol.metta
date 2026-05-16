@@ -53,6 +53,7 @@
 ; - Op::OverrideTurnContext
 ; - Op::ResolveElicitation / RequestId / ElicitationAction
 ; - Op::UserInputAnswer / RequestUserInputResponse
+; - Op::RequestPermissionsResponse / RequestPermissionsResponse
 ; - Op::InterAgentCommunication / InterAgentCommunication
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
@@ -1183,6 +1184,33 @@
 
 (= (codex:user-input-answer-op $id $response)
    (CodexOpUserInputAnswer $id $response))
+
+(= (codex:protocol-permission-grant-scope-turn)
+   "turn")
+
+(= (codex:protocol-permission-grant-scope-session)
+   "session")
+
+(= (codex:protocol-request-permissions-network $enabled)
+   (CodexRequestPermissionsNetwork $enabled))
+
+(= (codex:protocol-request-permissions-file-system $read $write)
+   (CodexRequestPermissionsFileSystem $read $write))
+
+(= (codex:protocol-request-permission-profile $network $file-system)
+   (CodexRequestPermissionProfile $network $file-system))
+
+(= (codex:protocol-request-permissions-response
+      $permissions
+      $scope
+      $strict-auto-review)
+   (CodexRequestPermissionsResponse
+     $permissions
+     $scope
+     $strict-auto-review))
+
+(= (codex:request-permissions-response-op $id $response)
+   (CodexOpRequestPermissionsResponse $id $response))
 
 (= (codex:inter-agent-communication
       $author
@@ -4293,6 +4321,39 @@
           (codex:protocol-request-user-input-response-answer-pairs
             $entries))))))
 
+(= (codex:protocol-request-permissions-network-json
+      (CodexRequestPermissionsNetwork $enabled))
+   (codex:guardian-request-permissions-network-json
+     (CodexRequestPermissionsNetwork $enabled)))
+
+(= (codex:protocol-request-permissions-file-system-json
+      (CodexRequestPermissionsFileSystem $read $write))
+   (codex:guardian-request-permissions-file-system-json
+     (CodexRequestPermissionsFileSystem $read $write)))
+
+(= (codex:protocol-request-permission-profile-json CodexAbsent)
+   (codex:guardian-request-permission-profile-json CodexAbsent))
+
+(= (codex:protocol-request-permission-profile-json
+      (CodexRequestPermissionProfile $network $file-system))
+   (codex:guardian-request-permission-profile-json
+     (CodexRequestPermissionProfile $network $file-system)))
+
+(= (codex:protocol-request-permissions-response-json
+      (CodexRequestPermissionsResponse $permissions $scope $strict-auto-review))
+   (if $strict-auto-review
+       (JsonObject
+         ((JsonPair
+            "permissions"
+            (codex:protocol-request-permission-profile-json $permissions))
+          (JsonPair "scope" (JsonString $scope))
+          (JsonPair "strict_auto_review" (JsonBool True))))
+       (JsonObject
+         ((JsonPair
+            "permissions"
+            (codex:protocol-request-permission-profile-json $permissions))
+          (JsonPair "scope" (JsonString $scope))))))
+
 (= (codex:review-decisions-json $decisions)
    (JsonArray
      (map-atom $decisions $item (codex:review-decision-json $item))))
@@ -7232,6 +7293,10 @@
    "user_input_answer")
 
 (= (codex:op-type
+      (CodexOpRequestPermissionsResponse $id $response))
+   "request_permissions_response")
+
+(= (codex:op-type
       (CodexOpInterAgentCommunication $communication))
    "inter_agent_communication")
 
@@ -8108,6 +8173,15 @@
       (JsonPair
         "response"
         (codex:protocol-request-user-input-response-json $response)))))
+
+(= (codex:op-json
+      (CodexOpRequestPermissionsResponse $id $response))
+   (JsonObject
+     ((JsonPair "type" (JsonString "request_permissions_response"))
+      (JsonPair "id" (JsonString $id))
+      (JsonPair
+        "response"
+        (codex:protocol-request-permissions-response-json $response)))))
 
 (= (codex:op-json
       (CodexOpInterAgentCommunication $communication))
