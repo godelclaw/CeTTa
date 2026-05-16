@@ -40,6 +40,7 @@
 ; - ExitedReviewModeEvent / ReviewOutputEvent JSON projection
 ; - TurnDiffEvent
 ; - GetHistoryEntryResponseEvent / HistoryEntry
+; - PatchApplyBeginEvent / PatchApplyUpdatedEvent / PatchApplyEndEvent
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -50,6 +51,10 @@
 ;
 ; CeTTa detail: `Empty` is a reduction sentinel, so omitted optional protocol
 ; fields use the internal tag `CodexAbsent` until projected back out.
+;
+; Rust represents `PatchApply*Event.changes` as `HashMap<PathBuf, FileChange>`.
+; This CeTTa slice models the same visible payload as an ordered list of keyed
+; entries and projects it back to the Rust JSON object shape at serialization.
 ;
 ; This restart subset does not yet port `account::PlanType`, so the
 ; `RateLimitSnapshot.plan_type` field is currently carried through as the same
@@ -485,6 +490,51 @@
 
 (= (codex:get-history-entry-response-event $offset $log-id $entry)
    (CodexEventGetHistoryEntryResponse $offset $log-id $entry))
+
+(= (codex:patch-apply-file-change-add $path $content)
+   (CodexProtocolPatchApplyFileChangeAdd $path $content))
+
+(= (codex:patch-apply-file-change-delete $path $content)
+   (CodexProtocolPatchApplyFileChangeDelete $path $content))
+
+(= (codex:patch-apply-file-change-update $path $unified-diff $move-path)
+   (CodexProtocolPatchApplyFileChangeUpdate $path $unified-diff $move-path))
+
+(= (codex:patch-apply-status-completed)
+   (CodexPatchApplyStatusCompleted))
+
+(= (codex:patch-apply-status-failed)
+   (CodexPatchApplyStatusFailed))
+
+(= (codex:patch-apply-status-declined)
+   (CodexPatchApplyStatusDeclined))
+
+(= (codex:patch-apply-begin-event
+      $call-id
+      $turn-id
+      $auto-approved
+      $changes)
+   (CodexEventPatchApplyBegin $call-id $turn-id $auto-approved $changes))
+
+(= (codex:patch-apply-updated-event $call-id $changes)
+   (CodexEventPatchApplyUpdated $call-id $changes))
+
+(= (codex:patch-apply-end-event
+      $call-id
+      $turn-id
+      $stdout
+      $stderr
+      $success
+      $changes
+      $status)
+   (CodexEventPatchApplyEnd
+     $call-id
+     $turn-id
+     $stdout
+     $stderr
+     $success
+     $changes
+     $status))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -1202,6 +1252,29 @@
 (= (codex:item-type
       (CodexEventGetHistoryEntryResponse $offset $log-id $entry))
    "get_history_entry_response")
+
+(= (codex:item-type
+      (CodexEventPatchApplyBegin
+        $call-id
+        $turn-id
+        $auto-approved
+        $changes))
+   "patch_apply_begin")
+
+(= (codex:item-type
+      (CodexEventPatchApplyUpdated $call-id $changes))
+   "patch_apply_updated")
+
+(= (codex:item-type
+      (CodexEventPatchApplyEnd
+        $call-id
+        $turn-id
+        $stdout
+        $stderr
+        $success
+        $changes
+        $status))
+   "patch_apply_end")
 
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
@@ -2124,6 +2197,66 @@
      ((JsonPair "conversation_id" (JsonString $conversation-id))
       (JsonPair "ts" (JsonNumber $ts))
       (JsonPair "text" (JsonString $text)))))
+
+(= (codex:patch-apply-file-change-json
+      (CodexProtocolPatchApplyFileChangeAdd $path $content))
+   (JsonObject
+     ((JsonPair "type" (JsonString "add"))
+      (JsonPair "content" (JsonString $content)))))
+
+(= (codex:patch-apply-file-change-json
+      (CodexProtocolPatchApplyFileChangeDelete $path $content))
+   (JsonObject
+     ((JsonPair "type" (JsonString "delete"))
+      (JsonPair "content" (JsonString $content)))))
+
+(= (codex:patch-apply-file-change-json
+      (CodexProtocolPatchApplyFileChangeUpdate $path $unified-diff $move-path))
+   (JsonObject
+     ((JsonPair "type" (JsonString "update"))
+      (JsonPair "unified_diff" (JsonString $unified-diff))
+      (JsonPair
+        "move_path"
+        (if (== $move-path CodexAbsent)
+            JsonNull
+            (JsonString $move-path))))))
+
+(= (codex:patch-apply-file-change-json-pair
+      (CodexProtocolPatchApplyFileChangeAdd $path $content))
+   (JsonPair $path
+     (codex:patch-apply-file-change-json
+       (CodexProtocolPatchApplyFileChangeAdd $path $content))))
+
+(= (codex:patch-apply-file-change-json-pair
+      (CodexProtocolPatchApplyFileChangeDelete $path $content))
+   (JsonPair $path
+     (codex:patch-apply-file-change-json
+       (CodexProtocolPatchApplyFileChangeDelete $path $content))))
+
+(= (codex:patch-apply-file-change-json-pair
+      (CodexProtocolPatchApplyFileChangeUpdate $path $unified-diff $move-path))
+   (JsonPair $path
+     (codex:patch-apply-file-change-json
+       (CodexProtocolPatchApplyFileChangeUpdate
+         $path
+         $unified-diff
+         $move-path))))
+
+(= (codex:patch-apply-file-changes-json $changes)
+   (JsonObject
+     (map-atom $changes $item (codex:patch-apply-file-change-json-pair $item))))
+
+(= (codex:patch-apply-status-json
+      (CodexPatchApplyStatusCompleted))
+   (JsonString "completed"))
+
+(= (codex:patch-apply-status-json
+      (CodexPatchApplyStatusFailed))
+   (JsonString "failed"))
+
+(= (codex:patch-apply-status-json
+      (CodexPatchApplyStatusDeclined))
+   (JsonString "declined"))
 
 (= (codex:plan-update-step-status-json
       (CodexUpdatePlanStepStatusPending))
@@ -3057,6 +3190,45 @@
           (JsonPair "offset" (JsonNumber $offset))
           (JsonPair "log_id" (JsonNumber $log-id))
           (JsonPair "entry" (codex:history-entry-json $entry))))))
+
+(= (codex:item-json
+      (CodexEventPatchApplyBegin
+        $call-id
+        $turn-id
+        $auto-approved
+        $changes))
+   (JsonObject
+     ((JsonPair "type" (JsonString "patch_apply_begin"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair "auto_approved" (JsonBool $auto-approved))
+      (JsonPair "changes" (codex:patch-apply-file-changes-json $changes)))))
+
+(= (codex:item-json
+      (CodexEventPatchApplyUpdated $call-id $changes))
+   (JsonObject
+     ((JsonPair "type" (JsonString "patch_apply_updated"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "changes" (codex:patch-apply-file-changes-json $changes)))))
+
+(= (codex:item-json
+      (CodexEventPatchApplyEnd
+        $call-id
+        $turn-id
+        $stdout
+        $stderr
+        $success
+        $changes
+        $status))
+   (JsonObject
+     ((JsonPair "type" (JsonString "patch_apply_end"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair "stdout" (JsonString $stdout))
+      (JsonPair "stderr" (JsonString $stderr))
+      (JsonPair "success" (JsonBool $success))
+      (JsonPair "changes" (codex:patch-apply-file-changes-json $changes))
+      (JsonPair "status" (codex:patch-apply-status-json $status)))))
 
 (= (codex:items-json $items)
    (function

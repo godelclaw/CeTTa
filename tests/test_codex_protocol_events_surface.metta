@@ -728,3 +728,56 @@
           1712345678
           "assistant: done"))))
   ("{\"type\":\"get_history_entry_response\",\"offset\":8,\"log_id\":42,\"entry\":{\"conversation_id\":\"thread-123\",\"ts\":1712345678,\"text\":\"assistant: done\"}}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:patch-apply-begin-event
+      "patch-1"
+      "turn-1"
+      True
+      ((codex:patch-apply-file-change-add
+         "/tmp/a.txt"
+         "hello\n"))))
+  ("patch_apply_begin"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:patch-apply-begin-event
+        "patch-1"
+        "turn-1"
+        True
+        ((codex:patch-apply-file-change-add
+           "/tmp/a.txt"
+           "hello\n")
+         (codex:patch-apply-file-change-update
+           "/tmp/b.txt"
+           "@@ -1 +1 @@\n-old\n+new\n"
+           CodexAbsent)))))
+  ("{\"type\":\"patch_apply_begin\",\"call_id\":\"patch-1\",\"turn_id\":\"turn-1\",\"auto_approved\":true,\"changes\":{\"/tmp/a.txt\":{\"type\":\"add\",\"content\":\"hello\\n\"},\"/tmp/b.txt\":{\"type\":\"update\",\"unified_diff\":\"@@ -1 +1 @@\\n-old\\n+new\\n\",\"move_path\":null}}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:patch-apply-updated-event
+        "patch-1"
+        ((codex:patch-apply-file-change-delete
+           "/tmp/a.txt"
+           "bye\n")))))
+  ("{\"type\":\"patch_apply_updated\",\"call_id\":\"patch-1\",\"changes\":{\"/tmp/a.txt\":{\"type\":\"delete\",\"content\":\"bye\\n\"}}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:patch-apply-end-event
+        "patch-1"
+        "turn-1"
+        "Applied patch."
+        ""
+        True
+        ((codex:patch-apply-file-change-update
+           "/tmp/c.txt"
+           "@@ -1 +1 @@\n-a\n+b\n"
+           "/tmp/d.txt"))
+        (codex:patch-apply-status-completed))))
+  ("{\"type\":\"patch_apply_end\",\"call_id\":\"patch-1\",\"turn_id\":\"turn-1\",\"stdout\":\"Applied patch.\",\"stderr\":\"\",\"success\":true,\"changes\":{\"/tmp/c.txt\":{\"type\":\"update\",\"unified_diff\":\"@@ -1 +1 @@\\n-a\\n+b\\n\",\"move_path\":\"/tmp/d.txt\"}},\"status\":\"completed\"}"))
