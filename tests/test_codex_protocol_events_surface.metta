@@ -691,3 +691,14 @@
           (codex:review-target-custom "check only auth flows")
           "focused pass"))))
   ("{\"type\":\"entered_review_mode\",\"target\":{\"type\":\"custom\",\"instructions\":\"check only auth flows\"},\"user_facing_hint\":\"focused pass\"}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:turn-diff-event "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new"))
+  ("turn_diff"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:turn-diff-event "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new")))
+  ("{\"type\":\"turn_diff\",\"unified_diff\":\"--- a/file\\n+++ b/file\\n@@ -1 +1 @@\\n-old\\n+new\"}"))

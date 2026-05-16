@@ -38,6 +38,7 @@
 ;   ReasoningContentDeltaEvent / ReasoningRawContentDeltaEvent
 ; - EnteredReviewMode(ReviewRequest) / ReviewTarget
 ; - ExitedReviewModeEvent / ReviewOutputEvent JSON projection
+; - TurnDiffEvent
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -474,6 +475,9 @@
 
 (= (codex:entered-review-mode-event $review-request)
    (CodexEventEnteredReviewMode $review-request))
+
+(= (codex:turn-diff-event $unified-diff)
+   (CodexEventTurnDiff $unified-diff))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -1183,6 +1187,10 @@
 (= (codex:item-type
       (CodexEventEnteredReviewMode $review-request))
    "entered_review_mode")
+
+(= (codex:item-type
+      (CodexEventTurnDiff $unified-diff))
+   "turn_diff")
 
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
@@ -3012,6 +3020,12 @@
        (cons-atom
          (JsonPair "type" (JsonString "entered_review_mode"))
          $request-pairs))))
+
+(= (codex:item-json
+      (CodexEventTurnDiff $unified-diff))
+   (JsonObject
+     ((JsonPair "type" (JsonString "turn_diff"))
+      (JsonPair "unified_diff" (JsonString $unified-diff)))))
 
 (= (codex:items-json $items)
    (function
