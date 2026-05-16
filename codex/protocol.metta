@@ -46,7 +46,7 @@
 ; - Op::RealtimeConversationStart/Audio/Text/Close/ListVoices
 ; - Submission / W3cTraceContext / Event queue wrappers
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
-; - Op::RefreshMcpServers / ReloadUserConfig / McpServerRefreshConfig
+; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills / McpServerRefreshConfig
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
 ; - SessionSource / SubAgentSource
@@ -821,6 +821,11 @@
 
 (= (codex:list-skills-response-event $skills)
    (CodexEventListSkillsResponse $skills))
+
+; CeTTa deviation: Rust uses `Vec<PathBuf>` for `ListSkills.cwds`; this slice
+; carries the same visible JSON path strings directly.
+(= (codex:list-skills-op $cwds $force-reload)
+   (CodexOpListSkills $cwds $force-reload))
 
 (= (codex:w3c-trace-context $traceparent $tracestate)
    (CodexW3cTraceContext $traceparent $tracestate))
@@ -6343,6 +6348,10 @@
       (CodexOpReloadUserConfig))
    "reload_user_config")
 
+(= (codex:op-type
+      (CodexOpListSkills $cwds $force-reload))
+   "list_skills")
+
 (= (codex:w3c-trace-context-json
       (CodexW3cTraceContext $traceparent $tracestate))
    (let $pairs-1 ()
@@ -6473,6 +6482,26 @@
       (CodexOpReloadUserConfig))
    (JsonObject
      ((JsonPair "type" (JsonString "reload_user_config")))))
+
+(= (codex:op-json
+      (CodexOpListSkills $cwds $force-reload))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "list_skills")))
+     (let $pairs-2
+       (if (== $cwds ())
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "cwds"
+             (JsonArray
+               (eval (map-atom $cwds $cwd (JsonString $cwd))))))
+       (JsonObject
+         (if (== $force-reload False)
+             $pairs-2
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "force_reload"
+               (JsonBool $force-reload)))))))
 
 (= (codex:submission-json
       (CodexSubmission $id $op $trace))
