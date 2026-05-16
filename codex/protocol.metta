@@ -41,7 +41,7 @@
 ; - TurnDiffEvent
 ; - GetHistoryEntryResponseEvent / HistoryEntry
 ; - ListSkillsResponseEvent / SkillsListEntry / SkillMetadata
-; - RealtimeConversationStarted/Closed/Sdp / RealtimeVoice
+; - RealtimeConversationStarted/Realtime/Closed/Sdp / RealtimeVoice
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
 ; - SessionSource / SubAgentSource
@@ -66,6 +66,10 @@
 ; `SessionSource` helper tranche. This slice preserves the same visible
 ; success/error/absence behavior through explicit `CodexSessionSourceOk`,
 ; `CodexSessionSourceErr`, and `CodexAbsent`.
+;
+; Rust models `RealtimeEvent::ConversationItemAdded` as `serde_json::Value`.
+; This slice carries that payload directly as the same JSON atom supplied by
+; callers so the visible wire shape remains unchanged.
 ;
 ; Rust represents `PatchApply*Event.changes` as `HashMap<PathBuf, FileChange>`.
 ; This CeTTa slice models the same visible payload as an ordered list of keyed
@@ -811,6 +815,86 @@
 
 (= (codex:realtime-conversation-started-event $session-id $version)
    (CodexEventRealtimeConversationStarted $session-id $version))
+
+(= (codex:realtime-transcript-delta $delta)
+   (CodexRealtimeTranscriptDelta $delta))
+
+(= (codex:realtime-transcript-done $text)
+   (CodexRealtimeTranscriptDone $text))
+
+(= (codex:realtime-transcript-entry $role $text)
+   (CodexRealtimeTranscriptEntry $role $text))
+
+(= (codex:realtime-handoff-requested
+      $handoff-id
+      $item-id
+      $input-transcript
+      $active-transcript)
+   (CodexRealtimeHandoffRequested
+     $handoff-id
+     $item-id
+     $input-transcript
+     $active-transcript))
+
+(= (codex:realtime-noop-requested $call-id $item-id)
+   (CodexRealtimeNoopRequested $call-id $item-id))
+
+(= (codex:realtime-input-audio-speech-started $item-id)
+   (CodexRealtimeInputAudioSpeechStarted $item-id))
+
+(= (codex:realtime-response-cancelled $response-id)
+   (CodexRealtimeResponseCancelled $response-id))
+
+(= (codex:realtime-response-created $response-id)
+   (CodexRealtimeResponseCreated $response-id))
+
+(= (codex:realtime-response-done $response-id)
+   (CodexRealtimeResponseDone $response-id))
+
+(= (codex:realtime-event-session-updated $session-id $instructions)
+   (CodexRealtimeEventSessionUpdated $session-id $instructions))
+
+(= (codex:realtime-event-input-audio-speech-started $event)
+   (CodexRealtimeEventInputAudioSpeechStarted $event))
+
+(= (codex:realtime-event-input-transcript-delta $event)
+   (CodexRealtimeEventInputTranscriptDelta $event))
+
+(= (codex:realtime-event-input-transcript-done $event)
+   (CodexRealtimeEventInputTranscriptDone $event))
+
+(= (codex:realtime-event-output-transcript-delta $event)
+   (CodexRealtimeEventOutputTranscriptDelta $event))
+
+(= (codex:realtime-event-output-transcript-done $event)
+   (CodexRealtimeEventOutputTranscriptDone $event))
+
+(= (codex:realtime-event-response-created $event)
+   (CodexRealtimeEventResponseCreated $event))
+
+(= (codex:realtime-event-response-cancelled $event)
+   (CodexRealtimeEventResponseCancelled $event))
+
+(= (codex:realtime-event-response-done $event)
+   (CodexRealtimeEventResponseDone $event))
+
+(= (codex:realtime-event-conversation-item-added $item)
+   (CodexRealtimeEventConversationItemAdded $item))
+
+(= (codex:realtime-event-conversation-item-done $item-id)
+   (CodexRealtimeEventConversationItemDone $item-id))
+
+(= (codex:realtime-event-handoff-requested $event)
+   (CodexRealtimeEventHandoffRequested $event))
+
+(= (codex:realtime-event-noop-requested $event)
+   (CodexRealtimeEventNoopRequested $event))
+
+(= (codex:realtime-event-error $message)
+   (CodexRealtimeEventError $message))
+
+(= (codex:realtime-conversation-realtime-event $payload)
+   (CodexEventRealtimeConversationRealtime $payload))
 
 (= (codex:realtime-conversation-closed-event $reason)
    (CodexEventRealtimeConversationClosed $reason))
@@ -2197,6 +2281,10 @@
 (= (codex:item-type
       (CodexEventRealtimeConversationStarted $session-id $version))
    "realtime_conversation_started")
+
+(= (codex:item-type
+      (CodexEventRealtimeConversationRealtime $payload))
+   "realtime_conversation_realtime")
 
 (= (codex:item-type
       (CodexEventRealtimeConversationClosed $reason))
@@ -3687,6 +3775,183 @@
       (CodexRealtimeConversationVersionV2))
    (JsonString "v2"))
 
+(= (codex:realtime-transcript-delta-json
+      (CodexRealtimeTranscriptDelta $delta))
+   (JsonObject
+     ((JsonPair "delta" (JsonString $delta)))))
+
+(= (codex:realtime-transcript-done-json
+      (CodexRealtimeTranscriptDone $text))
+   (JsonObject
+     ((JsonPair "text" (JsonString $text)))))
+
+(= (codex:realtime-transcript-entry-json
+      (CodexRealtimeTranscriptEntry $role $text))
+   (JsonObject
+     ((JsonPair "role" (JsonString $role))
+      (JsonPair "text" (JsonString $text)))))
+
+(= (codex:realtime-transcript-entries-json $entries)
+   (JsonArray
+     (eval (map-atom $entries $item (codex:realtime-transcript-entry-json $item)))))
+
+(= (codex:realtime-handoff-requested-json
+      (CodexRealtimeHandoffRequested
+        $handoff-id
+        $item-id
+        $input-transcript
+        $active-transcript))
+   (JsonObject
+     ((JsonPair "handoff_id" (JsonString $handoff-id))
+      (JsonPair "item_id" (JsonString $item-id))
+      (JsonPair "input_transcript" (JsonString $input-transcript))
+      (JsonPair
+        "active_transcript"
+        (codex:realtime-transcript-entries-json $active-transcript)))))
+
+(= (codex:realtime-noop-requested-json
+      (CodexRealtimeNoopRequested $call-id $item-id))
+   (JsonObject
+     ((JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "item_id" (JsonString $item-id)))))
+
+(= (codex:realtime-input-audio-speech-started-json
+      (CodexRealtimeInputAudioSpeechStarted $item-id))
+   (JsonObject
+     ((JsonPair
+        "item_id"
+        (if (== $item-id CodexAbsent)
+            JsonNull
+            (JsonString $item-id))))))
+
+(= (codex:realtime-response-cancelled-json
+      (CodexRealtimeResponseCancelled $response-id))
+   (JsonObject
+     ((JsonPair
+        "response_id"
+        (if (== $response-id CodexAbsent)
+            JsonNull
+            (JsonString $response-id))))))
+
+(= (codex:realtime-response-created-json
+      (CodexRealtimeResponseCreated $response-id))
+   (JsonObject
+     ((JsonPair
+        "response_id"
+        (if (== $response-id CodexAbsent)
+            JsonNull
+            (JsonString $response-id))))))
+
+(= (codex:realtime-response-done-json
+      (CodexRealtimeResponseDone $response-id))
+   (JsonObject
+     ((JsonPair
+        "response_id"
+        (if (== $response-id CodexAbsent)
+            JsonNull
+            (JsonString $response-id))))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventSessionUpdated $session-id $instructions))
+   (JsonObject
+     ((JsonPair
+        "SessionUpdated"
+        (JsonObject
+          ((JsonPair "session_id" (JsonString $session-id))
+           (JsonPair
+             "instructions"
+             (if (== $instructions CodexAbsent)
+                 JsonNull
+                 (JsonString $instructions)))))))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventInputAudioSpeechStarted $event))
+   (JsonObject
+     ((JsonPair
+        "InputAudioSpeechStarted"
+        (codex:realtime-input-audio-speech-started-json $event)))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventInputTranscriptDelta $event))
+   (JsonObject
+     ((JsonPair
+        "InputTranscriptDelta"
+        (codex:realtime-transcript-delta-json $event)))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventInputTranscriptDone $event))
+   (JsonObject
+     ((JsonPair
+        "InputTranscriptDone"
+        (codex:realtime-transcript-done-json $event)))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventOutputTranscriptDelta $event))
+   (JsonObject
+     ((JsonPair
+        "OutputTranscriptDelta"
+        (codex:realtime-transcript-delta-json $event)))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventOutputTranscriptDone $event))
+   (JsonObject
+     ((JsonPair
+        "OutputTranscriptDone"
+        (codex:realtime-transcript-done-json $event)))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventResponseCreated $event))
+   (JsonObject
+     ((JsonPair
+        "ResponseCreated"
+        (codex:realtime-response-created-json $event)))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventResponseCancelled $event))
+   (JsonObject
+     ((JsonPair
+        "ResponseCancelled"
+        (codex:realtime-response-cancelled-json $event)))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventResponseDone $event))
+   (JsonObject
+     ((JsonPair
+        "ResponseDone"
+        (codex:realtime-response-done-json $event)))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventConversationItemAdded $item))
+   (JsonObject
+     ((JsonPair "ConversationItemAdded" $item))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventConversationItemDone $item-id))
+   (JsonObject
+     ((JsonPair
+        "ConversationItemDone"
+        (JsonObject
+          ((JsonPair "item_id" (JsonString $item-id))))))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventHandoffRequested $event))
+   (JsonObject
+     ((JsonPair
+        "HandoffRequested"
+        (codex:realtime-handoff-requested-json $event)))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventNoopRequested $event))
+   (JsonObject
+     ((JsonPair
+        "NoopRequested"
+        (codex:realtime-noop-requested-json $event)))))
+
+(= (codex:realtime-event-json
+      (CodexRealtimeEventError $message))
+   (JsonObject
+     ((JsonPair "Error" (JsonString $message)))))
+
 (= (codex:realtime-voices-list-json
       (CodexRealtimeVoicesList $v1 $v2 $default-v1 $default-v2))
    (JsonObject
@@ -3731,17 +3996,26 @@
      ((JsonPair "mode" (JsonString "tokens"))
       (JsonPair "limit" (JsonNumber $tokens)))))
 
+; CeTTa evaluator detail: normalize the incoming product first so nested callers
+; like `product-json (product-from-session-source-name ...)` reduce to the same
+; Rust-visible wire string as already-materialized constructors.
 (= (codex:product-json
-      (CodexProductChatgpt))
-   (JsonString "chatgpt"))
+      (codex:product-from-session-source-name $value))
+   (let $normalized (codex:product-ascii-lower-text (str-trim $value))
+     (if (== $normalized "chatgpt")
+         (JsonString "chatgpt")
+         (if (== $normalized "codex")
+             (JsonString "codex")
+             (if (== $normalized "atlas")
+                 (JsonString "atlas")
+                 Empty)))))
 
-(= (codex:product-json
-      (CodexProductCodex))
-   (JsonString "codex"))
-
-(= (codex:product-json
-      (CodexProductAtlas))
-   (JsonString "atlas"))
+(= (codex:product-json $product)
+   (let $resolved (once $product)
+     (case $resolved
+       (((CodexProductChatgpt) (JsonString "chatgpt"))
+        ((CodexProductCodex) (JsonString "codex"))
+        ((CodexProductAtlas) (JsonString "atlas"))))))
 
 (= (codex:product-to-app-platform
       (CodexProductChatgpt))
@@ -3796,15 +4070,19 @@
 
 ; CeTTa deviation: Rust returns `Option<Product>` here. This restart surface
 ; uses `CodexAbsent` for the no-product case.
+; CeTTa evaluator detail: this public constructor boundary is forced through
+; `once` so nested consumers like `product-json` observe the normalized product
+; constructor rather than the unreduced normalization term.
 (= (codex:product-from-session-source-name $value)
-   (let $normalized (codex:product-ascii-lower-text (str-trim $value))
-     (if (== $normalized "chatgpt")
-         (CodexProductChatgpt)
-         (if (== $normalized "codex")
-             (CodexProductCodex)
-             (if (== $normalized "atlas")
-                 (CodexProductAtlas)
-                 CodexAbsent)))))
+   (once
+     (let $normalized (codex:product-ascii-lower-text (str-trim $value))
+       (if (== $normalized "chatgpt")
+           (CodexProductChatgpt)
+           (if (== $normalized "codex")
+               (CodexProductCodex)
+               (if (== $normalized "atlas")
+                   (CodexProductAtlas)
+                   CodexAbsent))))))
 
 (= (codex:subagent-source-display
       (CodexSubAgentSourceReview))
@@ -5775,6 +6053,12 @@
       (JsonPair
         "version"
         (codex:realtime-conversation-version-json $version)))))
+
+(= (codex:item-json
+      (CodexEventRealtimeConversationRealtime $payload))
+   (JsonObject
+     ((JsonPair "type" (JsonString "realtime_conversation_realtime"))
+      (JsonPair "payload" (codex:realtime-event-json $payload)))))
 
 (= (codex:item-json
       (CodexEventRealtimeConversationClosed $reason))
