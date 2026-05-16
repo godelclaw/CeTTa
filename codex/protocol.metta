@@ -49,6 +49,7 @@
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
 ; - Op::Compact / DropMemories / UpdateMemories
 ; - Op::SetThreadName / SetThreadMemoryMode / Undo / ThreadRollback
+; - Op::Review / Shutdown / RunUserShellCommand / ListModels
 ; - McpServerRefreshConfig
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
@@ -887,6 +888,18 @@
 
 (= (codex:thread-rollback-op $num-turns)
    (CodexOpThreadRollback $num-turns))
+
+(= (codex:review-op $review-request)
+   (CodexOpReview $review-request))
+
+(= (codex:shutdown-op)
+   (CodexOpShutdown))
+
+(= (codex:run-user-shell-command-op $command)
+   (CodexOpRunUserShellCommand $command))
+
+(= (codex:list-models-op)
+   (CodexOpListModels))
 
 (= (codex:realtime-conversation-version-v1)
    (CodexRealtimeConversationVersionV1))
@@ -6409,6 +6422,22 @@
       (CodexOpThreadRollback $num-turns))
    "thread_rollback")
 
+(= (codex:op-type
+      (CodexOpReview $review-request))
+   "review")
+
+(= (codex:op-type
+      (CodexOpShutdown))
+   "shutdown")
+
+(= (codex:op-type
+      (CodexOpRunUserShellCommand $command))
+   "run_user_shell_command")
+
+(= (codex:op-type
+      (CodexOpListModels))
+   "list_models")
+
 (= (codex:w3c-trace-context-json
       (CodexW3cTraceContext $traceparent $tracestate))
    (let $pairs-1 ()
@@ -6604,6 +6633,30 @@
    (JsonObject
      ((JsonPair "type" (JsonString "thread_rollback"))
       (JsonPair "num_turns" (JsonNumber $num-turns)))))
+
+(= (codex:op-json
+      (CodexOpReview $review-request))
+   (let $request-pairs (eval (codex:review-request-json-pairs $review-request))
+     (JsonObject
+       (cons-atom
+         (JsonPair "type" (JsonString "review"))
+         $request-pairs))))
+
+(= (codex:op-json
+      (CodexOpShutdown))
+   (JsonObject
+     ((JsonPair "type" (JsonString "shutdown")))))
+
+(= (codex:op-json
+      (CodexOpRunUserShellCommand $command))
+   (JsonObject
+     ((JsonPair "type" (JsonString "run_user_shell_command"))
+      (JsonPair "command" (JsonString $command)))))
+
+(= (codex:op-json
+      (CodexOpListModels))
+   (JsonObject
+     ((JsonPair "type" (JsonString "list_models")))))
 
 ; CeTTa evaluator detail: the generic `Submission` wrapper path below works
 ; for the simple already-landed op subset, but the structured realtime-start
