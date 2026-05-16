@@ -702,3 +702,29 @@
     (codex:item-json
       (codex:turn-diff-event "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new")))
   ("{\"type\":\"turn_diff\",\"unified_diff\":\"--- a/file\\n+++ b/file\\n@@ -1 +1 @@\\n-old\\n+new\"}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:get-history-entry-response-event 7 42 CodexAbsent))
+  ("get_history_entry_response"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:get-history-entry-response-event
+        7
+        42
+        CodexAbsent)))
+  ("{\"type\":\"get_history_entry_response\",\"offset\":7,\"log_id\":42}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:get-history-entry-response-event
+        8
+        42
+        (codex:history-entry
+          "thread-123"
+          1712345678
+          "assistant: done"))))
+  ("{\"type\":\"get_history_entry_response\",\"offset\":8,\"log_id\":42,\"entry\":{\"conversation_id\":\"thread-123\",\"ts\":1712345678,\"text\":\"assistant: done\"}}"))

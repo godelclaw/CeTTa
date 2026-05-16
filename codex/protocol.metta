@@ -39,6 +39,7 @@
 ; - EnteredReviewMode(ReviewRequest) / ReviewTarget
 ; - ExitedReviewModeEvent / ReviewOutputEvent JSON projection
 ; - TurnDiffEvent
+; - GetHistoryEntryResponseEvent / HistoryEntry
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -478,6 +479,12 @@
 
 (= (codex:turn-diff-event $unified-diff)
    (CodexEventTurnDiff $unified-diff))
+
+(= (codex:history-entry $conversation-id $ts $text)
+   (CodexHistoryEntry $conversation-id $ts $text))
+
+(= (codex:get-history-entry-response-event $offset $log-id $entry)
+   (CodexEventGetHistoryEntryResponse $offset $log-id $entry))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -1191,6 +1198,10 @@
 (= (codex:item-type
       (CodexEventTurnDiff $unified-diff))
    "turn_diff")
+
+(= (codex:item-type
+      (CodexEventGetHistoryEntryResponse $offset $log-id $entry))
+   "get_history_entry_response")
 
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
@@ -2106,6 +2117,13 @@
        ((JsonPair "target" (codex:review-target-json $target)))
        ((JsonPair "target" (codex:review-target-json $target))
         (JsonPair "user_facing_hint" (JsonString $user-facing-hint)))))
+
+(= (codex:history-entry-json
+      (CodexHistoryEntry $conversation-id $ts $text))
+   (JsonObject
+     ((JsonPair "conversation_id" (JsonString $conversation-id))
+      (JsonPair "ts" (JsonNumber $ts))
+      (JsonPair "text" (JsonString $text)))))
 
 (= (codex:plan-update-step-status-json
       (CodexUpdatePlanStepStatusPending))
@@ -3026,6 +3044,19 @@
    (JsonObject
      ((JsonPair "type" (JsonString "turn_diff"))
       (JsonPair "unified_diff" (JsonString $unified-diff)))))
+
+(= (codex:item-json
+      (CodexEventGetHistoryEntryResponse $offset $log-id $entry))
+   (if (== $entry CodexAbsent)
+       (JsonObject
+         ((JsonPair "type" (JsonString "get_history_entry_response"))
+          (JsonPair "offset" (JsonNumber $offset))
+          (JsonPair "log_id" (JsonNumber $log-id))))
+       (JsonObject
+         ((JsonPair "type" (JsonString "get_history_entry_response"))
+          (JsonPair "offset" (JsonNumber $offset))
+          (JsonPair "log_id" (JsonNumber $log-id))
+          (JsonPair "entry" (codex:history-entry-json $entry))))))
 
 (= (codex:items-json $items)
    (function
