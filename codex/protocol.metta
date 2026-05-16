@@ -36,6 +36,7 @@
 ; - ErrorEvent / RawResponseItemEvent
 ; - AgentMessageContentDeltaEvent / PlanDeltaEvent /
 ;   ReasoningContentDeltaEvent / ReasoningRawContentDeltaEvent
+; - EnteredReviewMode(ReviewRequest) / ReviewTarget
 ; - ExitedReviewModeEvent / ReviewOutputEvent JSON projection
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
@@ -455,6 +456,24 @@
 
 (= (codex:exited-review-mode-event $review-output)
    (CodexEventExitedReviewMode $review-output))
+
+(= (codex:review-target-uncommitted-changes)
+   (CodexReviewTargetUncommittedChanges))
+
+(= (codex:review-target-base-branch $branch)
+   (CodexReviewTargetBaseBranch $branch))
+
+(= (codex:review-target-commit $sha $title)
+   (CodexReviewTargetCommit $sha $title))
+
+(= (codex:review-target-custom $instructions)
+   (CodexReviewTargetCustom $instructions))
+
+(= (codex:review-request $target $user-facing-hint)
+   (CodexReviewRequest $target $user-facing-hint))
+
+(= (codex:entered-review-mode-event $review-request)
+   (CodexEventEnteredReviewMode $review-request))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -1160,6 +1179,10 @@
 (= (codex:item-type
       (CodexEventExitedReviewMode $review-output))
    "exited_review_mode")
+
+(= (codex:item-type
+      (CodexEventEnteredReviewMode $review-request))
+   "entered_review_mode")
 
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
@@ -2037,9 +2060,44 @@
         $overall-confidence-score))
    (JsonObject
      ((JsonPair "findings" (codex:review-findings-json $findings))
-      (JsonPair "overall_correctness" (JsonString $overall-correctness))
-      (JsonPair "overall_explanation" (JsonString $overall-explanation))
-      (JsonPair "overall_confidence_score" (JsonNumber $overall-confidence-score)))))
+     (JsonPair "overall_correctness" (JsonString $overall-correctness))
+     (JsonPair "overall_explanation" (JsonString $overall-explanation))
+     (JsonPair "overall_confidence_score" (JsonNumber $overall-confidence-score)))))
+
+(= (codex:review-target-json
+      (CodexReviewTargetUncommittedChanges))
+   (JsonObject
+     ((JsonPair "type" (JsonString "uncommittedChanges")))))
+
+(= (codex:review-target-json
+      (CodexReviewTargetBaseBranch $branch))
+   (JsonObject
+     ((JsonPair "type" (JsonString "baseBranch"))
+      (JsonPair "branch" (JsonString $branch)))))
+
+(= (codex:review-target-json
+      (CodexReviewTargetCommit $sha $title))
+   (JsonObject
+     ((JsonPair "type" (JsonString "commit"))
+      (JsonPair "sha" (JsonString $sha))
+      (JsonPair
+        "title"
+        (if (== $title CodexAbsent)
+            JsonNull
+            (JsonString $title))))))
+
+(= (codex:review-target-json
+      (CodexReviewTargetCustom $instructions))
+   (JsonObject
+     ((JsonPair "type" (JsonString "custom"))
+      (JsonPair "instructions" (JsonString $instructions)))))
+
+(= (codex:review-request-json-pairs
+      (CodexReviewRequest $target $user-facing-hint))
+   (if (== $user-facing-hint CodexAbsent)
+       ((JsonPair "target" (codex:review-target-json $target)))
+       ((JsonPair "target" (codex:review-target-json $target))
+        (JsonPair "user_facing_hint" (JsonString $user-facing-hint)))))
 
 (= (codex:plan-update-step-status-json
       (CodexUpdatePlanStepStatusPending))
@@ -2946,6 +3004,14 @@
         (if (== $review-output CodexAbsent)
             JsonNull
             (codex:review-output-event-json $review-output))))))
+
+(= (codex:item-json
+      (CodexEventEnteredReviewMode $review-request))
+   (let $request-pairs (eval (codex:review-request-json-pairs $review-request))
+     (JsonObject
+       (cons-atom
+         (JsonPair "type" (JsonString "entered_review_mode"))
+         $request-pairs))))
 
 (= (codex:items-json $items)
    (function

@@ -645,3 +645,49 @@
           "One high-confidence issue remains."
           0.75))))
   ("{\"type\":\"exited_review_mode\",\"review_output\":{\"findings\":[{\"title\":\"Missing guard\",\"body\":\"The code path does not check the returned permission.\",\"confidence_score\":0.75,\"priority\":1,\"code_location\":{\"absolute_file_path\":\"/tmp/example.rs\",\"line_range\":{\"start\":20,\"end\":24}}}],\"overall_correctness\":\"patch is not correct\",\"overall_explanation\":\"One high-confidence issue remains.\",\"overall_confidence_score\":0.75}}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:entered-review-mode-event
+      (codex:review-request
+        (codex:review-target-uncommitted-changes)
+        CodexAbsent)))
+  ("entered_review_mode"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:entered-review-mode-event
+        (codex:review-request
+          (codex:review-target-uncommitted-changes)
+          CodexAbsent))))
+  ("{\"type\":\"entered_review_mode\",\"target\":{\"type\":\"uncommittedChanges\"}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:entered-review-mode-event
+        (codex:review-request
+          (codex:review-target-base-branch "main")
+          "changes against main"))))
+  ("{\"type\":\"entered_review_mode\",\"target\":{\"type\":\"baseBranch\",\"branch\":\"main\"},\"user_facing_hint\":\"changes against main\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:entered-review-mode-event
+        (codex:review-request
+          (codex:review-target-commit
+            "abc123"
+            CodexAbsent)
+          CodexAbsent))))
+  ("{\"type\":\"entered_review_mode\",\"target\":{\"type\":\"commit\",\"sha\":\"abc123\",\"title\":null}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:entered-review-mode-event
+        (codex:review-request
+          (codex:review-target-custom "check only auth flows")
+          "focused pass"))))
+  ("{\"type\":\"entered_review_mode\",\"target\":{\"type\":\"custom\",\"instructions\":\"check only auth flows\"},\"user_facing_hint\":\"focused pass\"}"))
