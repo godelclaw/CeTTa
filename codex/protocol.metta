@@ -50,6 +50,7 @@
 ; - Op::UserInput / UserInput / TurnEnvironmentSelection
 ; - Op::UserInputWithTurnContext
 ; - Op::UserTurn
+; - Op::OverrideTurnContext
 ; - Op::InterAgentCommunication / InterAgentCommunication
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
@@ -1041,7 +1042,7 @@
      CodexAbsent
      CodexAbsent))
 
-(= (codex:user-turn-op
+ (= (codex:user-turn-op
       $items
       $cwd
       $approval-policy
@@ -1071,6 +1072,58 @@
      $collaboration-mode
      $personality
      $environments))
+
+; CeTTa deviation: Rust carries `cwd` as `PathBuf` and
+; `permission_profile` as `Option<PermissionProfile>`. This slice preserves the
+; same visible JSON using plain path strings plus the caller-supplied profile
+; JSON value.
+;
+; Rust also represents `effort` and `service_tier` here as nested `Option`s.
+; This slice preserves the same wire behavior using:
+; - `CodexAbsent` to omit the field
+; - `JsonNull` to serialize an explicit `null`
+; - a concrete enum value to serialize that value
+(= (codex:override-turn-context-op)
+   (CodexOpOverrideTurnContext
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent))
+
+(= (codex:override-turn-context-op
+      $cwd
+      $approval-policy
+      $approvals-reviewer
+      $sandbox-policy
+      $permission-profile
+      $windows-sandbox-level
+      $model
+      $effort
+      $summary
+      $service-tier
+      $collaboration-mode
+      $personality)
+   (CodexOpOverrideTurnContext
+     $cwd
+     $approval-policy
+     $approvals-reviewer
+     $sandbox-policy
+     $permission-profile
+     $windows-sandbox-level
+     $model
+     $effort
+     $summary
+     $service-tier
+     $collaboration-mode
+     $personality))
 
 (= (codex:inter-agent-communication
       $author
@@ -7024,6 +7077,22 @@
    "user_turn")
 
 (= (codex:op-type
+      (CodexOpOverrideTurnContext
+        $cwd
+        $approval-policy
+        $approvals-reviewer
+        $sandbox-policy
+        $permission-profile
+        $windows-sandbox-level
+        $model
+        $effort
+        $summary
+        $service-tier
+        $collaboration-mode
+        $personality))
+   "override_turn_context")
+
+(= (codex:op-type
       (CodexOpInterAgentCommunication $communication))
    "inter_agent_communication")
 
@@ -7748,6 +7817,103 @@
                                  "environments"
                                (codex:turn-environment-selections-json
                                    $environments))))))))))))))))
+
+(= (codex:op-json
+      (CodexOpOverrideTurnContext
+        $cwd
+        $approval-policy
+        $approvals-reviewer
+        $sandbox-policy
+        $permission-profile
+        $windows-sandbox-level
+        $model
+        $effort
+        $summary
+        $service-tier
+        $collaboration-mode
+        $personality))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "override_turn_context")))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "cwd"
+         $cwd)
+       (let $pairs-3
+         (codex:append-optional-json-value-pair
+           $pairs-2
+           "approval_policy"
+           (if (== $approval-policy CodexAbsent)
+               CodexAbsent
+               (codex:session-approval-policy-json $approval-policy)))
+         (let $pairs-4
+           (codex:append-optional-json-value-pair
+             $pairs-3
+             "approvals_reviewer"
+             (if (== $approvals-reviewer CodexAbsent)
+                 CodexAbsent
+                 (codex:session-approvals-reviewer-json
+                   $approvals-reviewer)))
+           (let $pairs-5
+             (codex:append-optional-json-value-pair
+               $pairs-4
+               "sandbox_policy"
+               (if (== $sandbox-policy CodexAbsent)
+                   CodexAbsent
+                   (codex:session-sandbox-policy-json $sandbox-policy)))
+             (let $pairs-6
+               (codex:append-optional-json-value-pair
+                 $pairs-5
+                 "permission_profile"
+                 $permission-profile)
+               (let $pairs-7
+                 (codex:append-optional-json-value-pair
+                   $pairs-6
+                   "windows_sandbox_level"
+                   (if (== $windows-sandbox-level CodexAbsent)
+                       CodexAbsent
+                       (codex:windows-sandbox-level-json
+                         $windows-sandbox-level)))
+                 (let $pairs-8
+                   (codex:append-optional-json-string-pair
+                     $pairs-7
+                     "model"
+                     $model)
+                   (let $pairs-9
+                     (codex:append-optional-json-value-pair
+                       $pairs-8
+                       "effort"
+                       (codex:user-input-with-turn-context-effort-json
+                         $effort))
+                     (let $pairs-10
+                       (codex:append-optional-json-value-pair
+                         $pairs-9
+                         "summary"
+                         (if (== $summary CodexAbsent)
+                             CodexAbsent
+                             (codex:reasoning-summary-json $summary)))
+                       (let $pairs-11
+                         (codex:append-optional-json-value-pair
+                           $pairs-10
+                           "service_tier"
+                           (codex:user-input-with-turn-context-service-tier-json
+                             $service-tier))
+                         (let $pairs-12
+                           (codex:append-optional-json-value-pair
+                             $pairs-11
+                             "collaboration_mode"
+                             (if (== $collaboration-mode CodexAbsent)
+                                 CodexAbsent
+                                 (codex:collaboration-mode-json
+                                   $collaboration-mode)))
+                           (JsonObject
+                             (codex:append-optional-json-value-pair
+                               $pairs-12
+                               "personality"
+                               (if (== $personality CodexAbsent)
+                                   CodexAbsent
+                                   (codex:personality-json
+                                     $personality)))))))))))))))))
 
 (= (codex:op-json
       (CodexOpInterAgentCommunication $communication))
