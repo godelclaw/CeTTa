@@ -49,6 +49,7 @@
 ; - Op::Interrupt / CleanBackgroundTerminals
 ; - Op::UserInput / UserInput / TurnEnvironmentSelection
 ; - Op::UserInputWithTurnContext
+; - Op::UserTurn
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
 ; - Op::Compact / DropMemories / UpdateMemories
@@ -992,9 +993,9 @@
       $model
       $effort
       $summary
-      $service-tier
-      $collaboration-mode
-      $personality)
+     $service-tier
+     $collaboration-mode
+     $personality)
    (CodexOpUserInputWithTurnContext
      $items
      $environments
@@ -1012,6 +1013,63 @@
      $service-tier
      $collaboration-mode
      $personality))
+
+; CeTTa deviation: Rust carries `cwd` as `PathBuf` and
+; `permission_profile` as `Option<PermissionProfile>`. This slice preserves the
+; same visible JSON using plain path strings plus the caller-supplied profile
+; JSON value.
+(= (codex:user-turn-op
+      $items
+      $cwd
+      $approval-policy
+      $sandbox-policy
+      $model)
+   (CodexOpUserTurn
+     $items
+     $cwd
+     $approval-policy
+     CodexAbsent
+     $sandbox-policy
+     CodexAbsent
+     $model
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent))
+
+(= (codex:user-turn-op
+      $items
+      $cwd
+      $approval-policy
+      $approvals-reviewer
+      $sandbox-policy
+      $permission-profile
+      $model
+      $effort
+      $summary
+      $service-tier
+      $final-output-json-schema
+      $collaboration-mode
+      $personality
+      $environments)
+   (CodexOpUserTurn
+     $items
+     $cwd
+     $approval-policy
+     $approvals-reviewer
+     $sandbox-policy
+     $permission-profile
+     $model
+     $effort
+     $summary
+     $service-tier
+     $final-output-json-schema
+     $collaboration-mode
+     $personality
+     $environments))
 
 (= (codex:add-to-history-op $text)
    (CodexOpAddToHistory $text))
@@ -3553,6 +3611,9 @@
        (if (== $service-tier JsonNull)
            JsonNull
            (codex:session-service-tier-json $service-tier))))
+
+(= (codex:user-turn-service-tier-json $service-tier)
+   (codex:user-input-with-turn-context-service-tier-json $service-tier))
 
 (= (codex:turn-abort-reason-json
       (CodexTurnAbortReasonInterrupted))
@@ -6905,6 +6966,24 @@
    "user_input_with_turn_context")
 
 (= (codex:op-type
+      (CodexOpUserTurn
+        $items
+        $cwd
+        $approval-policy
+        $approvals-reviewer
+        $sandbox-policy
+        $permission-profile
+        $model
+        $effort
+        $summary
+        $service-tier
+        $final-output-json-schema
+        $collaboration-mode
+        $personality
+        $environments))
+   "user_turn")
+
+(= (codex:op-type
       (CodexOpRefreshMcpServers $config))
    "refresh_mcp_servers")
 
@@ -7530,6 +7609,101 @@
                                          CodexAbsent
                                          (codex:personality-json
                                            $personality))))))))))))))))))))
+
+(= (codex:op-json
+      (CodexOpUserTurn
+        $items
+        $cwd
+        $approval-policy
+        $approvals-reviewer
+        $sandbox-policy
+        $permission-profile
+        $model
+        $effort
+        $summary
+        $service-tier
+        $final-output-json-schema
+        $collaboration-mode
+        $personality
+        $environments))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "user_turn"))
+      (JsonPair "items" (codex:user-inputs-json $items))
+      (JsonPair "cwd" (JsonString $cwd))
+      (JsonPair
+        "approval_policy"
+        (codex:session-approval-policy-json $approval-policy)))
+     (let $pairs-2
+       (codex:append-optional-json-value-pair
+         $pairs-1
+         "approvals_reviewer"
+         (if (== $approvals-reviewer CodexAbsent)
+             CodexAbsent
+             (codex:session-approvals-reviewer-json $approvals-reviewer)))
+       (let $pairs-3
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "sandbox_policy"
+           (codex:session-sandbox-policy-json $sandbox-policy))
+         (let $pairs-4
+           (codex:append-optional-json-value-pair
+             $pairs-3
+             "permission_profile"
+             $permission-profile)
+           (let $pairs-5
+             (codex:protocol-append-json-pair
+               $pairs-4
+               "model"
+               (JsonString $model))
+             (let $pairs-6
+               (codex:append-optional-json-value-pair
+                 $pairs-5
+                 "effort"
+                 (if (== $effort CodexAbsent)
+                     CodexAbsent
+                     (codex:session-reasoning-effort-json $effort)))
+               (let $pairs-7
+                 (codex:append-optional-json-value-pair
+                   $pairs-6
+                   "summary"
+                   (if (== $summary CodexAbsent)
+                       CodexAbsent
+                       (codex:reasoning-summary-json $summary)))
+                 (let $pairs-8
+                   (codex:append-optional-json-value-pair
+                     $pairs-7
+                     "service_tier"
+                     (codex:user-turn-service-tier-json $service-tier))
+                   (let $pairs-9
+                     (codex:protocol-append-json-pair
+                       $pairs-8
+                       "final_output_json_schema"
+                       (if (== $final-output-json-schema CodexAbsent)
+                           JsonNull
+                           $final-output-json-schema))
+                     (let $pairs-10
+                       (codex:append-optional-json-value-pair
+                         $pairs-9
+                         "collaboration_mode"
+                         (if (== $collaboration-mode CodexAbsent)
+                             CodexAbsent
+                             (codex:collaboration-mode-json
+                               $collaboration-mode)))
+                       (let $pairs-11
+                         (codex:append-optional-json-value-pair
+                           $pairs-10
+                           "personality"
+                           (if (== $personality CodexAbsent)
+                               CodexAbsent
+                               (codex:personality-json $personality)))
+                         (JsonObject
+                           (if (== $environments CodexAbsent)
+                               $pairs-11
+                               (codex:protocol-append-json-pair
+                                 $pairs-11
+                                 "environments"
+                                 (codex:turn-environment-selections-json
+                                   $environments))))))))))))))))
 
 (= (codex:op-json
       (CodexOpRefreshMcpServers $config))
