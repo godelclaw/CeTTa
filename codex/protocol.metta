@@ -33,6 +33,7 @@
 ; - PlanUpdate(UpdatePlanArgs)
 ; - TurnAbortedEvent
 ; - StreamErrorEvent / CodexErrorInfo / NonSteerableTurnKind
+; - ErrorEvent / RawResponseItemEvent
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -394,6 +395,12 @@
 
 (= (codex:stream-error-event $message $codex-error-info $additional-details)
    (CodexEventStreamError $message $codex-error-info $additional-details))
+
+(= (codex:error-event $message $codex-error-info)
+   (CodexEventError $message $codex-error-info))
+
+(= (codex:raw-response-item-event $item)
+   (CodexEventRawResponseItem $item))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -1053,6 +1060,14 @@
 (= (codex:item-type
       (CodexEventStreamError $message $codex-error-info $additional-details))
    "stream_error")
+
+(= (codex:item-type
+      (CodexEventError $message $codex-error-info))
+   "error")
+
+(= (codex:item-type
+      (CodexEventRawResponseItem $item))
+   "raw_response_item")
 
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
@@ -1783,6 +1798,72 @@
 (= (codex:codex-error-info-json
       (CodexErrorInfoOther))
    (JsonString "other"))
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoThreadRollbackFailed))
+   False)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoActiveTurnNotSteerable $turn-kind))
+   False)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoContextWindowExceeded))
+   True)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoUsageLimitExceeded))
+   True)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoServerOverloaded))
+   True)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoCyberPolicy))
+   True)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoHttpConnectionFailed $http-status-code))
+   True)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoResponseStreamConnectionFailed $http-status-code))
+   True)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoInternalServerError))
+   True)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoUnauthorized))
+   True)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoBadRequest))
+   True)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoSandboxError))
+   True)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoResponseStreamDisconnected $http-status-code))
+   True)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoResponseTooManyFailedAttempts $http-status-code))
+   True)
+
+(= (codex:codex-error-info-affects-turn-status
+      (CodexErrorInfoOther))
+   True)
+
+(= (codex:error-event-affects-turn-status
+      (CodexEventError $message $codex-error-info))
+   (if (== $codex-error-info CodexAbsent)
+       True
+       (codex:codex-error-info-affects-turn-status $codex-error-info)))
 
 (= (codex:plan-update-step-status-json
       (CodexUpdatePlanStepStatusPending))
@@ -2606,6 +2687,23 @@
         (if (== $additional-details CodexAbsent)
             JsonNull
             (JsonString $additional-details))))))
+
+(= (codex:item-json
+      (CodexEventError $message $codex-error-info))
+   (JsonObject
+     ((JsonPair "type" (JsonString "error"))
+      (JsonPair "message" (JsonString $message))
+      (JsonPair
+        "codex_error_info"
+        (if (== $codex-error-info CodexAbsent)
+            JsonNull
+            (codex:codex-error-info-json $codex-error-info))))))
+
+(= (codex:item-json
+      (CodexEventRawResponseItem $item))
+   (JsonObject
+     ((JsonPair "type" (JsonString "raw_response_item"))
+      (JsonPair "item" (codex:item-json $item)))))
 
 (= (codex:items-json $items)
    (function

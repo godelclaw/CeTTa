@@ -529,3 +529,39 @@
         (codex:codex-error-info-response-stream-disconnected CodexAbsent)
         CodexAbsent)))
   ("{\"type\":\"stream_error\",\"message\":\"connection dropped\",\"codex_error_info\":{\"response_stream_disconnected\":{\"http_status_code\":null}},\"additional_details\":null}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:error-event
+      "workspace rollback failed"
+      (codex:codex-error-info-thread-rollback-failed)))
+  ("error"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:error-event
+        "workspace rollback failed"
+        (codex:codex-error-info-thread-rollback-failed))))
+  ("{\"type\":\"error\",\"message\":\"workspace rollback failed\",\"codex_error_info\":\"thread_rollback_failed\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:error-event
+        "generic error"
+        CodexAbsent)))
+  ("{\"type\":\"error\",\"message\":\"generic error\",\"codex_error_info\":null}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:raw-response-item-event
+      (codex:commentary-message "Inspecting response items.")))
+  ("raw_response_item"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:raw-response-item-event
+        (codex:commentary-message "Inspecting response items."))))
+  ("{\"type\":\"raw_response_item\",\"item\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Inspecting response items.\"}],\"phase\":\"commentary\"}}"))

@@ -37,3 +37,30 @@
       ((codex:user-message "u")
        (codex:assistant-message "a"))))
   ("[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"u\"}]},{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"a\"}]}]"))
+
+!(assertEqualToResult
+  (codex:error-event-affects-turn-status
+    (codex:error-event
+      "rollback failed"
+      (codex:codex-error-info-thread-rollback-failed)))
+  (False))
+
+!(assertEqualToResult
+  (codex:error-event-affects-turn-status
+    (codex:error-event
+      "cannot steer"
+      (codex:codex-error-info-active-turn-not-steerable
+        (codex:non-steerable-turn-kind-review))))
+  (False))
+
+!(assertEqualToResult
+  (codex:error-event-affects-turn-status
+    (codex:error-event
+      "generic"
+      (codex:codex-error-info-other)))
+  (True))
+
+!(assertEqualToResult
+  (codex:error-event-affects-turn-status
+    (codex:error-event "message only" CodexAbsent))
+  (True))
