@@ -51,6 +51,7 @@
 ; - Op::UserInputWithTurnContext
 ; - Op::UserTurn
 ; - Op::OverrideTurnContext
+; - Op::ResolveElicitation / RequestId / ElicitationAction
 ; - Op::InterAgentCommunication / InterAgentCommunication
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
@@ -1130,6 +1131,45 @@
 
 (= (codex:patch-approval-op $id $decision)
    (CodexOpPatchApproval $id $decision))
+
+(= (codex:mcp-request-id-string $value)
+   (CodexMcpRequestIdString $value))
+
+(= (codex:mcp-request-id-integer $value)
+   (CodexMcpRequestIdInteger $value))
+
+(= (codex:elicitation-action-accept)
+   (CodexElicitationActionAccept))
+
+(= (codex:elicitation-action-decline)
+   (CodexElicitationActionDecline))
+
+(= (codex:elicitation-action-cancel)
+   (CodexElicitationActionCancel))
+
+(= (codex:resolve-elicitation-op
+      $server-name
+      $request-id
+      $decision)
+   (CodexOpResolveElicitation
+     $server-name
+     $request-id
+     $decision
+     CodexAbsent
+     CodexAbsent))
+
+(= (codex:resolve-elicitation-op
+      $server-name
+      $request-id
+      $decision
+      $content
+      $meta)
+   (CodexOpResolveElicitation
+     $server-name
+     $request-id
+     $decision
+     $content
+     $meta))
 
 (= (codex:inter-agent-communication
       $author
@@ -4181,6 +4221,26 @@
       (CodexReviewDecisionAbort))
    (JsonString "abort"))
 
+(= (codex:mcp-request-id-json
+      (CodexMcpRequestIdString $value))
+   (JsonString $value))
+
+(= (codex:mcp-request-id-json
+      (CodexMcpRequestIdInteger $value))
+   (JsonNumber $value))
+
+(= (codex:elicitation-action-json
+      (CodexElicitationActionAccept))
+   (JsonString "accept"))
+
+(= (codex:elicitation-action-json
+      (CodexElicitationActionDecline))
+   (JsonString "decline"))
+
+(= (codex:elicitation-action-json
+      (CodexElicitationActionCancel))
+   (JsonString "cancel"))
+
 (= (codex:review-decisions-json $decisions)
    (JsonArray
      (map-atom $decisions $item (codex:review-decision-json $item))))
@@ -7107,6 +7167,15 @@
    "patch_approval")
 
 (= (codex:op-type
+      (CodexOpResolveElicitation
+        $server-name
+        $request-id
+        $decision
+        $content
+        $meta))
+   "resolve_elicitation")
+
+(= (codex:op-type
       (CodexOpInterAgentCommunication $communication))
    "inter_agent_communication")
 
@@ -7951,6 +8020,29 @@
      ((JsonPair "type" (JsonString "patch_approval"))
       (JsonPair "id" (JsonString $id))
       (JsonPair "decision" (codex:review-decision-json $decision)))))
+
+(= (codex:op-json
+      (CodexOpResolveElicitation
+        $server-name
+        $request-id
+        $decision
+        $content
+        $meta))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "resolve_elicitation"))
+      (JsonPair "server_name" (JsonString $server-name))
+      (JsonPair "request_id" (codex:mcp-request-id-json $request-id))
+      (JsonPair "decision" (codex:elicitation-action-json $decision)))
+     (let $pairs-2
+       (codex:append-optional-json-value-pair
+         $pairs-1
+         "content"
+         $content)
+       (JsonObject
+         (codex:append-optional-json-value-pair
+           $pairs-2
+           "meta"
+           $meta)))))
 
 (= (codex:op-json
       (CodexOpInterAgentCommunication $communication))
