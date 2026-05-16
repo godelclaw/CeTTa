@@ -43,6 +43,7 @@
 ; - ListSkillsResponseEvent / SkillsListEntry / SkillMetadata
 ; - RealtimeConversationListVoicesResponseEvent / RealtimeVoice
 ; - Product
+; - SessionConfiguredEvent / SessionNetworkProxyRuntime
 ; - PatchApplyBeginEvent / PatchApplyUpdatedEvent / PatchApplyEndEvent
 ; - HookStartedEvent / HookCompletedEvent / HookRunSummary
 ; - UndoStartedEvent / UndoCompletedEvent
@@ -67,6 +68,12 @@
 ; The unified-exec delta event stores raw bytes in Rust and serializes them as
 ; base64. The current CeTTa surface therefore models the event payload as text
 ; whose current byte sequence is base64-encoded at JSON projection time.
+;
+; CeTTa deviation: the `SessionConfiguredEvent.permission_profile` helper
+; surface below carries the Rust-visible JSON payload directly instead of
+; fully porting the nested `permissions.rs` filesystem-entry record tranche in
+; the same increment. This preserves the exact wire shape for the restarted
+; `session_configured` event while that lower slice is still pending.
 
 !(import! &self json)
 !(import! &self list)
@@ -665,6 +672,192 @@
 
 (= (codex:product-atlas)
    (CodexProductAtlas))
+
+(= (codex:session-approvals-reviewer-user)
+   (CodexSessionApprovalsReviewerUser))
+
+(= (codex:session-approvals-reviewer-auto-review)
+   (CodexSessionApprovalsReviewerAutoReview))
+
+(= (codex:session-service-tier-fast)
+   (CodexSessionServiceTierFast))
+
+(= (codex:session-service-tier-flex)
+   (CodexSessionServiceTierFlex))
+
+(= (codex:session-reasoning-effort-none)
+   (CodexSessionReasoningEffortNone))
+
+(= (codex:session-reasoning-effort-minimal)
+   (CodexSessionReasoningEffortMinimal))
+
+(= (codex:session-reasoning-effort-low)
+   (CodexSessionReasoningEffortLow))
+
+(= (codex:session-reasoning-effort-medium)
+   (CodexSessionReasoningEffortMedium))
+
+(= (codex:session-reasoning-effort-high)
+   (CodexSessionReasoningEffortHigh))
+
+(= (codex:session-reasoning-effort-xhigh)
+   (CodexSessionReasoningEffortXHigh))
+
+(= (codex:session-approval-policy-untrusted)
+   (CodexSessionApprovalPolicyUnlessTrusted))
+
+(= (codex:session-approval-policy-on-failure)
+   (CodexSessionApprovalPolicyOnFailure))
+
+(= (codex:session-approval-policy-on-request)
+   (CodexSessionApprovalPolicyOnRequest))
+
+(= (codex:session-approval-policy-never)
+   (CodexSessionApprovalPolicyNever))
+
+(= (codex:session-approval-policy-granular-config
+      $sandbox-approval
+      $rules
+      $skill-approval
+      $request-permissions
+      $mcp-elicitations)
+   (CodexSessionGranularApprovalConfig
+     $sandbox-approval
+     $rules
+     $skill-approval
+     $request-permissions
+     $mcp-elicitations))
+
+(= (codex:session-approval-policy-granular $config)
+   (CodexSessionApprovalPolicyGranular $config))
+
+(= (codex:session-network-access-restricted)
+   (CodexSessionNetworkAccessRestricted))
+
+(= (codex:session-network-access-enabled)
+   (CodexSessionNetworkAccessEnabled))
+
+(= (codex:session-read-only-access-full)
+   (CodexSessionReadOnlyAccessFull))
+
+(= (codex:session-read-only-access-restricted
+      $include-platform-defaults
+      $readable-roots)
+   (CodexSessionReadOnlyAccessRestricted
+     $include-platform-defaults
+     $readable-roots))
+
+(= (codex:session-sandbox-policy-danger-full-access)
+   (CodexSessionSandboxPolicyDangerFullAccess))
+
+(= (codex:session-sandbox-policy-read-only $access $network-access)
+   (CodexSessionSandboxPolicyReadOnly $access $network-access))
+
+(= (codex:session-sandbox-policy-external-sandbox $network-access)
+   (CodexSessionSandboxPolicyExternalSandbox $network-access))
+
+(= (codex:session-sandbox-policy-workspace-write
+      $writable-roots
+      $read-only-access
+      $network-access
+      $exclude-tmpdir-env-var
+      $exclude-slash-tmp)
+   (CodexSessionSandboxPolicyWorkspaceWrite
+     $writable-roots
+     $read-only-access
+     $network-access
+     $exclude-tmpdir-env-var
+     $exclude-slash-tmp))
+
+(= (codex:session-network-sandbox-policy-restricted)
+   (CodexSessionNetworkSandboxPolicyRestricted))
+
+(= (codex:session-network-sandbox-policy-enabled)
+   (CodexSessionNetworkSandboxPolicyEnabled))
+
+(= (codex:session-network-proxy-runtime $http-addr $socks-addr)
+   (CodexSessionNetworkProxyRuntime $http-addr $socks-addr))
+
+(= (codex:session-permission-profile-disabled-json)
+   (JsonObject
+     ((JsonPair "type" (JsonString "disabled")))))
+
+(= (codex:session-permission-profile-external-json $network-policy)
+   (JsonObject
+     ((JsonPair "type" (JsonString "external"))
+      (JsonPair
+        "network"
+        (codex:session-network-sandbox-policy-json $network-policy)))))
+
+(= (codex:session-permission-profile-managed-unrestricted-json
+      $network-policy)
+   (JsonObject
+     ((JsonPair "type" (JsonString "managed"))
+      (JsonPair
+        "file_system"
+        (JsonObject
+          ((JsonPair "type" (JsonString "unrestricted")))))
+      (JsonPair
+        "network"
+        (codex:session-network-sandbox-policy-json $network-policy)))))
+
+(= (codex:session-permission-profile-managed-restricted-json
+      $entries
+      $glob-scan-max-depth
+      $network-policy)
+   (let $file-system-pairs
+     ((JsonPair "type" (JsonString "restricted"))
+      (JsonPair "entries" (JsonArray $entries)))
+     (let $file-system-pairs-2
+       (if (== $glob-scan-max-depth CodexAbsent)
+           $file-system-pairs
+           (codex:protocol-append-json-pair
+             $file-system-pairs
+             "glob_scan_max_depth"
+             (JsonNumber $glob-scan-max-depth)))
+       (JsonObject
+         ((JsonPair "type" (JsonString "managed"))
+          (JsonPair "file_system" (JsonObject $file-system-pairs-2))
+          (JsonPair
+            "network"
+            (codex:session-network-sandbox-policy-json $network-policy)))))))
+
+(= (codex:session-configured-event
+      $session-id
+      $forked-from-id
+      $thread-name
+      $model
+      $model-provider-id
+      $service-tier
+      $approval-policy
+      $approvals-reviewer
+      $sandbox-policy
+      $permission-profile
+      $cwd
+      $reasoning-effort
+      $history-log-id
+      $history-entry-count
+      $initial-messages
+      $network-proxy
+      $rollout-path)
+   (CodexEventSessionConfigured
+     $session-id
+     $forked-from-id
+     $thread-name
+     $model
+     $model-provider-id
+     $service-tier
+     $approval-policy
+     $approvals-reviewer
+     $sandbox-policy
+     $permission-profile
+     $cwd
+     $reasoning-effort
+     $history-log-id
+     $history-entry-count
+     $initial-messages
+     $network-proxy
+     $rollout-path))
 
 (= (codex:patch-apply-file-change-add $path $content)
    (CodexProtocolPatchApplyFileChangeAdd $path $content))
@@ -1568,6 +1761,27 @@
 (= (codex:item-type
       (CodexEventRealtimeConversationListVoicesResponse $voices))
    "realtime_conversation_list_voices_response")
+
+(= (codex:item-type
+      (CodexEventSessionConfigured
+        $session-id
+        $forked-from-id
+        $thread-name
+        $model
+        $model-provider-id
+        $service-tier
+        $approval-policy
+        $approvals-reviewer
+        $sandbox-policy
+        $permission-profile
+        $cwd
+        $reasoning-effort
+        $history-log-id
+        $history-entry-count
+        $initial-messages
+        $network-proxy
+        $rollout-path))
+   "session_configured")
 
 (= (codex:item-type
       (CodexEventPatchApplyBegin
@@ -2522,11 +2736,11 @@
       (JsonPair "ts" (JsonNumber $ts))
       (JsonPair "text" (JsonString $text)))))
 
-(= (codex:append-item $items $item)
+(= (codex:protocol-append-item $items $item)
    (list:append $items ($item)))
 
-(= (codex:append-json-pair $pairs $key $value)
-   (codex:append-item $pairs (JsonPair $key $value)))
+(= (codex:protocol-append-json-pair $pairs $key $value)
+   (codex:protocol-append-item $pairs (JsonPair $key $value)))
 
 (= (codex:optional-string-json $value)
    (if (== $value CodexAbsent)
@@ -2579,27 +2793,27 @@
      (let $pairs-2
        (if (== $description CodexAbsent)
            $pairs-1
-           (codex:append-json-pair
+           (codex:protocol-append-json-pair
              $pairs-1
              "description"
              (JsonString $description)))
        (let $pairs-3
          (if (== $transport CodexAbsent)
              $pairs-2
-             (codex:append-json-pair
+             (codex:protocol-append-json-pair
                $pairs-2
                "transport"
                (JsonString $transport)))
          (let $pairs-4
            (if (== $command CodexAbsent)
                $pairs-3
-               (codex:append-json-pair
+               (codex:protocol-append-json-pair
                  $pairs-3
                  "command"
                  (JsonString $command)))
            (if (== $url CodexAbsent)
                $pairs-4
-               (codex:append-json-pair
+               (codex:protocol-append-json-pair
                  $pairs-4
                  "url"
                  (JsonString $url))))))))
@@ -2635,35 +2849,35 @@
      (let $pairs-2
        (if (== $short-description CodexAbsent)
            $pairs-1
-           (codex:append-json-pair
+           (codex:protocol-append-json-pair
              $pairs-1
              "short_description"
              (JsonString $short-description)))
        (let $pairs-3
          (if (== $interface CodexAbsent)
              $pairs-2
-             (codex:append-json-pair
+             (codex:protocol-append-json-pair
                $pairs-2
                "interface"
                (codex:skill-interface-json $interface)))
          (let $pairs-4
            (if (== $dependencies CodexAbsent)
                $pairs-3
-               (codex:append-json-pair
+               (codex:protocol-append-json-pair
                  $pairs-3
                  "dependencies"
                  (codex:skill-dependencies-json $dependencies)))
            (let $pairs-5
-             (codex:append-json-pair
+             (codex:protocol-append-json-pair
                $pairs-4
                "path"
                (JsonString $path))
              (let $pairs-6
-               (codex:append-json-pair
+               (codex:protocol-append-json-pair
                  $pairs-5
                  "scope"
                  (codex:skill-scope-json $scope))
-               (codex:append-json-pair
+               (codex:protocol-append-json-pair
                  $pairs-6
                  "enabled"
                  (JsonBool $enabled)))))))))
@@ -2872,6 +3086,213 @@
    (if (== $products ())
        True
        (codex:product-list-contains $products $product)))
+
+(= (codex:append-optional-json-string-pair $pairs $key $value)
+   (if (== $value CodexAbsent)
+       $pairs
+       (codex:protocol-append-json-pair $pairs $key (JsonString $value))))
+
+(= (codex:append-optional-json-value-pair $pairs $key $value)
+   (if (== $value CodexAbsent)
+       $pairs
+       (codex:protocol-append-json-pair $pairs $key $value)))
+
+(= (codex:json-string-array $items)
+   (JsonArray
+     (map-atom $items $item (JsonString $item))))
+
+(= (codex:session-approvals-reviewer-json
+      (CodexSessionApprovalsReviewerUser))
+   (JsonString "user"))
+
+(= (codex:session-approvals-reviewer-json
+      (CodexSessionApprovalsReviewerAutoReview))
+   (JsonString "guardian_subagent"))
+
+(= (codex:session-service-tier-json
+      (CodexSessionServiceTierFast))
+   (JsonString "fast"))
+
+(= (codex:session-service-tier-json
+      (CodexSessionServiceTierFlex))
+   (JsonString "flex"))
+
+(= (codex:session-reasoning-effort-json
+      (CodexSessionReasoningEffortNone))
+   (JsonString "none"))
+
+(= (codex:session-reasoning-effort-json
+      (CodexSessionReasoningEffortMinimal))
+   (JsonString "minimal"))
+
+(= (codex:session-reasoning-effort-json
+      (CodexSessionReasoningEffortLow))
+   (JsonString "low"))
+
+(= (codex:session-reasoning-effort-json
+      (CodexSessionReasoningEffortMedium))
+   (JsonString "medium"))
+
+(= (codex:session-reasoning-effort-json
+      (CodexSessionReasoningEffortHigh))
+   (JsonString "high"))
+
+(= (codex:session-reasoning-effort-json
+      (CodexSessionReasoningEffortXHigh))
+   (JsonString "xhigh"))
+
+(= (codex:session-approval-policy-json
+      (CodexSessionApprovalPolicyUnlessTrusted))
+   (JsonString "untrusted"))
+
+(= (codex:session-approval-policy-json
+      (CodexSessionApprovalPolicyOnFailure))
+   (JsonString "on-failure"))
+
+(= (codex:session-approval-policy-json
+      (CodexSessionApprovalPolicyOnRequest))
+   (JsonString "on-request"))
+
+(= (codex:session-approval-policy-json
+      (CodexSessionApprovalPolicyNever))
+   (JsonString "never"))
+
+(= (codex:session-granular-approval-config-json
+      (CodexSessionGranularApprovalConfig
+        $sandbox-approval
+        $rules
+        $skill-approval
+        $request-permissions
+        $mcp-elicitations))
+   (JsonObject
+     ((JsonPair "sandbox_approval" (JsonBool $sandbox-approval))
+      (JsonPair "rules" (JsonBool $rules))
+      (JsonPair "skill_approval" (JsonBool $skill-approval))
+      (JsonPair "request_permissions" (JsonBool $request-permissions))
+      (JsonPair "mcp_elicitations" (JsonBool $mcp-elicitations)))))
+
+(= (codex:session-approval-policy-json
+      (CodexSessionApprovalPolicyGranular $config))
+   (JsonObject
+     ((JsonPair "granular" (codex:session-granular-approval-config-json $config)))))
+
+(= (codex:session-network-access-json
+      (CodexSessionNetworkAccessRestricted))
+   (JsonString "restricted"))
+
+(= (codex:session-network-access-json
+      (CodexSessionNetworkAccessEnabled))
+   (JsonString "enabled"))
+
+(= (codex:session-read-only-access-json
+      (CodexSessionReadOnlyAccessFull))
+   (JsonObject
+     ((JsonPair "type" (JsonString "full-access")))))
+
+(= (codex:session-read-only-access-json
+      (CodexSessionReadOnlyAccessRestricted
+        $include-platform-defaults
+        $readable-roots))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "restricted"))
+      (JsonPair
+        "include_platform_defaults"
+        (JsonBool $include-platform-defaults)))
+     (let $pairs-2
+       (if (== $readable-roots ())
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "readable_roots"
+             (codex:json-string-array $readable-roots)))
+       (JsonObject $pairs-2))))
+
+(= (codex:session-sandbox-policy-json
+      (CodexSessionSandboxPolicyDangerFullAccess))
+   (JsonObject
+     ((JsonPair "type" (JsonString "danger-full-access")))))
+
+(= (codex:session-sandbox-policy-json
+      (CodexSessionSandboxPolicyReadOnly $access $network-access))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "read-only")))
+     (let $pairs-2
+       (if (== $access (CodexSessionReadOnlyAccessFull))
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "access"
+             (codex:session-read-only-access-json $access)))
+       (let $pairs-3
+         (if $network-access
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "network_access"
+               (JsonBool $network-access))
+             $pairs-2)
+         (JsonObject $pairs-3)))))
+
+(= (codex:session-sandbox-policy-json
+      (CodexSessionSandboxPolicyExternalSandbox $network-access))
+   (JsonObject
+     ((JsonPair "type" (JsonString "external-sandbox"))
+      (JsonPair
+        "network_access"
+        (codex:session-network-access-json $network-access)))))
+
+(= (codex:session-sandbox-policy-json
+      (CodexSessionSandboxPolicyWorkspaceWrite
+        $writable-roots
+        $read-only-access
+        $network-access
+        $exclude-tmpdir-env-var
+        $exclude-slash-tmp))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "workspace-write")))
+     (let $pairs-2
+       (if (== $writable-roots ())
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "writable_roots"
+             (codex:json-string-array $writable-roots)))
+       (let $pairs-3
+         (if (== $read-only-access (CodexSessionReadOnlyAccessFull))
+             $pairs-2
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "read_only_access"
+               (codex:session-read-only-access-json $read-only-access)))
+         (let $pairs-4
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "network_access"
+             (JsonBool $network-access))
+           (let $pairs-5
+             (codex:protocol-append-json-pair
+               $pairs-4
+               "exclude_tmpdir_env_var"
+               (JsonBool $exclude-tmpdir-env-var))
+             (let $pairs-6
+               (codex:protocol-append-json-pair
+                 $pairs-5
+                 "exclude_slash_tmp"
+                 (JsonBool $exclude-slash-tmp))
+               (JsonObject $pairs-6))))))))
+
+(= (codex:session-network-sandbox-policy-json
+      (CodexSessionNetworkSandboxPolicyRestricted))
+   (JsonString "restricted"))
+
+(= (codex:session-network-sandbox-policy-json
+      (CodexSessionNetworkSandboxPolicyEnabled))
+   (JsonString "enabled"))
+
+(= (codex:session-network-proxy-runtime-json
+      (CodexSessionNetworkProxyRuntime $http-addr $socks-addr))
+   (JsonObject
+     ((JsonPair "http_addr" (JsonString $http-addr))
+      (JsonPair "socks_addr" (JsonString $socks-addr)))))
 
 (= (codex:patch-apply-file-change-json
       (CodexProtocolPatchApplyFileChangeAdd $path $content))
@@ -4057,6 +4478,121 @@
         "type"
         (JsonString "realtime_conversation_list_voices_response"))
       (JsonPair "voices" (codex:realtime-voices-list-json $voices)))))
+
+(= (codex:item-json
+      (CodexEventSessionConfigured
+        $session-id
+        $forked-from-id
+        $thread-name
+        $model
+        $model-provider-id
+        $service-tier
+        $approval-policy
+        $approvals-reviewer
+        $sandbox-policy
+        $permission-profile
+        $cwd
+        $reasoning-effort
+        $history-log-id
+        $history-entry-count
+        $initial-messages
+        $network-proxy
+        $rollout-path))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "session_configured"))
+      (JsonPair "session_id" (JsonString $session-id)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "forked_from_id"
+         $forked-from-id)
+       (let $pairs-3
+         (codex:append-optional-json-string-pair
+           $pairs-2
+           "thread_name"
+           $thread-name)
+         (let $pairs-4
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "model"
+             (JsonString $model))
+           (let $pairs-5
+             (codex:protocol-append-json-pair
+               $pairs-4
+               "model_provider_id"
+               (JsonString $model-provider-id))
+             (let $pairs-6
+               (codex:append-optional-json-value-pair
+                 $pairs-5
+                 "service_tier"
+                 (if (== $service-tier CodexAbsent)
+                     CodexAbsent
+                     (codex:session-service-tier-json $service-tier)))
+               (let $pairs-7
+                 (codex:protocol-append-json-pair
+                   $pairs-6
+                   "approval_policy"
+                   (codex:session-approval-policy-json $approval-policy))
+                 (let $pairs-8
+                   (codex:protocol-append-json-pair
+                     $pairs-7
+                     "approvals_reviewer"
+                     (codex:session-approvals-reviewer-json
+                       $approvals-reviewer))
+                   (let $pairs-9
+                     (codex:protocol-append-json-pair
+                       $pairs-8
+                       "sandbox_policy"
+                       (codex:session-sandbox-policy-json $sandbox-policy))
+                     (let $pairs-10
+                       (codex:append-optional-json-value-pair
+                         $pairs-9
+                         "permission_profile"
+                         $permission-profile)
+                       (let $pairs-11
+                         (codex:protocol-append-json-pair
+                           $pairs-10
+                           "cwd"
+                           (JsonString $cwd))
+                         (let $pairs-12
+                           (codex:append-optional-json-value-pair
+                             $pairs-11
+                             "reasoning_effort"
+                             (if (== $reasoning-effort CodexAbsent)
+                                 CodexAbsent
+                                 (codex:session-reasoning-effort-json
+                                   $reasoning-effort)))
+                           (let $pairs-13
+                             (codex:protocol-append-json-pair
+                               $pairs-12
+                               "history_log_id"
+                               (JsonNumber $history-log-id))
+                             (let $pairs-14
+                               (codex:protocol-append-json-pair
+                                 $pairs-13
+                                 "history_entry_count"
+                                 (JsonNumber $history-entry-count))
+                               (let $pairs-15
+                                 (codex:append-optional-json-value-pair
+                                   $pairs-14
+                                   "initial_messages"
+                                   (if (== $initial-messages CodexAbsent)
+                                       CodexAbsent
+                                       (codex:items-json $initial-messages)))
+                                 (let $pairs-16
+                                   (codex:append-optional-json-value-pair
+                                     $pairs-15
+                                     "network_proxy"
+                                     (if (== $network-proxy CodexAbsent)
+                                         CodexAbsent
+                                         (codex:session-network-proxy-runtime-json
+                                           $network-proxy)))
+                                   (let $pairs-17
+                                     (codex:append-optional-json-string-pair
+                                       $pairs-16
+                                       "rollout_path"
+                                       $rollout-path)
+                                     (JsonObject $pairs-17)))))))))))))))))))
 
 (= (codex:item-json
       (CodexEventPatchApplyBegin

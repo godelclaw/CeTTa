@@ -175,3 +175,21 @@
     (codex:product-atlas)
     ())
   (True))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:session-approval-policy-json
+      (codex:session-approval-policy-granular
+        (codex:session-approval-policy-granular-config
+          True
+          False
+          True
+          False
+          True))))
+  ("{\"granular\":{\"sandbox_approval\":true,\"rules\":false,\"skill_approval\":true,\"request_permissions\":false,\"mcp_elicitations\":true}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:session-permission-profile-external-json
+      (codex:session-network-sandbox-policy-enabled)))
+  ("{\"type\":\"external\",\"network\":\"enabled\"}"))

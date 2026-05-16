@@ -75,6 +75,7 @@
 !(import! &self permissions_instructions)
 !(import! &self protocol)
 !(import! &self json)
+!(import! &self list)
 !(import! &self str)
 
 (= (codex:contextual-fragment $role $start-marker $end-marker $body)
@@ -456,23 +457,56 @@
 (= (codex:append-item $items $item)
    (list:append $items ($item)))
 
+(= (codex:environment-context-cwd-lines CodexAbsent)
+   ())
+
+(= (codex:environment-context-cwd-lines $cwd)
+   ((format-args
+      "  <cwd>{}</cwd>"
+      ($cwd))))
+
+(= (codex:environment-context-current-date-lines CodexAbsent)
+   ())
+
+(= (codex:environment-context-current-date-lines $current-date)
+   ((format-args
+      "  <current_date>{}</current_date>"
+      ($current-date))))
+
+(= (codex:environment-context-timezone-lines CodexAbsent)
+   ())
+
+(= (codex:environment-context-timezone-lines $timezone)
+   ((format-args
+      "  <timezone>{}</timezone>"
+      ($timezone))))
+
 (= (codex:environment-context-domain-lines $domains $tag-name)
    (if (== $domains ())
        ()
        (let $head (list:first $domains)
          (let $tail (list:rest $domains)
-           (cons-atom
-             (format-args "    <{}>{}</{}>" ($tag-name $head $tag-name))
-             (codex:environment-context-domain-lines $tail $tag-name))))))
+           (let $tail-lines
+             (eval
+               (codex:environment-context-domain-lines
+                 $tail
+                 $tag-name))
+             (eval
+               (list:append
+                 ((format-args "    <{}>{}</{}>" ($tag-name $head $tag-name)))
+                 $tail-lines)))))))
 
 (= (codex:prefix-lines $lines $prefix)
    (if (== $lines ())
        ()
        (let $head (list:first $lines)
          (let $tail (list:rest $lines)
-           (cons-atom
-             (str-concat $prefix $head)
-             (codex:prefix-lines $tail $prefix))))))
+           (let $tail-lines
+             (eval (codex:prefix-lines $tail $prefix))
+             (eval
+               (list:append
+                 ((str-concat $prefix $head))
+                 $tail-lines)))))))
 
 (= (codex:environment-context-subagent-lines $subagents)
    (if (== $subagents "")
@@ -480,9 +514,14 @@
        (let $lines (str-split "\n" $subagents)
          (codex:prefix-lines $lines "    "))))
 
+(= (codex:environment-context-network-lines CodexAbsent)
+   ())
+
 (= (codex:environment-context-network-lines $network)
-   (case $network
-     (((CodexEnvironmentNetworkContext $allowed-domains $denied-domains)
+   (let $allowed-domains
+     (codex:environment-network-context-allowed-domains $network)
+     (let $denied-domains
+       (codex:environment-network-context-denied-domains $network)
        (let $allowed-lines
          (codex:environment-context-domain-lines
            $allowed-domains
@@ -495,66 +534,160 @@
              (codex:append-item () "  <network enabled=\"true\">")
              (let $lines-1 (list:append $lines-0 $allowed-lines)
                (let $lines-2 (list:append $lines-1 $denied-lines)
-                 (codex:append-item $lines-2 "  </network>"))))))))))
+                 (eval
+                   (codex:append-item $lines-2 "  </network>"))))))))))
+
+(= (codex:environment-context-subagents-block-lines CodexAbsent)
+   ())
 
 (= (codex:environment-context-subagents-block-lines $subagents)
    (let $subagent-lines (codex:environment-context-subagent-lines $subagents)
      (let $lines-0
        (codex:append-item () "  <subagents>")
        (let $lines-1 (list:append $lines-0 $subagent-lines)
-         (codex:append-item $lines-1 "  </subagents>")))))
+         (eval
+           (codex:append-item $lines-1 "  </subagents>"))))))
+
+(= (codex:environment-context-lines-from-fields
+      $cwd
+      $shell
+      $current-date
+      $timezone
+      $network
+      $subagents)
+   (eval
+     (list:append
+       (codex:environment-context-cwd-lines $cwd)
+       (list:append
+         ((format-args
+            "  <shell>{}</shell>"
+            ($shell)))
+         (list:append
+           (codex:environment-context-current-date-lines $current-date)
+           (list:append
+             (codex:environment-context-timezone-lines $timezone)
+             (list:append
+               (if (== $network CodexAbsent)
+                   ()
+                   (eval
+                     (codex:environment-context-network-lines
+                       $network)))
+               (if (== $subagents CodexAbsent)
+                   ()
+                   (eval
+                     (codex:environment-context-subagents-block-lines
+                       $subagents))))))))))
 
 (= (codex:environment-context-lines $context)
-   (case $context
-     (((CodexEnvironmentContext
-         $cwd
-         $shell
-         $current-date
-         $timezone
-         $network
-         $subagents)
-       (let $lines-0
-         (if (== $cwd CodexAbsent)
-             ()
-             (codex:append-item
-               ()
+   (codex:environment-context-lines-from-fields
+     (codex:environment-context-cwd $context)
+     (codex:environment-context-shell $context)
+     (codex:environment-context-current-date $context)
+     (codex:environment-context-timezone $context)
+     (codex:environment-context-network $context)
+     (codex:environment-context-subagents $context)))
+
+(= (codex:append-line-text $text $line)
+   (if (== $text "")
+       $line
+       (if (== $line "")
+           $text
+           (str-concat $text (str-concat "\n" $line)))))
+
+(= (codex:environment-context-domain-lines-text () $tag-name)
+   "")
+
+(= (codex:environment-context-domain-lines-text $domains $tag-name)
+   (let $head (list:first $domains)
+     (let $tail (list:rest $domains)
+       (let $line
+         (format-args "    <{}>{}</{}>" ($tag-name $head $tag-name))
+         (codex:append-line-text
+           $line
+           (codex:environment-context-domain-lines-text $tail $tag-name))))))
+
+(= (codex:prefixed-lines-text () $prefix)
+   "")
+
+(= (codex:prefixed-lines-text $lines $prefix)
+   (let $head (list:first $lines)
+     (let $tail (list:rest $lines)
+       (let $line (str-concat $prefix $head)
+         (codex:append-line-text
+           $line
+           (codex:prefixed-lines-text $tail $prefix))))))
+
+(= (codex:environment-context-subagents-block-text $subagents)
+   (if (== $subagents CodexAbsent)
+       ""
+       (if (== $subagents "")
+       ""
+           (let $inner
+             (codex:prefixed-lines-text (str-split "\n" $subagents) "    ")
+             (str-concat
+               "  <subagents>\n"
+               (str-concat $inner "\n  </subagents>"))))))
+
+(= (codex:environment-context-network-block-text $network)
+   (if (== $network CodexAbsent)
+       ""
+       (let $text-0 "  <network enabled=\"true\">"
+         (let $allowed-text
+           (codex:environment-context-domain-lines-text
+             (codex:environment-network-context-allowed-domains $network)
+             "allowed")
+           (let $text-1
+             (codex:append-line-text $text-0 $allowed-text)
+             (let $denied-text
+               (codex:environment-context-domain-lines-text
+                 (codex:environment-network-context-denied-domains $network)
+                 "denied")
+               (let $text-2
+                 (codex:append-line-text $text-1 $denied-text)
+                 (codex:append-line-text $text-2 "  </network>"))))))))
+
+(= (codex:environment-context-body-text $context)
+   (let $text-0
+     (if (== (codex:environment-context-cwd $context) CodexAbsent)
+         ""
+         (format-args
+           "  <cwd>{}</cwd>"
+           ((codex:environment-context-cwd $context))))
+     (let $text-1
+       (codex:append-line-text
+         $text-0
+         (format-args
+           "  <shell>{}</shell>"
+           ((codex:environment-context-shell $context))))
+       (let $text-2
+         (if (== (codex:environment-context-current-date $context) CodexAbsent)
+             $text-1
+             (codex:append-line-text
+               $text-1
                (format-args
-                 "  <cwd>{}</cwd>"
-                 ($cwd))))
-         (let $lines-1
-           (codex:append-item
-             $lines-0
-             (format-args
-               "  <shell>{}</shell>"
-               ($shell)))
-           (let $lines-2
-             (if (== $current-date CodexAbsent)
-                 $lines-1
-                 (codex:append-item
-                   $lines-1
-                   (format-args
-                     "  <current_date>{}</current_date>"
-                     ($current-date))))
-             (let $lines-3
-               (if (== $timezone CodexAbsent)
-                   $lines-2
-                   (codex:append-item
-                     $lines-2
-                     (format-args
-                       "  <timezone>{}</timezone>"
-                       ($timezone))))
-               (let $lines-4
-                 (if (== $network CodexAbsent)
-                     $lines-3
-                     (list:append
-                       $lines-3
-                       (codex:environment-context-network-lines $network)))
-                 (if (== $subagents CodexAbsent)
-                     $lines-4
-                     (list:append
-                       $lines-4
-                       (codex:environment-context-subagents-block-lines
-                         $subagents))))))))))))
+                 "  <current_date>{}</current_date>"
+                 ((codex:environment-context-current-date $context)))))
+         (let $text-3
+           (if (== (codex:environment-context-timezone $context) CodexAbsent)
+               $text-2
+               (codex:append-line-text
+                 $text-2
+                 (format-args
+                   "  <timezone>{}</timezone>"
+                   ((codex:environment-context-timezone $context)))))
+           (let $network-block
+             (codex:environment-context-network-block-text
+               (codex:environment-context-network $context))
+             (let $text-4
+               (if (== $network-block "")
+                   $text-3
+                   (codex:append-line-text $text-3 $network-block))
+               (let $subagents-block
+                 (codex:environment-context-subagents-block-text
+                   (codex:environment-context-subagents $context))
+                 (if (== $subagents-block "")
+                     $text-4
+                     (codex:append-line-text $text-4 $subagents-block))))))))))
 
 (= (codex:environment-context-fragment $context)
    (codex:contextual-fragment
@@ -563,7 +696,7 @@
      (codex:environment-context-end-marker)
      (format-args
        "\n{}\n"
-       ((str-join "\n" (codex:environment-context-lines $context))))))
+       ((codex:environment-context-body-text $context)))))
 
 (= (codex:environment-context-matches-text $text)
    (codex:contextual-fragment-matches-markers
