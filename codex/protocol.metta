@@ -50,6 +50,7 @@
 ; - Op::UserInput / UserInput / TurnEnvironmentSelection
 ; - Op::UserInputWithTurnContext
 ; - Op::UserTurn
+; - Op::InterAgentCommunication / InterAgentCommunication
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
 ; - Op::Compact / DropMemories / UpdateMemories
@@ -1053,8 +1054,8 @@
       $service-tier
       $final-output-json-schema
       $collaboration-mode
-      $personality
-      $environments)
+     $personality
+     $environments)
    (CodexOpUserTurn
      $items
      $cwd
@@ -1070,6 +1071,22 @@
      $collaboration-mode
      $personality
      $environments))
+
+(= (codex:inter-agent-communication
+      $author
+      $recipient
+      $other-recipients
+      $content
+      $trigger-turn)
+   (CodexInterAgentCommunication
+     $author
+     $recipient
+     $other-recipients
+     $content
+     $trigger-turn))
+
+(= (codex:inter-agent-communication-op $communication)
+   (CodexOpInterAgentCommunication $communication))
 
 (= (codex:add-to-history-op $text)
    (CodexOpAddToHistory $text))
@@ -3614,6 +3631,29 @@
 
 (= (codex:user-turn-service-tier-json $service-tier)
    (codex:user-input-with-turn-context-service-tier-json $service-tier))
+
+(= (codex:agent-path-json $path)
+   (JsonString (codex:agent-path-as-str $path)))
+
+(= (codex:agent-paths-json $paths)
+   (JsonArray
+     (map-atom $paths $item (codex:agent-path-json $item))))
+
+(= (codex:inter-agent-communication-json
+      (CodexInterAgentCommunication
+        $author
+        $recipient
+        $other-recipients
+        $content
+        $trigger-turn))
+   (JsonObject
+     ((JsonPair "author" (codex:agent-path-json $author))
+      (JsonPair "recipient" (codex:agent-path-json $recipient))
+      (JsonPair
+        "other_recipients"
+        (codex:agent-paths-json $other-recipients))
+      (JsonPair "content" (JsonString $content))
+      (JsonPair "trigger_turn" (JsonBool $trigger-turn)))))
 
 (= (codex:turn-abort-reason-json
       (CodexTurnAbortReasonInterrupted))
@@ -6984,6 +7024,10 @@
    "user_turn")
 
 (= (codex:op-type
+      (CodexOpInterAgentCommunication $communication))
+   "inter_agent_communication")
+
+(= (codex:op-type
       (CodexOpRefreshMcpServers $config))
    "refresh_mcp_servers")
 
@@ -7702,8 +7746,16 @@
                                (codex:protocol-append-json-pair
                                  $pairs-11
                                  "environments"
-                                 (codex:turn-environment-selections-json
+                               (codex:turn-environment-selections-json
                                    $environments))))))))))))))))
+
+(= (codex:op-json
+      (CodexOpInterAgentCommunication $communication))
+   (JsonObject
+     ((JsonPair "type" (JsonString "inter_agent_communication"))
+      (JsonPair
+        "communication"
+        (codex:inter-agent-communication-json $communication)))))
 
 (= (codex:op-json
       (CodexOpRefreshMcpServers $config))
