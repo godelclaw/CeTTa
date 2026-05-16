@@ -47,6 +47,7 @@
 ; - Op::RealtimeConversationStart/Audio/Text/Close/ListVoices
 ; - Submission / W3cTraceContext / Event queue wrappers
 ; - Op::Interrupt / CleanBackgroundTerminals
+; - Op::UserInput / UserInput / TurnEnvironmentSelection
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
 ; - Op::Compact / DropMemories / UpdateMemories
@@ -862,6 +863,52 @@
 
 (= (codex:clean-background-terminals-op)
    (CodexOpCleanBackgroundTerminals))
+
+(= (codex:user-input-text $text)
+   (CodexUserInputText $text ()))
+
+(= (codex:user-input-text $text $text-elements)
+   (CodexUserInputText $text $text-elements))
+
+(= (codex:user-input-image $image-url)
+   (CodexUserInputImage $image-url))
+
+; CeTTa deviation: Rust uses `PathBuf` for local image and skill paths in the
+; request-side `UserInput` surface. This protocol layer carries the same visible
+; wire values as strings.
+(= (codex:user-input-local-image $path)
+   (CodexUserInputLocalImage $path))
+
+(= (codex:user-input-skill $name $path)
+   (CodexUserInputSkill $name $path))
+
+(= (codex:user-input-mention $name $path)
+   (CodexUserInputMention $name $path))
+
+; CeTTa deviation: Rust uses `AbsolutePathBuf` for `TurnEnvironmentSelection.cwd`.
+; This protocol layer carries the same visible wire value as a string.
+(= (codex:turn-environment-selection $environment-id $cwd)
+   (CodexTurnEnvironmentSelection $environment-id $cwd))
+
+; CeTTa deviation: Rust uses `HashMap<String, String>` for
+; `responsesapi_client_metadata`. This slice uses an ordered entry list so the
+; visible JSON object shape is deterministic under the evaluator.
+(= (codex:responsesapi-client-metadata-entry $key $value)
+   (CodexResponsesApiClientMetadataEntry $key $value))
+
+(= (codex:user-input-op $items)
+   (CodexOpUserInput $items CodexAbsent CodexAbsent CodexAbsent))
+
+(= (codex:user-input-op
+      $items
+      $environments
+      $final-output-json-schema
+      $responsesapi-client-metadata)
+   (CodexOpUserInput
+     $items
+     $environments
+     $final-output-json-schema
+     $responsesapi-client-metadata))
 
 (= (codex:add-to-history-op $text)
    (CodexOpAddToHistory $text))
@@ -3257,6 +3304,77 @@
        (JsonObject
          ((JsonPair "byte_range" (codex:byte-range-json $byte-range))
           (JsonPair "placeholder" (JsonString $placeholder))))))
+
+(= (codex:user-input-json
+      (CodexUserInputText $text $text-elements))
+   (JsonObject
+     ((JsonPair "type" (JsonString "text"))
+      (JsonPair "text" (JsonString $text))
+      (JsonPair
+        "text_elements"
+        (JsonArray
+          (map-atom $text-elements $item (codex:text-element-json $item)))))))
+
+(= (codex:user-input-json
+      (CodexUserInputImage $image-url))
+   (JsonObject
+     ((JsonPair "type" (JsonString "image"))
+      (JsonPair "image_url" (JsonString $image-url)))))
+
+(= (codex:user-input-json
+      (CodexUserInputLocalImage $path))
+   (JsonObject
+     ((JsonPair "type" (JsonString "local_image"))
+      (JsonPair "path" (JsonString $path)))))
+
+(= (codex:user-input-json
+      (CodexUserInputSkill $name $path))
+   (JsonObject
+     ((JsonPair "type" (JsonString "skill"))
+      (JsonPair "name" (JsonString $name))
+      (JsonPair "path" (JsonString $path)))))
+
+(= (codex:user-input-json
+      (CodexUserInputMention $name $path))
+   (JsonObject
+     ((JsonPair "type" (JsonString "mention"))
+      (JsonPair "name" (JsonString $name))
+      (JsonPair "path" (JsonString $path)))))
+
+(= (codex:user-inputs-json $items)
+   (JsonArray
+     (eval
+       (map-atom $items $item (codex:user-input-json $item)))))
+
+(= (codex:turn-environment-selection-json
+      (CodexTurnEnvironmentSelection $environment-id $cwd))
+   (JsonObject
+     ((JsonPair "environment_id" (JsonString $environment-id))
+      (JsonPair "cwd" (JsonString $cwd)))))
+
+(= (codex:turn-environment-selections-json $items)
+   (JsonArray
+     (eval
+       (map-atom $items $item (codex:turn-environment-selection-json $item)))))
+
+(= (codex:responsesapi-client-metadata-entry-key
+      (CodexResponsesApiClientMetadataEntry $key $value))
+   $key)
+
+(= (codex:responsesapi-client-metadata-entry-value
+      (CodexResponsesApiClientMetadataEntry $key $value))
+   $value)
+
+(= (codex:responsesapi-client-metadata-json $entries)
+   (JsonObject
+     (eval
+       (map-atom
+         $entries
+         $item
+         (JsonPair
+           (codex:responsesapi-client-metadata-entry-key $item)
+           (JsonString
+             (codex:responsesapi-client-metadata-entry-value $item)))))))
 
 (= (codex:turn-abort-reason-json
       (CodexTurnAbortReasonInterrupted))
@@ -6581,6 +6699,14 @@
    "clean_background_terminals")
 
 (= (codex:op-type
+      (CodexOpUserInput
+        $items
+        $environments
+        $final-output-json-schema
+        $responsesapi-client-metadata))
+   "user_input")
+
+(= (codex:op-type
       (CodexOpRefreshMcpServers $config))
    "refresh_mcp_servers")
 
@@ -7050,6 +7176,38 @@
       (CodexOpCleanBackgroundTerminals))
    (JsonObject
      ((JsonPair "type" (JsonString "clean_background_terminals")))))
+
+(= (codex:op-json
+      (CodexOpUserInput
+        $items
+        $environments
+        $final-output-json-schema
+        $responsesapi-client-metadata))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "user_input"))
+      (JsonPair "items" (codex:user-inputs-json $items)))
+     (let $pairs-2
+       (if (== $environments CodexAbsent)
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "environments"
+             (codex:turn-environment-selections-json $environments)))
+       (let $pairs-3
+         (if (== $final-output-json-schema CodexAbsent)
+             $pairs-2
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "final_output_json_schema"
+               $final-output-json-schema))
+         (JsonObject
+           (if (== $responsesapi-client-metadata CodexAbsent)
+               $pairs-3
+               (codex:protocol-append-json-pair
+                 $pairs-3
+                 "responsesapi_client_metadata"
+                 (codex:responsesapi-client-metadata-json
+                   $responsesapi-client-metadata))))))))
 
 (= (codex:op-json
       (CodexOpRefreshMcpServers $config))
