@@ -46,6 +46,7 @@
 ; - RealtimeAudioFrame / RealtimeEvent::AudioOut
 ; - Op::RealtimeConversationStart/Audio/Text/Close/ListVoices
 ; - Submission / W3cTraceContext / Event queue wrappers
+; - Op::Interrupt / CleanBackgroundTerminals
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
 ; - Op::Compact / DropMemories / UpdateMemories
@@ -855,6 +856,12 @@
    (CodexMcpServerRefreshConfig
      $mcp-servers
      $mcp-oauth-credentials-store-mode))
+
+(= (codex:interrupt-op)
+   (CodexOpInterrupt))
+
+(= (codex:clean-background-terminals-op)
+   (CodexOpCleanBackgroundTerminals))
 
 (= (codex:add-to-history-op $text)
    (CodexOpAddToHistory $text))
@@ -6566,6 +6573,14 @@
    "realtime_conversation_list_voices")
 
 (= (codex:op-type
+      (CodexOpInterrupt))
+   "interrupt")
+
+(= (codex:op-type
+      (CodexOpCleanBackgroundTerminals))
+   "clean_background_terminals")
+
+(= (codex:op-type
       (CodexOpRefreshMcpServers $config))
    "refresh_mcp_servers")
 
@@ -7025,6 +7040,16 @@
       (CodexOpRealtimeConversationListVoices))
    (JsonObject
      ((JsonPair "type" (JsonString "realtime_conversation_list_voices")))))
+
+(= (codex:op-json
+      (CodexOpInterrupt))
+   (JsonObject
+     ((JsonPair "type" (JsonString "interrupt")))))
+
+(= (codex:op-json
+      (CodexOpCleanBackgroundTerminals))
+   (JsonObject
+     ((JsonPair "type" (JsonString "clean_background_terminals")))))
 
 (= (codex:op-json
       (CodexOpRefreshMcpServers $config))
