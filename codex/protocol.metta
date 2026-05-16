@@ -41,7 +41,7 @@
 ; - TurnDiffEvent
 ; - GetHistoryEntryResponseEvent / HistoryEntry
 ; - ListSkillsResponseEvent / SkillsListEntry / SkillMetadata
-; - RealtimeConversationListVoicesResponseEvent / RealtimeVoice
+; - RealtimeConversationStarted/Closed/Sdp / RealtimeVoice
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
 ; - SessionSource / SubAgentSource
@@ -802,6 +802,21 @@
 
 (= (codex:list-skills-response-event $skills)
    (CodexEventListSkillsResponse $skills))
+
+(= (codex:realtime-conversation-version-v1)
+   (CodexRealtimeConversationVersionV1))
+
+(= (codex:realtime-conversation-version-v2)
+   (CodexRealtimeConversationVersionV2))
+
+(= (codex:realtime-conversation-started-event $session-id $version)
+   (CodexEventRealtimeConversationStarted $session-id $version))
+
+(= (codex:realtime-conversation-closed-event $reason)
+   (CodexEventRealtimeConversationClosed $reason))
+
+(= (codex:realtime-conversation-sdp-event $sdp)
+   (CodexEventRealtimeConversationSdp $sdp))
 
 (= (codex:realtime-voice-alloy)
    (CodexRealtimeVoiceAlloy))
@@ -2178,6 +2193,18 @@
 (= (codex:item-type
       (CodexEventListSkillsResponse $skills))
    "list_skills_response")
+
+(= (codex:item-type
+      (CodexEventRealtimeConversationStarted $session-id $version))
+   "realtime_conversation_started")
+
+(= (codex:item-type
+      (CodexEventRealtimeConversationClosed $reason))
+   "realtime_conversation_closed")
+
+(= (codex:item-type
+      (CodexEventRealtimeConversationSdp $sdp))
+   "realtime_conversation_sdp")
 
 (= (codex:item-type
       (CodexEventRealtimeConversationListVoicesResponse $voices))
@@ -3651,6 +3678,14 @@
 (= (codex:realtime-voices-json $voices)
    (JsonArray
      (map-atom $voices $item (codex:realtime-voice-json $item))))
+
+(= (codex:realtime-conversation-version-json
+      (CodexRealtimeConversationVersionV1))
+   (JsonString "v1"))
+
+(= (codex:realtime-conversation-version-json
+      (CodexRealtimeConversationVersionV2))
+   (JsonString "v2"))
 
 (= (codex:realtime-voices-list-json
       (CodexRealtimeVoicesList $v1 $v2 $default-v1 $default-v2))
@@ -5727,6 +5762,35 @@
    (JsonObject
      ((JsonPair "type" (JsonString "list_skills_response"))
       (JsonPair "skills" (codex:skills-list-entries-json $skills)))))
+
+(= (codex:item-json
+      (CodexEventRealtimeConversationStarted $session-id $version))
+   (JsonObject
+     ((JsonPair "type" (JsonString "realtime_conversation_started"))
+      (JsonPair
+        "session_id"
+        (if (== $session-id CodexAbsent)
+            JsonNull
+            (JsonString $session-id)))
+      (JsonPair
+        "version"
+        (codex:realtime-conversation-version-json $version)))))
+
+(= (codex:item-json
+      (CodexEventRealtimeConversationClosed $reason))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "realtime_conversation_closed")))
+     (JsonObject
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "reason"
+         $reason))))
+
+(= (codex:item-json
+      (CodexEventRealtimeConversationSdp $sdp))
+   (JsonObject
+     ((JsonPair "type" (JsonString "realtime_conversation_sdp"))
+      (JsonPair "sdp" (JsonString $sdp)))))
 
 (= (codex:item-json
       (CodexEventRealtimeConversationListVoicesResponse $voices))
