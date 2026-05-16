@@ -173,6 +173,210 @@
   ("{\"granular\":{\"sandbox_approval\":true,\"rules\":false,\"skill_approval\":true,\"request_permissions\":false,\"mcp_elicitations\":true}}"))
 
 !(assertEqualToResult
+  (codex:session-granular-approval-config-allows-sandbox-approval
+    (codex:session-approval-policy-granular-config
+      True
+      False
+      True
+      False
+      True))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-granular-approval-config-allows-rules-approval
+    (codex:session-approval-policy-granular-config
+      True
+      False
+      True
+      False
+      True))
+  (False))
+
+!(assertEqualToResult
+  (codex:session-granular-approval-config-allows-skill-approval
+    (codex:session-approval-policy-granular-config
+      True
+      False
+      True
+      False
+      True))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-granular-approval-config-allows-request-permissions
+    (codex:session-approval-policy-granular-config
+      True
+      False
+      True
+      False
+      True))
+  (False))
+
+!(assertEqualToResult
+  (codex:session-granular-approval-config-allows-mcp-elicitations
+    (codex:session-approval-policy-granular-config
+      True
+      False
+      True
+      False
+      True))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-network-access-is-enabled
+    (codex:session-network-access-enabled))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-network-access-is-enabled
+    (codex:session-network-access-restricted))
+  (False))
+
+!(assertEqualToResult
+  (codex:session-read-only-access-has-full-disk-read-access
+    (codex:session-read-only-access-full))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-read-only-access-has-full-disk-read-access
+    (codex:session-read-only-access-restricted
+      True
+      ("/repo")))
+  (False))
+
+!(assertEqualToResult
+  (codex:session-read-only-access-include-platform-defaults
+    (codex:session-read-only-access-full))
+  (False))
+
+!(assertEqualToResult
+  (codex:session-read-only-access-include-platform-defaults
+    (codex:session-read-only-access-restricted
+      True
+      ("/repo")))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-disk-read-access
+    (codex:session-sandbox-policy-danger-full-access))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-disk-write-access
+    (codex:session-sandbox-policy-danger-full-access))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-network-access
+    (codex:session-sandbox-policy-danger-full-access))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-include-platform-defaults
+    (codex:session-sandbox-policy-danger-full-access))
+  (False))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-disk-read-access
+    (codex:session-sandbox-policy-external-sandbox
+      (codex:session-network-access-enabled)))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-disk-write-access
+    (codex:session-sandbox-policy-external-sandbox
+      (codex:session-network-access-restricted)))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-network-access
+    (codex:session-sandbox-policy-external-sandbox
+      (codex:session-network-access-restricted)))
+  (False))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-network-access
+    (codex:session-sandbox-policy-external-sandbox
+      (codex:session-network-access-enabled)))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-disk-read-access
+    (codex:session-sandbox-policy-read-only
+      (codex:session-read-only-access-restricted
+        True
+        ("/repo"))
+      False))
+  (False))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-disk-write-access
+    (codex:session-sandbox-policy-read-only
+      (codex:session-read-only-access-full)
+      True))
+  (False))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-network-access
+    (codex:session-sandbox-policy-read-only
+      (codex:session-read-only-access-full)
+      True))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-include-platform-defaults
+    (codex:session-sandbox-policy-read-only
+      (codex:session-read-only-access-restricted
+        True
+        ("/repo"))
+      False))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-disk-read-access
+    (codex:session-sandbox-policy-workspace-write
+      ()
+      (codex:session-read-only-access-full)
+      False
+      False
+      False))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-disk-write-access
+    (codex:session-sandbox-policy-workspace-write
+      ()
+      (codex:session-read-only-access-full)
+      False
+      False
+      False))
+  (False))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-has-full-network-access
+    (codex:session-sandbox-policy-workspace-write
+      ()
+      (codex:session-read-only-access-restricted
+        False
+        ("/repo"))
+      True
+      False
+      False))
+  (True))
+
+!(assertEqualToResult
+  (codex:session-sandbox-policy-include-platform-defaults
+    (codex:session-sandbox-policy-workspace-write
+      ()
+      (codex:session-read-only-access-restricted
+        False
+        ("/repo"))
+      True
+      False
+      False))
+  (False))
+
+!(assertEqualToResult
   (json-stringify
     (codex:session-permission-profile-external-json
       (codex:session-network-sandbox-policy-enabled)))

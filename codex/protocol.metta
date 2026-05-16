@@ -66,6 +66,8 @@
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
 ; - SessionSource / SubAgentSource
+; - GranularApprovalConfig / NetworkAccess / ReadOnlyAccess /
+;   SandboxPolicy boolean helper methods
 ; - SessionConfiguredEvent / SessionNetworkProxyRuntime
 ; - ExecPolicyAmendment / ReviewDecision
 ; - FileChange / Chunk
@@ -1862,6 +1864,165 @@
 
 (= (codex:session-network-proxy-runtime $http-addr $socks-addr)
    (CodexSessionNetworkProxyRuntime $http-addr $socks-addr))
+
+(= (codex:session-granular-approval-config-allows-sandbox-approval
+      (CodexSessionGranularApprovalConfig
+        $sandbox-approval
+        $rules
+        $skill-approval
+        $request-permissions
+        $mcp-elicitations))
+   $sandbox-approval)
+
+(= (codex:session-granular-approval-config-allows-rules-approval
+      (CodexSessionGranularApprovalConfig
+        $sandbox-approval
+        $rules
+        $skill-approval
+        $request-permissions
+        $mcp-elicitations))
+   $rules)
+
+(= (codex:session-granular-approval-config-allows-skill-approval
+      (CodexSessionGranularApprovalConfig
+        $sandbox-approval
+        $rules
+        $skill-approval
+        $request-permissions
+        $mcp-elicitations))
+   $skill-approval)
+
+(= (codex:session-granular-approval-config-allows-request-permissions
+      (CodexSessionGranularApprovalConfig
+        $sandbox-approval
+        $rules
+        $skill-approval
+        $request-permissions
+        $mcp-elicitations))
+   $request-permissions)
+
+(= (codex:session-granular-approval-config-allows-mcp-elicitations
+      (CodexSessionGranularApprovalConfig
+        $sandbox-approval
+        $rules
+        $skill-approval
+        $request-permissions
+        $mcp-elicitations))
+   $mcp-elicitations)
+
+(= (codex:session-network-access-is-enabled
+      (CodexSessionNetworkAccessEnabled))
+   True)
+
+(= (codex:session-network-access-is-enabled
+      (CodexSessionNetworkAccessRestricted))
+   False)
+
+(= (codex:session-read-only-access-has-full-disk-read-access
+      (CodexSessionReadOnlyAccessFull))
+   True)
+
+(= (codex:session-read-only-access-has-full-disk-read-access
+      (CodexSessionReadOnlyAccessRestricted
+        $include-platform-defaults
+        $readable-roots))
+   False)
+
+(= (codex:session-read-only-access-include-platform-defaults
+      (CodexSessionReadOnlyAccessFull))
+   False)
+
+(= (codex:session-read-only-access-include-platform-defaults
+      (CodexSessionReadOnlyAccessRestricted
+        $include-platform-defaults
+        $readable-roots))
+   $include-platform-defaults)
+
+(= (codex:session-sandbox-policy-has-full-disk-read-access
+      (CodexSessionSandboxPolicyDangerFullAccess))
+   True)
+
+(= (codex:session-sandbox-policy-has-full-disk-read-access
+      (CodexSessionSandboxPolicyExternalSandbox $network-access))
+   True)
+
+(= (codex:session-sandbox-policy-has-full-disk-read-access
+      (CodexSessionSandboxPolicyReadOnly $access $network-access))
+   (codex:session-read-only-access-has-full-disk-read-access $access))
+
+(= (codex:session-sandbox-policy-has-full-disk-read-access
+      (CodexSessionSandboxPolicyWorkspaceWrite
+        $writable-roots
+        $read-only-access
+        $network-access
+        $exclude-tmpdir-env-var
+        $exclude-slash-tmp))
+   (codex:session-read-only-access-has-full-disk-read-access
+     $read-only-access))
+
+(= (codex:session-sandbox-policy-has-full-disk-write-access
+      (CodexSessionSandboxPolicyDangerFullAccess))
+   True)
+
+(= (codex:session-sandbox-policy-has-full-disk-write-access
+      (CodexSessionSandboxPolicyExternalSandbox $network-access))
+   True)
+
+(= (codex:session-sandbox-policy-has-full-disk-write-access
+      (CodexSessionSandboxPolicyReadOnly $access $network-access))
+   False)
+
+(= (codex:session-sandbox-policy-has-full-disk-write-access
+      (CodexSessionSandboxPolicyWorkspaceWrite
+        $writable-roots
+        $read-only-access
+        $network-access
+        $exclude-tmpdir-env-var
+        $exclude-slash-tmp))
+   False)
+
+(= (codex:session-sandbox-policy-has-full-network-access
+      (CodexSessionSandboxPolicyDangerFullAccess))
+   True)
+
+(= (codex:session-sandbox-policy-has-full-network-access
+      (CodexSessionSandboxPolicyExternalSandbox $network-access))
+   (codex:session-network-access-is-enabled $network-access))
+
+(= (codex:session-sandbox-policy-has-full-network-access
+      (CodexSessionSandboxPolicyReadOnly $access $network-access))
+   $network-access)
+
+(= (codex:session-sandbox-policy-has-full-network-access
+      (CodexSessionSandboxPolicyWorkspaceWrite
+        $writable-roots
+        $read-only-access
+        $network-access
+        $exclude-tmpdir-env-var
+        $exclude-slash-tmp))
+   $network-access)
+
+(= (codex:session-sandbox-policy-include-platform-defaults
+      (CodexSessionSandboxPolicyDangerFullAccess))
+   False)
+
+(= (codex:session-sandbox-policy-include-platform-defaults
+      (CodexSessionSandboxPolicyExternalSandbox $network-access))
+   False)
+
+(= (codex:session-sandbox-policy-include-platform-defaults
+      (CodexSessionSandboxPolicyReadOnly $access $network-access))
+   (codex:session-read-only-access-include-platform-defaults $access))
+
+(= (codex:session-sandbox-policy-include-platform-defaults
+      (CodexSessionSandboxPolicyWorkspaceWrite
+        $writable-roots
+        $read-only-access
+        $network-access
+        $exclude-tmpdir-env-var
+        $exclude-slash-tmp))
+   (codex:session-read-only-access-include-platform-defaults
+     $read-only-access))
 
 (= (codex:session-permission-profile-disabled-json)
    (JsonObject
