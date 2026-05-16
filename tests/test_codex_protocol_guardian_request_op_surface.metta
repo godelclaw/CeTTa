@@ -86,4 +86,4 @@
           (codex:request-permissions-file-system
             ()
             ("/repo/runtime"))))))
-  ("{\"type\":\"request_permissions\",\"permissions\":{\"network\":true,\"file_system\":{\"write\":[\"/repo/runtime\"]}}}"))
+  ("{\"type\":\"request_permissions\",\"permissions\":{\"network\":{\"enabled\":true},\"file_system\":{\"write\":[\"/repo/runtime\"]}}}"))

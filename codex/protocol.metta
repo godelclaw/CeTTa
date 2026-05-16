@@ -38,6 +38,7 @@
 ;   ReasoningContentDeltaEvent / ReasoningRawContentDeltaEvent
 ; - EnteredReviewMode(ReviewRequest) / ReviewTarget
 ; - ExitedReviewModeEvent / ReviewOutputEvent JSON projection
+; - GuardianAssessment(GuardianAssessmentEvent)
 ; - TurnDiffEvent
 ; - GetHistoryEntryResponseEvent / HistoryEntry
 ; - ListSkillsResponseEvent / SkillsListEntry / SkillMetadata
@@ -2296,6 +2297,19 @@
 (= (codex:item-type
       (CodexEventGuardianWarning $message))
    "guardian_warning")
+
+(= (codex:item-type
+      (CodexGuardianAssessmentEvent
+        $id
+        $target-item-id
+        $turn-id
+        $status
+        $risk-level
+        $user-authorization
+        $rationale
+        $decision-source
+        $action))
+   "guardian_assessment")
 
 (= (codex:item-type
       (CodexEventModelReroute $from_model $to_model $reason))
@@ -5652,6 +5666,71 @@
       (JsonPair "message" (JsonString $message)))))
 
 (= (codex:item-json
+      (CodexGuardianAssessmentEvent
+        $id
+        $target-item-id
+        $turn-id
+        $status
+        $risk-level
+        $user-authorization
+        $rationale
+        $decision-source
+        $action))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "guardian_assessment"))
+      (JsonPair "id" (JsonString $id)))
+     (let $pairs-2
+       (if (== $target-item-id CodexAbsent)
+           $pairs-1
+           (codex:protocol-append-json-pair
+             $pairs-1
+             "target_item_id"
+             (JsonString $target-item-id)))
+       (let $pairs-3
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "turn_id"
+           (JsonString $turn-id))
+         (let $pairs-4
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "status"
+             (codex:guardian-assessment-status-json $status))
+           (let $pairs-5
+             (if (== $risk-level CodexAbsent)
+                 $pairs-4
+                 (codex:protocol-append-json-pair
+                   $pairs-4
+                   "risk_level"
+                   (codex:guardian-risk-level-json $risk-level)))
+             (let $pairs-6
+               (if (== $user-authorization CodexAbsent)
+                   $pairs-5
+                   (codex:protocol-append-json-pair
+                     $pairs-5
+                     "user_authorization"
+                     (codex:guardian-user-authorization-json $user-authorization)))
+               (let $pairs-7
+                 (if (== $rationale CodexAbsent)
+                     $pairs-6
+                     (codex:protocol-append-json-pair
+                       $pairs-6
+                       "rationale"
+                       (JsonString $rationale)))
+                 (let $pairs-8
+                   (if (== $decision-source CodexAbsent)
+                       $pairs-7
+                       (codex:protocol-append-json-pair
+                         $pairs-7
+                         "decision_source"
+                         (codex:guardian-assessment-decision-source-json $decision-source)))
+                   (JsonObject
+                     (codex:protocol-append-json-pair
+                       $pairs-8
+                       "action"
+                       (codex:guardian-assessment-action-json $action))))))))))))
+
+(= (codex:item-json
       (CodexEventModelReroute $from_model $to_model $reason))
    (JsonObject
      ((JsonPair "type" (JsonString "model_reroute"))
@@ -6658,7 +6737,8 @@
 
 (= (codex:guardian-request-permissions-network-json
       (CodexRequestPermissionsNetwork $enabled))
-   (JsonBool $enabled))
+   (JsonObject
+     ((JsonPair "enabled" (JsonBool $enabled)))))
 
 (= (codex:guardian-request-permissions-file-system-json
       (CodexRequestPermissionsFileSystem $read $write))
@@ -6812,10 +6892,7 @@
         $decision-source
         $action))
    (let $pairs-1
-     ((JsonPair "id" (JsonString $id))
-      (JsonPair "turn_id" (JsonString $turn-id))
-      (JsonPair "status" (codex:guardian-assessment-status-json $status))
-      (JsonPair "action" (codex:guardian-assessment-action-json $action)))
+     ((JsonPair "id" (JsonString $id)))
      (let $pairs-2
        (if (== $target-item-id CodexAbsent)
            $pairs-1
@@ -6824,33 +6901,48 @@
              "target_item_id"
              (JsonString $target-item-id)))
        (let $pairs-3
-         (if (== $risk-level CodexAbsent)
-             $pairs-2
-             (codex:protocol-append-json-pair
-               $pairs-2
-               "risk_level"
-               (codex:guardian-risk-level-json $risk-level)))
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "turn_id"
+           (JsonString $turn-id))
          (let $pairs-4
-           (if (== $user-authorization CodexAbsent)
-               $pairs-3
-               (codex:protocol-append-json-pair
-                 $pairs-3
-                 "user_authorization"
-                 (codex:guardian-user-authorization-json $user-authorization)))
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "status"
+             (codex:guardian-assessment-status-json $status))
            (let $pairs-5
-             (if (== $rationale CodexAbsent)
+             (if (== $risk-level CodexAbsent)
                  $pairs-4
                  (codex:protocol-append-json-pair
                    $pairs-4
-                   "rationale"
-                   (JsonString $rationale)))
-             (JsonObject
-               (if (== $decision-source CodexAbsent)
+                   "risk_level"
+                   (codex:guardian-risk-level-json $risk-level)))
+             (let $pairs-6
+               (if (== $user-authorization CodexAbsent)
                    $pairs-5
                    (codex:protocol-append-json-pair
                      $pairs-5
-                     "decision_source"
-                     (codex:guardian-assessment-decision-source-json $decision-source))))))))))
+                     "user_authorization"
+                     (codex:guardian-user-authorization-json $user-authorization)))
+               (let $pairs-7
+                 (if (== $rationale CodexAbsent)
+                     $pairs-6
+                     (codex:protocol-append-json-pair
+                       $pairs-6
+                       "rationale"
+                       (JsonString $rationale)))
+                 (let $pairs-8
+                   (if (== $decision-source CodexAbsent)
+                       $pairs-7
+                       (codex:protocol-append-json-pair
+                         $pairs-7
+                         "decision_source"
+                         (codex:guardian-assessment-decision-source-json $decision-source)))
+                   (JsonObject
+                     (codex:protocol-append-json-pair
+                       $pairs-8
+                       "action"
+                       (codex:guardian-assessment-action-json $action))))))))))))
 
 (= (codex:mcp-server-refresh-config-json
       (CodexMcpServerRefreshConfig
