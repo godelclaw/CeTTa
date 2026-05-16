@@ -43,6 +43,7 @@
 ; - ListSkillsResponseEvent / SkillsListEntry / SkillMetadata
 ; - RealtimeConversationListVoicesResponseEvent / RealtimeVoice
 ; - Product
+; - SessionSource / SubAgentSource
 ; - SessionConfiguredEvent / SessionNetworkProxyRuntime
 ; - ExecPolicyAmendment / ReviewDecision
 ; - FileChange / Chunk
@@ -59,6 +60,11 @@
 ;
 ; CeTTa detail: `Empty` is a reduction sentinel, so omitted optional protocol
 ; fields use the internal tag `CodexAbsent` until projected back out.
+;
+; Rust uses `Result<SessionSource, &'static str>` and `Option<...>` in the
+; `SessionSource` helper tranche. This slice preserves the same visible
+; success/error/absence behavior through explicit `CodexSessionSourceOk`,
+; `CodexSessionSourceErr`, and `CodexAbsent`.
 ;
 ; Rust represents `PatchApply*Event.changes` as `HashMap<PathBuf, FileChange>`.
 ; This CeTTa slice models the same visible payload as an ordered list of keyed
@@ -85,6 +91,7 @@
 !(import! &self json)
 !(import! &self list)
 !(import! &self str)
+!(import! &self agent_path)
 
 (= (codex:response-message $id $role $content $phase)
    (CodexResponseItemMessageWithId $id $role $content $phase))
@@ -890,6 +897,58 @@
 
 (= (codex:product-atlas)
    (CodexProductAtlas))
+
+(= (codex:session-source-ok $source)
+   (CodexSessionSourceOk $source))
+
+(= (codex:session-source-err $message)
+   (CodexSessionSourceErr $message))
+
+(= (codex:session-source-cli)
+   (CodexSessionSourceCli))
+
+(= (codex:session-source-vscode)
+   (CodexSessionSourceVSCode))
+
+(= (codex:session-source-exec)
+   (CodexSessionSourceExec))
+
+(= (codex:session-source-mcp)
+   (CodexSessionSourceMcp))
+
+(= (codex:session-source-custom $source)
+   (CodexSessionSourceCustom $source))
+
+(= (codex:session-source-subagent $source)
+   (CodexSessionSourceSubAgent $source))
+
+(= (codex:session-source-unknown)
+   (CodexSessionSourceUnknown))
+
+(= (codex:subagent-source-review)
+   (CodexSubAgentSourceReview))
+
+(= (codex:subagent-source-compact)
+   (CodexSubAgentSourceCompact))
+
+(= (codex:subagent-source-thread-spawn
+      $parent-thread-id
+      $depth
+      $agent-path
+      $agent-nickname
+      $agent-role)
+   (CodexSubAgentSourceThreadSpawn
+     $parent-thread-id
+     $depth
+     $agent-path
+     $agent-nickname
+     $agent-role))
+
+(= (codex:subagent-source-memory-consolidation)
+   (CodexSubAgentSourceMemoryConsolidation))
+
+(= (codex:subagent-source-other $other)
+   (CodexSubAgentSourceOther $other))
 
 (= (codex:session-approvals-reviewer-user)
    (CodexSessionApprovalsReviewerUser))
@@ -3624,6 +3683,306 @@
              (if (== $normalized "atlas")
                  (CodexProductAtlas)
                  CodexAbsent)))))
+
+(= (codex:subagent-source-display
+      (CodexSubAgentSourceReview))
+   "review")
+
+(= (codex:subagent-source-display
+      (CodexSubAgentSourceCompact))
+   "compact")
+
+(= (codex:subagent-source-display
+      (CodexSubAgentSourceThreadSpawn
+        $parent-thread-id
+        $depth
+        $agent-path
+        $agent-nickname
+        $agent-role))
+   (format-args "thread_spawn_{}_d{}" ($parent-thread-id $depth)))
+
+(= (codex:subagent-source-display
+      (CodexSubAgentSourceMemoryConsolidation))
+   "memory_consolidation")
+
+(= (codex:subagent-source-display
+      (CodexSubAgentSourceOther $other))
+   $other)
+
+(= (codex:session-source-display
+      (CodexSessionSourceCli))
+   "cli")
+
+(= (codex:session-source-display
+      (CodexSessionSourceVSCode))
+   "vscode")
+
+(= (codex:session-source-display
+      (CodexSessionSourceExec))
+   "exec")
+
+(= (codex:session-source-display
+      (CodexSessionSourceMcp))
+   "mcp")
+
+(= (codex:session-source-display
+      (CodexSessionSourceCustom $source))
+   $source)
+
+(= (codex:session-source-display
+      (CodexSessionSourceSubAgent $sub-source))
+   (str-concat "subagent_" (codex:subagent-source-display $sub-source)))
+
+(= (codex:session-source-display
+      (CodexSessionSourceUnknown))
+   "unknown")
+
+(= (codex:session-source-from-startup-arg $value)
+   (once
+     (let $trimmed (str-trim $value)
+       (if (== $trimmed "")
+           (codex:session-source-err "session source must not be empty")
+           (let $normalized (codex:product-ascii-lower-text $trimmed)
+             (codex:session-source-ok
+               (if (== $normalized "cli")
+                   (codex:session-source-cli)
+                   (if (== $normalized "vscode")
+                       (codex:session-source-vscode)
+                       (if (== $normalized "exec")
+                           (codex:session-source-exec)
+                           (if (or (== $normalized "mcp")
+                                   (or (== $normalized "appserver")
+                                       (or (== $normalized "app-server")
+                                           (== $normalized "app_server"))))
+                               (codex:session-source-mcp)
+                               (if (== $normalized "unknown")
+                                   (codex:session-source-unknown)
+                                   (codex:session-source-custom $normalized))))))))))))
+
+(= (codex:session-source-thread-source-name
+      (CodexSessionSourceCli))
+   "user")
+
+(= (codex:session-source-thread-source-name
+      (CodexSessionSourceVSCode))
+   "user")
+
+(= (codex:session-source-thread-source-name
+      (CodexSessionSourceExec))
+   "user")
+
+(= (codex:session-source-thread-source-name
+      (CodexSessionSourceSubAgent $sub-source))
+   "subagent")
+
+(= (codex:session-source-thread-source-name
+      (CodexSessionSourceMcp))
+   CodexAbsent)
+
+(= (codex:session-source-thread-source-name
+      (CodexSessionSourceCustom $source))
+   CodexAbsent)
+
+(= (codex:session-source-thread-source-name
+      (CodexSessionSourceUnknown))
+   CodexAbsent)
+
+(= (codex:subagent-source-get-nickname
+      (CodexSubAgentSourceReview))
+   CodexAbsent)
+
+(= (codex:subagent-source-get-nickname
+      (CodexSubAgentSourceCompact))
+   CodexAbsent)
+
+(= (codex:subagent-source-get-nickname
+      (CodexSubAgentSourceThreadSpawn
+        $parent-thread-id
+        $depth
+        $agent-path
+        $agent-nickname
+        $agent-role))
+   $agent-nickname)
+
+(= (codex:subagent-source-get-nickname
+      (CodexSubAgentSourceMemoryConsolidation))
+   "Morpheus")
+
+(= (codex:subagent-source-get-nickname
+      (CodexSubAgentSourceOther $other))
+   CodexAbsent)
+
+(= (codex:session-source-get-nickname
+      (CodexSessionSourceSubAgent $sub-source))
+   (codex:subagent-source-get-nickname $sub-source))
+
+(= (codex:session-source-get-nickname
+      (CodexSessionSourceCli))
+   CodexAbsent)
+
+(= (codex:session-source-get-nickname
+      (CodexSessionSourceVSCode))
+   CodexAbsent)
+
+(= (codex:session-source-get-nickname
+      (CodexSessionSourceExec))
+   CodexAbsent)
+
+(= (codex:session-source-get-nickname
+      (CodexSessionSourceMcp))
+   CodexAbsent)
+
+(= (codex:session-source-get-nickname
+      (CodexSessionSourceCustom $source))
+   CodexAbsent)
+
+(= (codex:session-source-get-nickname
+      (CodexSessionSourceUnknown))
+   CodexAbsent)
+
+(= (codex:subagent-source-get-agent-role
+      (CodexSubAgentSourceReview))
+   CodexAbsent)
+
+(= (codex:subagent-source-get-agent-role
+      (CodexSubAgentSourceCompact))
+   CodexAbsent)
+
+(= (codex:subagent-source-get-agent-role
+      (CodexSubAgentSourceThreadSpawn
+        $parent-thread-id
+        $depth
+        $agent-path
+        $agent-nickname
+        $agent-role))
+   $agent-role)
+
+(= (codex:subagent-source-get-agent-role
+      (CodexSubAgentSourceMemoryConsolidation))
+   "memory builder")
+
+(= (codex:subagent-source-get-agent-role
+      (CodexSubAgentSourceOther $other))
+   CodexAbsent)
+
+(= (codex:session-source-get-agent-role
+      (CodexSessionSourceSubAgent $sub-source))
+   (codex:subagent-source-get-agent-role $sub-source))
+
+(= (codex:session-source-get-agent-role
+      (CodexSessionSourceCli))
+   CodexAbsent)
+
+(= (codex:session-source-get-agent-role
+      (CodexSessionSourceVSCode))
+   CodexAbsent)
+
+(= (codex:session-source-get-agent-role
+      (CodexSessionSourceExec))
+   CodexAbsent)
+
+(= (codex:session-source-get-agent-role
+      (CodexSessionSourceMcp))
+   CodexAbsent)
+
+(= (codex:session-source-get-agent-role
+      (CodexSessionSourceCustom $source))
+   CodexAbsent)
+
+(= (codex:session-source-get-agent-role
+      (CodexSessionSourceUnknown))
+   CodexAbsent)
+
+(= (codex:subagent-source-get-agent-path
+      (CodexSubAgentSourceReview))
+   CodexAbsent)
+
+(= (codex:subagent-source-get-agent-path
+      (CodexSubAgentSourceCompact))
+   CodexAbsent)
+
+(= (codex:subagent-source-get-agent-path
+      (CodexSubAgentSourceThreadSpawn
+        $parent-thread-id
+        $depth
+        $agent-path
+        $agent-nickname
+        $agent-role))
+   $agent-path)
+
+(= (codex:subagent-source-get-agent-path
+      (CodexSubAgentSourceMemoryConsolidation))
+   (codex:agent-path-morpheus))
+
+(= (codex:subagent-source-get-agent-path
+      (CodexSubAgentSourceOther $other))
+   CodexAbsent)
+
+(= (codex:session-source-get-agent-path
+      (CodexSessionSourceSubAgent $sub-source))
+   (codex:subagent-source-get-agent-path $sub-source))
+
+(= (codex:session-source-get-agent-path
+      (CodexSessionSourceCli))
+   CodexAbsent)
+
+(= (codex:session-source-get-agent-path
+      (CodexSessionSourceVSCode))
+   CodexAbsent)
+
+(= (codex:session-source-get-agent-path
+      (CodexSessionSourceExec))
+   CodexAbsent)
+
+(= (codex:session-source-get-agent-path
+      (CodexSessionSourceMcp))
+   CodexAbsent)
+
+(= (codex:session-source-get-agent-path
+      (CodexSessionSourceCustom $source))
+   CodexAbsent)
+
+(= (codex:session-source-get-agent-path
+      (CodexSessionSourceUnknown))
+   CodexAbsent)
+
+(= (codex:session-source-restriction-product
+      (CodexSessionSourceCustom $source))
+   (codex:product-from-session-source-name $source))
+
+(= (codex:session-source-restriction-product
+      (CodexSessionSourceCli))
+   (codex:product-codex))
+
+(= (codex:session-source-restriction-product
+      (CodexSessionSourceVSCode))
+   (codex:product-codex))
+
+(= (codex:session-source-restriction-product
+      (CodexSessionSourceExec))
+   (codex:product-codex))
+
+(= (codex:session-source-restriction-product
+      (CodexSessionSourceMcp))
+   (codex:product-codex))
+
+(= (codex:session-source-restriction-product
+      (CodexSessionSourceUnknown))
+   (codex:product-codex))
+
+(= (codex:session-source-restriction-product
+      (CodexSessionSourceSubAgent $sub-source))
+   CodexAbsent)
+
+(= (codex:session-source-matches-product-restriction $source $products)
+   (if (== $products ())
+       True
+       (let $product (codex:session-source-restriction-product $source)
+         (if (== $product CodexAbsent)
+             False
+             (codex:product-matches-product-restriction
+               $product
+               $products)))))
 
 (= (codex:product-list-contains $products $needle)
    (if (== $products ())
