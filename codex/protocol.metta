@@ -1125,6 +1125,12 @@
      $collaboration-mode
      $personality))
 
+(= (codex:exec-approval-op $id $turn-id $decision)
+   (CodexOpExecApproval $id $turn-id $decision))
+
+(= (codex:patch-approval-op $id $decision)
+   (CodexOpPatchApproval $id $decision))
+
 (= (codex:inter-agent-communication
       $author
       $recipient
@@ -7093,6 +7099,14 @@
    "override_turn_context")
 
 (= (codex:op-type
+      (CodexOpExecApproval $id $turn-id $decision))
+   "exec_approval")
+
+(= (codex:op-type
+      (CodexOpPatchApproval $id $decision))
+   "patch_approval")
+
+(= (codex:op-type
       (CodexOpInterAgentCommunication $communication))
    "inter_agent_communication")
 
@@ -7914,6 +7928,29 @@
                                    CodexAbsent
                                    (codex:personality-json
                                      $personality)))))))))))))))))
+
+(= (codex:op-json
+      (CodexOpExecApproval $id $turn-id $decision))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "exec_approval"))
+      (JsonPair "id" (JsonString $id)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "turn_id"
+         $turn-id)
+       (JsonObject
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "decision"
+           (codex:review-decision-json $decision))))))
+
+(= (codex:op-json
+      (CodexOpPatchApproval $id $decision))
+   (JsonObject
+     ((JsonPair "type" (JsonString "patch_approval"))
+      (JsonPair "id" (JsonString $id))
+      (JsonPair "decision" (codex:review-decision-json $decision)))))
 
 (= (codex:op-json
       (CodexOpInterAgentCommunication $communication))
