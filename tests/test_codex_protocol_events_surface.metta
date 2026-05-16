@@ -372,3 +372,40 @@
         "ok"
         "/tmp/out.png")))
   ("{\"type\":\"image_generation_end\",\"call_id\":\"img-22\",\"status\":\"completed\",\"revised_prompt\":\"blueprint night skyline\",\"result\":\"ok\",\"saved_path\":\"/tmp/out.png\"}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:view-image-tool-call-event
+      "view-17"
+      "/tmp/picture.png"))
+  ("view_image_tool_call"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:view-image-tool-call-event
+        "view-17"
+        "/tmp/picture.png")))
+  ("{\"type\":\"view_image_tool_call\",\"call_id\":\"view-17\",\"path\":\"/tmp/picture.png\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:background-event-event
+        "waiting on remote worker")))
+  ("{\"type\":\"background_event\",\"message\":\"waiting on remote worker\"}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:deprecation-notice-event
+      "legacy profile support"
+      CodexAbsent))
+  ("deprecation_notice"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:deprecation-notice-event
+        "legacy profile support"
+        "use he_extended instead")))
+  ("{\"type\":\"deprecation_notice\",\"summary\":\"legacy profile support\",\"details\":\"use he_extended instead\"}"))

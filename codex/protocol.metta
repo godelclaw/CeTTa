@@ -28,6 +28,7 @@
 ; - TurnStartedEvent
 ; - TurnCompleteEvent / TokenCountEvent / StreamInfoEvent
 ; - AgentMessageEvent / UserMessageEvent
+; - ViewImageToolCallEvent / BackgroundEventEvent / DeprecationNoticeEvent
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -305,6 +306,15 @@
      $revised-prompt
      $result
      $saved-path))
+
+(= (codex:view-image-tool-call-event $call_id $path)
+   (CodexEventViewImageToolCall $call_id $path))
+
+(= (codex:background-event-event $message)
+   (CodexEventBackgroundEvent $message))
+
+(= (codex:deprecation-notice-event $summary $details)
+   (CodexEventDeprecationNotice $summary $details))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -933,6 +943,18 @@
         $saved-path))
    "image_generation_end")
 
+(= (codex:item-type
+      (CodexEventViewImageToolCall $call_id $path))
+   "view_image_tool_call")
+
+(= (codex:item-type
+      (CodexEventBackgroundEvent $message))
+   "background_event")
+
+(= (codex:item-type
+      (CodexEventDeprecationNotice $summary $details))
+   "deprecation_notice")
+
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
 
@@ -1401,6 +1423,26 @@
         $result
         $saved-path))
    (if (== $saved-path CodexAbsent) Empty $saved-path))
+
+(= (codex:view-image-tool-call-call-id
+      (CodexEventViewImageToolCall $call_id $path))
+   $call_id)
+
+(= (codex:view-image-tool-call-path
+      (CodexEventViewImageToolCall $call_id $path))
+   $path)
+
+(= (codex:background-event-message
+      (CodexEventBackgroundEvent $message))
+   $message)
+
+(= (codex:deprecation-notice-summary
+      (CodexEventDeprecationNotice $summary $details))
+   $summary)
+
+(= (codex:deprecation-notice-details
+      (CodexEventDeprecationNotice $summary $details))
+   (if (== $details CodexAbsent) Empty $details))
 
 (= (codex:web-search-action-json
       (CodexWebSearchActionSearch $query $queries))
@@ -2221,6 +2263,30 @@
               (JsonPair "revised_prompt" (JsonString $revised-prompt))
               (JsonPair "result" (JsonString $result))
               (JsonPair "saved_path" (JsonString $saved-path)))))))
+
+(= (codex:item-json
+      (CodexEventViewImageToolCall $call_id $path))
+   (JsonObject
+     ((JsonPair "type" (JsonString "view_image_tool_call"))
+      (JsonPair "call_id" (JsonString $call_id))
+      (JsonPair "path" (JsonString $path)))))
+
+(= (codex:item-json
+      (CodexEventBackgroundEvent $message))
+   (JsonObject
+     ((JsonPair "type" (JsonString "background_event"))
+      (JsonPair "message" (JsonString $message)))))
+
+(= (codex:item-json
+      (CodexEventDeprecationNotice $summary $details))
+   (if (== $details CodexAbsent)
+       (JsonObject
+         ((JsonPair "type" (JsonString "deprecation_notice"))
+          (JsonPair "summary" (JsonString $summary))))
+       (JsonObject
+         ((JsonPair "type" (JsonString "deprecation_notice"))
+          (JsonPair "summary" (JsonString $summary))
+          (JsonPair "details" (JsonString $details))))))
 
 (= (codex:items-json $items)
    (function
