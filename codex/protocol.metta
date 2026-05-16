@@ -42,6 +42,7 @@
 ; - GetHistoryEntryResponseEvent / HistoryEntry
 ; - ListSkillsResponseEvent / SkillsListEntry / SkillMetadata
 ; - RealtimeConversationListVoicesResponseEvent / RealtimeVoice
+; - Product
 ; - PatchApplyBeginEvent / PatchApplyUpdatedEvent / PatchApplyEndEvent
 ; - HookStartedEvent / HookCompletedEvent / HookRunSummary
 ; - UndoStartedEvent / UndoCompletedEvent
@@ -655,6 +656,15 @@
 
 (= (codex:realtime-conversation-list-voices-response-event $voices)
    (CodexEventRealtimeConversationListVoicesResponse $voices))
+
+(= (codex:product-chatgpt)
+   (CodexProductChatgpt))
+
+(= (codex:product-codex)
+   (CodexProductCodex))
+
+(= (codex:product-atlas)
+   (CodexProductAtlas))
 
 (= (codex:patch-apply-file-change-add $path $content)
    (CodexProtocolPatchApplyFileChangeAdd $path $content))
@@ -2773,6 +2783,95 @@
       (JsonPair "v2" (codex:realtime-voices-json $v2))
       (JsonPair "defaultV1" (codex:realtime-voice-json $default-v1))
       (JsonPair "defaultV2" (codex:realtime-voice-json $default-v2)))))
+
+(= (codex:product-json
+      (CodexProductChatgpt))
+   (JsonString "chatgpt"))
+
+(= (codex:product-json
+      (CodexProductCodex))
+   (JsonString "codex"))
+
+(= (codex:product-json
+      (CodexProductAtlas))
+   (JsonString "atlas"))
+
+(= (codex:product-to-app-platform
+      (CodexProductChatgpt))
+   "chat")
+
+(= (codex:product-to-app-platform
+      (CodexProductCodex))
+   "codex")
+
+(= (codex:product-to-app-platform
+      (CodexProductAtlas))
+   "atlas")
+
+(= (codex:product-ascii-lower-char $char)
+   (case $char
+     (("A" "a")
+      ("B" "b")
+      ("C" "c")
+      ("D" "d")
+      ("E" "e")
+      ("F" "f")
+      ("G" "g")
+      ("H" "h")
+      ("I" "i")
+      ("J" "j")
+      ("K" "k")
+      ("L" "l")
+      ("M" "m")
+      ("N" "n")
+      ("O" "o")
+      ("P" "p")
+      ("Q" "q")
+      ("R" "r")
+      ("S" "s")
+      ("T" "t")
+      ("U" "u")
+      ("V" "v")
+      ("W" "w")
+      ("X" "x")
+      ("Y" "y")
+      ("Z" "z")
+      ($other $other))))
+
+(= (codex:product-ascii-lower-text $text)
+   (if (== $text "")
+       ""
+       (str-concat
+         (codex:product-ascii-lower-char
+           (str-slice $text 0 1))
+         (codex:product-ascii-lower-text
+           (str-slice $text 1 (str-length $text))))))
+
+; CeTTa deviation: Rust returns `Option<Product>` here. This restart surface
+; uses `CodexAbsent` for the no-product case.
+(= (codex:product-from-session-source-name $value)
+   (let $normalized (codex:product-ascii-lower-text (str-trim $value))
+     (if (== $normalized "chatgpt")
+         (CodexProductChatgpt)
+         (if (== $normalized "codex")
+             (CodexProductCodex)
+             (if (== $normalized "atlas")
+                 (CodexProductAtlas)
+                 CodexAbsent)))))
+
+(= (codex:product-list-contains $products $needle)
+   (if (== $products ())
+       False
+       (if (== (list:first $products) $needle)
+           True
+           (codex:product-list-contains
+             (list:rest $products)
+             $needle))))
+
+(= (codex:product-matches-product-restriction $product $products)
+   (if (== $products ())
+       True
+       (codex:product-list-contains $products $product)))
 
 (= (codex:patch-apply-file-change-json
       (CodexProtocolPatchApplyFileChangeAdd $path $content))

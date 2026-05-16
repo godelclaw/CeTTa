@@ -114,3 +114,64 @@
           3)
         True)))
   ("[{\"type\":\"agent_reasoning_raw_content_delta\",\"delta\":\"raw reasoning delta\"}]"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:product-json (codex:product-chatgpt)))
+  ("\"chatgpt\""))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:product-json (codex:product-codex)))
+  ("\"codex\""))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:product-json (codex:product-atlas)))
+  ("\"atlas\""))
+
+!(assertEqualToResult
+  (codex:product-to-app-platform (codex:product-chatgpt))
+  ("chat"))
+
+!(assertEqualToResult
+  (codex:product-to-app-platform (codex:product-codex))
+  ("codex"))
+
+!(assertEqualToResult
+  (codex:product-to-app-platform (codex:product-atlas))
+  ("atlas"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:product-json
+      (codex:product-from-session-source-name " chatgpt ")))
+  ("\"chatgpt\""))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:product-json
+      (codex:product-from-session-source-name "ATLAS")))
+  ("\"atlas\""))
+
+!(assertEqualToResult
+  (codex:product-from-session-source-name "atlas-dev")
+  (CodexAbsent))
+
+!(assertEqualToResult
+  (codex:product-matches-product-restriction
+    (codex:product-chatgpt)
+    ((codex:product-chatgpt)))
+  (True))
+
+!(assertEqualToResult
+  (codex:product-matches-product-restriction
+    (codex:product-chatgpt)
+    ((codex:product-codex)))
+  (False))
+
+!(assertEqualToResult
+  (codex:product-matches-product-restriction
+    (codex:product-atlas)
+    ())
+  (True))
