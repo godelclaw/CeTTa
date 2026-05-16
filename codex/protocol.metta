@@ -45,7 +45,8 @@
 ; - RealtimeAudioFrame / RealtimeEvent::AudioOut
 ; - Op::RealtimeConversationStart/Audio/Text/Close/ListVoices
 ; - Submission / W3cTraceContext / Event queue wrappers
-; - Op::RefreshMcpServers / McpServerRefreshConfig
+; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
+; - Op::RefreshMcpServers / ReloadUserConfig / McpServerRefreshConfig
 ; - CompactedItem / TurnContextNetworkItem / TruncationPolicy
 ; - Product
 ; - SessionSource / SubAgentSource
@@ -837,8 +838,20 @@
      $mcp-servers
      $mcp-oauth-credentials-store-mode))
 
+(= (codex:add-to-history-op $text)
+   (CodexOpAddToHistory $text))
+
+(= (codex:get-history-entry-request-op $offset $log-id)
+   (CodexOpGetHistoryEntryRequest $offset $log-id))
+
+(= (codex:list-mcp-tools-op)
+   (CodexOpListMcpTools))
+
 (= (codex:refresh-mcp-servers-op $config)
    (CodexOpRefreshMcpServers $config))
+
+(= (codex:reload-user-config-op)
+   (CodexOpReloadUserConfig))
 
 (= (codex:realtime-conversation-version-v1)
    (CodexRealtimeConversationVersionV1))
@@ -6314,6 +6327,22 @@
       (CodexOpRefreshMcpServers $config))
    "refresh_mcp_servers")
 
+(= (codex:op-type
+      (CodexOpAddToHistory $text))
+   "add_to_history")
+
+(= (codex:op-type
+      (CodexOpGetHistoryEntryRequest $offset $log-id))
+   "get_history_entry_request")
+
+(= (codex:op-type
+      (CodexOpListMcpTools))
+   "list_mcp_tools")
+
+(= (codex:op-type
+      (CodexOpReloadUserConfig))
+   "reload_user_config")
+
 (= (codex:w3c-trace-context-json
       (CodexW3cTraceContext $traceparent $tracestate))
    (let $pairs-1 ()
@@ -6422,19 +6451,40 @@
      ((JsonPair "type" (JsonString "refresh_mcp_servers"))
       (JsonPair "config" (codex:mcp-server-refresh-config-json $config)))))
 
+(= (codex:op-json
+      (CodexOpAddToHistory $text))
+   (JsonObject
+     ((JsonPair "type" (JsonString "add_to_history"))
+      (JsonPair "text" (JsonString $text)))))
+
+(= (codex:op-json
+      (CodexOpGetHistoryEntryRequest $offset $log-id))
+   (JsonObject
+     ((JsonPair "type" (JsonString "get_history_entry_request"))
+      (JsonPair "offset" (JsonNumber $offset))
+      (JsonPair "log_id" (JsonNumber $log-id)))))
+
+(= (codex:op-json
+      (CodexOpListMcpTools))
+   (JsonObject
+     ((JsonPair "type" (JsonString "list_mcp_tools")))))
+
+(= (codex:op-json
+      (CodexOpReloadUserConfig))
+   (JsonObject
+     ((JsonPair "type" (JsonString "reload_user_config")))))
+
 (= (codex:submission-json
       (CodexSubmission $id $op $trace))
    (let $resolved-op (once $op)
-     (let $pairs-1
-       ((JsonPair "id" (JsonString $id))
-        (JsonPair "op" (codex:op-json $resolved-op)))
-       (JsonObject
-         (if (== $trace CodexAbsent)
-             $pairs-1
-             (codex:protocol-append-json-pair
-               $pairs-1
-               "trace"
-               (codex:w3c-trace-context-json $trace)))))))
+     (if (== $trace CodexAbsent)
+         (JsonObject
+           ((JsonPair "id" (JsonString $id))
+            (JsonPair "op" (codex:op-json $resolved-op))))
+         (JsonObject
+           ((JsonPair "id" (JsonString $id))
+            (JsonPair "op" (codex:op-json $resolved-op))
+            (JsonPair "trace" (codex:w3c-trace-context-json $trace)))))))
 
 (= (codex:event-envelope-json
       (CodexProtocolEvent $id $msg))
