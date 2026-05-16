@@ -31,6 +31,7 @@
 ; - ViewImageToolCallEvent / BackgroundEventEvent / DeprecationNoticeEvent
 ; - SkillsUpdateAvailable / ShutdownComplete
 ; - PlanUpdate(UpdatePlanArgs)
+; - TurnAbortedEvent
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -326,6 +327,18 @@
 
 (= (codex:plan-update-event $explanation $plan)
    (CodexUpdatePlanArgs $explanation $plan))
+
+(= (codex:turn-abort-reason-interrupted)
+   (CodexTurnAbortReasonInterrupted))
+
+(= (codex:turn-abort-reason-replaced)
+   (CodexTurnAbortReasonReplaced))
+
+(= (codex:turn-abort-reason-review-ended)
+   (CodexTurnAbortReasonReviewEnded))
+
+(= (codex:turn-aborted-event $turn-id $reason $completed-at $duration-ms)
+   (CodexEventTurnAborted $turn-id $reason $completed-at $duration-ms))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -978,6 +991,10 @@
       (CodexUpdatePlanArgs $explanation $plan))
    "plan_update")
 
+(= (codex:item-type
+      (CodexEventTurnAborted $turn-id $reason $completed-at $duration-ms))
+   "turn_aborted")
+
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
 
@@ -1592,6 +1609,18 @@
        (JsonObject
          ((JsonPair "byte_range" (codex:byte-range-json $byte-range))
           (JsonPair "placeholder" (JsonString $placeholder))))))
+
+(= (codex:turn-abort-reason-json
+      (CodexTurnAbortReasonInterrupted))
+   (JsonString "interrupted"))
+
+(= (codex:turn-abort-reason-json
+      (CodexTurnAbortReasonReplaced))
+   (JsonString "replaced"))
+
+(= (codex:turn-abort-reason-json
+      (CodexTurnAbortReasonReviewEnded))
+   (JsonString "review_ended"))
 
 (= (codex:plan-update-step-status-json
       (CodexUpdatePlanStepStatusPending))
@@ -2353,6 +2382,52 @@
             JsonNull
             (JsonString $explanation)))
       (JsonPair "plan" (codex:plan-update-steps-json $plan)))))
+
+(= (codex:item-json
+      (CodexEventTurnAborted $turn-id $reason $completed-at $duration-ms))
+   (if (== $turn-id CodexAbsent)
+       (if (== $completed-at CodexAbsent)
+           (if (== $duration-ms CodexAbsent)
+               (JsonObject
+                 ((JsonPair "type" (JsonString "turn_aborted"))
+                  (JsonPair "reason" (codex:turn-abort-reason-json $reason))))
+               (JsonObject
+                 ((JsonPair "type" (JsonString "turn_aborted"))
+                  (JsonPair "reason" (codex:turn-abort-reason-json $reason))
+                  (JsonPair "duration_ms" (JsonNumber $duration-ms)))))
+           (if (== $duration-ms CodexAbsent)
+               (JsonObject
+                 ((JsonPair "type" (JsonString "turn_aborted"))
+                  (JsonPair "reason" (codex:turn-abort-reason-json $reason))
+                  (JsonPair "completed_at" (JsonNumber $completed-at))))
+               (JsonObject
+                 ((JsonPair "type" (JsonString "turn_aborted"))
+                  (JsonPair "reason" (codex:turn-abort-reason-json $reason))
+                  (JsonPair "completed_at" (JsonNumber $completed-at))
+                  (JsonPair "duration_ms" (JsonNumber $duration-ms))))))
+       (if (== $completed-at CodexAbsent)
+           (if (== $duration-ms CodexAbsent)
+               (JsonObject
+                 ((JsonPair "type" (JsonString "turn_aborted"))
+                  (JsonPair "turn_id" (JsonString $turn-id))
+                  (JsonPair "reason" (codex:turn-abort-reason-json $reason))))
+               (JsonObject
+                 ((JsonPair "type" (JsonString "turn_aborted"))
+                  (JsonPair "turn_id" (JsonString $turn-id))
+                  (JsonPair "reason" (codex:turn-abort-reason-json $reason))
+                  (JsonPair "duration_ms" (JsonNumber $duration-ms)))))
+           (if (== $duration-ms CodexAbsent)
+               (JsonObject
+                 ((JsonPair "type" (JsonString "turn_aborted"))
+                  (JsonPair "turn_id" (JsonString $turn-id))
+                  (JsonPair "reason" (codex:turn-abort-reason-json $reason))
+                  (JsonPair "completed_at" (JsonNumber $completed-at))))
+               (JsonObject
+                 ((JsonPair "type" (JsonString "turn_aborted"))
+                  (JsonPair "turn_id" (JsonString $turn-id))
+                  (JsonPair "reason" (codex:turn-abort-reason-json $reason))
+                  (JsonPair "completed_at" (JsonNumber $completed-at))
+                  (JsonPair "duration_ms" (JsonNumber $duration-ms))))))))
 
 (= (codex:items-json $items)
    (function

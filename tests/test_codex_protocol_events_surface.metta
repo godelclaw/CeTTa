@@ -464,3 +464,32 @@
         CodexAbsent
         ())))
   ("{\"type\":\"plan_update\",\"explanation\":null,\"plan\":[]}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:turn-aborted-event
+      CodexAbsent
+      (codex:turn-abort-reason-interrupted)
+      CodexAbsent
+      CodexAbsent))
+  ("turn_aborted"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:turn-aborted-event
+        CodexAbsent
+        (codex:turn-abort-reason-interrupted)
+        CodexAbsent
+        CodexAbsent)))
+  ("{\"type\":\"turn_aborted\",\"reason\":\"interrupted\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:turn-aborted-event
+        "turn-42"
+        (codex:turn-abort-reason-review-ended)
+        1712346000
+        250)))
+  ("{\"type\":\"turn_aborted\",\"turn_id\":\"turn-42\",\"reason\":\"review_ended\",\"completed_at\":1712346000,\"duration_ms\":250}"))
