@@ -34,6 +34,8 @@
 ; - TurnAbortedEvent
 ; - StreamErrorEvent / CodexErrorInfo / NonSteerableTurnKind
 ; - ErrorEvent / RawResponseItemEvent
+; - AgentMessageContentDeltaEvent / PlanDeltaEvent /
+;   ReasoningContentDeltaEvent / ReasoningRawContentDeltaEvent
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -401,6 +403,54 @@
 
 (= (codex:raw-response-item-event $item)
    (CodexEventRawResponseItem $item))
+
+(= (codex:agent-message-content-delta-event
+      $thread-id
+      $turn-id
+      $item-id
+      $delta)
+   (CodexEventAgentMessageContentDelta
+     $thread-id
+     $turn-id
+     $item-id
+     $delta))
+
+(= (codex:plan-delta-event
+      $thread-id
+      $turn-id
+      $item-id
+      $delta)
+   (CodexEventPlanDelta
+     $thread-id
+     $turn-id
+     $item-id
+     $delta))
+
+(= (codex:reasoning-content-delta-event
+      $thread-id
+      $turn-id
+      $item-id
+      $delta
+      $summary-index)
+   (CodexEventReasoningContentDelta
+     $thread-id
+     $turn-id
+     $item-id
+     $delta
+     $summary-index))
+
+(= (codex:reasoning-raw-content-delta-event
+      $thread-id
+      $turn-id
+      $item-id
+      $delta
+      $content-index)
+   (CodexEventReasoningRawContentDelta
+     $thread-id
+     $turn-id
+     $item-id
+     $delta
+     $content-index))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -1068,6 +1118,40 @@
 (= (codex:item-type
       (CodexEventRawResponseItem $item))
    "raw_response_item")
+
+(= (codex:item-type
+      (CodexEventAgentMessageContentDelta
+        $thread-id
+        $turn-id
+        $item-id
+        $delta))
+   "agent_message_content_delta")
+
+(= (codex:item-type
+      (CodexEventPlanDelta
+        $thread-id
+        $turn-id
+        $item-id
+        $delta))
+   "plan_delta")
+
+(= (codex:item-type
+      (CodexEventReasoningContentDelta
+        $thread-id
+        $turn-id
+        $item-id
+        $delta
+        $summary-index))
+   "reasoning_content_delta")
+
+(= (codex:item-type
+      (CodexEventReasoningRawContentDelta
+        $thread-id
+        $turn-id
+        $item-id
+        $delta
+        $content-index))
+   "reasoning_raw_content_delta")
 
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
@@ -1864,6 +1948,48 @@
    (if (== $codex-error-info CodexAbsent)
        True
        (codex:codex-error-info-affects-turn-status $codex-error-info)))
+
+; Rust `HasLegacyEvent` / `EventMsg::as_legacy_events` currently projects these
+; delta events to the existing legacy event stream. The boolean flag is accepted
+; now so later `ItemStarted` / `ItemCompleted` ports can preserve the same
+; method surface even though the currently ported delta variants ignore it.
+(= (codex:event-as-legacy-events
+      (CodexEventAgentMessageContentDelta
+        $thread-id
+        $turn-id
+        $item-id
+        $delta)
+      $show-raw-agent-reasoning)
+   ((CodexEventAgentMessageDelta $delta)))
+
+(= (codex:event-as-legacy-events
+      (CodexEventPlanDelta
+        $thread-id
+        $turn-id
+        $item-id
+        $delta)
+      $show-raw-agent-reasoning)
+   ())
+
+(= (codex:event-as-legacy-events
+      (CodexEventReasoningContentDelta
+        $thread-id
+        $turn-id
+        $item-id
+        $delta
+        $summary-index)
+      $show-raw-agent-reasoning)
+   ((CodexEventAgentReasoningDelta $delta)))
+
+(= (codex:event-as-legacy-events
+      (CodexEventReasoningRawContentDelta
+        $thread-id
+        $turn-id
+        $item-id
+        $delta
+        $content-index)
+      $show-raw-agent-reasoning)
+   ((CodexEventAgentReasoningRawContentDelta $delta)))
 
 (= (codex:plan-update-step-status-json
       (CodexUpdatePlanStepStatusPending))
@@ -2704,6 +2830,62 @@
    (JsonObject
      ((JsonPair "type" (JsonString "raw_response_item"))
       (JsonPair "item" (codex:item-json $item)))))
+
+(= (codex:item-json
+      (CodexEventAgentMessageContentDelta
+        $thread-id
+        $turn-id
+        $item-id
+        $delta))
+   (JsonObject
+     ((JsonPair "type" (JsonString "agent_message_content_delta"))
+      (JsonPair "thread_id" (JsonString $thread-id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair "item_id" (JsonString $item-id))
+      (JsonPair "delta" (JsonString $delta)))))
+
+(= (codex:item-json
+      (CodexEventPlanDelta
+        $thread-id
+        $turn-id
+        $item-id
+        $delta))
+   (JsonObject
+     ((JsonPair "type" (JsonString "plan_delta"))
+      (JsonPair "thread_id" (JsonString $thread-id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair "item_id" (JsonString $item-id))
+      (JsonPair "delta" (JsonString $delta)))))
+
+(= (codex:item-json
+      (CodexEventReasoningContentDelta
+        $thread-id
+        $turn-id
+        $item-id
+        $delta
+        $summary-index))
+   (JsonObject
+     ((JsonPair "type" (JsonString "reasoning_content_delta"))
+      (JsonPair "thread_id" (JsonString $thread-id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair "item_id" (JsonString $item-id))
+      (JsonPair "delta" (JsonString $delta))
+      (JsonPair "summary_index" (JsonNumber $summary-index)))))
+
+(= (codex:item-json
+      (CodexEventReasoningRawContentDelta
+        $thread-id
+        $turn-id
+        $item-id
+        $delta
+        $content-index))
+   (JsonObject
+     ((JsonPair "type" (JsonString "reasoning_raw_content_delta"))
+      (JsonPair "thread_id" (JsonString $thread-id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair "item_id" (JsonString $item-id))
+      (JsonPair "delta" (JsonString $delta))
+      (JsonPair "content_index" (JsonNumber $content-index)))))
 
 (= (codex:items-json $items)
    (function

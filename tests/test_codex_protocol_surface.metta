@@ -64,3 +64,53 @@
   (codex:error-event-affects-turn-status
     (codex:error-event "message only" CodexAbsent))
   (True))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:items-json
+      (codex:event-as-legacy-events
+        (codex:agent-message-content-delta-event
+          "thread-1"
+          "turn-1"
+          "item-1"
+          "delta block")
+        False)))
+  ("[{\"type\":\"agent_message_delta\",\"delta\":\"delta block\"}]"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:items-json
+      (codex:event-as-legacy-events
+        (codex:plan-delta-event
+          "thread-2"
+          "turn-2"
+          "item-2"
+          "plan delta")
+        False)))
+  ("[]"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:items-json
+      (codex:event-as-legacy-events
+        (codex:reasoning-content-delta-event
+          "thread-3"
+          "turn-3"
+          "item-3"
+          "reasoning delta"
+          7)
+        False)))
+  ("[{\"type\":\"agent_reasoning_delta\",\"delta\":\"reasoning delta\"}]"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:items-json
+      (codex:event-as-legacy-events
+        (codex:reasoning-raw-content-delta-event
+          "thread-4"
+          "turn-4"
+          "item-4"
+          "raw reasoning delta"
+          3)
+        True)))
+  ("[{\"type\":\"agent_reasoning_raw_content_delta\",\"delta\":\"raw reasoning delta\"}]"))

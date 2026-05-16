@@ -565,3 +565,54 @@
       (codex:raw-response-item-event
         (codex:commentary-message "Inspecting response items."))))
   ("{\"type\":\"raw_response_item\",\"item\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Inspecting response items.\"}],\"phase\":\"commentary\"}}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:agent-message-content-delta-event
+      "thread-1"
+      "turn-1"
+      "item-1"
+      "delta block"))
+  ("agent_message_content_delta"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:agent-message-content-delta-event
+        "thread-1"
+        "turn-1"
+        "item-1"
+        "delta block")))
+  ("{\"type\":\"agent_message_content_delta\",\"thread_id\":\"thread-1\",\"turn_id\":\"turn-1\",\"item_id\":\"item-1\",\"delta\":\"delta block\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:plan-delta-event
+        "thread-2"
+        "turn-2"
+        "item-2"
+        "plan delta")))
+  ("{\"type\":\"plan_delta\",\"thread_id\":\"thread-2\",\"turn_id\":\"turn-2\",\"item_id\":\"item-2\",\"delta\":\"plan delta\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:reasoning-content-delta-event
+        "thread-3"
+        "turn-3"
+        "item-3"
+        "reasoning delta"
+        2)))
+  ("{\"type\":\"reasoning_content_delta\",\"thread_id\":\"thread-3\",\"turn_id\":\"turn-3\",\"item_id\":\"item-3\",\"delta\":\"reasoning delta\",\"summary_index\":2}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:reasoning-raw-content-delta-event
+        "thread-4"
+        "turn-4"
+        "item-4"
+        "raw reasoning delta"
+        0)))
+  ("{\"type\":\"reasoning_raw_content_delta\",\"thread_id\":\"thread-4\",\"turn_id\":\"turn-4\",\"item_id\":\"item-4\",\"delta\":\"raw reasoning delta\",\"content_index\":0}"))
