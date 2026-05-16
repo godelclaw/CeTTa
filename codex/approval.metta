@@ -9,7 +9,8 @@
 ;
 ; Deliberate restart-slice limits:
 ; - dangerous-command escalation is deferred until the command-safety slice
-; - proposed execpolicy amendments stay `null` until the amendment slice lands
+; - proposed execpolicy amendments still stay `null` in this approval slice
+;   until the approval-side amendment wiring lands
 ; - the heredoc/single-prefix complex shell parser is not present yet, so this
 ;   slice only expands `bash|sh|zsh -c|-lc` wrappers through `shell-plain-commands`
 ; - user-facing reason strings currently use simple token-joining instead of

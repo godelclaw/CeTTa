@@ -193,3 +193,109 @@
     (codex:session-permission-profile-external-json
       (codex:session-network-sandbox-policy-enabled)))
   ("{\"type\":\"external\",\"network\":\"enabled\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:exec-policy-amendment-json
+      (codex:exec-policy-amendment ("git" "status"))))
+  ("[\"git\",\"status\"]"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:review-decision-json
+      (codex:review-decision-approved)))
+  ("\"approved\""))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:review-decision-json
+      (codex:review-decision-approved-execpolicy-amendment
+        (codex:exec-policy-amendment ("git" "status")))))
+  ("{\"approved_execpolicy_amendment\":{\"proposed_execpolicy_amendment\":[\"git\",\"status\"]}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:review-decision-json
+      (codex:review-decision-approved-for-session)))
+  ("\"approved_for_session\""))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:review-decision-json
+      (codex:review-decision-network-policy-amendment
+        (CodexNetworkPolicyAmendment
+          (CodexNetworkPolicyRuleActionAllow)
+          "api.example.com"))))
+  ("{\"network_policy_amendment\":{\"network_policy_amendment\":{\"host\":\"api.example.com\",\"action\":\"allow\"}}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:review-decision-json
+      (codex:review-decision-denied)))
+  ("\"denied\""))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:review-decision-json
+      (codex:review-decision-timed-out)))
+  ("\"timed_out\""))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:review-decision-json
+      (codex:review-decision-abort)))
+  ("\"abort\""))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:review-decisions-json
+      ((codex:review-decision-approved)
+       (codex:review-decision-abort))))
+  ("[\"approved\",\"abort\"]"))
+
+!(assertEqualToResult
+  (codex:review-decision-opaque-string
+    (codex:review-decision-approved))
+  ("approved"))
+
+!(assertEqualToResult
+  (codex:review-decision-opaque-string
+    (codex:review-decision-approved-execpolicy-amendment
+      (codex:exec-policy-amendment ("git" "status"))))
+  ("approved_with_amendment"))
+
+!(assertEqualToResult
+  (codex:review-decision-opaque-string
+    (codex:review-decision-approved-for-session))
+  ("approved_for_session"))
+
+!(assertEqualToResult
+  (codex:review-decision-opaque-string
+    (codex:review-decision-network-policy-amendment
+      (CodexNetworkPolicyAmendment
+        (CodexNetworkPolicyRuleActionAllow)
+        "api.example.com")))
+  ("approved_with_network_policy_allow"))
+
+!(assertEqualToResult
+  (codex:review-decision-opaque-string
+    (codex:review-decision-network-policy-amendment
+      (CodexNetworkPolicyAmendment
+        (CodexNetworkPolicyRuleActionDeny)
+        "blocked.example.com")))
+  ("denied_with_network_policy_deny"))
+
+!(assertEqualToResult
+  (codex:review-decision-opaque-string
+    (codex:review-decision-denied))
+  ("denied"))
+
+!(assertEqualToResult
+  (codex:review-decision-opaque-string
+    (codex:review-decision-timed-out))
+  ("timed_out"))
+
+!(assertEqualToResult
+  (codex:review-decision-opaque-string
+    (codex:review-decision-abort))
+  ("abort"))

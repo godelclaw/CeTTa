@@ -44,6 +44,7 @@
 ; - RealtimeConversationListVoicesResponseEvent / RealtimeVoice
 ; - Product
 ; - SessionConfiguredEvent / SessionNetworkProxyRuntime
+; - ExecPolicyAmendment / ReviewDecision
 ; - PatchApplyBeginEvent / PatchApplyUpdatedEvent / PatchApplyEndEvent
 ; - HookStartedEvent / HookCompletedEvent / HookRunSummary
 ; - UndoStartedEvent / UndoCompletedEvent
@@ -248,6 +249,31 @@
 
 (= (codex:thread-name-updated-event $thread_id $thread_name)
    (CodexEventThreadNameUpdated $thread_id $thread_name))
+
+(= (codex:exec-policy-amendment $command)
+   (CodexExecPolicyAmendment $command))
+
+(= (codex:review-decision-approved)
+   (CodexReviewDecisionApproved))
+
+(= (codex:review-decision-approved-execpolicy-amendment $proposed-execpolicy-amendment)
+   (CodexReviewDecisionApprovedExecpolicyAmendment
+     $proposed-execpolicy-amendment))
+
+(= (codex:review-decision-approved-for-session)
+   (CodexReviewDecisionApprovedForSession))
+
+(= (codex:review-decision-network-policy-amendment $network-policy-amendment)
+   (CodexReviewDecisionNetworkPolicyAmendment $network-policy-amendment))
+
+(= (codex:review-decision-denied)
+   (CodexReviewDecisionDenied))
+
+(= (codex:review-decision-timed-out)
+   (CodexReviewDecisionTimedOut))
+
+(= (codex:review-decision-abort)
+   (CodexReviewDecisionAbort))
 
 (= (codex:thread-rolled-back-event $num_turns)
    (CodexEventThreadRolledBack $num_turns))
@@ -2735,6 +2761,115 @@
      ((JsonPair "conversation_id" (JsonString $conversation-id))
       (JsonPair "ts" (JsonNumber $ts))
       (JsonPair "text" (JsonString $text)))))
+
+(= (codex:exec-policy-amendment-command
+      (CodexExecPolicyAmendment $command))
+   $command)
+
+(= (codex:exec-policy-amendment-json
+      (CodexExecPolicyAmendment $command))
+   (codex:json-string-array $command))
+
+(= (codex:network-policy-rule-action-json
+      (CodexNetworkPolicyRuleActionAllow))
+   (JsonString "allow"))
+
+(= (codex:network-policy-rule-action-json
+      (CodexNetworkPolicyRuleActionDeny))
+   (JsonString "deny"))
+
+(= (codex:network-policy-amendment-json
+      (CodexNetworkPolicyAmendment $action $host))
+   (JsonObject
+     ((JsonPair "host" (JsonString $host))
+      (JsonPair "action" (codex:network-policy-rule-action-json $action)))))
+
+(= (codex:review-decision-json
+      (CodexReviewDecisionApproved))
+   (JsonString "approved"))
+
+(= (codex:review-decision-json
+      (CodexReviewDecisionApprovedExecpolicyAmendment
+        $proposed-execpolicy-amendment))
+   (JsonObject
+     ((JsonPair
+        "approved_execpolicy_amendment"
+        (JsonObject
+          ((JsonPair
+             "proposed_execpolicy_amendment"
+             (codex:exec-policy-amendment-json
+               $proposed-execpolicy-amendment))))))))
+
+(= (codex:review-decision-json
+      (CodexReviewDecisionApprovedForSession))
+   (JsonString "approved_for_session"))
+
+(= (codex:review-decision-json
+      (CodexReviewDecisionNetworkPolicyAmendment
+        $network-policy-amendment))
+   (JsonObject
+     ((JsonPair
+        "network_policy_amendment"
+        (JsonObject
+          ((JsonPair
+             "network_policy_amendment"
+             (codex:network-policy-amendment-json
+               $network-policy-amendment))))))))
+
+(= (codex:review-decision-json
+      (CodexReviewDecisionDenied))
+   (JsonString "denied"))
+
+(= (codex:review-decision-json
+      (CodexReviewDecisionTimedOut))
+   (JsonString "timed_out"))
+
+(= (codex:review-decision-json
+      (CodexReviewDecisionAbort))
+   (JsonString "abort"))
+
+(= (codex:review-decisions-json $decisions)
+   (JsonArray
+     (map-atom $decisions $item (codex:review-decision-json $item))))
+
+(= (codex:review-decision-opaque-string
+      (CodexReviewDecisionApproved))
+   "approved")
+
+(= (codex:review-decision-opaque-string
+      (CodexReviewDecisionApprovedExecpolicyAmendment
+        $proposed-execpolicy-amendment))
+   "approved_with_amendment")
+
+(= (codex:review-decision-opaque-string
+      (CodexReviewDecisionApprovedForSession))
+   "approved_for_session")
+
+(= (codex:review-decision-opaque-string
+      (CodexReviewDecisionNetworkPolicyAmendment
+        (CodexNetworkPolicyAmendment
+          (CodexNetworkPolicyRuleActionAllow)
+          $host)))
+   "approved_with_network_policy_allow")
+
+(= (codex:review-decision-opaque-string
+      (CodexReviewDecisionNetworkPolicyAmendment
+        (CodexNetworkPolicyAmendment
+          (CodexNetworkPolicyRuleActionDeny)
+          $host)))
+   "denied_with_network_policy_deny")
+
+(= (codex:review-decision-opaque-string
+      (CodexReviewDecisionDenied))
+   "denied")
+
+(= (codex:review-decision-opaque-string
+      (CodexReviewDecisionTimedOut))
+   "timed_out")
+
+(= (codex:review-decision-opaque-string
+      (CodexReviewDecisionAbort))
+   "abort")
 
 (= (codex:protocol-append-item $items $item)
    (list:append $items ($item)))
