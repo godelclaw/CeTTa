@@ -36,6 +36,7 @@
 ; - ErrorEvent / RawResponseItemEvent
 ; - AgentMessageContentDeltaEvent / PlanDeltaEvent /
 ;   ReasoningContentDeltaEvent / ReasoningRawContentDeltaEvent
+; - ExitedReviewModeEvent / ReviewOutputEvent JSON projection
 ; - UndoStartedEvent / UndoCompletedEvent
 ; - ReviewOutputEvent / ReviewFinding / ReviewCodeLocation / ReviewLineRange
 ;
@@ -451,6 +452,9 @@
      $item-id
      $delta
      $content-index))
+
+(= (codex:exited-review-mode-event $review-output)
+   (CodexEventExitedReviewMode $review-output))
 
 (= (codex:reasoning-summary-text $text)
    (CodexReasoningItemSummaryText $text))
@@ -1152,6 +1156,10 @@
         $delta
         $content-index))
    "reasoning_raw_content_delta")
+
+(= (codex:item-type
+      (CodexEventExitedReviewMode $review-output))
+   "exited_review_mode")
 
 (= (codex:message-role (CodexResponseItemMessage $role $content $phase))
    $role)
@@ -1990,6 +1998,48 @@
         $content-index)
       $show-raw-agent-reasoning)
    ((CodexEventAgentReasoningRawContentDelta $delta)))
+
+(= (codex:review-line-range-json
+      (CodexReviewLineRange $start $end))
+   (JsonObject
+     ((JsonPair "start" (JsonNumber $start))
+      (JsonPair "end" (JsonNumber $end)))))
+
+(= (codex:review-code-location-json
+      (CodexReviewCodeLocation $absolute-file-path $line-range))
+   (JsonObject
+     ((JsonPair "absolute_file_path" (JsonString $absolute-file-path))
+      (JsonPair "line_range" (codex:review-line-range-json $line-range)))))
+
+(= (codex:review-finding-json
+      (CodexReviewFinding
+        $title
+        $body
+        $confidence-score
+        $priority
+        $code-location))
+   (JsonObject
+     ((JsonPair "title" (JsonString $title))
+      (JsonPair "body" (JsonString $body))
+      (JsonPair "confidence_score" (JsonNumber $confidence-score))
+      (JsonPair "priority" (JsonNumber $priority))
+      (JsonPair "code_location" (codex:review-code-location-json $code-location)))))
+
+(= (codex:review-findings-json $findings)
+   (JsonArray
+     (map-atom $findings $item (codex:review-finding-json $item))))
+
+(= (codex:review-output-event-json
+      (CodexReviewOutputEvent
+        $findings
+        $overall-correctness
+        $overall-explanation
+        $overall-confidence-score))
+   (JsonObject
+     ((JsonPair "findings" (codex:review-findings-json $findings))
+      (JsonPair "overall_correctness" (JsonString $overall-correctness))
+      (JsonPair "overall_explanation" (JsonString $overall-explanation))
+      (JsonPair "overall_confidence_score" (JsonNumber $overall-confidence-score)))))
 
 (= (codex:plan-update-step-status-json
       (CodexUpdatePlanStepStatusPending))
@@ -2883,9 +2933,19 @@
      ((JsonPair "type" (JsonString "reasoning_raw_content_delta"))
       (JsonPair "thread_id" (JsonString $thread-id))
       (JsonPair "turn_id" (JsonString $turn-id))
-      (JsonPair "item_id" (JsonString $item-id))
-      (JsonPair "delta" (JsonString $delta))
-      (JsonPair "content_index" (JsonNumber $content-index)))))
+     (JsonPair "item_id" (JsonString $item-id))
+     (JsonPair "delta" (JsonString $delta))
+     (JsonPair "content_index" (JsonNumber $content-index)))))
+
+(= (codex:item-json
+      (CodexEventExitedReviewMode $review-output))
+   (JsonObject
+     ((JsonPair "type" (JsonString "exited_review_mode"))
+      (JsonPair
+        "review_output"
+        (if (== $review-output CodexAbsent)
+            JsonNull
+            (codex:review-output-event-json $review-output))))))
 
 (= (codex:items-json $items)
    (function

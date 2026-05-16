@@ -616,3 +616,32 @@
         "raw reasoning delta"
         0)))
   ("{\"type\":\"reasoning_raw_content_delta\",\"thread_id\":\"thread-4\",\"turn_id\":\"turn-4\",\"item_id\":\"item-4\",\"delta\":\"raw reasoning delta\",\"content_index\":0}"))
+
+!(assertEqualToResult
+  (codex:item-type
+    (codex:exited-review-mode-event CodexAbsent))
+  ("exited_review_mode"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:exited-review-mode-event CodexAbsent)))
+  ("{\"type\":\"exited_review_mode\",\"review_output\":null}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:item-json
+      (codex:exited-review-mode-event
+        (codex:review-output-event
+          ((codex:review-finding
+             "Missing guard"
+             "The code path does not check the returned permission."
+             0.75
+             1
+             (codex:review-code-location
+               "/tmp/example.rs"
+               (codex:review-line-range 20 24))))
+          "patch is not correct"
+          "One high-confidence issue remains."
+          0.75))))
+  ("{\"type\":\"exited_review_mode\",\"review_output\":{\"findings\":[{\"title\":\"Missing guard\",\"body\":\"The code path does not check the returned permission.\",\"confidence_score\":0.75,\"priority\":1,\"code_location\":{\"absolute_file_path\":\"/tmp/example.rs\",\"line_range\":{\"start\":20,\"end\":24}}}],\"overall_correctness\":\"patch is not correct\",\"overall_explanation\":\"One high-confidence issue remains.\",\"overall_confidence_score\":0.75}}"))
