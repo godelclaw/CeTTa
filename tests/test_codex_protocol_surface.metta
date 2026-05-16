@@ -299,3 +299,54 @@
   (codex:review-decision-opaque-string
     (codex:review-decision-abort))
   ("abort"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:file-change-json
+      (codex:file-change-add "new file contents\n")))
+  ("{\"type\":\"add\",\"content\":\"new file contents\\n\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:file-change-json
+      (codex:file-change-delete "old file contents\n")))
+  ("{\"type\":\"delete\",\"content\":\"old file contents\\n\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:file-change-json
+      (codex:file-change-update
+        "@@ -1 +1 @@\n-old\n+new\n"
+        CodexAbsent)))
+  ("{\"type\":\"update\",\"unified_diff\":\"@@ -1 +1 @@\\n-old\\n+new\\n\",\"move_path\":null}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:file-change-json
+      (codex:file-change-update
+        "@@ -1 +1 @@\n-old\n+new\n"
+        "src/new_name.rs")))
+  ("{\"type\":\"update\",\"unified_diff\":\"@@ -1 +1 @@\\n-old\\n+new\\n\",\"move_path\":\"src/new_name.rs\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:file-changes-json
+      ((codex:file-change-add "a")
+       (codex:file-change-delete "b"))))
+  ("[{\"type\":\"add\",\"content\":\"a\"},{\"type\":\"delete\",\"content\":\"b\"}]"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:chunk-json
+      (codex:chunk
+        7
+        ("-stale line" "-older line")
+        ("+fresh line"))))
+  ("{\"orig_index\":7,\"deleted_lines\":[\"-stale line\",\"-older line\"],\"inserted_lines\":[\"+fresh line\"]}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:chunks-json
+      ((codex:chunk 1 () ("+intro"))
+       (codex:chunk 3 ("-outdated") ("+current")))))
+  ("[{\"orig_index\":1,\"deleted_lines\":[],\"inserted_lines\":[\"+intro\"]},{\"orig_index\":3,\"deleted_lines\":[\"-outdated\"],\"inserted_lines\":[\"+current\"]}]"))

@@ -45,6 +45,7 @@
 ; - Product
 ; - SessionConfiguredEvent / SessionNetworkProxyRuntime
 ; - ExecPolicyAmendment / ReviewDecision
+; - FileChange / Chunk
 ; - PatchApplyBeginEvent / PatchApplyUpdatedEvent / PatchApplyEndEvent
 ; - HookStartedEvent / HookCompletedEvent / HookRunSummary
 ; - UndoStartedEvent / UndoCompletedEvent
@@ -274,6 +275,18 @@
 
 (= (codex:review-decision-abort)
    (CodexReviewDecisionAbort))
+
+(= (codex:file-change-add $content)
+   (CodexFileChangeAdd $content))
+
+(= (codex:file-change-delete $content)
+   (CodexFileChangeDelete $content))
+
+(= (codex:file-change-update $unified-diff $move-path)
+   (CodexFileChangeUpdate $unified-diff $move-path))
+
+(= (codex:chunk $orig-index $deleted-lines $inserted-lines)
+   (CodexChunk $orig-index $deleted-lines $inserted-lines))
 
 (= (codex:thread-rolled-back-event $num_turns)
    (CodexEventThreadRolledBack $num_turns))
@@ -2870,6 +2883,44 @@
 (= (codex:review-decision-opaque-string
       (CodexReviewDecisionAbort))
    "abort")
+
+(= (codex:file-change-json
+      (CodexFileChangeAdd $content))
+   (JsonObject
+     ((JsonPair "type" (JsonString "add"))
+      (JsonPair "content" (JsonString $content)))))
+
+(= (codex:file-change-json
+      (CodexFileChangeDelete $content))
+   (JsonObject
+     ((JsonPair "type" (JsonString "delete"))
+      (JsonPair "content" (JsonString $content)))))
+
+(= (codex:file-change-json
+      (CodexFileChangeUpdate $unified-diff $move-path))
+   (JsonObject
+     ((JsonPair "type" (JsonString "update"))
+      (JsonPair "unified_diff" (JsonString $unified-diff))
+      (JsonPair
+        "move_path"
+        (if (== $move-path CodexAbsent)
+            JsonNull
+            (JsonString $move-path))))))
+
+(= (codex:file-changes-json $changes)
+   (JsonArray
+     (map-atom $changes $item (codex:file-change-json $item))))
+
+(= (codex:chunk-json
+      (CodexChunk $orig-index $deleted-lines $inserted-lines))
+   (JsonObject
+     ((JsonPair "orig_index" (JsonNumber $orig-index))
+      (JsonPair "deleted_lines" (codex:json-string-array $deleted-lines))
+      (JsonPair "inserted_lines" (codex:json-string-array $inserted-lines)))))
+
+(= (codex:chunks-json $chunks)
+   (JsonArray
+     (map-atom $chunks $item (codex:chunk-json $item))))
 
 (= (codex:protocol-append-item $items $item)
    (list:append $items ($item)))
