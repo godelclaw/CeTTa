@@ -4714,8 +4714,20 @@
    (JsonArray
      (map-atom $chunks $item (codex:chunk-json $item))))
 
+(= (codex:protocol-append-items () $rhs)
+   $rhs)
+
+; CeTTa reduction note: this is the same left-to-right append used by Rust's
+; serde field construction, staged explicitly because the protocol module's
+; wrapper around `list:append` can collapse before JSON object materialization.
+(= (codex:protocol-append-items $lhs $rhs)
+   (let ($head $tail) (decons-atom $lhs)
+     (case (codex:protocol-append-items $tail $rhs)
+       (($rest
+          (cons-atom $head $rest))))))
+
 (= (codex:protocol-append-item $items $item)
-   (list:append $items ($item)))
+   (codex:protocol-append-items $items ($item)))
 
 (= (codex:protocol-append-json-pair $pairs $key $value)
    (codex:protocol-append-item $pairs (JsonPair $key $value)))
@@ -5796,9 +5808,19 @@
        $pairs
        (codex:protocol-append-json-pair $pairs $key $value)))
 
+(= (codex:json-string-items ())
+   ())
+
+(= (codex:json-string-items $items)
+   (let ($head $tail) (decons-atom $items)
+     (case (codex:json-string-items $tail)
+       (($tail-json
+          (cons-atom (JsonString $head) $tail-json))))))
+
 (= (codex:json-string-array $items)
-   (JsonArray
-     (map-atom $items $item (JsonString $item))))
+   (case (codex:json-string-items $items)
+     (($json-items
+       (JsonArray $json-items)))))
 
 (= (codex:session-approvals-reviewer-json
       (CodexSessionApprovalsReviewerUser))
@@ -8486,18 +8508,23 @@
          $pairs-1
          "turn_id"
          $turn-id)
-       (JsonObject
-         (codex:protocol-append-json-pair
-           $pairs-2
-           "decision"
-           (codex:review-decision-json $decision))))))
+       (case (codex:review-decision-json $decision)
+         (($decision-json
+           (case (codex:protocol-append-json-pair
+                   $pairs-2
+                   "decision"
+                   $decision-json)
+             (($pairs-3
+               (JsonObject $pairs-3))))))))))
 
 (= (codex:op-json
       (CodexOpPatchApproval $id $decision))
-   (JsonObject
-     ((JsonPair "type" (JsonString "patch_approval"))
-      (JsonPair "id" (JsonString $id))
-      (JsonPair "decision" (codex:review-decision-json $decision)))))
+   (case (codex:review-decision-json $decision)
+     (($decision-json
+       (JsonObject
+         ((JsonPair "type" (JsonString "patch_approval"))
+          (JsonPair "id" (JsonString $id))
+          (JsonPair "decision" $decision-json)))))))
 
 (= (codex:op-json
       (CodexOpResolveElicitation
@@ -8674,41 +8701,6 @@
      ((JsonPair "type" (JsonString "approve_guardian_denied_action"))
       (JsonPair "event" (codex:guardian-assessment-event-json $event)))))
 
-; CeTTa evaluator detail: the generic `Submission` wrapper path below works
-; for the simple already-landed op subset, but the structured realtime-start
-; op currently reduces to `Empty` when routed through that generic boundary.
-; This direct branch covers the currently landed submission-wrapper surface for
-; `Op::RealtimeConversationStart` with string `prompt` / `session_id` and no
-; transport, voice, or trace, while leaving the generic wrapper untouched for
-; the remaining restart subset.
-(= (codex:submission-json
-      (CodexSubmission
-        $id
-        (CodexOpRealtimeConversationStart
-          (CodexConversationStartParams
-            $output-modality
-            $prompt
-            $session-id
-            CodexAbsent
-            CodexAbsent))
-        CodexAbsent))
-   (let $prompt-len (str-length $prompt)
-     (let $session-id-len (str-length $session-id)
-       (JsonObject
-         ((JsonPair "id" (JsonString $id))
-          (JsonPair
-            "op"
-            (JsonObject
-              ((JsonPair "type" (JsonString "realtime_conversation_start"))
-               (JsonPair
-                 "output_modality"
-                 (codex:realtime-output-modality-json $output-modality))
-               (JsonPair "prompt" (JsonString $prompt))
-               (JsonPair "session_id" (JsonString $session-id))))))))))
-
-; The remaining restart subset still projects correctly through the generic
-; wrapper: `Submission { id, op, trace }` with the currently landed simple op
-; family and unit requests.
 (= (codex:submission-json
       (CodexSubmission $id $op $trace))
    (if (== $trace CodexAbsent)

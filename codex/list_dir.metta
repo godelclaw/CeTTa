@@ -681,13 +681,21 @@
                           (codex:list-dir-handler-result-error
                             "dir_path must be an absolute path"))))))))))
 
+(= (codex:handle-list-dir-parse-result
+      $context
+      (CodexListDirParseOk $args))
+   (codex:handle-list-dir-args $context $args))
+
+(= (codex:handle-list-dir-parse-result
+      $context
+      (CodexListDirParseError $message))
+   (codex:list-dir-handler-result-error
+     (codex:function-arguments-parse-error-message $message)))
+
 (= (codex:handle-list-dir-function $context $arguments)
    (case (codex:parse-list-dir-args $arguments)
-     (((CodexListDirParseOk $args)
-       (codex:handle-list-dir-args $context $args))
-      ((CodexListDirParseError $message)
-       (codex:list-dir-handler-result-error
-         (codex:function-arguments-parse-error-message $message))))))
+     (($parse-result
+       (codex:handle-list-dir-parse-result $context $parse-result)))))
 
 (= (codex:handle-list-dir-payload $context $call-id $payload)
    (case $payload
