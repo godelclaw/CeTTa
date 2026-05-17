@@ -59,16 +59,28 @@
       $call_id
       $input)))
 
+(= (codex:fixture-append-items () $rhs)
+   $rhs)
+
+; CeTTa reduction note: after importing the large protocol surface, recursive
+; `let ... (eval ...)` list materialization can collapse to no result. This
+; local append keeps Rust's item ordering while forcing the recursive tail with
+; `case`, which remains stable under the evaluator.
+(= (codex:fixture-append-items $lhs $rhs)
+   (let ($head $tail) (decons-atom $lhs)
+     (case (codex:fixture-append-items $tail $rhs)
+       (($rest
+          (cons-atom $head $rest))))))
+
 (= (codex:fixture-steps-items ())
    ())
 
 (= (codex:fixture-steps-items $steps)
    (let ($head $tail) (decons-atom $steps)
      (let $head-items (eval (codex:fixture-step-items $head))
-       (let $tail-items (eval (codex:fixture-steps-items $tail))
-         (list:append
-           $head-items
-           $tail-items)))))
+       (case (codex:fixture-steps-items $tail)
+         (($tail-items
+            (codex:fixture-append-items $head-items $tail-items)))))))
 
 (= (codex:final-response-candidate $item)
    (case $item
@@ -94,12 +106,42 @@
            (codex:final-response-from-reversed-items $rest $fallback)))))))
 
 (= (codex:final-response-from-items $items)
-   (let $reversed-items (eval (list:reverse $items))
-     (codex:final-response-from-reversed-items $reversed-items CodexAbsent)))
+   (codex:final-response-from-items-acc
+     $items
+     CodexAbsent
+     CodexAbsent))
+
+(= (codex:final-response-from-items-acc () $explicit-final $unknown-assistant)
+   (if (== $explicit-final CodexAbsent)
+       $unknown-assistant
+       $explicit-final))
+
+(= (codex:final-response-from-items-acc $items $explicit-final $unknown-assistant)
+   (let $item (list:first $items)
+     (let $rest (list:rest $items)
+       (case (codex:final-response-candidate $item)
+         (((CodexExplicitFinal $text)
+           (codex:final-response-from-items-acc
+             $rest
+             $text
+             $unknown-assistant))
+          ((CodexUnknownAssistant $text)
+           (codex:final-response-from-items-acc
+             $rest
+             $explicit-final
+             $text))
+          (CodexNoFinal
+           (codex:final-response-from-items-acc
+             $rest
+             $explicit-final
+             $unknown-assistant)))))))
 
 (= (codex:run-fixture-turn $steps)
-   (let $items (codex:fixture-steps-items $steps)
-     (CodexFixtureTurnResult $items (codex:final-response-from-items $items))))
+   (case (codex:fixture-steps-items $steps)
+     (($items
+       (case (codex:final-response-from-items $items)
+         (($final-response
+           (CodexFixtureTurnResult $items $final-response))))))))
 
 (= (codex:fixture-turn-items (CodexFixtureTurnResult $items $final_response))
    $items)
