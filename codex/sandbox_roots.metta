@@ -193,24 +193,28 @@
      (if (== $cwd-root CodexAbsent)
          False
          (== $cwd-root $root))
-     (let $read-only-subpaths
-       (eval
-         (codex:default-read-only-subpaths-for-writable-root
-           $root
-           $protect-missing-dot-codex))
-       (CodexWritableRoot $root $read-only-subpaths))))
+     ; CeTTa evaluation accommodation: Rust permits an empty Vec here.
+     ; Binding an evaluated `()` through `let` can erase the surrounding
+     ; constructor in composed assertions, so handle the empty case explicitly.
+     (case
+       (codex:default-read-only-subpaths-for-writable-root
+         $root
+         $protect-missing-dot-codex)
+       ((()
+         (CodexWritableRoot $root ()))
+        ($read-only-subpaths
+         (CodexWritableRoot $root $read-only-subpaths))))))
 
 (= (codex:sandbox-roots-materialize-writable-roots $roots $cwd-root)
-   (function
-     (let $materialized
-       (eval
-         (map-atom
-           $roots
-           $root
-           (codex:sandbox-roots-materialize-writable-root
-             $root
-             $cwd-root)))
-       (return $materialized))))
+   ; CeTTa evaluation accommodation: Rust maps this Vec deterministically.
+   ; `map-atom-strict` preserves that single-result materialization under
+   ; composed assertions where `function` plus `map-atom` can return NoReturn.
+   (map-atom-strict
+     $roots
+     $root
+     (codex:sandbox-roots-materialize-writable-root
+       $root
+       $cwd-root)))
 
 (= (codex:session-sandbox-policy-get-writable-roots-with-cwd
       (CodexSessionSandboxPolicyDangerFullAccess)
@@ -235,25 +239,26 @@
         $exclude-tmpdir-env-var
         $exclude-slash-tmp)
       $cwd)
-   (function
-     (let $joined-roots
-       (eval
-         (codex:sandbox-roots-workspace-write-root-paths-joined
-           $writable-roots
-           $exclude-tmpdir-env-var
-           $exclude-slash-tmp
-           $cwd))
-       (let $roots
-         (eval
-           (codex:sandbox-roots-split-joined-lines $joined-roots))
-         (let $materialized
-           (eval
+   ; CeTTa evaluation accommodation: this is the same Rust root order,
+   ; including duplicate cwd entries, but staged without function/let eval
+   ; so composed assertions do not collapse the materialized list.
+   (case
+     (codex:sandbox-roots-workspace-write-root-paths-joined
+       $writable-roots
+       $exclude-tmpdir-env-var
+       $exclude-slash-tmp
+       $cwd)
+     (($joined-roots
+       (case
+         (codex:sandbox-roots-split-joined-lines $joined-roots)
+         (($roots
+           (case
              (codex:sandbox-roots-materialize-writable-roots
                $roots
                (if (path-is-absolute? $cwd)
                    $cwd
-                   CodexAbsent)))
-           (return $materialized))))))
+                   CodexAbsent))
+             (($materialized $materialized))))))))))
 
 (= (codex:session-sandbox-policy-get-readable-roots-with-cwd
       (CodexSessionSandboxPolicyWorkspaceWrite

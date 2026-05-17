@@ -8720,6 +8720,175 @@
        ((JsonPair "id" (JsonString $id))
         (JsonPair "msg" (codex:item-json $resolved-msg))))))
 
+(= (codex:session-configured-json-tail
+      $pairs-12
+      $history-log-id
+      $history-entry-count
+      $initial-messages
+      $network-proxy
+      $rollout-path)
+   (case
+     (codex:protocol-append-json-pair
+       $pairs-12
+       "history_log_id"
+       (JsonNumber $history-log-id))
+     (($pairs-13
+       (case
+         (codex:protocol-append-json-pair
+           $pairs-13
+           "history_entry_count"
+           (JsonNumber $history-entry-count))
+         (($pairs-14
+           (case
+             (codex:append-optional-json-value-pair
+               $pairs-14
+               "initial_messages"
+               (if (== $initial-messages CodexAbsent)
+                   CodexAbsent
+                   (codex:items-json $initial-messages)))
+             (($pairs-15
+               (case
+                 (codex:append-optional-json-value-pair
+                   $pairs-15
+                   "network_proxy"
+                   (if (== $network-proxy CodexAbsent)
+                       CodexAbsent
+                       (codex:session-network-proxy-runtime-json
+                         $network-proxy)))
+                 (($pairs-16
+                   (case
+                     (codex:append-optional-json-string-pair
+                       $pairs-16
+                       "rollout_path"
+                       $rollout-path)
+                     (($pairs-17
+                       (JsonObject $pairs-17)))))))))))))))))
+
+(= (codex:session-configured-json-middle
+      $pairs-6
+      $approval-policy
+      $approvals-reviewer
+      $sandbox-policy
+      $permission-profile
+      $cwd
+      $reasoning-effort
+      $history-log-id
+      $history-entry-count
+      $initial-messages
+      $network-proxy
+      $rollout-path)
+   (case
+     (codex:protocol-append-json-pair
+       $pairs-6
+       "approval_policy"
+       (codex:session-approval-policy-json $approval-policy))
+     (($pairs-7
+       (case
+         (codex:protocol-append-json-pair
+           $pairs-7
+           "approvals_reviewer"
+           (codex:session-approvals-reviewer-json
+             $approvals-reviewer))
+         (($pairs-8
+           (case
+             (codex:protocol-append-json-pair
+               $pairs-8
+               "sandbox_policy"
+               (codex:session-sandbox-policy-json $sandbox-policy))
+             (($pairs-9
+               (case
+                 (codex:append-optional-json-value-pair
+                   $pairs-9
+                   "permission_profile"
+                   $permission-profile)
+                 (($pairs-10
+                   (case
+                     (codex:protocol-append-json-pair
+                       $pairs-10
+                       "cwd"
+                       (JsonString $cwd))
+                     (($pairs-11
+                       (case
+                         (codex:append-optional-json-value-pair
+                           $pairs-11
+                           "reasoning_effort"
+                           (if (== $reasoning-effort CodexAbsent)
+                               CodexAbsent
+                               (codex:session-reasoning-effort-json
+                                 $reasoning-effort)))
+                         (($pairs-12
+                           (codex:session-configured-json-tail
+                             $pairs-12
+                             $history-log-id
+                             $history-entry-count
+                             $initial-messages
+                             $network-proxy
+                             $rollout-path))))))))))))))))))))
+
+(= (codex:session-configured-json-head
+      $pairs-1
+      $forked-from-id
+      $thread-name
+      $model
+      $model-provider-id
+      $service-tier
+      $approval-policy
+      $approvals-reviewer
+      $sandbox-policy
+      $permission-profile
+      $cwd
+      $reasoning-effort
+      $history-log-id
+      $history-entry-count
+      $initial-messages
+      $network-proxy
+      $rollout-path)
+   (case
+     (codex:append-optional-json-string-pair
+       $pairs-1
+       "forked_from_id"
+       $forked-from-id)
+     (($pairs-2
+       (case
+         (codex:append-optional-json-string-pair
+           $pairs-2
+           "thread_name"
+           $thread-name)
+         (($pairs-3
+           (case
+             (codex:protocol-append-json-pair
+               $pairs-3
+               "model"
+               (JsonString $model))
+             (($pairs-4
+               (case
+                 (codex:protocol-append-json-pair
+                   $pairs-4
+                   "model_provider_id"
+                   (JsonString $model-provider-id))
+                 (($pairs-5
+                   (case
+                     (codex:append-optional-json-value-pair
+                       $pairs-5
+                       "service_tier"
+                       (if (== $service-tier CodexAbsent)
+                           CodexAbsent
+                           (codex:session-service-tier-json $service-tier)))
+                     (($pairs-6
+                       (codex:session-configured-json-middle
+                         $pairs-6
+                         $approval-policy
+                         $approvals-reviewer
+                         $sandbox-policy
+                         $permission-profile
+                         $cwd
+                         $reasoning-effort
+                         $history-log-id
+                         $history-entry-count
+                         $initial-messages
+                         $network-proxy
+                         $rollout-path)))))))))))))))))
+
 (= (codex:item-json
       (CodexEventSessionConfigured
         $session-id
@@ -8739,101 +8908,27 @@
         $initial-messages
         $network-proxy
         $rollout-path))
-   (let $pairs-1
+   ; CeTTa evaluation accommodation: preserve Rust's serialized field order but
+   ; stage the long optional-field chain so payload materialization is stable.
+   (codex:session-configured-json-head
      ((JsonPair "type" (JsonString "session_configured"))
       (JsonPair "session_id" (JsonString $session-id)))
-     (let $pairs-2
-       (codex:append-optional-json-string-pair
-         $pairs-1
-         "forked_from_id"
-         $forked-from-id)
-       (let $pairs-3
-         (codex:append-optional-json-string-pair
-           $pairs-2
-           "thread_name"
-           $thread-name)
-         (let $pairs-4
-           (codex:protocol-append-json-pair
-             $pairs-3
-             "model"
-             (JsonString $model))
-           (let $pairs-5
-             (codex:protocol-append-json-pair
-               $pairs-4
-               "model_provider_id"
-               (JsonString $model-provider-id))
-             (let $pairs-6
-               (codex:append-optional-json-value-pair
-                 $pairs-5
-                 "service_tier"
-                 (if (== $service-tier CodexAbsent)
-                     CodexAbsent
-                     (codex:session-service-tier-json $service-tier)))
-               (let $pairs-7
-                 (codex:protocol-append-json-pair
-                   $pairs-6
-                   "approval_policy"
-                   (codex:session-approval-policy-json $approval-policy))
-                 (let $pairs-8
-                   (codex:protocol-append-json-pair
-                     $pairs-7
-                     "approvals_reviewer"
-                     (codex:session-approvals-reviewer-json
-                       $approvals-reviewer))
-                   (let $pairs-9
-                     (codex:protocol-append-json-pair
-                       $pairs-8
-                       "sandbox_policy"
-                       (codex:session-sandbox-policy-json $sandbox-policy))
-                     (let $pairs-10
-                       (codex:append-optional-json-value-pair
-                         $pairs-9
-                         "permission_profile"
-                         $permission-profile)
-                       (let $pairs-11
-                         (codex:protocol-append-json-pair
-                           $pairs-10
-                           "cwd"
-                           (JsonString $cwd))
-                         (let $pairs-12
-                           (codex:append-optional-json-value-pair
-                             $pairs-11
-                             "reasoning_effort"
-                             (if (== $reasoning-effort CodexAbsent)
-                                 CodexAbsent
-                                 (codex:session-reasoning-effort-json
-                                   $reasoning-effort)))
-                           (let $pairs-13
-                             (codex:protocol-append-json-pair
-                               $pairs-12
-                               "history_log_id"
-                               (JsonNumber $history-log-id))
-                             (let $pairs-14
-                               (codex:protocol-append-json-pair
-                                 $pairs-13
-                                 "history_entry_count"
-                                 (JsonNumber $history-entry-count))
-                               (let $pairs-15
-                                 (codex:append-optional-json-value-pair
-                                   $pairs-14
-                                   "initial_messages"
-                                   (if (== $initial-messages CodexAbsent)
-                                       CodexAbsent
-                                       (codex:items-json $initial-messages)))
-                                 (let $pairs-16
-                                   (codex:append-optional-json-value-pair
-                                     $pairs-15
-                                     "network_proxy"
-                                     (if (== $network-proxy CodexAbsent)
-                                         CodexAbsent
-                                         (codex:session-network-proxy-runtime-json
-                                           $network-proxy)))
-                                   (let $pairs-17
-                                     (codex:append-optional-json-string-pair
-                                       $pairs-16
-                                       "rollout_path"
-                                       $rollout-path)
-                                     (JsonObject $pairs-17)))))))))))))))))))
+     $forked-from-id
+     $thread-name
+     $model
+     $model-provider-id
+     $service-tier
+     $approval-policy
+     $approvals-reviewer
+     $sandbox-policy
+     $permission-profile
+     $cwd
+     $reasoning-effort
+     $history-log-id
+     $history-entry-count
+     $initial-messages
+     $network-proxy
+     $rollout-path))
 
 (= (codex:item-json
       (CodexEventPatchApplyBegin
