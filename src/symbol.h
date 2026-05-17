@@ -80,6 +80,7 @@ typedef struct {
     X(let_star, "let*") \
     X(let, "let") \
     X(chain, "chain") \
+    X(map_atom_strict, "map-atom-strict") \
     X(collect, "collect") \
     X(fold, "fold") \
     X(fold_by_key, "fold-by-key") \

@@ -16,6 +16,7 @@
 (: return-on-error (-> Atom Atom %Undefined%))
 (: filter-atom (-> Expression Variable Atom Expression))
 (: map-atom (-> Expression Variable Atom Expression))
+(: map-atom-strict (-> Expression Variable Atom Expression))
 (: empty (-> Atom))
 (: unique (-> Atom %Undefined%))
 (: union (-> Atom Atom %Undefined%))

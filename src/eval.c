@@ -3957,6 +3957,23 @@ eval_for_current_caller(Space *s, Arena *a, Atom *type, Atom *atom,
                         bool preserve_bindings, OutcomeSet *os);
 
 typedef struct {
+    Atom *var;
+    Atom *value;
+} MapAtomStrictRewriteCtx;
+
+static Atom *map_atom_strict_rewrite_var(Arena *a, Atom *src_var, void *ctx) {
+    MapAtomStrictRewriteCtx *rewrite = ctx;
+    /* Higher-order call sites can freshen the binder occurrence in the
+       template, so mirror atom-subst's spelling fallback for this binder. */
+    if (rewrite && rewrite->var &&
+        (src_var->var_id == rewrite->var->var_id ||
+         src_var->sym_id == rewrite->var->sym_id)) {
+        return atom_deep_copy(a, rewrite->value);
+    }
+    return atom_deep_copy(a, src_var);
+}
+
+typedef struct {
     OrderedOutcomeVisitor visitor;
     void *ctx;
     uint32_t *visited;
@@ -9102,6 +9119,84 @@ tail_call: ;
         if (inner.len == 0)
             outcome_set_add(os, atom_empty(a), &_empty);
         outcome_set_free(&inner);
+        return;
+    }
+
+    /* ── map-atom-strict ──────────────────────────────────────────────── */
+    if (head_id == g_builtin_syms.map_atom_strict) {
+        if (nargs != 3) {
+            outcome_set_add(os,
+                atom_error(a, atom, atom_symbol(a, "IncorrectNumberOfArguments")),
+                &_empty);
+            return;
+        }
+
+        Atom *list = bindings_apply_if_vars(CURRENT_ENV, a, expr_arg(atom, 0));
+        list = resolve_registry_refs(a, materialize_runtime_token(s, a, list));
+        Atom *var = expr_arg(atom, 1);
+        Atom *map_templ = expr_arg(atom, 2);
+
+        if (list->kind != ATOM_EXPR) {
+            outcome_set_add(os,
+                bad_arg_type_error(s, a, atom, 1, atom_expression_type(a), list),
+                &_empty);
+            return;
+        }
+        if (!var || var->kind != ATOM_VAR) {
+            outcome_set_add(os,
+                bad_arg_type_error(s, a, atom, 2, atom_variable_type(a), var),
+                &_empty);
+            return;
+        }
+
+        Atom **mapped = arena_alloc(a, sizeof(Atom *) *
+                                       (list->expr.len > 0 ? list->expr.len : 1));
+        for (uint32_t i = 0; i < list->expr.len; i++) {
+            Atom *outer_applied = bindings_apply_if_vars(CURRENT_ENV, a, map_templ);
+            MapAtomStrictRewriteCtx rewrite = {
+                .var = var,
+                .value = list->expr.elems[i],
+            };
+            Atom *instantiated = cetta_atom_rewrite_vars(
+                a, outer_applied, map_atom_strict_rewrite_var, &rewrite, true);
+            if (!instantiated) {
+                outcome_set_add(os,
+                    atom_error(a, atom, atom_symbol(a, "MapAtomStrictRewriteFailed")),
+                    &_empty);
+                return;
+            }
+            ResultSet item_results;
+            result_set_init(&item_results);
+            metta_eval(s, a, NULL, instantiated, fuel, &item_results);
+
+            Atom *selected = NULL;
+            Atom *first_error = NULL;
+            for (uint32_t j = 0; j < item_results.len; j++) {
+                Atom *candidate = item_results.items[j];
+                if (atom_is_empty(candidate))
+                    continue;
+                if (atom_is_error(candidate)) {
+                    if (!first_error)
+                        first_error = candidate;
+                    continue;
+                }
+                selected = candidate;
+                break;
+            }
+            result_set_free(&item_results);
+
+            if (!selected) {
+                outcome_set_add(os,
+                    first_error ? first_error
+                                : atom_error(a, atom,
+                                             atom_symbol(a, "MapAtomStrictNoResult")),
+                    &_empty);
+                return;
+            }
+            mapped[i] = selected;
+        }
+
+        outcome_set_add(os, atom_expr(a, mapped, list->expr.len), &_empty);
         return;
     }
 

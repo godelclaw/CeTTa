@@ -67,13 +67,19 @@
                      (codex:plain-tool-name $name)
                      (codex:namespaced-tool-name $namespace $name))
                  (let $display (codex:tool-name-display $tool-name)
-                   (if (codex:unavailable-tool-string-list-contains
-                         $exposed-tool-names
-                         $display)
-                       $tail-pairs
+                   ; CeTTa evaluation accommodation: materialize the
+                   ; HashSet::contains equivalent before choosing whether to
+                   ; keep this pair. The direct `if` form can collapse when
+                   ; the exposed-name list is itself recursive data.
+                   (case
+                     (codex:unavailable-tool-string-list-contains
+                       $exposed-tool-names
+                       $display)
+                     ((True $tail-pairs)
+                      (False
                        (cons-atom
                          (codex:unavailable-tool-pair $display $tool-name)
-                         $tail-pairs))))
+                         $tail-pairs))))))
                $tail-pairs))
           ($other $tail-pairs))))))
 
@@ -104,11 +110,18 @@
          (codex:unavailable-tool-find-first-by-display $tail $display))))
 
 (= (codex:unavailable-tool-names-from-displays $pairs $displays)
-   (eval
-     (map-atom
-       $displays
-       $display
-       (codex:unavailable-tool-find-first-by-display $pairs $display))))
+   ; CeTTa evaluation accommodation: Rust's BTreeMap::into_values
+   ; materializes selected values after key ordering. map-atom-strict preserves
+   ; that single-result mapping behavior while avoiding the imported-module
+   ; tail recursion collapse seen with map-atom here.
+   (if (== (list:len $displays) 1)
+       (let $display (list:first $displays)
+         (case (codex:unavailable-tool-find-first-by-display $pairs $display)
+           (($tool-name ($tool-name)))))
+       (map-atom-strict
+         $displays
+         $display
+         (codex:unavailable-tool-find-first-by-display $pairs $display))))
 
 (= (codex:collect-unavailable-called-tools $input $exposed-tool-names)
    (let $pairs
