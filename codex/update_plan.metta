@@ -90,15 +90,26 @@
 (= (codex:update-plan-unsupported-payload $payload-kind)
    (CodexUpdatePlanPayloadUnsupported $payload-kind))
 
+; CeTTa harness accommodation: Rust's PlanToolOutput always returns
+; `Plan updated`; this explicit behavior atom lets local surfaces request that
+; same deterministic output while the async session event loop is still absent.
+(= (codex:update-plan-response-behavior-return)
+   (CodexUpdatePlanResponseBehaviorReturn))
+
 (= (codex:update-plan-handler-context $mode)
-   (CodexUpdatePlanHandlerContext $mode))
+   (CodexUpdatePlanHandlerContext
+     $mode
+     (codex:update-plan-response-behavior-return)))
+
+(= (codex:update-plan-handler-context $mode $response-behavior)
+   (CodexUpdatePlanHandlerContext $mode $response-behavior))
 
 (= (codex:default-update-plan-handler-context)
    (codex:update-plan-handler-context
      (codex:collaboration-mode-default)))
 
 (= (codex:update-plan-handler-context-mode
-      (CodexUpdatePlanHandlerContext $mode))
+      (CodexUpdatePlanHandlerContext $mode $response-behavior))
    $mode)
 
 (= (codex:update-plan-handler-result-type
@@ -277,27 +288,65 @@
       (CodexUpdatePlanParseError $message))
    (codex:update-plan-parse-error $message))
 
+; CeTTa evaluation accommodation: stage parser Result values through one
+; materialized case at a time. This preserves Rust's serde parsing semantics
+; while avoiding unevaluated result expressions flowing as data arguments.
+(= (codex:update-plan-build-args-from-plan-array-result
+      $explanation
+      (CodexUpdatePlanParseOk $plan-items))
+   (case (codex:parse-update-plan-steps $plan-items)
+     (((CodexUpdatePlanParseOk $parsed-plan)
+       (codex:update-plan-build-args-result
+         $explanation
+         (CodexUpdatePlanParseOk $parsed-plan)))
+      ((CodexUpdatePlanParseError $step-message)
+       (codex:update-plan-parse-error $step-message)))))
+
+(= (codex:update-plan-build-args-from-plan-array-result
+      $explanation
+      (CodexUpdatePlanParseError $message))
+   (codex:update-plan-parse-error $message))
+
+(= (codex:update-plan-build-args-from-explanation-result
+      $object
+      (CodexUpdatePlanParseOk $explanation))
+   (case (codex:update-plan-json-object-required-array-result $object "plan")
+     (((CodexUpdatePlanParseOk $plan-items)
+       (codex:update-plan-build-args-from-plan-array-result
+         $explanation
+         (CodexUpdatePlanParseOk $plan-items)))
+      ((CodexUpdatePlanParseError $plan-message)
+       (codex:update-plan-parse-error $plan-message)))))
+
+(= (codex:update-plan-build-args-from-explanation-result
+      $object
+      (CodexUpdatePlanParseError $message))
+   (codex:update-plan-parse-error $message))
+
 (= (codex:parse-update-plan-args-object $object)
    (case (codex:update-plan-json-object-optional-string-result
            $object
            "explanation")
-     (((CodexUpdatePlanParseError $message)
-       (codex:update-plan-parse-error $message))
-      ((CodexUpdatePlanParseOk $explanation)
-       (case (codex:update-plan-json-object-required-array-result $object "plan")
-         (((CodexUpdatePlanParseError $message)
-           (codex:update-plan-parse-error $message))
-          ((CodexUpdatePlanParseOk $plan-items)
-           (codex:update-plan-build-args-result
-             $explanation
-             (codex:parse-update-plan-steps $plan-items)))))))))
+     (((CodexUpdatePlanParseOk $explanation)
+       (codex:update-plan-build-args-from-explanation-result
+         $object
+         (CodexUpdatePlanParseOk $explanation)))
+      ((CodexUpdatePlanParseError $exp-message)
+       (codex:update-plan-parse-error $exp-message)))))
+
+(= (codex:parse-update-plan-args-from-object-result
+      (CodexParseFunctionArgumentsObjectOk $object))
+   (codex:parse-update-plan-args-object $object))
+
+(= (codex:parse-update-plan-args-from-object-result
+      (CodexParseFunctionArgumentsObjectError $message))
+   (codex:update-plan-parse-error $message))
 
 (= (codex:parse-update-plan-args $input)
-   (case (codex:parse-function-arguments-object $input)
-     (((CodexParseFunctionArgumentsObjectOk $object)
-       (codex:parse-update-plan-args-object $object))
-      ((CodexParseFunctionArgumentsObjectError $message)
-       (codex:update-plan-parse-error $message)))))
+   (let $object-result
+     (codex:parse-function-arguments-object $input)
+     (codex:parse-update-plan-args-from-object-result
+       $object-result)))
 
 (= (codex:handle-update-plan-function $context $arguments)
    (if (==
