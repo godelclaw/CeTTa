@@ -30,9 +30,11 @@
             (codex:review-line-range-end $line-range)))))))
 
 (= (codex:review-strip-trailing-cr $text)
-   (if (str-ends-with? $text "\r")
-       (str-slice $text 0 (- (str-length $text) 1))
-       $text))
+   (case (str-ends-with? $text "\r")
+     ((True
+       (str-slice $text 0 (- (str-length $text) 1)))
+      (False
+       $text))))
 
 (= (codex:review-normalize-split-lines () $drop-final-empty)
    ())
@@ -42,10 +44,14 @@
      (if (== $tail ())
          (if (and $drop-final-empty (== $head ""))
              ()
-             ((codex:review-strip-trailing-cr $head)))
-         (let $rest
-           (codex:review-normalize-split-lines $tail $drop-final-empty)
-           (cons-atom (codex:review-strip-trailing-cr $head) $rest)))))
+             (case (codex:review-strip-trailing-cr $head)
+               (($stripped-head
+                 ($stripped-head)))))
+         (case (codex:review-strip-trailing-cr $head)
+           (($stripped-head
+             (let $rest
+               (codex:review-normalize-split-lines $tail $drop-final-empty)
+               (cons-atom $stripped-head $rest))))))))
 
 (= (codex:review-body-lines $body)
    (if (== $body "")
@@ -59,8 +65,20 @@
 
 (= (codex:review-indent-lines $lines)
    (let ($head $tail) (decons-atom $lines)
-     (let $rest (codex:review-indent-lines $tail)
-       (cons-atom (str-concat "  " $head) $rest))))
+     (case (str-concat "  " $head)
+       (($indented-head
+         (case (codex:review-indent-lines $tail)
+           (($rest
+             (cons-atom $indented-head $rest)))))))))
+
+(= (codex:review-append-lines () $rhs)
+   $rhs)
+
+(= (codex:review-append-lines $lhs $rhs)
+   (let ($head $tail) (decons-atom $lhs)
+     (case (codex:review-append-lines $tail $rhs)
+       (($rest
+         (cons-atom $head $rest))))))
 
 (= (codex:review-selection-head CodexAbsent)
    CodexAbsent)
@@ -101,25 +119,82 @@
 (= (codex:review-finding-block-lines () $selection)
    ())
 
-(= (codex:review-finding-block-lines $findings $selection)
-   (let ($head $tail) (decons-atom $findings)
-     (let $selection-head (codex:review-selection-head $selection)
-       (let $selection-tail (codex:review-selection-tail $selection)
-         (let $item-line
-           (if (== $selection CodexAbsent)
-               (codex:review-finding-line $head)
-               (codex:review-finding-line $head $selection-head))
-           (let $body-lines
-             (codex:review-indent-lines
-               (codex:review-body-lines
-                 (codex:review-finding-body $head)))
-             (let $tail-lines
-               (codex:review-finding-block-lines $tail $selection-tail)
-               (list:append
-                 (list:append
+(= (codex:review-finding-item-lines $item $selection)
+   (let $selection-head (codex:review-selection-head $selection)
+     (let $item-line
+       (if (== $selection CodexAbsent)
+           (codex:review-finding-line $item)
+           (codex:review-finding-line $item $selection-head))
+       (case (codex:review-body-lines (codex:review-finding-body $item))
+         (($raw-body-lines
+           (case (codex:review-indent-lines $raw-body-lines)
+             (($body-lines
+               (codex:review-append-lines
+                 (codex:review-append-lines
                    ("")
                    ($item-line))
-                 (list:append $body-lines $tail-lines)))))))))
+                 $body-lines))))))))))
+
+(= (codex:review-finding-block-lines $findings $selection)
+   (let ($head $tail) (decons-atom $findings)
+     (let $item (once $head)
+       (let $selection-tail (codex:review-selection-tail $selection)
+         (case (codex:review-finding-item-lines $item $selection)
+           (($item-lines
+             (case
+               (codex:review-finding-block-lines $tail $selection-tail)
+               (($tail-lines
+                 (codex:review-append-lines $item-lines $tail-lines)))))))))))
+
+(= (codex:review-body-text-parts () $drop-final-empty)
+   "")
+
+; Same visible line sequence as Rust's Vec<String> + join, but built as text so
+; the relative-module evaluator path does not need to rebind generated line
+; lists that it can print but not consume.
+(= (codex:review-body-text-parts $parts $drop-final-empty)
+   (let ($head $tail) (decons-atom $parts)
+     (if (== $tail ())
+         (if (and $drop-final-empty (== $head ""))
+             ""
+             (case (codex:review-strip-trailing-cr $head)
+               (($stripped-head
+                 (str-concat "\n  " $stripped-head)))))
+         (case (codex:review-strip-trailing-cr $head)
+           (($stripped-head
+             (let $tail-text
+               (codex:review-body-text-parts $tail $drop-final-empty)
+               (str-concat
+                 (str-concat "\n  " $stripped-head)
+                 $tail-text))))))))
+
+(= (codex:review-body-text "")
+   "")
+
+(= (codex:review-body-text $body)
+   (codex:review-body-text-parts
+     (str-split "\n" $body)
+     (str-ends-with? $body "\n")))
+
+(= (codex:review-finding-block-text () $selection)
+   "")
+
+(= (codex:review-finding-block-text $findings $selection)
+   (let ($head $tail) (decons-atom $findings)
+     (let $item (once $head)
+       (let $selection-head (codex:review-selection-head $selection)
+         (let $selection-tail (codex:review-selection-tail $selection)
+           (let $item-line
+             (if (== $selection CodexAbsent)
+                 (codex:review-finding-line $item)
+                 (codex:review-finding-line $item $selection-head))
+             (let $body-text
+               (codex:review-body-text (codex:review-finding-body $item))
+               (let $tail-text
+                 (codex:review-finding-block-text $tail $selection-tail)
+                 (str-concat
+                   (str-concat "\n\n" (str-concat $item-line $body-text))
+                   $tail-text)))))))))
 
 (= (codex:format-review-findings-block $findings)
    (codex:format-review-findings-block $findings CodexAbsent))
@@ -129,13 +204,9 @@
      (if (> (list:len $findings) 1)
          "Full review comments:"
          "Review comment:")
-     (str-join
-       "\n"
-       (list:append
-         (list:append
-           ("")
-           ($header))
-         (codex:review-finding-block-lines $findings $selection)))))
+     (str-concat
+       (str-concat "\n" $header)
+       (codex:review-finding-block-text $findings $selection))))
 
 (= (codex:render-review-output-text $output)
    (let $explanation
