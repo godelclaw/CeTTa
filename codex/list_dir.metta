@@ -233,11 +233,14 @@
            (+ (* $acc 10) (codex:list-dir-decimal-digit-value $digit-char))))))
 
 (= (codex:list-dir-number-field-result $key $text)
-   (if (codex:is-list-dir-decimal-string $text)
-       (codex:list-dir-parse-ok
-         (codex:list-dir-decimal-string-to-number $text))
+   (case (codex:is-list-dir-decimal-string $text)
+     ((True
+       (case (codex:list-dir-decimal-string-to-number $text)
+         (($number
+            (codex:list-dir-parse-ok $number)))))
+      (False
        (codex:list-dir-parse-error
-         (format-args "invalid type for `{}`; expected integer" ($key)))))
+         (format-args "invalid type for `{}`; expected integer" ($key)))))))
 
 (= (codex:list-dir-json-object-number-with-default-result $object $key $default)
    (case (json-object-get $object $key)
@@ -270,14 +273,16 @@
       $offset
       (CodexListDirParseOk $limit)
       $object)
-   (codex:list-dir-args-from-depth-result
-     $dir-path
-     $offset
-     $limit
-     (codex:list-dir-json-object-number-with-default-result
-       $object
-       "depth"
-       (codex:list-dir-default-depth))))
+   (case (codex:list-dir-json-object-number-with-default-result
+           $object
+           "depth"
+           (codex:list-dir-default-depth))
+     (($depth-result
+       (codex:list-dir-args-from-depth-result
+         $dir-path
+         $offset
+         $limit
+         $depth-result)))))
 
 (= (codex:list-dir-args-from-limit-result
       $dir-path
@@ -290,14 +295,16 @@
       $dir-path
       (CodexListDirParseOk $offset)
       $object)
-   (codex:list-dir-args-from-limit-result
-     $dir-path
-     $offset
-     (codex:list-dir-json-object-number-with-default-result
-       $object
-       "limit"
-       (codex:list-dir-default-limit))
-     $object))
+   (case (codex:list-dir-json-object-number-with-default-result
+           $object
+           "limit"
+           (codex:list-dir-default-limit))
+     (($limit-result
+       (codex:list-dir-args-from-limit-result
+         $dir-path
+         $offset
+         $limit-result
+         $object)))))
 
 (= (codex:list-dir-args-from-offset-result
       $dir-path
@@ -310,13 +317,15 @@
            $object
            "dir_path")
      (((CodexListDirParseOk $dir-path)
-       (codex:list-dir-args-from-offset-result
-         $dir-path
-         (codex:list-dir-json-object-number-with-default-result
-           $object
-           "offset"
-           (codex:list-dir-default-offset))
-         $object))
+       (case (codex:list-dir-json-object-number-with-default-result
+               $object
+               "offset"
+               (codex:list-dir-default-offset))
+         (($offset-result
+           (codex:list-dir-args-from-offset-result
+             $dir-path
+             $offset-result
+             $object)))))
       ((CodexListDirParseError $message)
        (codex:list-dir-parse-error $message)))))
 
@@ -336,12 +345,23 @@
 (= (codex:list-dir-relative-child-prefix $prefix $name)
    (if (== $prefix "")
        $name
-       (path-join $prefix $name)))
+       (str-concat
+         $prefix
+         (str-concat "/" $name))))
+
+(= (codex:list-dir-child-path $current-dir $name)
+   (if (== $current-dir "/")
+       (str-concat "/" $name)
+       (str-concat
+         $current-dir
+         (str-concat "/" $name))))
 
 (= (codex:list-dir-entry-depth-from-prefix $prefix)
    (if (== $prefix "")
        0
-       (list:len (path-parts $prefix))))
+       (case (path-parts $prefix)
+         (($parts
+            (list:len $parts))))))
 
 (= (codex:list-dir-normalize-entry-component $name)
    (if (> (str-length $name) (codex:list-dir-maximum-entry-length))
@@ -385,16 +405,44 @@
                   (($rest-lines
                      (cons-atom $line $rest-lines)))))))))))
 
+(= (codex:list-dir-append-items () $rhs)
+   $rhs)
+
+; CeTTa reduction note: the list_dir handler imports the large protocol surface,
+; and recursive `list:append`/`let` chains can collapse to no result in that
+; environment. Keep the Rust-visible ordering with an explicit case-forced
+; append, matching the stable pattern used by fixture turn lowering.
+(= (codex:list-dir-append-items $lhs $rhs)
+   (let ($head $tail) (decons-atom $lhs)
+     (case (codex:list-dir-append-items $tail $rhs)
+       (($rest
+          (cons-atom $head $rest))))))
+
+; Same lexical normalization as `path-normalize`, staged so false deny-root
+; comparisons do not collapse under the imported tool surface.
+(= (codex:list-dir-normalize-path $path)
+   (case (path-is-absolute? $path)
+     ((True
+       (case (path-parts $path)
+         (($parts
+            (path-build-from-parts $parts True)))))
+      (False
+       (case (path-parts $path)
+         (($parts
+            (path-build-from-parts $parts False))))))))
+
 (= (codex:list-dir-is-path-within-root $path $root)
-   (let $norm-path (path-normalize $path)
-     (let $norm-root (path-normalize $root)
-       (if (== $norm-root "/")
-           True
-           (if (== $norm-path $norm-root)
+   (case (codex:list-dir-normalize-path $path)
+     (($norm-path
+       (case (codex:list-dir-normalize-path $root)
+         (($norm-root
+           (if (== $norm-root "/")
                True
-               (str-starts-with?
-                 $norm-path
-                 (str-concat $norm-root "/")))))))
+               (if (== $norm-path $norm-root)
+                   True
+                   (str-starts-with?
+                     $norm-path
+                     (str-concat $norm-root "/")))))))))))
 
 (= (codex:is-list-dir-read-denied-path $context $path)
    (codex:is-list-dir-read-denied-path-roots
@@ -442,56 +490,68 @@
        (codex:list-dir-collect-ok $acc)
        (let $item (list:first $items)
          (let $rest (list:rest $items)
-           (let $name (codex:list-dir-fs-entry-name $item)
-             (let $kind (codex:list-dir-fs-entry-kind $item)
-               (let $child-path (path-join $current-dir $name)
-                 (if (codex:is-list-dir-read-denied-path $context $child-path)
-                     (codex:list-dir-collect-entry-items
-                       $current-dir
-                       $relative-prefix
-                       $remaining-depth
-                       $context
-                       $rest
-                       $acc)
-                     (let $entry
-                       (codex:list-dir-entry
-                         (codex:list-dir-normalize-entry-component $name)
-                         (codex:list-dir-entry-depth-from-prefix $relative-prefix)
-                         $kind)
-                       (let $acc1 (list:append $acc ($entry))
-                         (if (== $kind (codex:list-dir-kind-directory))
-                             (if (> $remaining-depth 1)
-                                 (case (codex:list-dir-collect-entries
-                                         $child-path
-                                         (codex:list-dir-relative-child-prefix
-                                           $relative-prefix
-                                           $name)
-                                         (- $remaining-depth 1)
-                                         $context)
-                                   (((CodexListDirCollectOk $child-entries)
+           (case (codex:list-dir-fs-entry-name $item)
+             (($name
+               (case (codex:list-dir-fs-entry-kind $item)
+                 (($kind
+                   (case (codex:is-list-dir-read-denied-path
+                           $context
+                           (codex:list-dir-child-path $current-dir $name))
+                     ((True
+                       (codex:list-dir-collect-entry-items
+                         $current-dir
+                         $relative-prefix
+                         $remaining-depth
+                         $context
+                         $rest
+                         $acc))
+                      (False
+                       (let $entry
+                         (codex:list-dir-entry
+                           (codex:list-dir-normalize-entry-component $name)
+                           (codex:list-dir-entry-depth-from-prefix $relative-prefix)
+                           $kind)
+                         (case (codex:list-dir-append-items $acc ($entry))
+                           (($acc1
+                             (if (== $kind (codex:list-dir-kind-directory))
+                                 (if (> $remaining-depth 1)
+                                     (case (codex:list-dir-collect-entries
+                                             (codex:list-dir-child-path
+                                               $current-dir
+                                               $name)
+                                             (codex:list-dir-relative-child-prefix
+                                               $relative-prefix
+                                               $name)
+                                             (- $remaining-depth 1)
+                                             $context)
+                                       (((CodexListDirCollectOk $child-entries)
+                                         (case (codex:list-dir-append-items
+                                                 $acc1
+                                                 $child-entries)
+                                           (($acc2
+                                             (codex:list-dir-collect-entry-items
+                                               $current-dir
+                                               $relative-prefix
+                                               $remaining-depth
+                                               $context
+                                               $rest
+                                               $acc2)))))
+                                        ((CodexListDirCollectError $message)
+                                         (codex:list-dir-collect-error $message))))
                                      (codex:list-dir-collect-entry-items
                                        $current-dir
                                        $relative-prefix
                                        $remaining-depth
                                        $context
                                        $rest
-                                       (list:append $acc1 $child-entries)))
-                                    ((CodexListDirCollectError $message)
-                                     (codex:list-dir-collect-error $message))))
+                                       $acc1))
                                  (codex:list-dir-collect-entry-items
                                    $current-dir
                                    $relative-prefix
                                    $remaining-depth
                                    $context
                                    $rest
-                                   $acc1))
-                             (codex:list-dir-collect-entry-items
-                               $current-dir
-                               $relative-prefix
-                               $remaining-depth
-                               $context
-                               $rest
-                               $acc1))))))))))))
+                                   $acc1)))))))))))))))))))
 
 (= (codex:list-dir-drop $items $count)
    (if (== $count 0)
@@ -595,29 +655,31 @@
                    (if (== $depth 0)
                        (codex:list-dir-handler-result-error
                          "depth must be greater than zero")
-                       (if (path-is-absolute? $dir-path)
-                           (if (codex:is-list-dir-read-denied-path $context $dir-path)
-                               (codex:list-dir-handler-result-error
-                                 (format-args
-                                   "{}: `{}`"
-                                   ((codex:list-dir-deny-read-policy-message)
-                                    $dir-path)))
-                               (case (codex:list-dir-collect-entries
-                                       $dir-path
-                                       ""
-                                       $depth
-                                       $context)
-                                 (((CodexListDirCollectOk $entries)
-                                   (codex:list-dir-handler-from-entries
-                                     $dir-path
-                                     $offset
-                                     $limit
-                                     $entries))
-                                  ((CodexListDirCollectError $message)
-                                   (codex:list-dir-handler-result-error
-                                     $message)))))
-                           (codex:list-dir-handler-result-error
-                             "dir_path must be an absolute path"))))))))))
+                      (if (path-is-absolute? $dir-path)
+                          (case (codex:is-list-dir-read-denied-path $context $dir-path)
+                            ((True
+                              (codex:list-dir-handler-result-error
+                                (format-args
+                                  "{}: `{}`"
+                                  ((codex:list-dir-deny-read-policy-message)
+                                   $dir-path))))
+                             (False
+                              (case (codex:list-dir-collect-entries
+                                      $dir-path
+                                      ""
+                                      $depth
+                                      $context)
+                                (((CodexListDirCollectOk $entries)
+                                  (codex:list-dir-handler-from-entries
+                                    $dir-path
+                                    $offset
+                                    $limit
+                                    $entries))
+                                 ((CodexListDirCollectError $message)
+                                  (codex:list-dir-handler-result-error
+                                    $message)))))))
+                          (codex:list-dir-handler-result-error
+                            "dir_path must be an absolute path"))))))))))
 
 (= (codex:handle-list-dir-function $context $arguments)
    (case (codex:parse-list-dir-args $arguments)
