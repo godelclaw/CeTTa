@@ -94,6 +94,148 @@ tests/test_checkpoint_group_extract_cross_form_regression.metta	he	metta	he_exte
 tests/test_clist_surface.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_closed_stream_fastpath.metta	he	metta	he_extended	main	native	test-backend-dedicated	golden	dedicated backend or bridge golden regression
 tests/test_closed_stream_runtime_stats.metta	he	metta	he_extended	runtime-stats	native	test-backend-dedicated	golden	dedicated backend or bridge golden regression
+tests/test_codex_agent_path_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_apply_patch_output_direct_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_apply_patch_output_shell_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_apply_patch_reject_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_apply_patch_struct_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_approval_fallback_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_approval_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_approval_unless_trusted_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_apps_instructions_match_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_available_capability_instructions_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_collaboration_mode_match_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_command_canonicalization_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_command_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_commit_attribution_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_context_exec_code_mode_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_context_exec_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_context_fragment_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_context_mcp_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_context_response_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_developer_instruction_fragments_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_environment_context_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_event_mapping_agent_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_event_mapping_dev_context_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_event_mapping_hook_prompt_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_event_mapping_image_generation_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_event_mapping_reasoning_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_event_mapping_user_basic_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_event_mapping_user_contextual_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_event_mapping_user_image_tag_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_event_mapping_user_local_image_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_event_mapping_web_search_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_exec_policy_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_fixture_turn_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_hook_prompt_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_hook_prompt_visible_message_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_image_detail_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_list_dir_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_network_policy_decision_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_num_format_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_permissions_access_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_permissions_instructions_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_permissions_legacy_bridge_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_permissions_legacy_projection_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_permissions_preserve_deny_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_permissions_read_deny_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_permissions_root_projection_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_permissions_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_permissions_write_access_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_approval_response_ops_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_collab_events_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_collab_spawn_end_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_compacted_truncation_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_control_request_ops_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_dynamic_tool_response_request_op_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_events_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_function_output_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_guardian_event_wrapper_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_guardian_request_op_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_inter_agent_communication_request_op_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_list_skills_request_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_list_skills_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_override_turn_context_request_op_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_product_source_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_queue_wrappers_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_realtime_audio_out_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_realtime_conversation_events_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_realtime_payload_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_realtime_request_ops_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_refresh_mcp_servers_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_request_permissions_response_request_op_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_resolve_elicitation_request_op_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_review_simple_request_ops_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_session_configured_payload_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_session_configured_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_session_source_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_simple_request_ops_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_submission_start_wrapper_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_submission_trace_wrapper_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_thread_request_ops_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_truncation_mul_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_unit_request_ops_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_user_input_answer_request_op_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_user_input_request_op_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_user_input_with_turn_context_populated_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_user_input_with_turn_context_request_op_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_user_turn_request_op_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_protocol_writable_root_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_rate_limit_snapshot_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_realtime_conversation_fragments_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_permissions_apply_patch_runtime_apply_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_permissions_apply_patch_runtime_shape_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_permissions_apply_patch_strict_apply_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_permissions_apply_patch_strict_shape_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_permissions_cancel_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_permissions_empty_repro_plain.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_permissions_empty_repro_tools.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_permissions_granular_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_permissions_handler_output_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_permissions_state_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_permissions_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_user_input_router_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_user_input_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_user_input_turn_final_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_user_input_turn_output_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_request_user_input_turn_phase_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_review_format_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_sandbox_roots_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_sandbox_tags_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_session_prefix_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_session_rollout_init_error_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_simple_developer_text_fragments_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_token_usage_info_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_token_usage_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tool_config_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tool_handler_common_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tool_registry_plan_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tool_router_bridge_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_exec_events_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_exec_exit_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_exec_stdout_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_exec_text_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_exec_tool_call_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_get_command_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_hook_post_exec_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_hook_post_write_stdin_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_hook_pre_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_live_background_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_permissions_exec_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_permissions_parse_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_write_stdin_error_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_tools_write_stdin_events_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_unavailable_tool_handler_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_unavailable_tool_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_update_plan_event_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_update_plan_output_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_update_plan_router_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_update_plan_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_update_plan_tool_output_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_view_image_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_writable_root_defaults_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_collapse_add_next_atom_from_collapse_bind_result.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_collapse_bind.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_collapse_bind_arity.metta	he	metta	he_extended	main	native	test	golden	-
@@ -170,6 +312,7 @@ tests/test_get_type_space_arity.metta	he	metta	he_extended	main	native	test	gold
 tests/test_get_type_space_nonspace_error.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_git_module_arity.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_git_module_missing.metta	he	metta	he_extended	main	native	test	golden	-
+tests/test_git_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_hash_space.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_he_nested_binding_substitution_regression.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_if.metta	he	metta	he_extended	main	native	test	golden	-
@@ -203,6 +346,7 @@ tests/test_include_space_target_error.metta	he	metta	he_extended	main	native	tes
 tests/test_intersection_atom.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_isinf_math_bad_type.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_isnan_math_bad_type.metta	he	metta	he_extended	main	native	test	golden	-
+tests/test_json_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_let.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_let_star_error_short_circuit.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_list_surface.metta	he	metta	he_extended	main	native	test	golden	-
@@ -280,6 +424,7 @@ tests/test_once.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_once_arity.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_outcome_variant_composition_regression.metta	he	metta	he_extended	runtime-stats	native	test-runtime-stats-lane	golden	runtime-stats lane golden regression
 tests/test_outcome_variant_observation_seam_regression.metta	he	metta	he_extended	runtime-stats	native	test-runtime-stats-lane	golden	runtime-stats lane golden regression
+tests/test_patch_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_path_surface.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_pathmap_backend_primary_destructive_regression.metta	he	metta	he_extended	pathmap	pathmap	probe-pathmap-lane	probe	pathmap destructive surface diagnostic
 tests/test_pathmap_backend_primary_growth_regression.metta	he	metta	he_extended	pathmap	pathmap	test-pathmap-lane	golden	pathmap lane golden regression
@@ -307,6 +452,7 @@ tests/test_print_nondet_probe.metta	he	metta	he_extended	main	native	probe-core-
 tests/test_println_arity.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_println_surface.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_println_unit_binding.metta	he	metta	he_extended	main	native	test	golden	-
+tests/test_process_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_pverify_dv_regression.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_pverify_make_assertion_missing_f.metta	he	metta	he_extended	main	native	test	golden	-
 tests/test_py_ops_surface.metta	he	metta	he_extended	python	native	test-python	golden	Python-enabled build golden regression
