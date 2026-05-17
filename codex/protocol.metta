@@ -7154,45 +7154,52 @@
         $model
         $reasoning-effort
         $status))
-   (let $pairs-1
-     ((JsonPair "type" (JsonString "collab_agent_spawn_end"))
-      (JsonPair "call_id" (JsonString $call-id))
-      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
-      (JsonPair
-        "new_thread_id"
-        (if (== $new-thread-id CodexAbsent)
-            JsonNull
-            (JsonString $new-thread-id))))
-     (let $pairs-2
-       (codex:append-optional-json-string-pair
-         $pairs-1
-         "new_agent_nickname"
-         $new-agent-nickname)
-       (let $pairs-3
+   ; CeTTa evaluation accommodation: preserve Rust's serialized field order but
+   ; stage optional-field appends so nested json-stringify materializes the object.
+   (case
+     (codex:append-optional-json-string-pair
+       ((JsonPair "type" (JsonString "collab_agent_spawn_end"))
+        (JsonPair "call_id" (JsonString $call-id))
+        (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+        (JsonPair
+          "new_thread_id"
+          (if (== $new-thread-id CodexAbsent)
+              JsonNull
+              (JsonString $new-thread-id))))
+       "new_agent_nickname"
+       $new-agent-nickname)
+     (($pairs-2
+       (case
          (codex:append-optional-json-string-pair
            $pairs-2
            "new_agent_role"
            $new-agent-role)
-         (let $pairs-4
-           (codex:protocol-append-json-pair
-             $pairs-3
-             "prompt"
-             (JsonString $prompt))
-         (let $pairs-5
+         (($pairs-3
+           (case
              (codex:protocol-append-json-pair
-               $pairs-4
-               "model"
-               (JsonString $model))
-             (let $pairs-6
-               (codex:protocol-append-json-pair
-                 $pairs-5
-                 "reasoning_effort"
-                 (codex:session-reasoning-effort-json $reasoning-effort))
-               (JsonObject
+               $pairs-3
+               "prompt"
+               (JsonString $prompt))
+             (($pairs-4
+               (case
                  (codex:protocol-append-json-pair
-                   $pairs-6
-                   "status"
-                   (codex:protocol-agent-status-json $status))))))))))
+                   $pairs-4
+                   "model"
+                   (JsonString $model))
+                 (($pairs-5
+                   (case
+                     (codex:protocol-append-json-pair
+                       $pairs-5
+                       "reasoning_effort"
+                       (codex:session-reasoning-effort-json $reasoning-effort))
+                     (($pairs-6
+                       (case
+                         (codex:protocol-append-json-pair
+                           $pairs-6
+                           "status"
+                           (codex:protocol-agent-status-json $status))
+                         (($pairs-7
+                           (JsonObject $pairs-7))))))))))))))))))))
 
 (= (codex:item-json
       (CodexEventCollabAgentInteractionBegin
@@ -7216,31 +7223,36 @@
         $receiver-agent-role
         $prompt
         $status))
-   (let $pairs-1
-     ((JsonPair "type" (JsonString "collab_agent_interaction_end"))
-      (JsonPair "call_id" (JsonString $call-id))
-      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
-      (JsonPair "receiver_thread_id" (JsonString $receiver-thread-id)))
-     (let $pairs-2
-       (codex:append-optional-json-string-pair
-         $pairs-1
-         "receiver_agent_nickname"
-         $receiver-agent-nickname)
-       (let $pairs-3
+   ; CeTTa evaluation accommodation: preserve Rust's serialized field order but
+   ; stage optional-field appends so nested json-stringify materializes the object.
+   (case
+     (codex:append-optional-json-string-pair
+       ((JsonPair "type" (JsonString "collab_agent_interaction_end"))
+        (JsonPair "call_id" (JsonString $call-id))
+        (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+        (JsonPair "receiver_thread_id" (JsonString $receiver-thread-id)))
+       "receiver_agent_nickname"
+       $receiver-agent-nickname)
+     (($pairs-2
+       (case
          (codex:append-optional-json-string-pair
            $pairs-2
            "receiver_agent_role"
            $receiver-agent-role)
-         (let $pairs-4
-           (codex:protocol-append-json-pair
-             $pairs-3
-             "prompt"
-             (JsonString $prompt))
-           (JsonObject
+         (($pairs-3
+           (case
              (codex:protocol-append-json-pair
-               $pairs-4
-               "status"
-               (codex:protocol-agent-status-json $status))))))))
+               $pairs-3
+               "prompt"
+               (JsonString $prompt))
+             (($pairs-4
+               (case
+                 (codex:protocol-append-json-pair
+                   $pairs-4
+                   "status"
+                   (codex:protocol-agent-status-json $status))
+                 (($pairs-5
+                   (JsonObject $pairs-5))))))))))))))
 
 (= (codex:item-json
       (CodexEventCollabWaitingBegin
