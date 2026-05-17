@@ -761,16 +761,7 @@
                (CodexRequestPermissionsFileSystem () $merged-write))
            (CodexRequestPermissionsFileSystem $merged-read $merged-write)))))
 
-(= (codex:merge-request-permission-profiles CodexAbsent CodexAbsent)
-   CodexAbsent)
-
-(= (codex:merge-request-permission-profiles CodexAbsent $permissions)
-   $permissions)
-
-(= (codex:merge-request-permission-profiles $permissions CodexAbsent)
-   $permissions)
-
-(= (codex:merge-request-permission-profiles
+(= (codex:merge-request-permission-profile-values
       (CodexRequestPermissionProfile $left-network $left-file-system)
       (CodexRequestPermissionProfile $right-network $right-file-system))
    (codex:request-permission-profile-or-absent
@@ -780,6 +771,13 @@
      (codex:merge-request-permissions-file-system
        $left-file-system
        $right-file-system)))
+
+(= (codex:merge-request-permission-profiles $left $right)
+   (if (== $left CodexAbsent)
+       $right
+       (if (== $right CodexAbsent)
+           $left
+           (codex:merge-request-permission-profile-values $left $right))))
 
 (= (codex:request-permissions-readable-roots CodexAbsent)
    ())
@@ -904,19 +902,15 @@
          $right-file-system)
        False))
 
-(= (codex:is-request-permissions-preapproved CodexAbsent $granted $cwd)
-   False)
-
-(= (codex:is-request-permissions-preapproved $effective CodexAbsent $cwd)
-   False)
-
 (= (codex:is-request-permissions-preapproved $effective $granted $cwd)
-   (codex:is-request-permission-profile-equivalent?
-     (codex:intersect-request-permission-profiles
-       $effective
-       $granted
-       $cwd)
-     (codex:normalize-request-permission-profile $cwd $effective)))
+   (if (or (== $effective CodexAbsent) (== $granted CodexAbsent))
+       False
+       (codex:is-request-permission-profile-equivalent?
+         (codex:intersect-request-permission-profiles
+           $effective
+           $granted
+           $cwd)
+         (codex:normalize-request-permission-profile $cwd $effective))))
 
 (= (codex:normalize-request-permissions-response
       $requested-permissions

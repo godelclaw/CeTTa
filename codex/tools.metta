@@ -198,15 +198,14 @@
        (codex:default-max-output-tokens)
        $value))
 
-(= (codex:resolve-sandbox-permissions CodexAbsent)
-   (codex:sandbox-permissions-use-default))
-
 (= (codex:resolve-sandbox-permissions $value)
-   (if (== $value (codex:sandbox-permissions-with-additional-permissions))
-       (codex:sandbox-permissions-with-additional-permissions)
-       (if (== $value (codex:sandbox-permissions-require-escalated))
-           (codex:sandbox-permissions-require-escalated)
-           (codex:sandbox-permissions-use-default))))
+   (if (== $value CodexAbsent)
+       (codex:sandbox-permissions-use-default)
+       (if (== $value (codex:sandbox-permissions-with-additional-permissions))
+           (codex:sandbox-permissions-with-additional-permissions)
+           (if (== $value (codex:sandbox-permissions-require-escalated))
+               (codex:sandbox-permissions-require-escalated)
+               (codex:sandbox-permissions-use-default)))))
 
 (= (codex:resolve-yield-time-ms $value)
    (if (== $value CodexAbsent)
@@ -332,52 +331,215 @@
       (JsonPair "tool_input" $tool-input)
       (JsonPair "tool_response" $tool-response))))
 
+(= (codex:parse-exec-command-args-prefix-rule
+      $json
+      $cmd
+      $resolved-workdir
+      $shell
+      $login
+      $tty
+      $yield-time-ms
+      $max-output-tokens
+      $sandbox-permissions
+      $additional-permissions
+      $justification)
+   (case (codex:json-object-optional-array $json "prefix_rule")
+     (($prefix-rule-json
+       (CodexExecCommandArgs
+         $cmd
+         $resolved-workdir
+         $shell
+         $login
+         (codex:resolve-tty $tty)
+         (codex:resolve-yield-time-ms $yield-time-ms)
+         (codex:resolve-max-output-tokens $max-output-tokens)
+         $sandbox-permissions
+         $additional-permissions
+         $justification
+         (if (== $prefix-rule-json CodexAbsent)
+             CodexAbsent
+             (codex:request-permissions-string-array-from-optional-json
+               $prefix-rule-json)))))))
+
+(= (codex:parse-exec-command-args-justification
+      $json
+      $cmd
+      $resolved-workdir
+      $shell
+      $login
+      $tty
+      $yield-time-ms
+      $max-output-tokens
+      $sandbox-permissions
+      $additional-permissions)
+   (case (codex:json-object-optional-string $json "justification")
+     (($justification
+       (codex:parse-exec-command-args-prefix-rule
+         $json
+         $cmd
+         $resolved-workdir
+         $shell
+         $login
+         $tty
+         $yield-time-ms
+         $max-output-tokens
+         $sandbox-permissions
+         $additional-permissions
+         $justification)))))
+
+(= (codex:parse-exec-command-args-additional-permissions
+      $json
+      $cmd
+      $resolved-workdir
+      $shell
+      $login
+      $tty
+      $yield-time-ms
+      $max-output-tokens
+      $sandbox-permissions)
+   (case (codex:json-object-optional-object $json "additional_permissions")
+     (($additional-permissions-json
+       (codex:parse-exec-command-args-justification
+         $json
+         $cmd
+         $resolved-workdir
+         $shell
+         $login
+         $tty
+         $yield-time-ms
+         $max-output-tokens
+         $sandbox-permissions
+         (if (== $additional-permissions-json CodexAbsent)
+             CodexAbsent
+             (codex:normalize-request-permission-profile
+               $resolved-workdir
+               (codex:request-permission-profile-from-json
+                 $additional-permissions-json))))))))
+
+(= (codex:parse-exec-command-args-sandbox-permissions
+      $json
+      $cmd
+      $resolved-workdir
+      $shell
+      $login
+      $tty
+      $yield-time-ms
+      $max-output-tokens)
+   (case (codex:json-object-optional-string $json "sandbox_permissions")
+     (($sandbox-permissions-json
+       (codex:parse-exec-command-args-additional-permissions
+         $json
+         $cmd
+         $resolved-workdir
+         $shell
+         $login
+         $tty
+         $yield-time-ms
+         $max-output-tokens
+         (codex:resolve-sandbox-permissions $sandbox-permissions-json))))))
+
+(= (codex:parse-exec-command-args-max-output
+      $json
+      $cmd
+      $resolved-workdir
+      $shell
+      $login
+      $tty
+      $yield-time-ms)
+   (case (codex:json-object-optional-int $json "max_output_tokens")
+     (($max-output-tokens
+       (codex:parse-exec-command-args-sandbox-permissions
+         $json
+         $cmd
+         $resolved-workdir
+         $shell
+         $login
+         $tty
+         $yield-time-ms
+         $max-output-tokens)))))
+
+(= (codex:parse-exec-command-args-yield-time
+      $json
+      $cmd
+      $resolved-workdir
+      $shell
+      $login
+      $tty)
+   (case (codex:json-object-optional-int $json "yield_time_ms")
+     (($yield-time-ms
+       (codex:parse-exec-command-args-max-output
+         $json
+         $cmd
+         $resolved-workdir
+         $shell
+         $login
+         $tty
+         $yield-time-ms)))))
+
+(= (codex:parse-exec-command-args-tty
+      $json
+      $cmd
+      $resolved-workdir
+      $shell
+      $login)
+   (case (codex:json-object-optional-bool $json "tty")
+     (($tty
+       (codex:parse-exec-command-args-yield-time
+         $json
+         $cmd
+         $resolved-workdir
+         $shell
+         $login
+         $tty)))))
+
+(= (codex:parse-exec-command-args-login
+      $json
+      $cmd
+      $resolved-workdir
+      $shell)
+   (case (codex:json-object-optional-bool $json "login")
+     (($login
+       (codex:parse-exec-command-args-tty
+         $json
+         $cmd
+         $resolved-workdir
+         $shell
+         $login)))))
+
+(= (codex:parse-exec-command-args-shell
+      $json
+      $cmd
+      $resolved-workdir)
+   (case (codex:json-object-optional-string $json "shell")
+     (($shell
+       (codex:parse-exec-command-args-login
+         $json
+         $cmd
+         $resolved-workdir
+         $shell)))))
+
+(= (codex:parse-exec-command-args-workdir $json $cmd)
+   (case (codex:json-object-optional-string $json "workdir")
+     (($workdir
+       (case (codex:resolve-workdir $workdir)
+         (($resolved-workdir
+           (codex:parse-exec-command-args-shell
+             $json
+             $cmd
+             $resolved-workdir))))))))
+
+(= (codex:parse-exec-command-args-json $json)
+   ; CeTTa evaluation accommodation: this is the same field extraction and
+   ; defaulting as Rust's exec args deserialization, staged one field at a time
+   ; to avoid the evaluator collapsing the long nested optional-field chain.
+   (case (codex:json-object-required-string $json "cmd")
+     (($cmd
+       (codex:parse-exec-command-args-workdir $json $cmd)))))
+
 (= (codex:parse-exec-command-args $input)
-   (let $json (json-parse $input)
-     (let $cmd (codex:json-object-required-string $json "cmd")
-       (let $workdir (codex:json-object-optional-string $json "workdir")
-         (let $resolved-workdir (codex:resolve-workdir $workdir)
-           (let $shell (codex:json-object-optional-string $json "shell")
-             (let $login (codex:json-object-optional-bool $json "login")
-               (let $tty (codex:json-object-optional-bool $json "tty")
-                 (let $yield-time-ms (codex:json-object-optional-int $json "yield_time_ms")
-                   (let $max-output-tokens
-                     (codex:json-object-optional-int $json "max_output_tokens")
-                     (let $sandbox-permissions
-                       (codex:resolve-sandbox-permissions
-                         (codex:json-object-optional-string
-                           $json
-                           "sandbox_permissions"))
-                       (let $additional-permissions-json
-                         (codex:json-object-optional-object
-                           $json
-                           "additional_permissions")
-                         (let $prefix-rule-json
-                           (codex:json-object-optional-array
-                             $json
-                             "prefix_rule")
-                           (CodexExecCommandArgs
-                             $cmd
-                             $resolved-workdir
-                             $shell
-                             $login
-                             (codex:resolve-tty $tty)
-                             (codex:resolve-yield-time-ms $yield-time-ms)
-                             (codex:resolve-max-output-tokens $max-output-tokens)
-                             $sandbox-permissions
-                             (if (== $additional-permissions-json CodexAbsent)
-                                 CodexAbsent
-                                 (codex:normalize-request-permission-profile
-                                   $resolved-workdir
-                                   (codex:request-permission-profile-from-json
-                                     $additional-permissions-json)))
-                             (codex:json-object-optional-string
-                               $json
-                               "justification")
-                             (if (== $prefix-rule-json CodexAbsent)
-                                 CodexAbsent
-                                 (codex:request-permissions-string-array-from-optional-json
-                                   $prefix-rule-json))))))))))))))))
+   (case (json-parse $input)
+     (($json
+       (codex:parse-exec-command-args-json $json)))))
 
 (= (codex:parse-write-stdin-args $input)
    (let $json (json-parse $input)
