@@ -1075,9 +1075,6 @@
 (= (codex:collaboration-mode-instructions-end-marker)
    "</collaboration_mode>")
 
-(= (codex:settings $model $reasoning-effort $developer-instructions)
-   (CodexSettings $model $reasoning-effort $developer-instructions))
-
 (= (codex:settings-model (CodexSettings $model $reasoning-effort $developer-instructions))
    $model)
 
@@ -1088,9 +1085,6 @@
 (= (codex:settings-developer-instructions
       (CodexSettings $model $reasoning-effort $developer-instructions))
    $developer-instructions)
-
-(= (codex:collaboration-mode $mode $settings)
-   (CodexCollaborationMode $mode $settings))
 
 (= (codex:collaboration-mode-kind
       (CodexCollaborationMode $mode $settings))
