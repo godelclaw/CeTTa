@@ -4700,8 +4700,10 @@
             (JsonString $move-path))))))
 
 (= (codex:file-changes-json $changes)
+   ; CeTTa evaluation accommodation: Rust serializes these Vec fields in order;
+   ; strict map materializes each element before JsonArray construction.
    (JsonArray
-     (map-atom $changes $item (codex:file-change-json $item))))
+     (map-atom-strict $changes $item (codex:file-change-json $item))))
 
 (= (codex:chunk-json
       (CodexChunk $orig-index $deleted-lines $inserted-lines))
@@ -4712,7 +4714,7 @@
 
 (= (codex:chunks-json $chunks)
    (JsonArray
-     (map-atom $chunks $item (codex:chunk-json $item))))
+     (map-atom-strict $chunks $item (codex:chunk-json $item))))
 
 (= (codex:protocol-append-items () $rhs)
    $rhs)
@@ -5818,9 +5820,8 @@
           (cons-atom (JsonString $head) $tail-json))))))
 
 (= (codex:json-string-array $items)
-   (case (codex:json-string-items $items)
-     (($json-items
-       (JsonArray $json-items)))))
+   (JsonArray
+     (map-atom-strict $items $item (JsonString $item))))
 
 (= (codex:session-approvals-reviewer-json
       (CodexSessionApprovalsReviewerUser))
