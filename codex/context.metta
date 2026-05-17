@@ -956,6 +956,43 @@
 (= (codex:append-json-pair $pairs $key $value)
    (codex:append-item $pairs (JsonPair $key $value)))
 
+; CeTTa currently collapses the generic staged optional-pair builder for this
+; completed/no-session shape. Keep the direct Rust-equivalent wire projection.
+(= (codex:exec-command-tool-output-code-mode-json
+      (CodexToolOutputExecCommand
+        $event-call-id
+        $chunk-id
+        $wall-time-ms
+        $raw-output
+        $max-output-tokens
+        CodexAbsent
+        $exit-code
+        $original-token-count
+        $hook-command))
+   (JsonObject
+     ((JsonPair "chunk_id" (JsonString $chunk-id))
+      (JsonPair
+        "wall_time_seconds"
+        (JsonNumber (codex:duration-ms-to-json-seconds-text $wall-time-ms)))
+      (JsonPair "exit_code" (JsonNumber (codex:number-text $exit-code)))
+      (JsonPair
+        "original_token_count"
+        (JsonNumber (codex:number-text $original-token-count)))
+      (JsonPair
+        "output"
+        (JsonString
+          (codex:exec-command-tool-output-truncated-output
+            (CodexToolOutputExecCommand
+              $event-call-id
+              $chunk-id
+              $wall-time-ms
+              $raw-output
+              $max-output-tokens
+              CodexAbsent
+              $exit-code
+              $original-token-count
+              $hook-command)))))))
+
 (= (codex:exec-command-tool-output-code-mode-json
       (CodexToolOutputExecCommand
         $event-call-id
