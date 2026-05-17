@@ -45,19 +45,21 @@
               ($other ProcessNoSessionSnapshot)))))
         ($other ProcessNoSessionSnapshot)))))
 
+(= (test:background-snapshot-success $snapshot)
+   (or
+     (process-session-snapshot-is-running $snapshot)
+     (codex:is-string-contains
+       (process-session-snapshot-aggregated-output $snapshot)
+       "done")))
+
 !(assertEqualToResult
-  (or
-    (process-session-snapshot-is-running
-      (once (test:background-poll-snapshot)))
-    (codex:is-string-contains
-      (process-session-snapshot-aggregated-output
-        (once (test:background-poll-snapshot)))
-      "done"))
+  (let $snapshot
+    (once (test:background-poll-snapshot))
+    (test:background-snapshot-success $snapshot))
   (True))
 
 !(assertEqualToResult
-  (<
-    (process-session-snapshot-duration-ms
-      (once (test:background-poll-snapshot)))
-    1800)
+  (let $snapshot
+    (once (test:background-poll-snapshot))
+    (< (process-session-snapshot-duration-ms $snapshot) 1800))
   (True))
