@@ -4112,16 +4112,43 @@
          $agent-role))))
 
 (= (codex:collab-agent-ref-json
+      (codex:collab-agent-ref $thread-id $agent-nickname $agent-role))
+   ; CeTTa evaluation accommodation: fixture and call-site lists can contain
+   ; constructor wrapper expressions. Rust has already materialized these data
+   ; constructors, so accept the wrapper shape without changing the wire JSON.
+   (codex:collab-agent-ref-json
+     (CodexCollabAgentRef $thread-id $agent-nickname $agent-role)))
+
+(= (codex:collab-agent-ref-json
       (CodexCollabAgentRef $thread-id $agent-nickname $agent-role))
-   (JsonObject
+   ; CeTTa evaluation accommodation: preserve Rust's optional agent fields but
+   ; materialize the pair list before wrapping it as a JSON object.
+   (case
      (codex:collab-agent-ref-json-pairs
        $thread-id
        $agent-nickname
-       $agent-role)))
+       $agent-role)
+     (($pairs
+       (JsonObject $pairs)))))
 
 (= (codex:collab-agent-refs-json $items)
    (JsonArray
-     (map-atom $items $item (codex:collab-agent-ref-json $item))))
+     (map-atom-strict $items $item (codex:collab-agent-ref-json $item))))
+
+(= (codex:collab-agent-status-entry-json
+      (codex:collab-agent-status-entry
+        $thread-id
+        $agent-nickname
+        $agent-role
+        $status))
+   ; CeTTa evaluation accommodation: lists can carry constructor wrapper
+   ; expressions; Rust has already materialized the status-entry data.
+   (codex:collab-agent-status-entry-json
+     (CodexCollabAgentStatusEntry
+       $thread-id
+       $agent-nickname
+       $agent-role
+       $status)))
 
 (= (codex:collab-agent-status-entry-json
       (CodexCollabAgentStatusEntry
@@ -4129,20 +4156,29 @@
         $agent-nickname
         $agent-role
         $status))
-   (let $pairs-1
+   ; CeTTa evaluation accommodation: preserve Rust field order but materialize
+   ; optional agent identity pairs before appending status.
+   (case
      (codex:collab-agent-ref-json-pairs
        $thread-id
        $agent-nickname
        $agent-role)
-     (JsonObject
-       (codex:protocol-append-json-pair
-         $pairs-1
-         "status"
-         (codex:protocol-agent-status-json $status)))))
+     (($pairs-1
+       (case
+         (codex:protocol-append-json-pair
+           $pairs-1
+           "status"
+           (codex:protocol-agent-status-json $status))
+         (($pairs-2
+           (JsonObject $pairs-2))))))))
 
 (= (codex:collab-agent-status-entries-json $items)
    (JsonArray
      (map-atom $items $item (codex:collab-agent-status-entry-json $item))))
+
+(= (codex:collab-waiting-status-json-pair
+      (codex:collab-waiting-status-entry $thread-id $status))
+   (JsonPair $thread-id (codex:protocol-agent-status-json $status)))
 
 (= (codex:collab-waiting-status-json-pair
       (CodexCollabWaitingStatusEntry $thread-id $status))
@@ -7273,11 +7309,13 @@
              $pairs-1
              "receiver_agents"
              (codex:collab-agent-refs-json $receiver-agents)))
-       (JsonObject
+       (case
          (codex:protocol-append-json-pair
            $pairs-2
            "call_id"
-           (JsonString $call-id))))))
+           (JsonString $call-id))
+         (($pairs-3
+           (JsonObject $pairs-3)))))))
 
 (= (codex:item-json
       (CodexEventCollabWaitingEnd
@@ -7296,11 +7334,13 @@
              $pairs-1
              "agent_statuses"
              (codex:collab-agent-status-entries-json $agent-statuses)))
-       (JsonObject
+       (case
          (codex:protocol-append-json-pair
            $pairs-2
            "statuses"
-           (codex:collab-waiting-statuses-json $statuses))))))
+           (codex:collab-waiting-statuses-json $statuses))
+         (($pairs-3
+           (JsonObject $pairs-3)))))))
 
 (= (codex:item-json
       (CodexEventCollabCloseBegin
@@ -7321,26 +7361,30 @@
         $receiver-agent-nickname
         $receiver-agent-role
         $status))
-   (let $pairs-1
-     ((JsonPair "type" (JsonString "collab_close_end"))
-      (JsonPair "call_id" (JsonString $call-id))
-      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
-      (JsonPair "receiver_thread_id" (JsonString $receiver-thread-id)))
-     (let $pairs-2
-       (codex:append-optional-json-string-pair
-         $pairs-1
-         "receiver_agent_nickname"
-         $receiver-agent-nickname)
-       (let $pairs-3
+   ; CeTTa evaluation accommodation: preserve Rust's serialized field order but
+   ; stage optional-field appends so nested json-stringify materializes the object.
+   (case
+     (codex:append-optional-json-string-pair
+       ((JsonPair "type" (JsonString "collab_close_end"))
+        (JsonPair "call_id" (JsonString $call-id))
+        (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+        (JsonPair "receiver_thread_id" (JsonString $receiver-thread-id)))
+       "receiver_agent_nickname"
+       $receiver-agent-nickname)
+     (($pairs-2
+       (case
          (codex:append-optional-json-string-pair
            $pairs-2
            "receiver_agent_role"
            $receiver-agent-role)
-         (JsonObject
-           (codex:protocol-append-json-pair
-             $pairs-3
-             "status"
-             (codex:protocol-agent-status-json $status)))))))
+         (($pairs-3
+           (case
+             (codex:protocol-append-json-pair
+               $pairs-3
+               "status"
+               (codex:protocol-agent-status-json $status))
+             (($pairs-4
+               (JsonObject $pairs-4)))))))))))
 
 (= (codex:item-json
       (CodexEventCollabResumeBegin
@@ -7373,26 +7417,30 @@
         $receiver-agent-nickname
         $receiver-agent-role
         $status))
-   (let $pairs-1
-     ((JsonPair "type" (JsonString "collab_resume_end"))
-      (JsonPair "call_id" (JsonString $call-id))
-      (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
-      (JsonPair "receiver_thread_id" (JsonString $receiver-thread-id)))
-     (let $pairs-2
-       (codex:append-optional-json-string-pair
-         $pairs-1
-         "receiver_agent_nickname"
-         $receiver-agent-nickname)
-       (let $pairs-3
+   ; CeTTa evaluation accommodation: preserve Rust's serialized field order but
+   ; stage optional-field appends so nested json-stringify materializes the object.
+   (case
+     (codex:append-optional-json-string-pair
+       ((JsonPair "type" (JsonString "collab_resume_end"))
+        (JsonPair "call_id" (JsonString $call-id))
+        (JsonPair "sender_thread_id" (JsonString $sender-thread-id))
+        (JsonPair "receiver_thread_id" (JsonString $receiver-thread-id)))
+       "receiver_agent_nickname"
+       $receiver-agent-nickname)
+     (($pairs-2
+       (case
          (codex:append-optional-json-string-pair
            $pairs-2
            "receiver_agent_role"
            $receiver-agent-role)
-         (JsonObject
-           (codex:protocol-append-json-pair
-             $pairs-3
-             "status"
-             (codex:protocol-agent-status-json $status)))))))
+         (($pairs-3
+           (case
+             (codex:protocol-append-json-pair
+               $pairs-3
+               "status"
+               (codex:protocol-agent-status-json $status))
+             (($pairs-4
+               (JsonObject $pairs-4)))))))))))
 
 (= (codex:item-json
       (CodexEventStreamError $message $codex-error-info $additional-details))
