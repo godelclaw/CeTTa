@@ -367,6 +367,17 @@
       ($other
        False))))
 
+(= (codex:should-skip-user-image-label-text $text $previous-item $next-item)
+   (if (codex:is-local-image-open-tag-text $text)
+       (codex:is-input-image-content-item $next-item)
+       (if (codex:is-image-open-tag-text $text)
+           (codex:is-input-image-content-item $next-item)
+           (if (codex:is-input-image-content-item $previous-item)
+               (if (codex:is-local-image-close-tag-text $text)
+                   True
+                   (codex:is-image-close-tag-text $text))
+               False))))
+
 (= (codex:parse-user-message-content () $previous-item)
    ())
 
@@ -379,17 +390,10 @@
              (if (== $tail ())
                  CodexAbsent
                  (list:first $tail))
-             (if (or
-                   (and
-                     (or
-                       (codex:is-local-image-open-tag-text $text)
-                       (codex:is-image-open-tag-text $text))
-                     (codex:is-input-image-content-item $next-item))
-                   (and
-                     (codex:is-input-image-content-item $previous-item)
-                     (or
-                       (codex:is-local-image-close-tag-text $text)
-                       (codex:is-image-close-tag-text $text))))
+            (if (codex:should-skip-user-image-label-text
+                  $text
+                  $previous-item
+                  $next-item)
                  (case (codex:parse-user-message-content $tail $head)
                    (($parsed-tail
                       $parsed-tail)))
