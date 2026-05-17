@@ -187,7 +187,7 @@
 (= (codex:tool-registry-plan-handlers (CodexToolRegistryPlan $specs $handlers))
    $handlers)
 
-(= (codex:json-string-array $items)
+(= (codex:tool-registry-json-string-array $items)
    (function
      (let $json-items
        (eval (map-atom $items $item (JsonString $item)))
@@ -240,7 +240,7 @@
    (JsonObject
      ((JsonPair "type" (JsonString "object"))
       (JsonPair "properties" (JsonObject $properties))
-      (JsonPair "required" (codex:json-string-array $required)))))
+      (JsonPair "required" (codex:tool-registry-json-string-array $required)))))
 
 (= (codex:json-schema-object-with-additional-properties
       $properties
@@ -257,7 +257,7 @@
    (JsonObject
      ((JsonPair "type" (JsonString "object"))
       (JsonPair "properties" (JsonObject $properties))
-      (JsonPair "required" (codex:json-string-array $required))
+      (JsonPair "required" (codex:tool-registry-json-string-array $required))
       (JsonPair "additionalProperties" (JsonBool $additional-properties)))))
 
 (= (codex:tool-spec-json
@@ -282,7 +282,7 @@
           $name
           $description
           $strict
-          $defer-loading
+          True
           $parameters
           $output-schema)))
    (JsonObject
@@ -290,7 +290,24 @@
       (JsonPair "name" (JsonString $name))
       (JsonPair "description" (JsonString $description))
       (JsonPair "strict" (JsonBool $strict))
-      (JsonPair "defer_loading" (JsonBool $defer-loading))
+      (JsonPair "defer_loading" (JsonBool True))
+      (JsonPair "parameters" $parameters))))
+
+(= (codex:tool-spec-json
+      (CodexToolSpecFunction
+        (CodexResponsesApiTool
+          $name
+          $description
+          $strict
+          False
+          $parameters
+          $output-schema)))
+   (JsonObject
+     ((JsonPair "type" (JsonString "function"))
+      (JsonPair "name" (JsonString $name))
+      (JsonPair "description" (JsonString $description))
+      (JsonPair "strict" (JsonBool $strict))
+      (JsonPair "defer_loading" (JsonBool False))
       (JsonPair "parameters" $parameters))))
 
 (= (codex:tool-spec-json
@@ -380,7 +397,7 @@
 
 (= (codex:tool-registry-plan-spec-names-json
       (CodexToolRegistryPlan $specs $handlers))
-   (codex:json-string-array
+   (codex:tool-registry-json-string-array
      (codex:configured-tool-spec-names $specs)))
 
 (= (codex:tool-registry-plan-spec-parallel-flags
