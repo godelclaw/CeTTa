@@ -118,6 +118,20 @@
      ((codex:provider-account-state-account $state)
       (codex:provider-account-state-requires-openai-auth $state))))
 
+(= (test:model-provider-bedrock-with-aws $aws)
+   (codex:create-model-provider
+     (codex:create-amazon-bedrock-provider $aws)
+     CodexAbsent))
+
+(= (test:model-provider-bedrock-mantle-headers)
+   (codex:headers-insert
+     (codex:headers-insert
+       ()
+       (codex:amazon-bedrock-legacy-session-id-header)
+       "019dae79-15c3-70c3-8736-3219b8602b37")
+     "x-client-request-id"
+     "request-id"))
+
 !(assertEqualToResult
   (codex:auth-manager-has-external-auth
     (codex:model-provider-auth-manager
@@ -279,3 +293,95 @@
           CodexAbsent)
         "us-west-1")))
   ("Fatal error: Amazon Bedrock Mantle does not support region `us-west-1`"))
+
+!(assertEqualToResult
+  ((codex:aws-bearer-token-bedrock-env-var)
+   (codex:amazon-bedrock-bearer-token-from-env-value CodexAbsent)
+   (codex:amazon-bedrock-bearer-token-from-env-value "   ")
+   (codex:amazon-bedrock-bearer-token-from-env-value
+     "  bedrock-api-key-test  "))
+  (("AWS_BEARER_TOKEN_BEDROCK"
+    CodexAbsent
+    CodexAbsent
+    "bedrock-api-key-test")))
+
+!(assertEqualToResult
+  (codex:amazon-bedrock-bearer-token-region-value
+    (codex:amazon-bedrock-bearer-token-region-from-config
+      (codex:model-provider-aws-auth-info
+        "codex-bedrock"
+        " us-west-2 ")))
+  ("us-west-2"))
+
+!(assertEqualToResult
+  (codex:error-display
+    (codex:amazon-bedrock-bearer-token-region-error
+      (codex:amazon-bedrock-bearer-token-region-from-config
+        (codex:model-provider-aws-auth-info
+          CodexAbsent
+          CodexAbsent))))
+  ("Fatal error: Amazon Bedrock bearer token auth requires `model_providers.amazon-bedrock.aws.region`"))
+
+!(assertEqualToResult
+  ((codex:amazon-bedrock-auth-method-token
+      (codex:amazon-bedrock-auth-method-value
+        (codex:amazon-bedrock-resolve-auth-method-from-env-value
+          (codex:model-provider-aws-auth-info
+            CodexAbsent
+            " us-west-2 ")
+          "  bedrock-api-key-test  ")))
+   (codex:amazon-bedrock-auth-method-region
+      (codex:amazon-bedrock-auth-method-value
+        (codex:amazon-bedrock-resolve-auth-method-from-env-value
+          (codex:model-provider-aws-auth-info
+            CodexAbsent
+            " us-west-2 ")
+          "  bedrock-api-key-test  "))))
+  (("bedrock-api-key-test" "us-west-2")))
+
+!(assertEqualToResult
+  (codex:headers-get
+    (codex:auth-provider-to-auth-headers
+      (codex:model-provider-auth-resolve-value
+        (codex:model-provider-api-auth-from-env-value
+          (test:model-provider-bedrock-with-aws
+            (codex:model-provider-aws-auth-info
+              CodexAbsent
+              " us-west-2 "))
+          "  bedrock-api-key-test  ")))
+    "authorization")
+  ("Bearer bedrock-api-key-test"))
+
+!(assertEqualToResult
+  (codex:error-display
+    (codex:model-provider-auth-resolve-error
+      (codex:model-provider-api-auth-from-env-value
+        (test:model-provider-bedrock-with-aws
+          (codex:model-provider-aws-auth-info
+            CodexAbsent
+            CodexAbsent))
+        "bedrock-api-key-test")))
+  ("Fatal error: Amazon Bedrock bearer token auth requires `model_providers.amazon-bedrock.aws.region`"))
+
+!(assertEqualToResult
+  (codex:headers-get
+    (codex:auth-provider-to-auth-headers
+      (codex:model-provider-auth-resolve-value
+        (codex:model-provider-api-auth
+          (test:model-provider-bedrock-with-aws
+            (codex:model-provider-aws-auth-info
+              "codex-bedrock"
+              CodexAbsent)))))
+    "authorization")
+  (CodexAbsent))
+
+!(assertEqualToResult
+  ((codex:headers-get
+      (codex:amazon-bedrock-remove-headers-not-preserved-by-bedrock-mantle
+        (test:model-provider-bedrock-mantle-headers))
+      "session_id")
+   (codex:headers-get
+      (codex:amazon-bedrock-remove-headers-not-preserved-by-bedrock-mantle
+        (test:model-provider-bedrock-mantle-headers))
+      "x-client-request-id"))
+  ((CodexAbsent "request-id")))

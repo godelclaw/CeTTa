@@ -11,6 +11,7 @@
 ; - ProviderAccountState / ProviderAccountError shape and account_state rules
 ; - api_provider and api_auth projection over already-materialized auth snapshots
 ; - Amazon Bedrock Mantle supported-region base URL rules
+; - Amazon Bedrock auth-method selection at the env-bearer/SigV4 boundary
 ;
 ; Required CeTTa representation notes for audit:
 ; - Rust stores providers behind Arc<dyn ModelProvider>. CeTTa represents those
@@ -21,6 +22,10 @@
 ; - Rust Amazon Bedrock api_provider resolves the region through AWS auth context.
 ;   CeTTa does not yet have AWS SDK bindings, so the faithful pure seam accepts a
 ;   resolved region explicitly and applies the same Mantle base-url validation.
+; - Rust Bedrock SigV4 add_auth_headers is a no-op and apply_auth signs the
+;   prepared HTTP request. CeTTa represents the auth provider boundary here but
+;   intentionally does not implement SigV4 signing until an AWS HTTP auth runtime
+;   exists.
 
 !(import! &self account)
 !(import! &self auth_provider)
@@ -194,6 +199,12 @@
 (= (codex:amazon-bedrock-mantle-service-name)
    "bedrock-mantle")
 
+(= (codex:aws-bearer-token-bedrock-env-var)
+   "AWS_BEARER_TOKEN_BEDROCK")
+
+(= (codex:amazon-bedrock-legacy-session-id-header)
+   "session_id")
+
 (= (codex:amazon-bedrock-mantle-region-supported $region)
    (case $region
      (("us-east-2" True)
@@ -245,6 +256,37 @@
                CodexAbsent
                $trimmed)))))
 
+(= (codex:amazon-bedrock-bearer-token-from-env-value $env-value)
+   (case $env-value
+     ((CodexAbsent CodexAbsent)
+      ($token
+       (let $trimmed (str-trim $token)
+         (if (== $trimmed "")
+             CodexAbsent
+             $trimmed))))))
+
+(= (codex:amazon-bedrock-bearer-token-region-ok $region)
+   (CodexAmazonBedrockBearerTokenRegionOk $region))
+
+(= (codex:amazon-bedrock-bearer-token-region-err $error)
+   (CodexAmazonBedrockBearerTokenRegionErr $error))
+
+(= (codex:amazon-bedrock-bearer-token-region-value
+      (CodexAmazonBedrockBearerTokenRegionOk $region))
+   $region)
+
+(= (codex:amazon-bedrock-bearer-token-region-error
+      (CodexAmazonBedrockBearerTokenRegionErr $error))
+   $error)
+
+(= (codex:amazon-bedrock-bearer-token-region-from-config $aws)
+   (let $region (codex:amazon-bedrock-region-from-config $aws)
+     (if (== $region CodexAbsent)
+         (codex:amazon-bedrock-bearer-token-region-err
+           (codex:error-fatal
+             "Amazon Bedrock bearer token auth requires `model_providers.amazon-bedrock.aws.region`"))
+         (codex:amazon-bedrock-bearer-token-region-ok $region))))
+
 (= (codex:amazon-bedrock-aws-auth-config $aws)
    (CodexAwsAuthConfig
      (codex:model-provider-aws-auth-info-profile $aws)
@@ -262,6 +304,85 @@
 (= (codex:aws-auth-config-service
       (CodexAwsAuthConfig $profile $region $service))
    $service)
+
+(= (codex:amazon-bedrock-auth-method-env-bearer-token $token $region)
+   (CodexAmazonBedrockAuthMethodEnvBearerToken $token $region))
+
+(= (codex:amazon-bedrock-auth-method-aws-sdk $aws-auth-config)
+   (CodexAmazonBedrockAuthMethodAwsSdk $aws-auth-config))
+
+(= (codex:amazon-bedrock-auth-method-ok $auth-method)
+   (CodexAmazonBedrockAuthMethodOk $auth-method))
+
+(= (codex:amazon-bedrock-auth-method-err $error)
+   (CodexAmazonBedrockAuthMethodErr $error))
+
+(= (codex:amazon-bedrock-auth-method-value
+      (CodexAmazonBedrockAuthMethodOk $auth-method))
+   $auth-method)
+
+(= (codex:amazon-bedrock-auth-method-error
+      (CodexAmazonBedrockAuthMethodErr $error))
+   $error)
+
+(= (codex:amazon-bedrock-auth-method-token
+      (CodexAmazonBedrockAuthMethodEnvBearerToken $token $region))
+   $token)
+
+(= (codex:amazon-bedrock-auth-method-region
+      (CodexAmazonBedrockAuthMethodEnvBearerToken $token $region))
+   $region)
+
+(= (codex:amazon-bedrock-auth-method-aws-auth-config
+      (CodexAmazonBedrockAuthMethodAwsSdk $aws-auth-config))
+   $aws-auth-config)
+
+(= (codex:amazon-bedrock-resolve-auth-method-from-env-value $aws $env-value)
+   (let $token (codex:amazon-bedrock-bearer-token-from-env-value $env-value)
+     (if (== $token CodexAbsent)
+         (codex:amazon-bedrock-auth-method-ok
+           (codex:amazon-bedrock-auth-method-aws-sdk
+             (codex:amazon-bedrock-aws-auth-config $aws)))
+         (case (codex:amazon-bedrock-bearer-token-region-from-config $aws)
+           (((CodexAmazonBedrockBearerTokenRegionErr $error)
+             (codex:amazon-bedrock-auth-method-err $error))
+            ((CodexAmazonBedrockBearerTokenRegionOk $region)
+             (codex:amazon-bedrock-auth-method-ok
+               (codex:amazon-bedrock-auth-method-env-bearer-token
+                 $token
+                 $region))))))))
+
+(= (codex:bedrock-mantle-sigv4-auth-provider $aws-auth-config)
+   (CodexBedrockMantleSigV4AuthProvider $aws-auth-config))
+
+(= (codex:bedrock-mantle-sigv4-auth-provider-aws-auth-config
+      (CodexBedrockMantleSigV4AuthProvider $aws-auth-config))
+   $aws-auth-config)
+
+(= (codex:auth-provider-add-auth-headers
+      (CodexBedrockMantleSigV4AuthProvider $aws-auth-config)
+      $headers)
+   $headers)
+
+(= (codex:amazon-bedrock-remove-headers-not-preserved-by-bedrock-mantle $headers)
+   (codex:headers-remove
+     $headers
+     (codex:amazon-bedrock-legacy-session-id-header)))
+
+(= (codex:amazon-bedrock-resolve-provider-auth-from-env-value $aws $env-value)
+   (case (codex:amazon-bedrock-resolve-auth-method-from-env-value
+           $aws
+           $env-value)
+     (((CodexAmazonBedrockAuthMethodErr $error)
+       (codex:model-provider-auth-resolve-err $error))
+      ((CodexAmazonBedrockAuthMethodOk
+         (CodexAmazonBedrockAuthMethodEnvBearerToken $token $region))
+       (codex:model-provider-auth-resolve-ok
+         (codex:bearer-auth-provider-new $token)))
+      ((CodexAmazonBedrockAuthMethodOk
+         (CodexAmazonBedrockAuthMethodAwsSdk $aws-auth-config))
+       (codex:model-provider-auth-resolve-ok
+         (codex:bedrock-mantle-sigv4-auth-provider $aws-auth-config))))))
 
 (= (codex:model-provider-api-provider-with-region
       (CodexAmazonBedrockModelProvider $provider-info $aws)
@@ -293,15 +414,16 @@
 
 (= (codex:model-provider-api-auth
       (CodexAmazonBedrockModelProvider $provider-info $aws))
-   (codex:model-provider-auth-resolve-err
-     (codex:error-fatal
-       "Amazon Bedrock SigV4 auth requires an AWS auth runtime")))
+   (codex:amazon-bedrock-resolve-provider-auth-from-env-value
+     $aws
+     CodexAbsent))
 
 (= (codex:model-provider-api-auth-from-env-value
       (CodexAmazonBedrockModelProvider $provider-info $aws)
       $env-value)
-   (codex:model-provider-api-auth
-     (CodexAmazonBedrockModelProvider $provider-info $aws)))
+   (codex:amazon-bedrock-resolve-provider-auth-from-env-value
+     $aws
+     $env-value))
 
 (= (codex:model-provider-account-state
       (CodexAmazonBedrockModelProvider $provider-info $aws))
