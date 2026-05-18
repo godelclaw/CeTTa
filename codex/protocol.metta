@@ -59,6 +59,7 @@
 ; - Op::OverrideTurnContext
 ; - Op::ResolveElicitation / RequestId / ElicitationAction
 ; - Op::UserInputAnswer / RequestUserInputResponse
+; - RequestUserInputEvent JSON projection
 ; - Op::RequestPermissionsResponse / RequestPermissionsResponse
 ; - RequestPermissionsEvent JSON projection
 ; - Op::DynamicToolResponse / DynamicToolResponse
@@ -1386,6 +1387,27 @@
 
 (= (codex:protocol-request-user-input-response $answers)
    (CodexRequestUserInputResponse $answers))
+
+(= (codex:protocol-request-user-input-question-option $label $description)
+   (CodexRequestUserInputQuestionOption $label $description))
+
+(= (codex:protocol-request-user-input-question
+      $id
+      $header
+      $question
+      $is-other
+      $is-secret
+      $options)
+   (CodexRequestUserInputQuestion
+     $id
+     $header
+     $question
+     $is-other
+     $is-secret
+     $options))
+
+(= (codex:protocol-request-user-input-event $call-id $turn-id $questions)
+   (CodexRequestUserInputEvent $call-id $turn-id $questions))
 
 (= (codex:user-input-answer-op $id $response)
    (CodexOpUserInputAnswer $id $response))
@@ -3128,6 +3150,10 @@
         $formatted-output
         $status))
    "exec_command_end")
+
+(= (codex:item-type
+      (CodexRequestUserInputEvent $call-id $turn-id $questions))
+   "request_user_input")
 
 (= (codex:item-type
       (CodexRequestPermissionsEvent
@@ -5189,6 +5215,58 @@
         (JsonObject
           (codex:protocol-request-user-input-response-answer-pairs
             $entries))))))
+
+(= (codex:protocol-request-user-input-question-option-json
+      (CodexRequestUserInputQuestionOption $label $description))
+   (JsonObject
+     ((JsonPair "label" (JsonString $label))
+      (JsonPair "description" (JsonString $description)))))
+
+(= (codex:protocol-request-user-input-options-json $options)
+   (JsonArray
+     (map-atom-strict
+       $options
+       $option
+       (codex:protocol-request-user-input-question-option-json $option))))
+
+(= (codex:protocol-request-user-input-question-json
+      (CodexRequestUserInputQuestion
+        $id
+        $header
+        $question
+        $is-other
+        $is-secret
+        $options))
+   (let $pairs-1
+     ((JsonPair "id" (JsonString $id))
+      (JsonPair "header" (JsonString $header))
+      (JsonPair "question" (JsonString $question))
+      (JsonPair "isOther" (JsonBool $is-other))
+      (JsonPair "isSecret" (JsonBool $is-secret)))
+     (JsonObject
+       (codex:append-optional-json-value-pair
+         $pairs-1
+         "options"
+         (if (== $options CodexAbsent)
+             CodexAbsent
+             (codex:protocol-request-user-input-options-json $options))))))
+
+(= (codex:protocol-request-user-input-questions-json $questions)
+   (JsonArray
+     (map-atom-strict
+       $questions
+       $question
+       (codex:protocol-request-user-input-question-json $question))))
+
+(= (codex:protocol-request-user-input-event-json
+      (CodexRequestUserInputEvent $call-id $turn-id $questions))
+   (JsonObject
+     ((JsonPair "type" (JsonString "request_user_input"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair
+        "questions"
+        (codex:protocol-request-user-input-questions-json $questions)))))
 
 (= (codex:protocol-request-permissions-network-json
       (CodexRequestPermissionsNetwork $enabled))
@@ -7386,6 +7464,11 @@
       (JsonPair "call_id" (JsonString $call_id))
       (JsonPair "process_id" (JsonString $process_id))
       (JsonPair "stdin" (JsonString $stdin)))))
+
+(= (codex:item-json
+      (CodexRequestUserInputEvent $call-id $turn-id $questions))
+   (codex:protocol-request-user-input-event-json
+     (CodexRequestUserInputEvent $call-id $turn-id $questions)))
 
 (= (codex:protocol-request-permissions-event-json
       (CodexRequestPermissionsEvent
