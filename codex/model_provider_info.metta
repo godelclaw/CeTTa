@@ -1105,18 +1105,17 @@
        (codex:model-provider-header-value-valid $value)
        False))
 
-(= (codex:model-provider-headers-remove () $name)
-   ())
-
 (= (codex:model-provider-headers-remove $headers $name)
-   (let ($head $tail) (decons-atom $headers)
-     (case (codex:model-provider-headers-remove $tail $name)
-       (($rest
-         (if (codex:model-provider-header-name-eq
-               (codex:model-provider-header-name $head)
-               $name)
-             $rest
-             (cons-atom $head $rest)))))))
+   (if (== $headers ())
+       ()
+       (let ($head $tail) (decons-atom $headers)
+         (case (codex:model-provider-headers-remove $tail $name)
+           (($rest
+             (if (codex:model-provider-header-name-eq
+                   (codex:model-provider-header-name $head)
+                   $name)
+                 $rest
+                 (cons-atom $head $rest))))))))
 
 (= (codex:model-provider-headers-insert $headers $name $value)
    (if (codex:model-provider-header-valid $name $value)
@@ -1125,113 +1124,95 @@
          (codex:model-provider-headers-remove $headers $name))
        $headers))
 
-(= (codex:model-provider-headers-get () $name)
-   CodexAbsent)
-
 (= (codex:model-provider-headers-get $headers $name)
-   (let ($head $tail) (decons-atom $headers)
-     (if (codex:model-provider-header-name-eq
-           (codex:model-provider-header-name $head)
-           $name)
-         (codex:model-provider-header-value $head)
-         (case (codex:model-provider-headers-get $tail $name)
-           (($found $found))))))
-
-(= (codex:model-provider-env-values-get () $name)
-   CodexAbsent)
+   (if (== $headers ())
+       CodexAbsent
+       (let ($head $tail) (decons-atom $headers)
+         (if (codex:model-provider-header-name-eq
+               (codex:model-provider-header-name $head)
+               $name)
+             (codex:model-provider-header-value $head)
+             (case (codex:model-provider-headers-get $tail $name)
+               (($found $found)))))))
 
 (= (codex:model-provider-env-values-get $env-values $name)
-   (let ($head $tail) (decons-atom $env-values)
-     (if (== (codex:model-provider-env-value-name $head) $name)
-         (codex:model-provider-env-value-value $head)
-         (case (codex:model-provider-env-values-get $tail $name)
-           (($found $found))))))
-
-(= (codex:model-provider-info-insert-env-header
-      $headers
-      $name
-      CodexAbsent)
-   $headers)
+   (if (== $env-values ())
+       CodexAbsent
+       (let ($head $tail) (decons-atom $env-values)
+         (if (== (codex:model-provider-env-value-name $head) $name)
+             (codex:model-provider-env-value-value $head)
+             (case (codex:model-provider-env-values-get $tail $name)
+               (($found $found)))))))
 
 (= (codex:model-provider-info-insert-env-header
       $headers
       $name
       $value)
-   (if (== (str-trim $value) "")
-       $headers
-       (codex:model-provider-headers-insert $headers $name $value)))
-
-(= (codex:model-provider-info-fold-static-headers CodexAbsent $headers)
-   $headers)
-
-(= (codex:model-provider-info-fold-static-headers () $headers)
-   $headers)
+   (case $value
+     ((CodexAbsent $headers)
+      ($actual-value
+       (if (== (str-trim $actual-value) "")
+           $headers
+           (codex:model-provider-headers-insert
+             $headers
+             $name
+             $actual-value))))))
 
 (= (codex:model-provider-info-fold-static-headers $entries $headers)
-   (let ($entry $tail) (decons-atom $entries)
-     (case (codex:model-provider-info-fold-static-headers
-             $tail
-             (codex:model-provider-headers-insert
-               $headers
-               (codex:model-provider-header-name $entry)
-               (codex:model-provider-header-value $entry)))
-       (($next-headers $next-headers)))))
-
-(= (codex:model-provider-info-fold-env-headers-from-values
-      CodexAbsent
-      $env-values
-      $headers)
-   $headers)
-
-(= (codex:model-provider-info-fold-env-headers-from-values
-      ()
-      $env-values
-      $headers)
-   $headers)
-
-(= (codex:model-provider-info-fold-env-headers-from-values
-      $entries
-      $env-values
-      $headers)
-   (let ($entry $tail) (decons-atom $entries)
-     (let $env-value
-       (codex:model-provider-env-values-get
-         $env-values
-         (codex:model-provider-header-value $entry))
-       (case (codex:model-provider-info-fold-env-headers-from-values
-               $tail
-               $env-values
-               (codex:model-provider-info-insert-env-header
-                 $headers
-                 (codex:model-provider-header-name $entry)
-                 $env-value))
-         (($next-headers $next-headers))))))
-
-(= (codex:model-provider-info-fold-env-headers-from-system
-      CodexAbsent
-      $headers)
-   $headers)
-
-(= (codex:model-provider-info-fold-env-headers-from-system
-      ()
-      $headers)
-   $headers)
-
-(= (codex:model-provider-info-fold-env-headers-from-system
-      $entries
-      $headers)
-   (let ($entry $tail) (decons-atom $entries)
-     (case (system-getenv-or-default
-             (codex:model-provider-header-value $entry)
-             CodexAbsent)
-       (($env-value
-         (case (codex:model-provider-info-fold-env-headers-from-system
+   (case $entries
+     ((CodexAbsent $headers)
+      (() $headers)
+      ($materialized-entries
+       (let ($entry $tail) (decons-atom $materialized-entries)
+         (case (codex:model-provider-info-fold-static-headers
                  $tail
-                 (codex:model-provider-info-insert-env-header
+                 (codex:model-provider-headers-insert
                    $headers
                    (codex:model-provider-header-name $entry)
-                   $env-value))
+                   (codex:model-provider-header-value $entry)))
            (($next-headers $next-headers))))))))
+
+(= (codex:model-provider-info-fold-env-headers-from-values
+      $entries
+      $env-values
+      $headers)
+   (case $entries
+     ((CodexAbsent $headers)
+      (() $headers)
+      ($materialized-entries
+       (let ($entry $tail) (decons-atom $materialized-entries)
+         (let $env-value
+           (codex:model-provider-env-values-get
+             $env-values
+             (codex:model-provider-header-value $entry))
+           (case (codex:model-provider-info-fold-env-headers-from-values
+                   $tail
+                   $env-values
+                   (codex:model-provider-info-insert-env-header
+                     $headers
+                     (codex:model-provider-header-name $entry)
+                     $env-value))
+             (($next-headers $next-headers)))))))))
+
+(= (codex:model-provider-info-fold-env-headers-from-system
+      $entries
+      $headers)
+   (case $entries
+     ((CodexAbsent $headers)
+      (() $headers)
+      ($materialized-entries
+       (let ($entry $tail) (decons-atom $materialized-entries)
+         (case (system-getenv-or-default
+                 (codex:model-provider-header-value $entry)
+                 CodexAbsent)
+           (($env-value
+             (case (codex:model-provider-info-fold-env-headers-from-system
+                     $tail
+                     (codex:model-provider-info-insert-env-header
+                       $headers
+                       (codex:model-provider-header-name $entry)
+                       $env-value))
+               (($next-headers $next-headers)))))))))))
 
 (= (codex:model-provider-info-build-header-map-from-env-values
       $provider
