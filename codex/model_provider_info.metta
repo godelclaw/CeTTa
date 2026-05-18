@@ -13,6 +13,7 @@
 ; - OpenAI / Amazon Bedrock / base-url OSS provider constructor shape
 ; - ModelProviderInfo::validate auth/AWS conflict rules
 ; - built_in_model_providers and merge_configured_model_providers catalog rules
+; - supports_remote_compaction and Azure Responses provider detection
 ;
 ; Required CeTTa representation notes for audit:
 ; - Rust returns Result<Option<String>, CodexErr>. CeTTa represents that as
@@ -876,6 +877,82 @@
 (= (codex:model-provider-info-has-command-auth $provider)
    (codex:model-provider-info-is-present
      (codex:model-provider-info-auth $provider)))
+
+(= (codex:model-provider-info-ascii-lower-char $char)
+   (case $char
+     (("A" "a") ("B" "b") ("C" "c") ("D" "d") ("E" "e") ("F" "f")
+      ("G" "g") ("H" "h") ("I" "i") ("J" "j") ("K" "k") ("L" "l")
+      ("M" "m") ("N" "n") ("O" "o") ("P" "p") ("Q" "q") ("R" "r")
+      ("S" "s") ("T" "t") ("U" "u") ("V" "v") ("W" "w") ("X" "x")
+      ("Y" "y") ("Z" "z")
+      ($other $other))))
+
+(= (codex:model-provider-info-ascii-lower-text $text)
+   (if (== (str-length $text) 0)
+       ""
+       (str-concat
+         (codex:model-provider-info-ascii-lower-char
+           (str-slice $text 0 1))
+         (codex:model-provider-info-ascii-lower-text
+           (str-slice $text 1 (str-length $text))))))
+
+(= (codex:model-provider-info-eq-ignore-ascii-case $lhs $rhs)
+   (== (codex:model-provider-info-ascii-lower-text $lhs)
+       (codex:model-provider-info-ascii-lower-text $rhs)))
+
+(= (codex:model-provider-info-text-contains $text $needle)
+   (case (str-find $text $needle)
+     ((Empty False)
+      ($index True))))
+
+(= (codex:azure-responses-base-url-markers)
+   ("openai.azure."
+    "cognitiveservices.azure."
+    "aoai.azure."
+    "azure-api."
+    "azurefd."
+    "windows.net/openai"))
+
+(= (codex:matches-azure-responses-base-url-marker
+      $lower-base-url
+      ())
+   False)
+
+(= (codex:matches-azure-responses-base-url-marker
+      $lower-base-url
+      $markers)
+   (let ($marker $tail) (decons-atom $markers)
+     (if (codex:model-provider-info-text-contains
+           $lower-base-url
+           $marker)
+         True
+         (case (codex:matches-azure-responses-base-url-marker
+                 $lower-base-url
+                 $tail)
+           (($result $result))))))
+
+(= (codex:matches-azure-responses-base-url $base-url)
+   (let $lower-base-url
+     (codex:model-provider-info-ascii-lower-text $base-url)
+     (case (codex:azure-responses-base-url-markers)
+       (($markers
+         (codex:matches-azure-responses-base-url-marker
+           $lower-base-url
+           $markers))))))
+
+(= (codex:is-azure-responses-provider $name $base-url)
+   (if (codex:model-provider-info-eq-ignore-ascii-case $name "azure")
+       True
+       (if (== $base-url CodexAbsent)
+           False
+           (codex:matches-azure-responses-base-url $base-url))))
+
+(= (codex:model-provider-info-supports-remote-compaction $provider)
+   (if (codex:model-provider-info-is-openai $provider)
+       True
+       (codex:is-azure-responses-provider
+         (codex:model-provider-info-name $provider)
+         (codex:model-provider-info-base-url $provider))))
 
 (= (codex:model-provider-catalog-entry $id $provider)
    (CodexModelProviderCatalogEntry $id $provider))

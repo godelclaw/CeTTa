@@ -80,6 +80,26 @@
      False
      False))
 
+(= (test:model-provider-named-provider $name $base-url)
+   (codex:model-provider-info-full
+     $name
+     $base-url
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     (codex:wire-api-responses)
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     False
+     False))
+
 !(assertEqualToResult
   (codex:wire-api-display (codex:wire-api-responses))
   ("responses"))
@@ -310,6 +330,68 @@
         False
         False)))
   ((True False True)))
+
+!(assertEqualToResult
+  ((codex:is-azure-responses-provider
+      "test"
+      "https://foo.openai.azure.com/openai")
+   (codex:is-azure-responses-provider
+      "test"
+      "https://foo.openai.azure.us/openai/deployments/bar")
+   (codex:is-azure-responses-provider
+      "test"
+      "https://foo.cognitiveservices.azure.cn/openai")
+   (codex:is-azure-responses-provider
+      "test"
+      "https://foo.aoai.azure.com/openai")
+   (codex:is-azure-responses-provider
+      "test"
+      "https://foo.openai.azure-api.net/openai")
+   (codex:is-azure-responses-provider
+      "test"
+      "https://foo.z01.azurefd.net/")
+   (codex:is-azure-responses-provider
+      "test"
+      "https://acct.blob.core.windows.net/openai"))
+  ((True True True True True True True)))
+
+!(assertEqualToResult
+  ((codex:is-azure-responses-provider
+      "Azure"
+      "https://example.com")
+   (codex:is-azure-responses-provider
+      "aZuRe"
+      CodexAbsent)
+   (codex:is-azure-responses-provider
+      "test"
+      "https://api.openai.com/v1")
+   (codex:is-azure-responses-provider
+      "test"
+      "https://example.com/openai")
+   (codex:is-azure-responses-provider
+      "test"
+      "https://myproxy.azurewebsites.net/openai")
+   (codex:is-azure-responses-provider
+      "test"
+      CodexAbsent))
+  ((True True False False False False)))
+
+!(assertEqualToResult
+  ((codex:model-provider-info-supports-remote-compaction
+      (codex:create-openai-provider CodexAbsent))
+   (codex:model-provider-info-supports-remote-compaction
+      (test:model-provider-named-provider
+        "Azure"
+        "https://example.com/openai"))
+   (codex:model-provider-info-supports-remote-compaction
+      (test:model-provider-named-provider
+        "Example"
+        "https://example.com/v1"))
+   (codex:model-provider-info-supports-remote-compaction
+      (test:model-provider-named-provider
+        "Example"
+        "https://foo.openai.azure.com/openai")))
+  ((True True False True)))
 
 !(assertEqualToResult
   (codex:model-provider-catalog-ids
