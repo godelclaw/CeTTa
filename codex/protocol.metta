@@ -51,6 +51,7 @@
 ;   ExecCommandEndEvent JSON projection
 ; - DynamicToolCallRequest / DynamicToolCallResponseEvent JSON projection
 ; - McpToolCallEndEvent / CallToolResult JSON projection
+; - ExecApprovalRequestEvent JSON projection and helper methods
 ; - Submission / W3cTraceContext / Event queue wrappers
 ; - Op::Interrupt / CleanBackgroundTerminals
 ; - Op::UserInput / UserInput / TurnEnvironmentSelection
@@ -98,10 +99,12 @@
 
 ; CeTTa deviation: Rust carries several guardian/approval path fields as
 ; `AbsolutePathBuf` and imports `RequestPermissionProfile` from the separate
-; request_permissions surface. This protocol slice mirrors the same visible
-; JSON using plain path strings plus a narrow local profile projector so the
-; request-side guardian op can stay self-contained without introducing a
-; protocol/request_permissions import cycle.
+; request_permissions surface. It also carries `AdditionalPermissionProfile`
+; using the same legacy read/write filesystem profile JSON when the profile can
+; be represented that way. This protocol slice mirrors those visible JSON
+; surfaces using plain path strings plus a narrow local profile projector so
+; the request-side guardian/approval surfaces can stay self-contained without
+; introducing a protocol/request_permissions import cycle.
 ;
 ; Rust uses `Result<SessionSource, &'static str>` and `Option<...>` in the
 ; `SessionSource` helper tranche. This slice preserves the same visible
@@ -538,6 +541,57 @@
 
 (= (codex:review-decision-abort)
    (CodexReviewDecisionAbort))
+
+(= (codex:network-approval-protocol-http)
+   (CodexNetworkApprovalProtocolHttp))
+
+(= (codex:network-approval-protocol-https)
+   (CodexNetworkApprovalProtocolHttps))
+
+(= (codex:network-approval-protocol-socks5-tcp)
+   (CodexNetworkApprovalProtocolSocks5Tcp))
+
+(= (codex:network-approval-protocol-socks5-udp)
+   (CodexNetworkApprovalProtocolSocks5Udp))
+
+(= (codex:network-approval-context $host $protocol)
+   (CodexNetworkApprovalContext $host $protocol))
+
+(= (codex:network-policy-rule-action-allow)
+   (CodexNetworkPolicyRuleActionAllow))
+
+(= (codex:network-policy-rule-action-deny)
+   (CodexNetworkPolicyRuleActionDeny))
+
+(= (codex:network-policy-amendment $action $host)
+   (CodexNetworkPolicyAmendment $action $host))
+
+(= (codex:exec-approval-request-event
+      $call-id
+      $approval-id
+      $turn-id
+      $command
+      $cwd
+      $reason
+      $network-approval-context
+      $proposed-execpolicy-amendment
+      $proposed-network-policy-amendments
+      $additional-permissions
+      $available-decisions
+      $parsed-cmd)
+   (CodexEventExecApprovalRequest
+     $call-id
+     $approval-id
+     $turn-id
+     $command
+     $cwd
+     $reason
+     $network-approval-context
+     $proposed-execpolicy-amendment
+     $proposed-network-policy-amendments
+     $additional-permissions
+     $available-decisions
+     $parsed-cmd))
 
 (= (codex:file-change-add $content)
    (CodexFileChangeAdd $content))
@@ -3196,6 +3250,22 @@
    "exec_command_end")
 
 (= (codex:item-type
+      (CodexEventExecApprovalRequest
+        $call-id
+        $approval-id
+        $turn-id
+        $command
+        $cwd
+        $reason
+        $network-approval-context
+        $proposed-execpolicy-amendment
+        $proposed-network-policy-amendments
+        $additional-permissions
+        $available-decisions
+        $parsed-cmd))
+   "exec_approval_request")
+
+(= (codex:item-type
       (CodexRequestUserInputEvent $call-id $turn-id $questions))
    "request_user_input")
 
@@ -5173,6 +5243,111 @@
    (JsonObject
      ((JsonPair "host" (JsonString $host))
       (JsonPair "action" (codex:network-policy-rule-action-json $action)))))
+
+(= (codex:network-approval-context-json
+      (CodexNetworkApprovalContext $host $protocol))
+   (JsonObject
+     ((JsonPair "host" (JsonString $host))
+      (JsonPair
+        "protocol"
+        (codex:guardian-network-approval-protocol-json $protocol)))))
+
+(= (codex:network-policy-amendments-json $amendments)
+   (JsonArray
+     (map-atom-strict
+       $amendments
+       $amendment
+       (codex:network-policy-amendment-json $amendment))))
+
+(= (codex:network-policy-amendment-is-allow
+      (CodexNetworkPolicyAmendment (CodexNetworkPolicyRuleActionAllow) $host))
+   True)
+
+(= (codex:network-policy-amendment-is-allow
+      (CodexNetworkPolicyAmendment (CodexNetworkPolicyRuleActionDeny) $host))
+   False)
+
+(= (codex:first-allow-network-policy-amendment $amendments)
+   (if (== $amendments ())
+       CodexAbsent
+       (let $head (list:first $amendments)
+         (if (codex:network-policy-amendment-is-allow $head)
+             $head
+             (codex:first-allow-network-policy-amendment
+               (list:rest $amendments))))))
+
+(= (codex:exec-approval-request-default-network-decisions
+      $allow-amendment)
+   (if (== $allow-amendment CodexAbsent)
+       ((CodexReviewDecisionApproved)
+        (CodexReviewDecisionApprovedForSession)
+        (CodexReviewDecisionAbort))
+       ((CodexReviewDecisionApproved)
+        (CodexReviewDecisionApprovedForSession)
+        (CodexReviewDecisionNetworkPolicyAmendment $allow-amendment)
+        (CodexReviewDecisionAbort))))
+
+(= (codex:exec-approval-request-default-available-decisions
+      $network-approval-context
+      $proposed-execpolicy-amendment
+      $proposed-network-policy-amendments
+      $additional-permissions)
+   (if (== $network-approval-context CodexAbsent)
+       (if (== $additional-permissions CodexAbsent)
+           (if (== $proposed-execpolicy-amendment CodexAbsent)
+               ((CodexReviewDecisionApproved)
+                (CodexReviewDecisionAbort))
+               ((CodexReviewDecisionApproved)
+                (CodexReviewDecisionApprovedExecpolicyAmendment
+                  $proposed-execpolicy-amendment)
+                (CodexReviewDecisionAbort)))
+           ((CodexReviewDecisionApproved)
+            (CodexReviewDecisionAbort)))
+       (codex:exec-approval-request-default-network-decisions
+         (if (== $proposed-network-policy-amendments CodexAbsent)
+             CodexAbsent
+             (codex:first-allow-network-policy-amendment
+               $proposed-network-policy-amendments)))))
+
+(= (codex:exec-approval-request-effective-approval-id
+      (CodexEventExecApprovalRequest
+        $call-id
+        $approval-id
+        $turn-id
+        $command
+        $cwd
+        $reason
+        $network-approval-context
+        $proposed-execpolicy-amendment
+        $proposed-network-policy-amendments
+        $additional-permissions
+        $available-decisions
+        $parsed-cmd))
+   (if (== $approval-id CodexAbsent)
+       $call-id
+       $approval-id))
+
+(= (codex:exec-approval-request-effective-available-decisions
+      (CodexEventExecApprovalRequest
+        $call-id
+        $approval-id
+        $turn-id
+        $command
+        $cwd
+        $reason
+        $network-approval-context
+        $proposed-execpolicy-amendment
+        $proposed-network-policy-amendments
+        $additional-permissions
+        $available-decisions
+        $parsed-cmd))
+   (if (== $available-decisions CodexAbsent)
+       (codex:exec-approval-request-default-available-decisions
+         $network-approval-context
+         $proposed-execpolicy-amendment
+         $proposed-network-policy-amendments
+         $additional-permissions)
+       $available-decisions))
 
 (= (codex:review-decision-json
       (CodexReviewDecisionApproved))
@@ -7591,6 +7766,125 @@
                                    "status"
                                    (codex:exec-command-status-json
                                      $status))))))))))))))))))
+
+(= (codex:exec-approval-request-event-json
+      (CodexEventExecApprovalRequest
+        $call-id
+        $approval-id
+        $turn-id
+        $command
+        $cwd
+        $reason
+        $network-approval-context
+        $proposed-execpolicy-amendment
+        $proposed-network-policy-amendments
+        $additional-permissions
+        $available-decisions
+        $parsed-cmd))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "exec_approval_request"))
+      (JsonPair "call_id" (JsonString $call-id)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "approval_id"
+         $approval-id)
+       (let $pairs-3
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "turn_id"
+           (JsonString $turn-id))
+         (let $pairs-4
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "command"
+             (codex:json-string-array $command))
+           (let $pairs-5
+             (codex:protocol-append-json-pair
+               $pairs-4
+               "cwd"
+               (JsonString $cwd))
+             (let $pairs-6
+               (codex:append-optional-json-string-pair
+                 $pairs-5
+                 "reason"
+                 $reason)
+               (let $pairs-7
+                 (codex:append-optional-json-value-pair
+                   $pairs-6
+                   "network_approval_context"
+                   (if (== $network-approval-context CodexAbsent)
+                       CodexAbsent
+                       (codex:network-approval-context-json
+                         $network-approval-context)))
+                 (let $pairs-8
+                   (codex:append-optional-json-value-pair
+                     $pairs-7
+                     "proposed_execpolicy_amendment"
+                     (if (== $proposed-execpolicy-amendment CodexAbsent)
+                         CodexAbsent
+                         (codex:exec-policy-amendment-json
+                           $proposed-execpolicy-amendment)))
+                   (let $pairs-9
+                     (codex:append-optional-json-value-pair
+                       $pairs-8
+                       "proposed_network_policy_amendments"
+                       (if (== $proposed-network-policy-amendments CodexAbsent)
+                           CodexAbsent
+                           (codex:network-policy-amendments-json
+                             $proposed-network-policy-amendments)))
+                     (let $pairs-10
+                       (codex:append-optional-json-value-pair
+                         $pairs-9
+                         "additional_permissions"
+                         (if (== $additional-permissions CodexAbsent)
+                             CodexAbsent
+                             (codex:protocol-request-permission-profile-json
+                               $additional-permissions)))
+                       (let $pairs-11
+                         (codex:append-optional-json-value-pair
+                           $pairs-10
+                           "available_decisions"
+                           (if (== $available-decisions CodexAbsent)
+                               CodexAbsent
+                               (codex:review-decisions-json $available-decisions)))
+                         (JsonObject
+                           (codex:protocol-append-json-pair
+                             $pairs-11
+                             "parsed_cmd"
+                             (codex:protocol-parsed-commands-json
+                               $parsed-cmd)))))))))))))))
+
+(= (codex:item-json
+      (CodexEventExecApprovalRequest
+        $call-id
+        $approval-id
+        $turn-id
+        $command
+        $cwd
+        $reason
+        $network-approval-context
+        $proposed-execpolicy-amendment
+        $proposed-network-policy-amendments
+        $additional-permissions
+        $available-decisions
+        $parsed-cmd))
+   (case
+     (codex:exec-approval-request-event-json
+       (CodexEventExecApprovalRequest
+         $call-id
+         $approval-id
+         $turn-id
+         $command
+         $cwd
+         $reason
+         $network-approval-context
+         $proposed-execpolicy-amendment
+         $proposed-network-policy-amendments
+         $additional-permissions
+         $available-decisions
+         $parsed-cmd))
+     (($json $json))))
 
 (= (codex:item-json
       (CodexEventExecCommandOutputDelta $call_id $stream $chunk))
