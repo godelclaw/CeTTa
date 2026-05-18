@@ -60,6 +60,7 @@
 ; - Op::ResolveElicitation / RequestId / ElicitationAction
 ; - Op::UserInputAnswer / RequestUserInputResponse
 ; - Op::RequestPermissionsResponse / RequestPermissionsResponse
+; - RequestPermissionsEvent JSON projection
 ; - Op::DynamicToolResponse / DynamicToolResponse
 ; - Op::InterAgentCommunication / InterAgentCommunication
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
@@ -1415,6 +1416,19 @@
 
 (= (codex:request-permissions-response-op $id $response)
    (CodexOpRequestPermissionsResponse $id $response))
+
+(= (codex:protocol-request-permissions-event
+      $call-id
+      $turn-id
+      $reason
+      $permissions
+      $cwd)
+   (CodexRequestPermissionsEvent
+     $call-id
+     $turn-id
+     $reason
+     $permissions
+     $cwd))
 
 (= (codex:protocol-dynamic-tool-output-item-input-text $text)
    (CodexDynamicToolCallOutputContentItemInputText $text))
@@ -3114,6 +3128,15 @@
         $formatted-output
         $status))
    "exec_command_end")
+
+(= (codex:item-type
+      (CodexRequestPermissionsEvent
+        $call-id
+        $turn-id
+        $reason
+        $permissions
+        $cwd))
+   "request_permissions")
 
 (= (codex:item-type
       (CodexEventDynamicToolCallRequest
@@ -7363,6 +7386,48 @@
       (JsonPair "call_id" (JsonString $call_id))
       (JsonPair "process_id" (JsonString $process_id))
       (JsonPair "stdin" (JsonString $stdin)))))
+
+(= (codex:protocol-request-permissions-event-json
+      (CodexRequestPermissionsEvent
+        $call-id
+        $turn-id
+        $reason
+        $permissions
+        $cwd))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "request_permissions"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "turn_id" (JsonString $turn-id)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "reason"
+         $reason)
+       (let $pairs-3
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "permissions"
+           (codex:protocol-request-permission-profile-json $permissions))
+         (JsonObject
+           (codex:append-optional-json-string-pair
+             $pairs-3
+             "cwd"
+             $cwd))))))
+
+(= (codex:item-json
+      (CodexRequestPermissionsEvent
+        $call-id
+        $turn-id
+        $reason
+        $permissions
+        $cwd))
+   (codex:protocol-request-permissions-event-json
+     (CodexRequestPermissionsEvent
+       $call-id
+       $turn-id
+       $reason
+       $permissions
+       $cwd)))
 
 (= (codex:item-json
       (CodexEventDynamicToolCallRequest
