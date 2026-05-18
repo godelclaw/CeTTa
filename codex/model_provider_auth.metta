@@ -17,13 +17,15 @@
 ;   consumes the bearer-backed `CodexAuth` snapshots exported by `login_auth`.
 
 !(import! &self auth_provider)
+!(import! &self external_bearer)
 !(import! &self login_auth)
 !(import! &self model_provider_info)
 
 (= (codex:auth-manager-external-bearer-only $config)
    (case $config
      (($materialized-config
-       (CodexAuthManagerExternalBearerOnly $materialized-config)))))
+       (codex:external-bearer-auth-manager
+         (codex:bearer-token-refresher-new $materialized-config))))))
 
 (= (codex:auth-manager-for-provider $auth-manager $provider)
    (let $config (codex:model-provider-info-auth $provider)

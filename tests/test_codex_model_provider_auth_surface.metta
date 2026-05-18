@@ -176,9 +176,11 @@
     (CodexBaseAuthManager)
     (codex-model-provider-auth-command-provider))
   ((CodexAuthManagerExternalBearerOnly
-     (CodexModelProviderAuthInfo
-       "print-token"
-       ()
-       5000
-       300000
-       "/repo"))))
+     (CodexBearerTokenRefresher
+       (CodexModelProviderAuthInfo
+         "print-token"
+         ()
+         5000
+         300000
+         "/repo")
+       CodexAbsent))))
