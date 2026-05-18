@@ -6,6 +6,7 @@
 ; Covered in this increment:
 ; - PlanType variants and wire names
 ; - PlanType family helper predicates
+; - ProviderAccount variants
 
 (= (codex:plan-type-free)
    (CodexPlanTypeFree))
@@ -97,3 +98,24 @@
       ((CodexPlanTypeEnterprise) True)
       ((CodexPlanTypeEdu) True)
       ($other False))))
+
+(= (codex:provider-account-api-key)
+   (CodexProviderAccountApiKey))
+
+(= (codex:provider-account-chatgpt $email $plan-type)
+   (case $plan-type
+     (($materialized-plan-type
+       (CodexProviderAccountChatgpt $email $materialized-plan-type)))))
+
+(= (codex:provider-account-amazon-bedrock)
+   (CodexProviderAccountAmazonBedrock))
+
+(= (codex:provider-account-chatgpt-email $account)
+   (case $account
+     (((CodexProviderAccountChatgpt $email $plan-type)
+       $email))))
+
+(= (codex:provider-account-chatgpt-plan-type $account)
+   (case $account
+     (((CodexProviderAccountChatgpt $email $plan-type)
+       $plan-type))))

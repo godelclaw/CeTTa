@@ -68,3 +68,31 @@
 !(assertEqualToResult
   (codex:plan-type-is-workspace-account (codex:plan-type-pro))
   (False))
+
+!(assertEqualToResult
+  (codex:provider-account-api-key)
+  ((CodexProviderAccountApiKey)))
+
+!(assertEqualToResult
+  (codex:provider-account-amazon-bedrock)
+  ((CodexProviderAccountAmazonBedrock)))
+
+!(assertEqualToResult
+  (codex:provider-account-chatgpt
+    "zar@example.com"
+    (codex:plan-type-pro))
+  ((CodexProviderAccountChatgpt "zar@example.com" (CodexPlanTypePro))))
+
+!(assertEqualToResult
+  (codex:provider-account-chatgpt-email
+    (codex:provider-account-chatgpt
+      "zar@example.com"
+      (codex:plan-type-pro-lite)))
+  ("zar@example.com"))
+
+!(assertEqualToResult
+  (codex:provider-account-chatgpt-plan-type
+    (codex:provider-account-chatgpt
+      "zar@example.com"
+      (codex:plan-type-pro-lite)))
+  ((CodexPlanTypeProLite)))
