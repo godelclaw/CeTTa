@@ -6,18 +6,21 @@
 ; Covered in this increment:
 ; - AgentIdentityKey / AgentTaskAuthorizationTarget data shapes
 ; - AgentBillOfMaterials / build_abom
+; - AgentAssertionEnvelope serialization and RegisterTaskRequest JSON shape
 ; - agent_identity_request_id
 ; - agent_registration_url, agent_task_registration_url, agent_identity_biscuit_url
 ; - normalize_chatgpt_base_url
 ;
 ; Required CeTTa representation notes for audit:
-; - Rust signing/decryption helpers depend on Ed25519 PKCS#8, SHA-512, base64url,
-;   and crypto_box seal support. Those are runtime-library work, not pure MeTTa
-;   rewrites, and are intentionally not claimed by this helper slice.
+; - Rust signing/decryption/key-material helpers depend on Ed25519 PKCS#8,
+;   SHA-512, and crypto_box seal support. Those are runtime-library work, not
+;   pure MeTTa rewrites, and are intentionally not claimed by this helper slice.
 
 !(import! &self str)
 !(import! &self system)
 !(import! &self protocol)
+!(import! &self json)
+!(import! &self str_base64url)
 
 (= (codex:agent-identity-key
       $agent-runtime-id
@@ -76,6 +79,130 @@
         $agent-harness-id
         $running-location))
    $running-location)
+
+(= (codex:agent-assertion-envelope
+      $agent-runtime-id
+      $task-id
+      $timestamp
+      $signature)
+   (CodexAgentAssertionEnvelope
+     $agent-runtime-id
+     $task-id
+     $timestamp
+     $signature))
+
+(= (codex:agent-assertion-envelope-agent-runtime-id
+      (CodexAgentAssertionEnvelope
+        $agent-runtime-id
+        $task-id
+        $timestamp
+        $signature))
+   $agent-runtime-id)
+
+(= (codex:agent-assertion-envelope-task-id
+      (CodexAgentAssertionEnvelope
+        $agent-runtime-id
+        $task-id
+        $timestamp
+        $signature))
+   $task-id)
+
+(= (codex:agent-assertion-envelope-timestamp
+      (CodexAgentAssertionEnvelope
+        $agent-runtime-id
+        $task-id
+        $timestamp
+        $signature))
+   $timestamp)
+
+(= (codex:agent-assertion-envelope-signature
+      (CodexAgentAssertionEnvelope
+        $agent-runtime-id
+        $task-id
+        $timestamp
+        $signature))
+   $signature)
+
+(= (codex:agent-assertion-envelope-json
+      (CodexAgentAssertionEnvelope
+        $agent-runtime-id
+        $task-id
+        $timestamp
+        $signature))
+   (JsonObject
+     ((JsonPair "agent_runtime_id" (JsonString $agent-runtime-id))
+      (JsonPair "signature" (JsonString $signature))
+      (JsonPair "task_id" (JsonString $task-id))
+      (JsonPair "timestamp" (JsonString $timestamp)))))
+
+(= (codex:serialize-agent-assertion $envelope)
+   ; Rust serializes a BTreeMap, so field order is lexicographic.
+   (case (json-stringify (codex:agent-assertion-envelope-json $envelope))
+     (($payload
+       (str-base64url-encode-no-pad $payload)))))
+
+(= (codex:agent-identity-auth-header-ok $header)
+   (CodexAgentIdentityAuthHeaderOk $header))
+
+(= (codex:agent-identity-auth-header-err $message)
+   (CodexAgentIdentityAuthHeaderErr $message))
+
+(= (codex:agent-identity-auth-header-value
+      (CodexAgentIdentityAuthHeaderOk $header))
+   $header)
+
+(= (codex:agent-identity-auth-header-error
+      (CodexAgentIdentityAuthHeaderErr $message))
+   $message)
+
+(= (codex:authorization-header-for-agent-task-with-signature-timestamp
+      $key
+      $target
+      $signature
+      $timestamp)
+   ; Same Rust control flow with signing/time injected until Ed25519 support lands.
+   (let $key-runtime-id
+     (codex:agent-identity-key-agent-runtime-id $key)
+     (let $target-runtime-id
+       (codex:agent-task-authorization-target-agent-runtime-id $target)
+       (if (== $key-runtime-id $target-runtime-id)
+           (codex:agent-identity-auth-header-ok
+             (str-concat
+               "AgentAssertion "
+               (codex:serialize-agent-assertion
+                 (codex:agent-assertion-envelope
+                   $target-runtime-id
+                   (codex:agent-task-authorization-target-task-id $target)
+                   $timestamp
+                   $signature))))
+           (codex:agent-identity-auth-header-err
+             (str-concat
+               (str-concat
+                 (str-concat
+                   "agent task runtime "
+                   $target-runtime-id)
+                 " does not match stored agent identity ")
+               $key-runtime-id))))))
+
+(= (codex:register-task-request $timestamp $signature)
+   (CodexRegisterTaskRequest $timestamp $signature))
+
+(= (codex:register-task-request-timestamp
+      (CodexRegisterTaskRequest $timestamp $signature))
+   $timestamp)
+
+(= (codex:register-task-request-signature
+      (CodexRegisterTaskRequest $timestamp $signature))
+   $signature)
+
+(= (codex:register-task-request-json
+      (CodexRegisterTaskRequest $timestamp $signature))
+   (JsonObject
+     ((JsonPair "timestamp" (JsonString $timestamp))
+      (JsonPair "signature" (JsonString $signature)))))
+
+(= (codex:agent-task-registration-timeout-seconds)
+   30)
 
 (= (codex:agent-identity-package-version)
    "0.124.0")
