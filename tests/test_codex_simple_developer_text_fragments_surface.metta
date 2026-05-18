@@ -69,19 +69,21 @@
   (False))
 
 !(assertEqualToResult
-  (codex:contextual-fragment-render
-    (codex:network-rule-saved-from-amendment
-      (codex:network-policy-amendment
-        (codex:network-policy-rule-action-allow)
-        "api.example.com")))
+  (once
+    (codex:contextual-fragment-render
+      (codex:network-rule-saved-from-amendment
+        (codex:network-policy-amendment
+          (codex:network-policy-rule-action-allow)
+          "api.example.com"))))
   ("Allowed network rule saved in execpolicy (allowlist): api.example.com"))
 
 !(assertEqualToResult
-  (codex:contextual-fragment-render
-    (codex:network-rule-saved-from-amendment
-      (codex:network-policy-amendment
-        (codex:network-policy-rule-action-deny)
-        "blocked.example.com")))
+  (once
+    (codex:contextual-fragment-render
+      (codex:network-rule-saved-from-amendment
+        (codex:network-policy-amendment
+          (codex:network-policy-rule-action-deny)
+          "blocked.example.com"))))
   ("Denied network rule saved in execpolicy (denylist): blocked.example.com"))
 
 !(assertEqualToResult

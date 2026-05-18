@@ -559,6 +559,17 @@
 (= (codex:network-approval-context $host $protocol)
    (CodexNetworkApprovalContext $host $protocol))
 
+(= (codex:network-approval-context-is-absent CodexAbsent)
+   True)
+
+(= (codex:network-approval-context-is-absent
+      (CodexNetworkApprovalContext $host $protocol))
+   False)
+
+(= (codex:network-approval-context-is-absent
+      (codex:network-approval-context $host $protocol))
+   False)
+
 (= (codex:network-policy-rule-action-allow)
    (CodexNetworkPolicyRuleActionAllow))
 
@@ -4320,15 +4331,17 @@
          "revised_prompt"
          $revised-prompt)
        (let $pairs-3
-         (codex:protocol-append-json-pair
-           $pairs-2
-           "result"
-           (JsonString $result))
-         (JsonObject
-           (codex:append-optional-json-string-pair
-             $pairs-3
-             "saved_path"
-             $saved-path))))))
+        (codex:protocol-append-json-pair
+          $pairs-2
+          "result"
+          (JsonString $result))
+        (case
+          (codex:materialize-json-pairs
+            (codex:append-optional-json-string-pair
+              $pairs-3
+              "saved_path"
+              $saved-path))
+          (($pairs-4 (JsonObject $pairs-4))))))))
 
 (= (codex:mcp-invocation-json
       (CodexMcpInvocation $server $tool $arguments))
@@ -4436,10 +4449,11 @@
                    "icons"
                    $icons)
                  (JsonObject
-                   (codex:append-optional-json-value-pair
-                     $pairs-7
-                     "_meta"
-                     $meta))))))))))
+                   (codex:materialize-json-pairs
+                     (codex:append-optional-json-value-pair
+                       $pairs-7
+                       "_meta"
+                       $meta)))))))))))
 
 (= (codex:mcp-resource-json
       (CodexMcpResource
@@ -4497,10 +4511,11 @@
                        "icons"
                        $icons)
                      (JsonObject
-                       (codex:append-optional-json-value-pair
-                         $pairs-9
-                         "_meta"
-                         $meta))))))))))))
+                       (codex:materialize-json-pairs
+                         (codex:append-optional-json-value-pair
+                           $pairs-9
+                           "_meta"
+                           $meta)))))))))))))
 
 (= (codex:mcp-resource-template-json
       (CodexMcpResourceTemplate
@@ -4538,10 +4553,11 @@
                  "description"
                  $description)
                (JsonObject
-                 (codex:append-optional-json-string-pair
-                   $pairs-6
-                   "mimeType"
-                   $mime-type)))))))))
+                 (codex:materialize-json-pairs
+                   (codex:append-optional-json-string-pair
+                     $pairs-6
+                     "mimeType"
+                     $mime-type))))))))))
 
 (= (codex:mcp-map-entry-key (CodexMcpMapEntry $key $value))
    $key)
@@ -5420,7 +5436,7 @@
       $proposed-execpolicy-amendment
       $proposed-network-policy-amendments
       $additional-permissions)
-   (if (== $network-approval-context CodexAbsent)
+   (if (codex:network-approval-context-is-absent $network-approval-context)
        (if (== $additional-permissions CodexAbsent)
            (if (== $proposed-execpolicy-amendment CodexAbsent)
                ((CodexReviewDecisionApproved)
@@ -5539,13 +5555,14 @@
          "_meta"
          $meta)
        (JsonObject
-         (codex:protocol-append-json-pair
+         (codex:materialize-json-pairs
            (codex:protocol-append-json-pair
-             $pairs-2
-             "message"
-             (JsonString $message))
-           "requested_schema"
-           $requested-schema)))))
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "message"
+               (JsonString $message))
+             "requested_schema"
+             $requested-schema))))))
 
 (= (codex:elicitation-request-json
       (CodexElicitationRequestUrl $meta $message $url $elicitation-id))
@@ -5557,16 +5574,17 @@
          "_meta"
          $meta)
        (JsonObject
-         (codex:protocol-append-json-pair
+         (codex:materialize-json-pairs
            (codex:protocol-append-json-pair
              (codex:protocol-append-json-pair
-               $pairs-2
-               "message"
-               (JsonString $message))
-             "url"
-             (JsonString $url))
-           "elicitation_id"
-           (JsonString $elicitation-id))))))
+               (codex:protocol-append-json-pair
+                 $pairs-2
+                 "message"
+                 (JsonString $message))
+               "url"
+               (JsonString $url))
+             "elicitation_id"
+             (JsonString $elicitation-id)))))))
 
 (= (codex:elicitation-request-event-json
       (CodexEventElicitationRequest
@@ -5582,16 +5600,17 @@
          "turn_id"
          $turn-id)
        (JsonObject
-         (codex:protocol-append-json-pair
+         (codex:materialize-json-pairs
            (codex:protocol-append-json-pair
              (codex:protocol-append-json-pair
-               $pairs-2
-               "server_name"
-               (JsonString $server-name))
-             "id"
-             (codex:mcp-request-id-json $id))
-           "request"
-           (codex:elicitation-request-json $request))))))
+               (codex:protocol-append-json-pair
+                 $pairs-2
+                 "server_name"
+                 (JsonString $server-name))
+               "id"
+               (codex:mcp-request-id-json $id))
+             "request"
+             (once (codex:elicitation-request-json $request))))))))
 
 (= (codex:elicitation-action-json
       (CodexElicitationActionAccept))
@@ -5881,6 +5900,12 @@
 (= (codex:protocol-append-json-pair $pairs $key $value)
    (codex:protocol-append-item $pairs (JsonPair $key $value)))
 
+; CeTTa evaluation accommodation: Rust serde builds a concrete ordered field
+; list before serializing. Pair chains built from optional helpers need the same
+; materialization boundary when file-mode tests consume them through JsonObject.
+(= (codex:materialize-json-pairs $pairs)
+   (once (eval $pairs)))
+
 (= (codex:optional-string-json $value)
    (if (== $value CodexAbsent)
        JsonNull
@@ -5958,7 +5983,9 @@
                  (JsonString $url))))))))
 
 (= (codex:skill-tool-dependency-json $dependency)
-   (JsonObject (codex:skill-tool-dependency-json-pairs $dependency)))
+   (case
+     (codex:skill-tool-dependency-json-pairs $dependency)
+     (($pairs (JsonObject $pairs)))))
 
 (= (codex:skill-tool-dependencies-json $dependencies)
    (JsonArray
@@ -6016,13 +6043,15 @@
                  $pairs-5
                  "scope"
                  (codex:skill-scope-json $scope))
-               (codex:protocol-append-json-pair
-                 $pairs-6
-                 "enabled"
-                 (JsonBool $enabled)))))))))
+               (codex:materialize-json-pairs
+                 (codex:protocol-append-json-pair
+                   $pairs-6
+                   "enabled"
+                   (JsonBool $enabled))))))))))
 
 (= (codex:skill-metadata-json $skill)
-   (JsonObject (codex:skill-metadata-json-pairs $skill)))
+   (case (codex:skill-metadata-json-pairs $skill)
+     (($pairs (JsonObject $pairs)))))
 
 (= (codex:skill-metadatas-json $skills)
    (JsonArray
@@ -6977,6 +7006,22 @@
    (JsonObject
      ((JsonPair "secs" (JsonNumber $secs))
       (JsonPair "nanos" (JsonNumber $nanos)))))
+
+; CeTTa file-mode evaluation does not force complex protocol producer calls when
+; they are passed directly to json-stringify. These helpers preserve the public
+; JSON constructors and add an explicit materialization boundary for callers that
+; need the Rust Codex wire string.
+(= (codex:item-json-string $item)
+   (case (codex:item-json $item)
+     (($json (once (json-stringify $json))))))
+
+(= (codex:op-json-string $op)
+   (case (codex:op-json $op)
+     (($json (once (json-stringify $json))))))
+
+(= (codex:guardian-assessment-action-json-string $action)
+   (case (codex:guardian-assessment-action-json $action)
+     (($json (once (json-stringify $json))))))
 
 (= (codex:exec-command-source-json
       (CodexExecCommandSourceAgent))
@@ -9130,19 +9175,23 @@
 
 (= (codex:item-json
       (CodexEventItemStarted $thread-id $turn-id $item))
-   (JsonObject
-     ((JsonPair "type" (JsonString "item_started"))
-      (JsonPair "thread_id" (JsonString $thread-id))
-      (JsonPair "turn_id" (JsonString $turn-id))
-      (JsonPair "item" (codex:turn-item-json $item)))))
+   (case (codex:turn-item-json $item)
+     (($item-json
+       (JsonObject
+         ((JsonPair "type" (JsonString "item_started"))
+          (JsonPair "thread_id" (JsonString $thread-id))
+          (JsonPair "turn_id" (JsonString $turn-id))
+          (JsonPair "item" $item-json)))))))
 
 (= (codex:item-json
       (CodexEventItemCompleted $thread-id $turn-id $item))
-   (JsonObject
-     ((JsonPair "type" (JsonString "item_completed"))
-      (JsonPair "thread_id" (JsonString $thread-id))
-      (JsonPair "turn_id" (JsonString $turn-id))
-      (JsonPair "item" (codex:turn-item-json $item)))))
+   (case (codex:turn-item-json $item)
+     (($item-json
+       (JsonObject
+         ((JsonPair "type" (JsonString "item_completed"))
+          (JsonPair "thread_id" (JsonString $thread-id))
+          (JsonPair "turn_id" (JsonString $turn-id))
+          (JsonPair "item" $item-json)))))))
 
 (= (codex:item-json
       (CodexEventAgentMessageContentDelta

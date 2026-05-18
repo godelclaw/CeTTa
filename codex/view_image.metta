@@ -228,6 +228,18 @@
          $environment-available
          $can-request-original-image-detail
          $cwd))
+      ((codex:view-image-args $path $detail)
+       (CodexViewImageArgs $path $detail))
+      ((codex:view-image-handler-context
+         $image-input-supported
+         $environment-available
+         $can-request-original-image-detail
+         $cwd)
+       (CodexViewImageHandlerContext
+         $image-input-supported
+         $environment-available
+         $can-request-original-image-detail
+         $cwd))
       ($other
        (once (eval $other))))))
 
@@ -280,8 +292,11 @@
       $cwd
       $path
       $requested-detail)
-   (case (codex:view-image-resolve-path $cwd $path)
-     (($resolved-path
+   ; CeTTa evaluation accommodation: case/let do not reliably thread a bare
+   ; string result from view-image-resolve-path into fs-path-kind. Build the
+   ; concrete path at the call boundary instead, preserving the same visible
+   ; absolute-path and cwd-relative behavior used by Rust.
+   (if (path-is-absolute? $path)
        (codex:handle-view-image-resolved-path
          (CodexViewImageHandlerContext
            True
@@ -289,7 +304,15 @@
            $can-request-original-image-detail
            $cwd)
          $requested-detail
-         $resolved-path)))))
+         $path)
+       (codex:handle-view-image-resolved-path
+         (CodexViewImageHandlerContext
+           True
+           True
+           $can-request-original-image-detail
+           $cwd)
+         $requested-detail
+         (format-args "{}/{}" ($cwd $path)))))
 
 (= (codex:handle-view-image-args $context $args)
    ; CeTTa reduction note: Rust evaluates these handler gates in sequence.

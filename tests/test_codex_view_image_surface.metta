@@ -23,54 +23,50 @@
   (0))
 
 !(assertEqualToResult
-  (json-stringify
-    (codex:item-json
-      (once
-        (codex:run-view-image-tool-call
-          "call-view-image"
-          "{\"path\":\"/home/zarclaw/repos/CeTTa/runtime/codex-view-image-fixture/pixel.png\"}"))))
+  (codex:item-json-string
+    (once
+      (codex:run-view-image-tool-call
+        "call-view-image"
+        "{\"path\":\"/home/zarclaw/repos/CeTTa/runtime/codex-view-image-fixture/pixel.png\"}")))
   ("{\"type\":\"custom_tool_call_output\",\"call_id\":\"call-view-image\",\"output\":[{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6x0AAAAASUVORK5CYII=\",\"detail\":\"high\"}]}"))
 
 !(assertEqualToResult
-  (json-stringify
-    (codex:item-json
-      (once
-        (codex:run-view-image-tool-call-with-context
-          (codex:view-image-handler-context
-            True
-            True
-            True
-            "/home/zarclaw/repos/CeTTa")
-          "call-view-image-original"
-          "{\"path\":\"/home/zarclaw/repos/CeTTa/runtime/codex-view-image-fixture/pixel.png\",\"detail\":\"original\"}"))))
+  (codex:item-json-string
+    (once
+      (codex:run-view-image-tool-call-with-context
+        (codex:view-image-handler-context
+          True
+          True
+          True
+          "/home/zarclaw/repos/CeTTa")
+        "call-view-image-original"
+        "{\"path\":\"/home/zarclaw/repos/CeTTa/runtime/codex-view-image-fixture/pixel.png\",\"detail\":\"original\"}")))
   ("{\"type\":\"custom_tool_call_output\",\"call_id\":\"call-view-image-original\",\"output\":[{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6x0AAAAASUVORK5CYII=\",\"detail\":\"original\"}]}"))
 
 !(assertEqualToResult
-  (json-stringify
-    (codex:item-json
-      (once
-        (codex:run-view-image-tool-call-with-context
-          (codex:view-image-handler-context
-            True
-            True
-            False
-            (codex-view-image-fixture-root))
-          "call-view-image-relative"
-          "{\"path\":\"pixel.png\"}"))))
+  (codex:item-json-string
+    (once
+      (codex:run-view-image-tool-call-with-context
+        (codex:view-image-handler-context
+          True
+          True
+          False
+          (codex-view-image-fixture-root))
+        "call-view-image-relative"
+        "{\"path\":\"pixel.png\"}")))
   ("{\"type\":\"custom_tool_call_output\",\"call_id\":\"call-view-image-relative\",\"output\":[{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6x0AAAAASUVORK5CYII=\",\"detail\":\"high\"}]}"))
 
 !(assertEqualToResult
-  (json-stringify
-    (codex:item-json
-      (once
-        (codex:run-view-image-tool-call-with-context
-          (codex:view-image-handler-context
-            True
-            True
-            False
-            (codex-view-image-fixture-root))
-          "call-view-image-original-fallback"
-          "{\"path\":\"pixel.png\",\"detail\":\"original\"}"))))
+  (codex:item-json-string
+    (once
+      (codex:run-view-image-tool-call-with-context
+        (codex:view-image-handler-context
+          True
+          True
+          False
+          (codex-view-image-fixture-root))
+        "call-view-image-original-fallback"
+        "{\"path\":\"pixel.png\",\"detail\":\"original\"}")))
   ("{\"type\":\"custom_tool_call_output\",\"call_id\":\"call-view-image-original-fallback\",\"output\":[{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6x0AAAAASUVORK5CYII=\",\"detail\":\"high\"}]}"))
 
 !(assertEqualToResult

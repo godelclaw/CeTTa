@@ -597,6 +597,10 @@
        $original-token-count
        $hook-command)))
 
+(= (codex:tool-output-code-mode-result-json-string $output $payload)
+   (case (codex:tool-output-code-mode-result $output $payload)
+     (($json (json-stringify $json)))))
+
 (= (codex:response-input-to-code-mode-result
       (CodexResponseItemMessage $role $content $phase))
    (codex:content-items-to-code-mode-result $content))
@@ -1010,7 +1014,7 @@
                    $pairs4
                    "original_token_count"
                    (JsonNumber (codex:number-text $original-token-count))))
-             (JsonObject
+             (case
                (codex:append-json-pair
                  $pairs5
                  "output"
@@ -1025,7 +1029,8 @@
                        $process-id
                        $exit-code
                        $original-token-count
-                       $hook-command)))))))))))
+                       $hook-command))))
+               (($pairs6 (JsonObject $pairs6))))))))))
 
 (= (codex:take-first-items () $limit)
    ())

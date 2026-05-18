@@ -1290,7 +1290,15 @@
    "Allowed")
 
 (= (codex:network-rule-saved-action-text
+      (codex:network-policy-rule-action-allow))
+   "Allowed")
+
+(= (codex:network-rule-saved-action-text
       (CodexNetworkPolicyRuleActionDeny))
+   "Denied")
+
+(= (codex:network-rule-saved-action-text
+      (codex:network-policy-rule-action-deny))
    "Denied")
 
 (= (codex:network-rule-saved-list-name
@@ -1298,7 +1306,15 @@
    "allowlist")
 
 (= (codex:network-rule-saved-list-name
+      (codex:network-policy-rule-action-allow))
+   "allowlist")
+
+(= (codex:network-rule-saved-list-name
       (CodexNetworkPolicyRuleActionDeny))
+   "denylist")
+
+(= (codex:network-rule-saved-list-name
+      (codex:network-policy-rule-action-deny))
    "denylist")
 
 (= (codex:network-rule-saved $action $host)
@@ -1316,6 +1332,10 @@
 ; an extra accessor reduction layer while preserving Rust's visible behavior.
 (= (codex:network-rule-saved-from-amendment
       (CodexNetworkPolicyAmendment $action $host))
+   (codex:network-rule-saved $action $host))
+
+(= (codex:network-rule-saved-from-amendment
+      (codex:network-policy-amendment $action $host))
    (codex:network-rule-saved $action $host))
 
 (= (codex:network-rule-saved-matches-text $text)
