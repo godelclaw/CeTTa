@@ -8644,6 +8644,9 @@ static Atom *str_split_middle_bytes(Arena *a, Atom *head,
     return result;
 }
 
+static Atom *str_base64url_decode(Arena *a, Atom *head,
+                                  Atom **args, uint32_t nargs);
+
 static Atom *str_base64_encode(Arena *a, Atom *head,
                                Atom **args, uint32_t nargs) {
     static const char table[] =
@@ -8655,6 +8658,14 @@ static Atom *str_base64_encode(Arena *a, Atom *head,
     size_t out_ix = 0;
     char *encoded;
     Atom *result;
+    /* Keep the public CeTTa helper separate without adding a builtin symbol:
+       builtin symbol count changes perturb precompiled stdlib symbol IDs. */
+    if (nargs == 2) {
+        const char *mode = library_text_arg(args[0]);
+        if (mode && strcmp(mode, "__decode_url_no_pad") == 0) {
+            return str_base64url_decode(a, head, args + 1, 1);
+        }
+    }
     if (nargs != 1 || !(text = library_text_arg(args[0]))) {
         return library_signature_error(a, head, args, nargs, "expected text argument");
     }
@@ -8688,6 +8699,89 @@ static Atom *str_base64_encode(Arena *a, Atom *head,
     encoded[out_ix] = '\0';
     result = atom_string(a, encoded);
     free(encoded);
+    return result;
+}
+
+static int base64url_decode_value(unsigned char c) {
+    if (c >= 'A' && c <= 'Z') return (int)(c - 'A');
+    if (c >= 'a' && c <= 'z') return 26 + (int)(c - 'a');
+    if (c >= '0' && c <= '9') return 52 + (int)(c - '0');
+    if (c == '-') return 62;
+    if (c == '_') return 63;
+    return -1;
+}
+
+static Atom *str_base64url_decode_error(Arena *a, Atom *head,
+                                        Atom **args, uint32_t nargs) {
+    return atom_error(a, library_call_expr(a, head, args, nargs),
+                      atom_string(a, "invalid base64url"));
+}
+
+static Atom *str_base64url_decode(Arena *a, Atom *head,
+                                  Atom **args, uint32_t nargs) {
+    const char *text;
+    size_t len;
+    size_t in_ix = 0;
+    size_t out_ix = 0;
+    size_t out_cap;
+    char *decoded;
+    Atom *result;
+
+    if (nargs != 1 || !(text = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected text argument");
+    }
+
+    len = strlen(text);
+    if ((len % 4u) == 1u) {
+        return str_base64url_decode_error(a, head, args, nargs);
+    }
+
+    out_cap = ((len * 3u) / 4u) + 3u;
+    decoded = cetta_malloc(out_cap + 1u);
+
+    while (in_ix + 4u <= len) {
+        int v0 = base64url_decode_value((unsigned char)text[in_ix]);
+        int v1 = base64url_decode_value((unsigned char)text[in_ix + 1u]);
+        int v2 = base64url_decode_value((unsigned char)text[in_ix + 2u]);
+        int v3 = base64url_decode_value((unsigned char)text[in_ix + 3u]);
+        if (v0 < 0 || v1 < 0 || v2 < 0 || v3 < 0) {
+            free(decoded);
+            return str_base64url_decode_error(a, head, args, nargs);
+        }
+        decoded[out_ix++] = (char)((v0 << 2) | (v1 >> 4));
+        decoded[out_ix++] = (char)(((v1 & 0x0f) << 4) | (v2 >> 2));
+        decoded[out_ix++] = (char)(((v2 & 0x03) << 6) | v3);
+        in_ix += 4u;
+    }
+
+    if (in_ix < len) {
+        size_t rem = len - in_ix;
+        int v0 = base64url_decode_value((unsigned char)text[in_ix]);
+        int v1 = rem >= 2u ? base64url_decode_value((unsigned char)text[in_ix + 1u]) : -1;
+        int v2 = rem >= 3u ? base64url_decode_value((unsigned char)text[in_ix + 2u]) : -1;
+        if (v0 < 0 || v1 < 0 || (rem == 3u && v2 < 0)) {
+            free(decoded);
+            return str_base64url_decode_error(a, head, args, nargs);
+        }
+        if (rem == 2u) {
+            if ((v1 & 0x0f) != 0) {
+                free(decoded);
+                return str_base64url_decode_error(a, head, args, nargs);
+            }
+            decoded[out_ix++] = (char)((v0 << 2) | (v1 >> 4));
+        } else if (rem == 3u) {
+            if ((v2 & 0x03) != 0) {
+                free(decoded);
+                return str_base64url_decode_error(a, head, args, nargs);
+            }
+            decoded[out_ix++] = (char)((v0 << 2) | (v1 >> 4));
+            decoded[out_ix++] = (char)(((v1 & 0x0f) << 4) | (v2 >> 2));
+        }
+    }
+
+    decoded[out_ix] = '\0';
+    result = atom_string(a, decoded);
+    free(decoded);
     return result;
 }
 
