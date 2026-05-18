@@ -964,7 +964,10 @@
    (str-join "\n" (codex:exec-command-tool-output-response-lines $output)))
 
 (= (codex:append-json-pair $pairs $key $value)
-   (codex:append-item $pairs (JsonPair $key $value)))
+   ; CeTTa evaluation accommodation: Rust Vec pushes are fully materialized
+   ; before reuse; force the equivalent list append boundary here.
+   (case (codex:append-item $pairs (JsonPair $key $value))
+     (($materialized $materialized))))
 
 (= (codex:exec-command-tool-output-code-mode-json
       (CodexToolOutputExecCommand

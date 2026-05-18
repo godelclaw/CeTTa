@@ -2173,6 +2173,45 @@ static Atom *system_cwd(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     return atom_string(a, path);
 }
 
+static const char *system_os_name(void) {
+#if defined(_WIN32)
+    return "windows";
+#elif defined(__APPLE__) && defined(__MACH__)
+    return "macos";
+#elif defined(__ANDROID__)
+    return "android";
+#elif defined(__linux__)
+    return "linux";
+#elif defined(__FreeBSD__)
+    return "freebsd";
+#elif defined(__DragonFly__)
+    return "dragonfly";
+#elif defined(__OpenBSD__)
+    return "openbsd";
+#elif defined(__NetBSD__)
+    return "netbsd";
+#elif defined(__sun)
+    return "solaris";
+#elif defined(__HAIKU__)
+    return "haiku";
+#elif defined(__EMSCRIPTEN__)
+    return "emscripten";
+#elif defined(__wasi__)
+    return "wasi";
+#elif defined(_AIX)
+    return "aix";
+#else
+    return "unknown";
+#endif
+}
+
+static Atom *system_os(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    if (!system_zero_arg_ok(args, nargs)) {
+        return library_signature_error(a, head, args, nargs, "expected: (system-os)");
+    }
+    return atom_string(a, system_os_name());
+}
+
 static Atom *cetta_library_dispatch_system(const CettaLibraryContext *ctx,
                                            Arena *a, Atom *head,
                                            Atom **args, uint32_t nargs) {
@@ -2201,6 +2240,9 @@ static Atom *cetta_library_dispatch_system(const CettaLibraryContext *ctx,
     }
     if (head_id == g_builtin_syms.lib_system_cwd) {
         return system_cwd(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_system_os) {
+        return system_os(a, head, args, nargs);
     }
     return NULL;
 }

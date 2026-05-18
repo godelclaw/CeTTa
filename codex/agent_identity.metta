@@ -5,6 +5,7 @@
 ;
 ; Covered in this increment:
 ; - AgentIdentityKey / AgentTaskAuthorizationTarget data shapes
+; - AgentBillOfMaterials / build_abom
 ; - agent_registration_url, agent_task_registration_url, agent_identity_biscuit_url
 ; - normalize_chatgpt_base_url
 ;
@@ -14,6 +15,8 @@
 ;   rewrites, and are intentionally not claimed by this helper slice.
 
 !(import! &self str)
+!(import! &self system)
+!(import! &self protocol)
 
 (= (codex:agent-identity-key
       $agent-runtime-id
@@ -42,6 +45,62 @@
 (= (codex:agent-task-authorization-target-task-id
       (CodexAgentTaskAuthorizationTarget $agent-runtime-id $task-id))
    $task-id)
+
+(= (codex:agent-bill-of-materials
+      $agent-version
+      $agent-harness-id
+      $running-location)
+   (CodexAgentBillOfMaterials
+     $agent-version
+     $agent-harness-id
+     $running-location))
+
+(= (codex:agent-bill-of-materials-agent-version
+      (CodexAgentBillOfMaterials
+        $agent-version
+        $agent-harness-id
+        $running-location))
+   $agent-version)
+
+(= (codex:agent-bill-of-materials-agent-harness-id
+      (CodexAgentBillOfMaterials
+        $agent-version
+        $agent-harness-id
+        $running-location))
+   $agent-harness-id)
+
+(= (codex:agent-bill-of-materials-running-location
+      (CodexAgentBillOfMaterials
+        $agent-version
+        $agent-harness-id
+        $running-location))
+   $running-location)
+
+(= (codex:agent-identity-package-version)
+   "0.124.0")
+
+(= (codex:agent-identity-harness-id $session-source)
+   (case $session-source
+     (((CodexSessionSourceVSCode)
+       "codex-app")
+      ($other "codex-cli"))))
+
+(= (codex:build-agent-bill-of-materials-with-version-os
+      $session-source
+      $agent-version
+      $os)
+   (codex:agent-bill-of-materials
+     $agent-version
+     (codex:agent-identity-harness-id $session-source)
+     (str-concat
+       (str-concat (codex:session-source-display $session-source) "-")
+       $os)))
+
+(= (codex:build-agent-bill-of-materials $session-source)
+   (codex:build-agent-bill-of-materials-with-version-os
+     $session-source
+     (codex:agent-identity-package-version)
+     (system-os)))
 
 (= (codex:agent-identity-string-contains $text $needle)
    (case (str-find $text $needle)

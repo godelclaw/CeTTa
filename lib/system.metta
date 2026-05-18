@@ -37,3 +37,8 @@
    (function
      (case (__cetta_lib_system_cwd ())
        (($result (return $result))))))
+
+(= (system-os)
+   (function
+     (case (__cetta_lib_system_os ())
+       (($result (return $result))))))
