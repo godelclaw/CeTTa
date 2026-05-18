@@ -36,6 +36,8 @@
 ; - ErrorEvent / RawResponseItemEvent
 ; - AgentMessageContentDeltaEvent / PlanDeltaEvent /
 ;   ReasoningContentDeltaEvent / ReasoningRawContentDeltaEvent
+; - TurnItem::WebSearch / TurnItem::ImageGeneration plus
+;   ItemStartedEvent / ItemCompletedEvent lifecycle projection
 ; - EnteredReviewMode(ReviewRequest) / ReviewTarget
 ; - ExitedReviewModeEvent / ReviewOutputEvent JSON projection
 ; - GuardianAssessment(GuardianAssessmentEvent)
@@ -969,6 +971,12 @@
 
 (= (codex:raw-response-item-event $item)
    (CodexEventRawResponseItem $item))
+
+(= (codex:item-started-event $thread-id $turn-id $item)
+   (CodexEventItemStarted $thread-id $turn-id $item))
+
+(= (codex:item-completed-event $thread-id $turn-id $item)
+   (CodexEventItemCompleted $thread-id $turn-id $item))
 
 (= (codex:agent-message-content-delta-event
       $thread-id
@@ -2759,6 +2767,35 @@
      $revised-prompt
      $result))
 
+(= (codex:turn-item-web-search $id $query $action)
+   (CodexTurnItemWebSearch $id $query $action))
+
+(= (codex:turn-item-image-generation
+      $id
+      $status
+      $revised-prompt
+      $result
+      $saved-path)
+   (CodexTurnItemImageGeneration
+     $id
+     $status
+     $revised-prompt
+     $result
+     $saved-path))
+
+(= (codex:turn-item-id
+      (CodexTurnItemWebSearch $id $query $action))
+   $id)
+
+(= (codex:turn-item-id
+      (CodexTurnItemImageGeneration
+        $id
+        $status
+        $revised-prompt
+        $result
+        $saved-path))
+   $id)
+
 (= (codex:review-line-range $start $end)
    (CodexReviewLineRange $start $end))
 
@@ -3611,6 +3648,14 @@
    "raw_response_item")
 
 (= (codex:item-type
+      (CodexEventItemStarted $thread-id $turn-id $item))
+   "item_started")
+
+(= (codex:item-type
+      (CodexEventItemCompleted $thread-id $turn-id $item))
+   "item_completed")
+
+(= (codex:item-type
       (CodexEventAgentMessageContentDelta
         $thread-id
         $turn-id
@@ -4249,6 +4294,41 @@
       (CodexWebSearchActionOther))
    (JsonObject
      ((JsonPair "type" (JsonString "other")))))
+
+(= (codex:turn-item-json
+      (CodexTurnItemWebSearch $id $query $action))
+   (JsonObject
+     ((JsonPair "type" (JsonString "WebSearch"))
+      (JsonPair "id" (JsonString $id))
+      (JsonPair "query" (JsonString $query))
+      (JsonPair "action" (codex:web-search-action-json $action)))))
+
+(= (codex:turn-item-json
+      (CodexTurnItemImageGeneration
+        $id
+        $status
+        $revised-prompt
+        $result
+        $saved-path))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "ImageGeneration"))
+      (JsonPair "id" (JsonString $id))
+      (JsonPair "status" (JsonString $status)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "revised_prompt"
+         $revised-prompt)
+       (let $pairs-3
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "result"
+           (JsonString $result))
+         (JsonObject
+           (codex:append-optional-json-string-pair
+             $pairs-3
+             "saved_path"
+             $saved-path))))))
 
 (= (codex:mcp-invocation-json
       (CodexMcpInvocation $server $tool $arguments))
@@ -5096,10 +5176,58 @@
        True
        (codex:codex-error-info-affects-turn-status $codex-error-info)))
 
-; Rust `HasLegacyEvent` / `EventMsg::as_legacy_events` currently projects these
-; delta events to the existing legacy event stream. The boolean flag is accepted
-; now so later `ItemStarted` / `ItemCompleted` ports can preserve the same
-; method surface even though the currently ported delta variants ignore it.
+; Rust `HasLegacyEvent` / `EventMsg::as_legacy_events` projects these item
+; lifecycle and delta events to the existing legacy event stream. The boolean
+; flag is accepted on every equation because Rust threads
+; `show_raw_agent_reasoning` through the same method surface.
+(= (codex:event-as-legacy-events
+      (CodexEventItemStarted
+        $thread-id
+        $turn-id
+        (CodexTurnItemWebSearch $id $query $action))
+      $show-raw-agent-reasoning)
+   ((CodexEventWebSearchBegin $id)))
+
+(= (codex:event-as-legacy-events
+      (CodexEventItemStarted
+        $thread-id
+        $turn-id
+        (CodexTurnItemImageGeneration
+          $id
+          $status
+          $revised-prompt
+          $result
+          $saved-path))
+      $show-raw-agent-reasoning)
+   ((CodexEventImageGenerationBegin $id)))
+
+(= (codex:event-as-legacy-events
+      (CodexEventItemCompleted $thread-id $turn-id $item)
+      $show-raw-agent-reasoning)
+   (codex:turn-item-as-legacy-events
+     $item
+     $show-raw-agent-reasoning))
+
+(= (codex:turn-item-as-legacy-events
+      (CodexTurnItemWebSearch $id $query $action)
+      $show-raw-agent-reasoning)
+   ((CodexEventWebSearchEnd $id $query $action)))
+
+(= (codex:turn-item-as-legacy-events
+      (CodexTurnItemImageGeneration
+        $id
+        $status
+        $revised-prompt
+        $result
+        $saved-path)
+      $show-raw-agent-reasoning)
+   ((CodexEventImageGenerationEnd
+      $id
+      $status
+      $revised-prompt
+      $result
+      $saved-path)))
+
 (= (codex:event-as-legacy-events
       (CodexEventAgentMessageContentDelta
         $thread-id
@@ -8999,6 +9127,22 @@
    (JsonObject
      ((JsonPair "type" (JsonString "raw_response_item"))
       (JsonPair "item" (codex:item-json $item)))))
+
+(= (codex:item-json
+      (CodexEventItemStarted $thread-id $turn-id $item))
+   (JsonObject
+     ((JsonPair "type" (JsonString "item_started"))
+      (JsonPair "thread_id" (JsonString $thread-id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair "item" (codex:turn-item-json $item)))))
+
+(= (codex:item-json
+      (CodexEventItemCompleted $thread-id $turn-id $item))
+   (JsonObject
+     ((JsonPair "type" (JsonString "item_completed"))
+      (JsonPair "thread_id" (JsonString $thread-id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair "item" (codex:turn-item-json $item)))))
 
 (= (codex:item-json
       (CodexEventAgentMessageContentDelta
