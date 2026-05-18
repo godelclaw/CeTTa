@@ -161,8 +161,17 @@
      ((CodexAbsent CodexAbsent)
       ((JsonArray $items) $items))))
 
+(= (codex:append-items () $rhs)
+   $rhs)
+
+(= (codex:append-items $lhs $rhs)
+   (let ($head $tail) (decons-atom $lhs)
+     (case (codex:append-items $tail $rhs)
+       (($rest
+          (cons-atom $head $rest))))))
+
 (= (codex:append-item $items $item)
-   (list:append $items ($item)))
+   (codex:append-items $items ($item)))
 
 (= (codex:is-blank-text $text)
    (== (str-trim $text) ""))
@@ -901,97 +910,66 @@
         $exit-code
         $original-token-count
         $hook-command))
-   (let $lines1
+   (case
      (if (== $chunk-id "")
          ()
          ((format-args "Chunk ID: {}" ($chunk-id))))
-     (let $lines2
-       (codex:append-item
-         $lines1
-         (format-args
-           "Wall time: {} seconds"
-           ((codex:duration-ms-to-seconds-text $wall-time-ms))))
-       (let $lines3
-         (if (== $exit-code CodexAbsent)
-             $lines2
-             (codex:append-item
-               $lines2
-               (format-args
-                 "Process exited with code {}"
-                 ($exit-code))))
-         (let $lines4
-           (if (== $process-id CodexAbsent)
-               $lines3
-               (codex:append-item
-                 $lines3
-                 (format-args
-                   "Process running with session ID {}"
-                   ($process-id))))
-           (let $lines5
-             (if (== $original-token-count CodexAbsent)
-                 $lines4
+     (($lines1
+       (case
+         (codex:append-item
+           $lines1
+           (format-args
+             "Wall time: {} seconds"
+             ((codex:duration-ms-to-seconds-text $wall-time-ms))))
+         (($lines2
+           (case
+             (if (== $exit-code CodexAbsent)
+                 $lines2
                  (codex:append-item
-                   $lines4
+                   $lines2
                    (format-args
-                     "Original token count: {}"
-                     ($original-token-count))))
-             (let $lines6 (codex:append-item $lines5 "Output:")
-               (codex:append-item
-                 $lines6
-                 (codex:exec-command-tool-output-truncated-output
-                   (CodexToolOutputExecCommand
-                     $event-call-id
-                     $chunk-id
-                     $wall-time-ms
-                     $raw-output
-                     $max-output-tokens
-                     $process-id
-                     $exit-code
-                     $original-token-count
-                     $hook-command))))))))))
+                     "Process exited with code {}"
+                     ($exit-code))))
+             (($lines3
+               (case
+                 (if (== $process-id CodexAbsent)
+                     $lines3
+                     (codex:append-item
+                       $lines3
+                       (format-args
+                         "Process running with session ID {}"
+                         ($process-id))))
+                 (($lines4
+                   (case
+                     (if (== $original-token-count CodexAbsent)
+                         $lines4
+                         (codex:append-item
+                           $lines4
+                           (format-args
+                             "Original token count: {}"
+                             ($original-token-count))))
+                     (($lines5
+                       (case (codex:append-item $lines5 "Output:")
+                         (($lines6
+                           (codex:append-item
+                             $lines6
+                             (codex:exec-command-tool-output-truncated-output
+                               (CodexToolOutputExecCommand
+                                 $event-call-id
+                                 $chunk-id
+                                 $wall-time-ms
+                                 $raw-output
+                                 $max-output-tokens
+                                 $process-id
+                                 $exit-code
+                                 $original-token-count
+                                 $hook-command))))))))))))))))))))))
 
 (= (codex:exec-command-tool-output-response-text $output)
    (str-join "\n" (codex:exec-command-tool-output-response-lines $output)))
 
 (= (codex:append-json-pair $pairs $key $value)
    (codex:append-item $pairs (JsonPair $key $value)))
-
-; CeTTa currently collapses the generic staged optional-pair builder for this
-; completed/no-session shape. Keep the direct Rust-equivalent wire projection.
-(= (codex:exec-command-tool-output-code-mode-json
-      (CodexToolOutputExecCommand
-        $event-call-id
-        $chunk-id
-        $wall-time-ms
-        $raw-output
-        $max-output-tokens
-        CodexAbsent
-        $exit-code
-        $original-token-count
-        $hook-command))
-   (JsonObject
-     ((JsonPair "chunk_id" (JsonString $chunk-id))
-      (JsonPair
-        "wall_time_seconds"
-        (JsonNumber (codex:duration-ms-to-json-seconds-text $wall-time-ms)))
-      (JsonPair "exit_code" (JsonNumber (codex:number-text $exit-code)))
-      (JsonPair
-        "original_token_count"
-        (JsonNumber (codex:number-text $original-token-count)))
-      (JsonPair
-        "output"
-        (JsonString
-          (codex:exec-command-tool-output-truncated-output
-            (CodexToolOutputExecCommand
-              $event-call-id
-              $chunk-id
-              $wall-time-ms
-              $raw-output
-              $max-output-tokens
-              CodexAbsent
-              $exit-code
-              $original-token-count
-              $hook-command)))))))
 
 (= (codex:exec-command-tool-output-code-mode-json
       (CodexToolOutputExecCommand

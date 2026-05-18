@@ -35,7 +35,6 @@
 !(import! &self json)
 !(import! &self list)
 !(import! &self path)
-!(import! &self protocol)
 !(import! &self str)
 !(import! &self system)
 
@@ -144,6 +143,38 @@
      $file-system-sandbox-policy
      $additional-permissions
      $permissions-preapproved))
+
+; CeTTa evaluation accommodation: request_permissions call sites often pass
+; public constructor wrappers as fields inside other constructors. Rust has
+; concrete structs at these boundaries, so this helper materializes only the
+; request_permissions data values before field access or normalization.
+(= (codex:request-permissions-materialize $value)
+   (case $value
+     ((CodexAbsent CodexAbsent)
+      ((CodexRequestPermissionsNetwork $enabled)
+       (CodexRequestPermissionsNetwork $enabled))
+      ((CodexRequestPermissionsFileSystem $read $write)
+       (CodexRequestPermissionsFileSystem $read $write))
+      ((CodexRequestPermissionProfile $network $file-system)
+       (CodexRequestPermissionProfile $network $file-system))
+      ((CodexRequestPermissionsResponse
+         $permissions
+         $scope
+         $strict-auto-review)
+       (CodexRequestPermissionsResponse
+         $permissions
+         $scope
+         $strict-auto-review))
+      ((CodexRequestPermissionsState
+         $session-permissions
+         $turn-permissions
+         $turn-strict-auto-review)
+       (CodexRequestPermissionsState
+         $session-permissions
+         $turn-permissions
+         $turn-strict-auto-review))
+      ($other
+       (once (eval $other))))))
 
 (= (codex:request-permissions-network-enabled
       (CodexRequestPermissionsNetwork $enabled))
@@ -262,26 +293,32 @@
         $response-behavior))
    $response-behavior)
 
-(= (codex:request-permissions-state-session-permissions
-      (CodexRequestPermissionsState
-        $session-permissions
-        $turn-permissions
-        $turn-strict-auto-review))
-   (once (eval $session-permissions)))
+(= (codex:request-permissions-state-session-permissions $state)
+   (case (codex:request-permissions-materialize $state)
+     (((CodexRequestPermissionsState
+         $session-permissions
+         $turn-permissions
+         $turn-strict-auto-review)
+       (codex:request-permissions-materialize $session-permissions))
+      ($other Empty))))
 
-(= (codex:request-permissions-state-turn-permissions
-      (CodexRequestPermissionsState
-        $session-permissions
-        $turn-permissions
-        $turn-strict-auto-review))
-   (once (eval $turn-permissions)))
+(= (codex:request-permissions-state-turn-permissions $state)
+   (case (codex:request-permissions-materialize $state)
+     (((CodexRequestPermissionsState
+         $session-permissions
+         $turn-permissions
+         $turn-strict-auto-review)
+       (codex:request-permissions-materialize $turn-permissions))
+      ($other Empty))))
 
-(= (codex:request-permissions-state-turn-strict-auto-review
-      (CodexRequestPermissionsState
-        $session-permissions
-        $turn-permissions
-        $turn-strict-auto-review))
-   $turn-strict-auto-review)
+(= (codex:request-permissions-state-turn-strict-auto-review $state)
+   (case (codex:request-permissions-materialize $state)
+     (((CodexRequestPermissionsState
+         $session-permissions
+         $turn-permissions
+         $turn-strict-auto-review)
+       $turn-strict-auto-review)
+      ($other False))))
 
 (= (codex:request-permissions-tool-call-result-item $result)
    (let $resolved-result (once (eval $result))
@@ -417,34 +454,30 @@
 (= (codex:request-permissions-optional-string-json $value)
    (JsonString $value))
 
-(= (codex:is-request-permissions-network-empty? CodexAbsent)
-   True)
+(= (codex:is-request-permissions-network-empty? $network)
+   (case (codex:request-permissions-materialize $network)
+     ((CodexAbsent True)
+      ((CodexRequestPermissionsNetwork CodexAbsent) True)
+      ((CodexRequestPermissionsNetwork $enabled) False)
+      ($other True))))
 
-(= (codex:is-request-permissions-network-empty?
-      (CodexRequestPermissionsNetwork CodexAbsent))
-   True)
+(= (codex:is-request-permissions-file-system-empty? $file-system)
+   (case (codex:request-permissions-materialize $file-system)
+     ((CodexAbsent True)
+      ((CodexRequestPermissionsFileSystem $read $write)
+       (if (== (list:len $read) 0)
+           (== (list:len $write) 0)
+           False))
+      ($other True))))
 
-(= (codex:is-request-permissions-network-empty?
-      (CodexRequestPermissionsNetwork $enabled))
-   False)
-
-(= (codex:is-request-permissions-file-system-empty? CodexAbsent)
-   True)
-
-(= (codex:is-request-permissions-file-system-empty?
-      (CodexRequestPermissionsFileSystem $read $write))
-   (if (== (list:len $read) 0)
-       (== (list:len $write) 0)
-       False))
-
-(= (codex:is-request-permission-profile-empty? CodexAbsent)
-   True)
-
-(= (codex:is-request-permission-profile-empty?
-      (CodexRequestPermissionProfile $network $file-system))
-   (if (codex:is-request-permissions-network-empty? $network)
-       (codex:is-request-permissions-file-system-empty? $file-system)
-       False))
+(= (codex:is-request-permission-profile-empty? $profile)
+   (case (codex:request-permissions-materialize $profile)
+     ((CodexAbsent True)
+      ((CodexRequestPermissionProfile $network $file-system)
+       (if (codex:is-request-permissions-network-empty? $network)
+           (codex:is-request-permissions-file-system-empty? $file-system)
+           False))
+      ($other True))))
 
 (= (codex:is-string-in-list $needle ())
    False)
@@ -469,10 +502,34 @@
            $acc
            (list:append $acc ($head))))))
 
+; Same lexical normalization as `path-normalize`/`path-join`, staged through
+; `case` so request_permissions remains stable when called from modules that
+; also import the large protocol/list_dir surfaces.
+(= (codex:request-permissions-normalize-path $path)
+   (case (path-is-absolute? $path)
+     ((True
+       (case (path-parts $path)
+         (($parts
+            (path-build-from-parts $parts True)))))
+      (False
+       (case (path-parts $path)
+         (($parts
+            (path-build-from-parts $parts False))))))))
+
+(= (codex:request-permissions-join-path-text $cwd $path)
+   (if (== $cwd "/")
+       (str-concat "/" $path)
+       (if (str-ends-with? $cwd "/")
+           (str-concat $cwd $path)
+           (str-concat (str-concat $cwd "/") $path))))
+
 (= (codex:normalized-request-permissions-path $cwd $path)
-   (if (path-is-absolute? $path)
-       (path-normalize $path)
-       (path-join $cwd $path)))
+   (case (path-is-absolute? $path)
+     ((True
+       (codex:request-permissions-normalize-path $path))
+      (False
+       (codex:request-permissions-normalize-path
+         (codex:request-permissions-join-path-text $cwd $path))))))
 
 (= (codex:normalize-request-permissions-path-list $cwd $paths)
    (codex:normalize-request-permissions-path-list-acc $cwd $paths ()))
@@ -669,32 +726,27 @@
            $json
            "permissions")))))
 
-(= (codex:normalize-request-permissions-network CodexAbsent)
-   CodexAbsent)
+(= (codex:normalize-request-permissions-network $network)
+   (case (codex:request-permissions-materialize $network)
+     ((CodexAbsent CodexAbsent)
+      ((CodexRequestPermissionsNetwork CodexAbsent) CodexAbsent)
+      ((CodexRequestPermissionsNetwork $enabled)
+       (CodexRequestPermissionsNetwork $enabled)))))
 
-(= (codex:normalize-request-permissions-network
-      (CodexRequestPermissionsNetwork CodexAbsent))
-   CodexAbsent)
-
-(= (codex:normalize-request-permissions-network
-      (CodexRequestPermissionsNetwork $enabled))
-   (CodexRequestPermissionsNetwork $enabled))
-
-(= (codex:normalize-request-permissions-file-system $cwd CodexAbsent)
-   CodexAbsent)
-
-(= (codex:normalize-request-permissions-file-system
-      $cwd
-      (CodexRequestPermissionsFileSystem $read $write))
-   (let $normalized-read (codex:normalize-request-permissions-path-list $cwd $read)
-     (let $normalized-write (codex:normalize-request-permissions-path-list $cwd $write)
-       (if (== (list:len $normalized-read) 0)
-           (if (== (list:len $normalized-write) 0)
-               CodexAbsent
-               (CodexRequestPermissionsFileSystem () $normalized-write))
-           (CodexRequestPermissionsFileSystem
-             $normalized-read
-             $normalized-write)))))
+(= (codex:normalize-request-permissions-file-system $cwd $file-system)
+   (case (codex:request-permissions-materialize $file-system)
+     ((CodexAbsent CodexAbsent)
+      ((CodexRequestPermissionsFileSystem $read $write)
+       (let $normalized-read (codex:normalize-request-permissions-path-list $cwd $read)
+         (let $normalized-write
+           (codex:normalize-request-permissions-path-list $cwd $write)
+           (if (== (list:len $normalized-read) 0)
+               (if (== (list:len $normalized-write) 0)
+                   CodexAbsent
+                   (CodexRequestPermissionsFileSystem () $normalized-write))
+               (CodexRequestPermissionsFileSystem
+                 $normalized-read
+                 $normalized-write))))))))
 
 (= (codex:request-permission-profile-or-absent CodexAbsent CodexAbsent)
    CodexAbsent)
@@ -702,15 +754,15 @@
 (= (codex:request-permission-profile-or-absent $network $file-system)
    (CodexRequestPermissionProfile $network $file-system))
 
-(= (codex:normalize-request-permission-profile $cwd CodexAbsent)
-   CodexAbsent)
-
-(= (codex:normalize-request-permission-profile
-      $cwd
-      (CodexRequestPermissionProfile $network $file-system))
-   (codex:request-permission-profile-or-absent
-     (codex:normalize-request-permissions-network $network)
-     (codex:normalize-request-permissions-file-system $cwd $file-system)))
+(= (codex:normalize-request-permission-profile $cwd $profile)
+   (case (codex:request-permissions-materialize $profile)
+     ((CodexAbsent CodexAbsent)
+      ((CodexRequestPermissionProfile $network $file-system)
+       (codex:request-permission-profile-or-absent
+         (codex:normalize-request-permissions-network $network)
+         (codex:normalize-request-permissions-file-system
+           $cwd
+           $file-system))))))
 
 (= (codex:normalize-request-permissions-args
       $cwd
@@ -773,11 +825,17 @@
        $right-file-system)))
 
 (= (codex:merge-request-permission-profiles $left $right)
-   (if (== $left CodexAbsent)
-       $right
-       (if (== $right CodexAbsent)
-           $left
-           (codex:merge-request-permission-profile-values $left $right))))
+   (case (codex:request-permissions-materialize $left)
+     (($resolved-left
+       (case (codex:request-permissions-materialize $right)
+         (($resolved-right
+           (if (== $resolved-left CodexAbsent)
+               $resolved-right
+               (if (== $resolved-right CodexAbsent)
+                   $resolved-left
+                   (codex:merge-request-permission-profile-values
+                     $resolved-left
+                     $resolved-right))))))))))
 
 (= (codex:request-permissions-readable-roots CodexAbsent)
    ())
@@ -903,63 +961,91 @@
        False))
 
 (= (codex:is-request-permissions-preapproved $effective $granted $cwd)
-   (if (or (== $effective CodexAbsent) (== $granted CodexAbsent))
-       False
-       (codex:is-request-permission-profile-equivalent?
-         (codex:intersect-request-permission-profiles
-           $effective
-           $granted
-           $cwd)
-         (codex:normalize-request-permission-profile $cwd $effective))))
+   (case (codex:request-permissions-materialize $effective)
+     (($resolved-effective
+       (case (codex:request-permissions-materialize $granted)
+         (($resolved-granted
+           (if (or
+                 (== $resolved-effective CodexAbsent)
+                 (== $resolved-granted CodexAbsent))
+               False
+               (case
+                 (codex:intersect-request-permission-profiles
+                   $resolved-effective
+                   $resolved-granted
+                   $cwd)
+                 (($intersected
+                   (case
+                     (codex:normalize-request-permission-profile
+                       $cwd
+                       $resolved-effective)
+                     (($normalized-effective
+                       (codex:is-request-permission-profile-equivalent?
+                         $intersected
+                         $normalized-effective)))))))))))))))
 
 (= (codex:normalize-request-permissions-response
       $requested-permissions
-      (CodexRequestPermissionsResponse $permissions $scope $strict-auto-review)
+      $response
       $cwd)
-   (if (and
-         $strict-auto-review
-         (== $scope (codex:permission-grant-scope-session)))
-       (CodexRequestPermissionsResponse
-         CodexAbsent
-         (codex:permission-grant-scope-turn)
-         False)
-       (let $normalized-permissions
-         (codex:normalize-request-permission-profile $cwd $permissions)
-         (if (codex:is-request-permission-profile-empty? $normalized-permissions)
-             (CodexRequestPermissionsResponse
-               CodexAbsent
-               $scope
-               $strict-auto-review)
-             (CodexRequestPermissionsResponse
-               (codex:intersect-request-permission-profiles
-                 $requested-permissions
-                 $normalized-permissions
-                 $cwd)
-               $scope
-               $strict-auto-review)))))
+   (case (codex:request-permissions-materialize $response)
+     (((CodexRequestPermissionsResponse
+         $permissions
+         $scope
+         $strict-auto-review)
+       (if (and
+             $strict-auto-review
+             (== $scope (codex:permission-grant-scope-session)))
+           (CodexRequestPermissionsResponse
+             CodexAbsent
+             (codex:permission-grant-scope-turn)
+             False)
+           (let $normalized-permissions
+             (codex:normalize-request-permission-profile $cwd $permissions)
+             (if (codex:is-request-permission-profile-empty?
+                   $normalized-permissions)
+                 (CodexRequestPermissionsResponse
+                   CodexAbsent
+                   $scope
+                   $strict-auto-review)
+                 (CodexRequestPermissionsResponse
+                   (codex:intersect-request-permission-profiles
+                     (codex:normalize-request-permission-profile
+                       $cwd
+                       $requested-permissions)
+                     $normalized-permissions
+                     $cwd)
+                   $scope
+                   $strict-auto-review))))))))
 
-(= (codex:record-granted-request-permissions-for-state
-      $state
-      (CodexRequestPermissionsResponse $permissions $scope $strict-auto-review))
-   (if (codex:is-request-permission-profile-empty? $permissions)
-       $state
-       (if (== $scope (codex:permission-grant-scope-turn))
-           (codex:request-permissions-state
-             (codex:request-permissions-state-session-permissions $state)
-             (codex:merge-request-permission-profiles
-               (codex:request-permissions-state-turn-permissions $state)
-               $permissions)
-             (if $strict-auto-review
-                 True
-                 (codex:request-permissions-state-turn-strict-auto-review
-                   $state)))
-           (codex:request-permissions-state
-             (codex:merge-request-permission-profiles
-               (codex:request-permissions-state-session-permissions $state)
-               $permissions)
-             (codex:request-permissions-state-turn-permissions $state)
-             (codex:request-permissions-state-turn-strict-auto-review
-               $state)))))
+(= (codex:record-granted-request-permissions-for-state $state $response)
+   (case (codex:request-permissions-materialize $response)
+     (((CodexRequestPermissionsResponse
+         $permissions
+         $scope
+         $strict-auto-review)
+       (let $resolved-permissions
+         (codex:request-permissions-materialize $permissions)
+         (if (codex:is-request-permission-profile-empty? $resolved-permissions)
+             $state
+             (if (== $scope (codex:permission-grant-scope-turn))
+                 (codex:request-permissions-state
+                   (codex:request-permissions-state-session-permissions $state)
+                   (codex:merge-request-permission-profiles
+                     (codex:request-permissions-state-turn-permissions $state)
+                     $resolved-permissions)
+                   (if $strict-auto-review
+                       True
+                       (codex:request-permissions-state-turn-strict-auto-review
+                         $state)))
+                 (codex:request-permissions-state
+                   (codex:merge-request-permission-profiles
+                     (codex:request-permissions-state-session-permissions
+                       $state)
+                     $resolved-permissions)
+                   (codex:request-permissions-state-turn-permissions $state)
+                   (codex:request-permissions-state-turn-strict-auto-review
+                     $state)))))))))
 
 (= (codex:request-permissions-granted-permissions $state)
    (codex:merge-request-permission-profiles

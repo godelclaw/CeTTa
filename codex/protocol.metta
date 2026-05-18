@@ -5052,44 +5052,40 @@
         $session-id
         $transport
         $voice))
-   (let $pairs-1
-     ((JsonPair
-        "output_modality"
-        (codex:realtime-output-modality-json $output-modality)))
-     (let $pairs-2
-       (if (== $prompt CodexAbsent)
-           $pairs-1
-           (if (== $prompt JsonNull)
-               (codex:protocol-append-json-pair
-                 $pairs-1
-                 "prompt"
-                 JsonNull)
-               (codex:protocol-append-json-pair
-                 $pairs-1
-                 "prompt"
-                 (JsonString $prompt))))
-       (let $pairs-3
-         (if (== $session-id CodexAbsent)
-             $pairs-2
-             (codex:protocol-append-json-pair
-               $pairs-2
-               "session_id"
-               (JsonString $session-id)))
-         (let $pairs-4
-           (if (== $transport CodexAbsent)
-               $pairs-3
-               (codex:protocol-append-json-pair
+   ; CeTTa reduction note: this is Rust serde's field order for
+   ; ConversationStartParams, staged so composed request-op assertions do not
+   ; collapse the optional pair list before JSON materialization.
+   (case
+     (codex:append-optional-json-nullable-string-pair
+       ((JsonPair
+          "output_modality"
+          (codex:realtime-output-modality-json $output-modality)))
+       "prompt"
+       $prompt)
+     (($pairs-2
+       (case
+         (codex:append-optional-json-string-pair
+           $pairs-2
+           "session_id"
+           $session-id)
+         (($pairs-3
+           (case
+             (if (== $transport CodexAbsent)
                  $pairs-3
-                 "transport"
-                 (codex:conversation-start-transport-json $transport)))
-           (let $pairs-5
-             (if (== $voice CodexAbsent)
-                 $pairs-4
                  (codex:protocol-append-json-pair
-                   $pairs-4
-                   "voice"
-                   (codex:realtime-voice-json $voice)))
-             (JsonObject $pairs-5)))))))
+                   $pairs-3
+                   "transport"
+                   (codex:conversation-start-transport-json $transport)))
+             (($pairs-4
+               (case
+                 (if (== $voice CodexAbsent)
+                     $pairs-4
+                     (codex:protocol-append-json-pair
+                       $pairs-4
+                       "voice"
+                       (codex:realtime-voice-json $voice)))
+                 (($pairs-5
+                   (JsonObject $pairs-5))))))))))))))
 
 (= (codex:conversation-audio-params-json
       (CodexConversationAudioParams $frame))
@@ -5841,6 +5837,13 @@
        $pairs
        (codex:protocol-append-json-pair $pairs $key (JsonString $value))))
 
+(= (codex:append-optional-json-nullable-string-pair $pairs $key $value)
+   (if (== $value CodexAbsent)
+       $pairs
+       (if (== $value JsonNull)
+           (codex:protocol-append-json-pair $pairs $key JsonNull)
+           (codex:protocol-append-json-pair $pairs $key (JsonString $value)))))
+
 (= (codex:append-optional-json-value-pair $pairs $key $value)
    (if (== $value CodexAbsent)
        $pairs
@@ -6449,9 +6452,8 @@
       (JsonPair "text" (JsonString $text)))))
 
 (= (codex:content-json $items)
-   (function
-     (let $json-items (eval (map-atom $items $item (codex:content-item-json $item)))
-       (return (JsonArray $json-items)))))
+   (JsonArray
+     (map-atom-strict $items $item (codex:content-item-json $item))))
 
 (= (codex:output-json (CodexFunctionCallOutputText $text))
    (JsonString $text))
@@ -8137,45 +8139,40 @@
           $session-id
           $transport
           $voice)))
-   (let $pairs-1
-     ((JsonPair "type" (JsonString "realtime_conversation_start"))
-      (JsonPair
-        "output_modality"
-        (codex:realtime-output-modality-json $output-modality)))
-     (let $pairs-2
-       (if (== $prompt CodexAbsent)
-           $pairs-1
-           (if (== $prompt JsonNull)
-               (codex:protocol-append-json-pair
-                 $pairs-1
-                 "prompt"
-                 JsonNull)
-               (codex:protocol-append-json-pair
-                 $pairs-1
-                 "prompt"
-                 (JsonString $prompt))))
-       (let $pairs-3
-         (if (== $session-id CodexAbsent)
-             $pairs-2
-             (codex:protocol-append-json-pair
-               $pairs-2
-               "session_id"
-               (JsonString $session-id)))
-         (let $pairs-4
-           (if (== $transport CodexAbsent)
-               $pairs-3
-               (codex:protocol-append-json-pair
+   ; CeTTa reduction note: this preserves Rust serde's tagged Op field order
+   ; while forcing each optional append to materialize before the next one.
+   (case
+     (codex:append-optional-json-nullable-string-pair
+       ((JsonPair "type" (JsonString "realtime_conversation_start"))
+        (JsonPair
+          "output_modality"
+          (codex:realtime-output-modality-json $output-modality)))
+       "prompt"
+       $prompt)
+     (($pairs-2
+       (case
+         (codex:append-optional-json-string-pair
+           $pairs-2
+           "session_id"
+           $session-id)
+         (($pairs-3
+           (case
+             (if (== $transport CodexAbsent)
                  $pairs-3
-                 "transport"
-                 (codex:conversation-start-transport-json $transport)))
-           (let $pairs-5
-             (if (== $voice CodexAbsent)
-                 $pairs-4
                  (codex:protocol-append-json-pair
-                   $pairs-4
-                   "voice"
-                   (codex:realtime-voice-json $voice)))
-             (JsonObject $pairs-5)))))))
+                   $pairs-3
+                   "transport"
+                   (codex:conversation-start-transport-json $transport)))
+             (($pairs-4
+               (case
+                 (if (== $voice CodexAbsent)
+                     $pairs-4
+                     (codex:protocol-append-json-pair
+                       $pairs-4
+                       "voice"
+                       (codex:realtime-voice-json $voice)))
+                 (($pairs-5
+                   (JsonObject $pairs-5))))))))))))))
 
 (= (codex:op-json
       (CodexOpRealtimeConversationAudio

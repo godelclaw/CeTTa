@@ -57,31 +57,37 @@
       $input
       $exposed-tool-names)
    (let ($head $tail) (decons-atom $input)
-     (let $tail-pairs
+     (case
        (codex:collect-unavailable-called-tool-pairs $tail $exposed-tool-names)
-       (case $head
-         (((CodexResponseItemFunctionCall $id $name $namespace $arguments $call_id)
-           (if (codex:should-collect-unavailable-tool $name $namespace)
-               (let $tool-name
-                 (if (== $namespace CodexAbsent)
-                     (codex:plain-tool-name $name)
-                     (codex:namespaced-tool-name $namespace $name))
-                 (let $display (codex:tool-name-display $tool-name)
-                   ; CeTTa evaluation accommodation: materialize the
-                   ; HashSet::contains equivalent before choosing whether to
-                   ; keep this pair. The direct `if` form can collapse when
-                   ; the exposed-name list is itself recursive data.
-                   (case
-                     (codex:unavailable-tool-string-list-contains
-                       $exposed-tool-names
-                       $display)
-                     ((True $tail-pairs)
-                      (False
-                       (cons-atom
-                         (codex:unavailable-tool-pair $display $tool-name)
-                         $tail-pairs))))))
-               $tail-pairs))
-          ($other $tail-pairs))))))
+       (($tail-pairs
+         (case $head
+           (((CodexResponseItemFunctionCall
+               $id
+               $name
+               $namespace
+               $arguments
+               $call_id)
+             (if (codex:should-collect-unavailable-tool $name $namespace)
+                 (let $tool-name
+                   (if (== $namespace CodexAbsent)
+                       (codex:plain-tool-name $name)
+                       (codex:namespaced-tool-name $namespace $name))
+                   (let $display (codex:tool-name-display $tool-name)
+                     ; CeTTa evaluation accommodation: materialize the
+                     ; HashSet::contains equivalent before choosing whether to
+                     ; keep this pair. The direct `if` form can collapse when
+                     ; the exposed-name list is itself recursive data.
+                     (case
+                       (codex:unavailable-tool-string-list-contains
+                         $exposed-tool-names
+                         $display)
+                       ((True $tail-pairs)
+                        (False
+                         (cons-atom
+                           (codex:unavailable-tool-pair $display $tool-name)
+                           $tail-pairs))))))
+                 $tail-pairs))
+            ($other $tail-pairs))))))))
 
 (= (codex:unavailable-tool-pair-displays $pairs)
    (eval
@@ -124,11 +130,15 @@
          (codex:unavailable-tool-find-first-by-display $pairs $display))))
 
 (= (codex:collect-unavailable-called-tools $input $exposed-tool-names)
-   (let $pairs
+   (case
      (codex:collect-unavailable-called-tool-pairs $input $exposed-tool-names)
-     (let $displays
-       (eval (codex:unavailable-tool-pair-displays $pairs))
-       (let $sorted-displays
-         (codex:unavailable-tool-dedup-sorted-strings
-           (sort-strings $displays))
-         (codex:unavailable-tool-names-from-displays $pairs $sorted-displays)))))
+     (($pairs
+       (case (eval (codex:unavailable-tool-pair-displays $pairs))
+         (($displays
+           (case
+             (codex:unavailable-tool-dedup-sorted-strings
+               (sort-strings $displays))
+             (($sorted-displays
+               (codex:unavailable-tool-names-from-displays
+                 $pairs
+                 $sorted-displays)))))))))))

@@ -214,29 +214,102 @@
            "image path `{}` is not a file"
            ($resolved-path)))))))
 
-(= (codex:handle-view-image-args $context $args)
-   (if (not (codex:view-image-handler-context-image-input-supported $context))
+(= (codex:view-image-materialize $value)
+   (case $value
+     (((CodexViewImageArgs $path $detail)
+       (CodexViewImageArgs $path $detail))
+      ((CodexViewImageHandlerContext
+         $image-input-supported
+         $environment-available
+         $can-request-original-image-detail
+         $cwd)
+       (CodexViewImageHandlerContext
+         $image-input-supported
+         $environment-available
+         $can-request-original-image-detail
+         $cwd))
+      ($other
+       (once (eval $other))))))
+
+(= (codex:handle-view-image-values
+      False
+      $environment-available
+      $can-request-original-image-detail
+      $cwd
+      $path
+      $requested-detail)
+   (codex:view-image-handler-result-error
+     (codex:view-image-unsupported-message)))
+
+(= (codex:handle-view-image-values
+      True
+      $environment-available
+      $can-request-original-image-detail
+      $cwd
+      $path
+      $requested-detail)
+   (case
+     (and
+       (not (== $requested-detail CodexAbsent))
+       (not (== $requested-detail "original")))
+     ((True
        (codex:view-image-handler-result-error
-         (codex:view-image-unsupported-message))
-       (let $requested-detail (codex:view-image-args-detail $args)
-         (if (and
-               (not (== $requested-detail CodexAbsent))
-               (not (== $requested-detail "original")))
-             (codex:view-image-handler-result-error
-               (format-args
-                 "view_image.detail only supports `original`; omit `detail` for default resized behavior, got `{}`"
-                 ($requested-detail)))
-             (if (not (codex:view-image-handler-context-environment-available $context))
-                 (codex:view-image-handler-result-error
-                   "view_image is unavailable in this session")
-                 (let $resolved-path
-                   (codex:view-image-resolve-path
-                     (codex:view-image-handler-context-cwd $context)
-                     (codex:view-image-args-path $args))
-                   (codex:handle-view-image-resolved-path
-                     $context
-                     $requested-detail
-                     $resolved-path)))))))
+         (format-args
+           "view_image.detail only supports `original`; omit `detail` for default resized behavior, got `{}`"
+           ($requested-detail))))
+      (False
+       (codex:handle-view-image-available-values
+         $environment-available
+         $can-request-original-image-detail
+         $cwd
+         $path
+         $requested-detail)))))
+
+(= (codex:handle-view-image-available-values
+      False
+      $can-request-original-image-detail
+      $cwd
+      $path
+      $requested-detail)
+   (codex:view-image-handler-result-error
+     "view_image is unavailable in this session"))
+
+(= (codex:handle-view-image-available-values
+      True
+      $can-request-original-image-detail
+      $cwd
+      $path
+      $requested-detail)
+   (case (codex:view-image-resolve-path $cwd $path)
+     (($resolved-path
+       (codex:handle-view-image-resolved-path
+         (CodexViewImageHandlerContext
+           True
+           True
+           $can-request-original-image-detail
+           $cwd)
+         $requested-detail
+         $resolved-path)))))
+
+(= (codex:handle-view-image-args $context $args)
+   ; CeTTa reduction note: Rust evaluates these handler gates in sequence.
+   ; Materialize the two Rust structs once, then run the value-level gates in
+   ; small helpers so composed assertions do not drop the success branch.
+   (case (codex:view-image-materialize $context)
+     (((CodexViewImageHandlerContext
+         $image-input-supported
+         $environment-available
+         $can-request-original-image-detail
+         $cwd)
+       (case (codex:view-image-materialize $args)
+         (((CodexViewImageArgs $path $requested-detail)
+           (codex:handle-view-image-values
+             $image-input-supported
+             $environment-available
+             $can-request-original-image-detail
+             $cwd
+             $path
+             $requested-detail))))))))
 
 (= (codex:run-view-image-tool-call-with-context $context $call-id $input)
    (case (codex:parse-view-image-args $input)
