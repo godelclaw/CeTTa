@@ -384,7 +384,8 @@ typedef struct {
     X(lib_mm2_context_size, "__cetta_lib_mm2_context_size") \
     X(lib_mm2_context_atoms, "__cetta_lib_mm2_context_atoms") \
     /* ── Native handle ── */ \
-    X(native_handle, "NativeHandle")
+    X(native_handle, "NativeHandle") \
+    X(lib_str_split_middle_bytes, "__cetta_lib_str_split_middle_bytes")
 
 typedef struct {
 #define CETTA_BUILTIN_SYMBOL_FIELD(field, text) SymbolId field;

@@ -8546,6 +8546,104 @@ static Atom *str_take_bytes_at_char_boundary(Arena *a, Atom *head,
     return result;
 }
 
+static size_t utf8_char_len_at(const char *text, size_t len, size_t index) {
+    unsigned char first;
+    if (!text || index >= len) return 0;
+    first = (unsigned char)text[index];
+    if ((first & 0x80u) == 0u) return 1u;
+    if ((first & 0xe0u) == 0xc0u && index + 1u < len &&
+        (((unsigned char)text[index + 1u]) & 0xc0u) == 0x80u) {
+        return 2u;
+    }
+    if ((first & 0xf0u) == 0xe0u && index + 2u < len &&
+        (((unsigned char)text[index + 1u]) & 0xc0u) == 0x80u &&
+        (((unsigned char)text[index + 2u]) & 0xc0u) == 0x80u) {
+        return 3u;
+    }
+    if ((first & 0xf8u) == 0xf0u && index + 3u < len &&
+        (((unsigned char)text[index + 1u]) & 0xc0u) == 0x80u &&
+        (((unsigned char)text[index + 2u]) & 0xc0u) == 0x80u &&
+        (((unsigned char)text[index + 3u]) & 0xc0u) == 0x80u) {
+        return 4u;
+    }
+    return 1u;
+}
+
+static Atom *str_split_middle_bytes(Arena *a, Atom *head,
+                                    Atom **args, uint32_t nargs) {
+    const char *text;
+    int beginning_bytes_arg;
+    int end_bytes_arg;
+    size_t len;
+    size_t beginning_bytes;
+    size_t end_bytes;
+    size_t tail_start_target;
+    size_t prefix_end = 0u;
+    size_t suffix_start;
+    size_t removed_chars = 0u;
+    bool suffix_started = false;
+    char *prefix;
+    char *suffix;
+    Atom *result;
+
+    if (nargs != 3 || !(text = library_text_arg(args[0])) ||
+        !library_int_arg(args[1], &beginning_bytes_arg) ||
+        !library_int_arg(args[2], &end_bytes_arg) ||
+        beginning_bytes_arg < 0 || end_bytes_arg < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected text and non-negative byte budgets");
+    }
+
+    len = strlen(text);
+    beginning_bytes = (size_t)beginning_bytes_arg;
+    end_bytes = (size_t)end_bytes_arg;
+    tail_start_target = end_bytes > len ? 0u : len - end_bytes;
+    suffix_start = len;
+
+    for (size_t index = 0u; index < len;) {
+        size_t char_len = utf8_char_len_at(text, len, index);
+        size_t char_end = index + char_len;
+        if (char_end <= beginning_bytes) {
+            prefix_end = char_end;
+            index = char_end;
+            continue;
+        }
+
+        if (index >= tail_start_target) {
+            if (!suffix_started) {
+                suffix_start = index;
+                suffix_started = true;
+            }
+            index = char_end;
+            continue;
+        }
+
+        removed_chars++;
+        index = char_end;
+    }
+
+    if (suffix_start < prefix_end) suffix_start = prefix_end;
+
+    prefix = cetta_malloc(prefix_end + 1u);
+    memcpy(prefix, text, prefix_end);
+    prefix[prefix_end] = '\0';
+
+    suffix = cetta_malloc(len - suffix_start + 1u);
+    memcpy(suffix, text + suffix_start, len - suffix_start);
+    suffix[len - suffix_start] = '\0';
+
+    result = atom_expr(a, (Atom *[]){
+        atom_symbol(a, "StrMiddleSplit"),
+        atom_int(a, (int64_t)removed_chars),
+        atom_string(a, prefix),
+        atom_string(a, suffix)
+    }, 4);
+
+    free(prefix);
+    free(suffix);
+    return result;
+}
+
 static Atom *str_base64_encode(Arena *a, Atom *head,
                                Atom **args, uint32_t nargs) {
     static const char table[] =
@@ -8629,6 +8727,9 @@ static Atom *cetta_library_dispatch_str(Arena *a, Atom *head,
     }
     if (head_id == g_builtin_syms.lib_str_take_bytes_at_char_boundary) {
         return str_take_bytes_at_char_boundary(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_str_split_middle_bytes) {
+        return str_split_middle_bytes(a, head, args, nargs);
     }
     if (head_id == g_builtin_syms.lib_str_base64_encode) {
         return str_base64_encode(a, head, args, nargs);

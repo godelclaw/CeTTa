@@ -15,10 +15,6 @@
 ; - Rust generates random six-hex chunk IDs. This slice derives a stable chunk
 ;   marker from the tool call id because the current CeTTa library surface has
 ;   no RNG helper yet.
-; - Rust truncation preserves UTF-8 scalar boundaries. CeTTa's current
-;   `str-slice` surface is byte-indexed, so the truncation helper is
-;   byte-oriented in this slice. The demo/tests keep ASCII output until a
-;   scalar-aware string helper lands.
 ; - Rust does not need a helper to resume a prior exec result object because
 ;   its async handler layer can naturally thread `session_id` into a later
 ;   write_stdin tool call. This slice adds an internal
@@ -73,6 +69,7 @@
 !(import! &self request_user_input)
 !(import! &self update_plan)
 !(import! &self str)
+!(import! &self str_middle)
 !(import! &self system)
 
 ; `tools` only needs a tiny protocol value subset here. Importing the full
@@ -1203,40 +1200,34 @@
 
 (= (codex:token-truncation-marker $removed-bytes)
    (str-concat
-     "..."
+     "…"
      (str-concat
        (codex:number-text
          (codex:approx-tokens-from-byte-count $removed-bytes))
-       " tokens truncated...")))
+       " tokens truncated…")))
 
 (= (codex:truncate-middle-with-token-budget $text $max-tokens)
    (let $max-bytes (codex:approx-bytes-for-tokens $max-tokens)
      (codex:truncate-middle-with-token-budget-bytes $text $max-bytes)))
 
 (= (codex:truncate-middle-with-token-budget-bytes $text $max-bytes)
-   (if (<= (str-length $text) $max-bytes)
-       $text
-       (if (== $max-bytes 0)
-           (codex:token-truncation-marker (str-length $text))
-           (let $text-len (str-length $text)
-             (let $left-budget (/ $max-bytes 2)
-               (let $right-budget (- $max-bytes $left-budget)
-                 (let $prefix-end
-                   (if (> $left-budget $text-len) $text-len $left-budget)
-                   (let $suffix-start-target
-                     (if (> $right-budget $text-len)
-                         0
-                         (- $text-len $right-budget))
-                     (let $suffix-start
-                       (if (< $suffix-start-target $prefix-end)
-                           $prefix-end
-                           $suffix-start-target)
-                       (str-concat
-                         (str-slice $text 0 $prefix-end)
+   (if (== $text "")
+       ""
+       (if (<= (str-length $text) $max-bytes)
+           $text
+           (if (== $max-bytes 0)
+               (codex:token-truncation-marker (str-length $text))
+               (let $text-len (str-length $text)
+                 (let $left-budget (trunc-math (/ $max-bytes 2))
+                   (let $right-budget (- $max-bytes $left-budget)
+                     (case (str-split-middle-bytes $text $left-budget $right-budget)
+                       (((StrMiddleSplit $removed-chars $prefix $suffix)
                          (str-concat
-                           (codex:token-truncation-marker
-                             (- $text-len $max-bytes))
-                           (str-slice $text $suffix-start $text-len))))))))))))
+                           $prefix
+                           (str-concat
+                             (codex:token-truncation-marker
+                               (- $text-len $max-bytes))
+                             $suffix))))))))))))
 
 (= (codex:format-truncated-output $text $max-output-tokens)
    (let $max-bytes (codex:approx-bytes-for-tokens $max-output-tokens)

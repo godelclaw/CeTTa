@@ -22,6 +22,7 @@
 !(import! &self list)
 !(import! &self protocol)
 !(import! &self str)
+!(import! &self str_middle)
 
 (= (codex:telemetry-preview-max-bytes)
    2048)
@@ -797,40 +798,34 @@
 
 (= (codex:token-truncation-marker $removed-bytes)
    (str-concat
-     "..."
+     "…"
      (str-concat
        (codex:number-text
          (codex:approx-tokens-from-byte-count $removed-bytes))
-       " tokens truncated...")))
+       " tokens truncated…")))
 
 (= (codex:truncate-middle-with-token-budget $text $max-tokens)
    (let $max-bytes (codex:approx-bytes-for-tokens $max-tokens)
      (codex:truncate-middle-with-token-budget-bytes $text $max-bytes)))
 
 (= (codex:truncate-middle-with-token-budget-bytes $text $max-bytes)
-   (if (<= (str-length $text) $max-bytes)
-       $text
-       (if (== $max-bytes 0)
-           (codex:token-truncation-marker (str-length $text))
-           (let $text-len (str-length $text)
-             (let $left-budget (/ $max-bytes 2)
-               (let $right-budget (- $max-bytes $left-budget)
-                 (let $prefix-end
-                   (if (> $left-budget $text-len) $text-len $left-budget)
-                   (let $suffix-start-target
-                     (if (> $right-budget $text-len)
-                         0
-                         (- $text-len $right-budget))
-                     (let $suffix-start
-                       (if (< $suffix-start-target $prefix-end)
-                           $prefix-end
-                           $suffix-start-target)
-                       (str-concat
-                         (str-slice $text 0 $prefix-end)
+   (if (== $text "")
+       ""
+       (if (<= (str-length $text) $max-bytes)
+           $text
+           (if (== $max-bytes 0)
+               (codex:token-truncation-marker (str-length $text))
+               (let $text-len (str-length $text)
+                 (let $left-budget (trunc-math (/ $max-bytes 2))
+                   (let $right-budget (- $max-bytes $left-budget)
+                     (case (str-split-middle-bytes $text $left-budget $right-budget)
+                       (((StrMiddleSplit $removed-chars $prefix $suffix)
                          (str-concat
-                           (codex:token-truncation-marker
-                             (- $text-len $max-bytes))
-                           (str-slice $text $suffix-start $text-len))))))))))))
+                           $prefix
+                           (str-concat
+                             (codex:token-truncation-marker
+                               (- $text-len $max-bytes))
+                             $suffix))))))))))))
 
 (= (codex:resolve-max-output-tokens $max-output-tokens)
    (if (== $max-output-tokens CodexAbsent)
