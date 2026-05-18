@@ -41,6 +41,8 @@
 ; - GuardianAssessment(GuardianAssessmentEvent)
 ; - TurnDiffEvent
 ; - GetHistoryEntryResponseEvent / HistoryEntry
+; - McpListToolsResponseEvent / McpTool / McpResource /
+;   McpResourceTemplate / McpAuthStatus
 ; - ListSkillsResponseEvent / SkillsListEntry / SkillMetadata
 ; - RealtimeConversationStarted/Realtime/Closed/Sdp / RealtimeVoice
 ; - RealtimeAudioFrame / RealtimeEvent::AudioOut
@@ -123,6 +125,10 @@
 ; Rust also represents `CollabWaitingEndEvent.statuses` as
 ; `HashMap<ThreadId, AgentStatus>`. This CeTTa slice uses the same ordered-list
 ; projection approach there so the visible JSON object shape remains identical.
+;
+; Rust represents `McpListToolsResponseEvent` maps as `HashMap`s. This CeTTa
+; slice uses ordered keyed entries and projects them back into the same JSON
+; object shape; object member order is not semantic on the Rust side.
 ;
 ; The unified-exec delta event stores raw bytes in Rust and serializes them as
 ; base64. The current CeTTa surface therefore models the event payload as text
@@ -397,6 +403,87 @@
      $mcp-app-resource-uri
      $duration
      $result))
+
+(= (codex:mcp-tool
+      $name
+      $title
+      $description
+      $input-schema
+      $output-schema
+      $annotations
+      $icons
+      $meta)
+   (CodexMcpTool
+     $name
+     $title
+     $description
+     $input-schema
+     $output-schema
+     $annotations
+     $icons
+     $meta))
+
+(= (codex:mcp-resource
+      $annotations
+      $description
+      $mime-type
+      $name
+      $size
+      $title
+      $uri
+      $icons
+      $meta)
+   (CodexMcpResource
+     $annotations
+     $description
+     $mime-type
+     $name
+     $size
+     $title
+     $uri
+     $icons
+     $meta))
+
+(= (codex:mcp-resource-template
+      $annotations
+      $uri-template
+      $name
+      $title
+      $description
+      $mime-type)
+   (CodexMcpResourceTemplate
+     $annotations
+     $uri-template
+     $name
+     $title
+     $description
+     $mime-type))
+
+(= (codex:mcp-auth-status-unsupported)
+   (CodexMcpAuthStatusUnsupported))
+
+(= (codex:mcp-auth-status-not-logged-in)
+   (CodexMcpAuthStatusNotLoggedIn))
+
+(= (codex:mcp-auth-status-bearer-token)
+   (CodexMcpAuthStatusBearerToken))
+
+(= (codex:mcp-auth-status-oauth)
+   (CodexMcpAuthStatusOAuth))
+
+(= (codex:mcp-map-entry $key $value)
+   (CodexMcpMapEntry $key $value))
+
+(= (codex:mcp-list-tools-response-event
+      $tools
+      $resources
+      $resource-templates
+      $auth-statuses)
+   (CodexEventMcpListToolsResponse
+     $tools
+     $resources
+     $resource-templates
+     $auth-statuses))
 
 (= (codex:mcp-startup-status-starting)
    (CodexMcpStartupStatusStarting))
@@ -3100,6 +3187,14 @@
    "mcp_tool_call_end")
 
 (= (codex:item-type
+      (CodexEventMcpListToolsResponse
+        $tools
+        $resources
+        $resource-templates
+        $auth-statuses))
+   "mcp_list_tools_response")
+
+(= (codex:item-type
       (CodexEventMcpStartupUpdate $server $status))
    "mcp_startup_update")
 
@@ -4021,6 +4116,232 @@
       (CodexMcpToolCallResultErr $message))
    (JsonObject
      ((JsonPair "Err" (JsonString $message)))))
+
+(= (codex:mcp-auth-status-json
+      (CodexMcpAuthStatusUnsupported))
+   (JsonString "unsupported"))
+
+(= (codex:mcp-auth-status-json
+      (CodexMcpAuthStatusNotLoggedIn))
+   (JsonString "not_logged_in"))
+
+(= (codex:mcp-auth-status-json
+      (CodexMcpAuthStatusBearerToken))
+   (JsonString "bearer_token"))
+
+(= (codex:mcp-auth-status-json
+      (CodexMcpAuthStatusOAuth))
+   (JsonString "oauth"))
+
+(= (codex:mcp-tool-json
+      (CodexMcpTool
+        $name
+        $title
+        $description
+        $input-schema
+        $output-schema
+        $annotations
+        $icons
+        $meta))
+   (let $pairs-1
+     ((JsonPair "name" (JsonString $name)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "title"
+         $title)
+       (let $pairs-3
+         (codex:append-optional-json-string-pair
+           $pairs-2
+           "description"
+           $description)
+         (let $pairs-4
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "inputSchema"
+             $input-schema)
+           (let $pairs-5
+             (codex:append-optional-json-value-pair
+               $pairs-4
+               "outputSchema"
+               $output-schema)
+             (let $pairs-6
+               (codex:append-optional-json-value-pair
+                 $pairs-5
+                 "annotations"
+                 $annotations)
+               (let $pairs-7
+                 (codex:append-optional-json-value-pair
+                   $pairs-6
+                   "icons"
+                   $icons)
+                 (JsonObject
+                   (codex:append-optional-json-value-pair
+                     $pairs-7
+                     "_meta"
+                     $meta))))))))))
+
+(= (codex:mcp-resource-json
+      (CodexMcpResource
+        $annotations
+        $description
+        $mime-type
+        $name
+        $size
+        $title
+        $uri
+        $icons
+        $meta))
+   (let $pairs-1
+     ()
+     (let $pairs-2
+       (codex:append-optional-json-value-pair
+         $pairs-1
+         "annotations"
+         $annotations)
+       (let $pairs-3
+         (codex:append-optional-json-string-pair
+           $pairs-2
+           "description"
+           $description)
+         (let $pairs-4
+           (codex:append-optional-json-string-pair
+             $pairs-3
+             "mimeType"
+             $mime-type)
+           (let $pairs-5
+             (codex:protocol-append-json-pair
+               $pairs-4
+               "name"
+               (JsonString $name))
+             (let $pairs-6
+               (codex:append-optional-json-value-pair
+                 $pairs-5
+                 "size"
+                 (if (== $size CodexAbsent)
+                     CodexAbsent
+                     (JsonNumber $size)))
+               (let $pairs-7
+                 (codex:append-optional-json-string-pair
+                   $pairs-6
+                   "title"
+                   $title)
+                 (let $pairs-8
+                   (codex:protocol-append-json-pair
+                     $pairs-7
+                     "uri"
+                     (JsonString $uri))
+                   (let $pairs-9
+                     (codex:append-optional-json-value-pair
+                       $pairs-8
+                       "icons"
+                       $icons)
+                     (JsonObject
+                       (codex:append-optional-json-value-pair
+                         $pairs-9
+                         "_meta"
+                         $meta))))))))))))
+
+(= (codex:mcp-resource-template-json
+      (CodexMcpResourceTemplate
+        $annotations
+        $uri-template
+        $name
+        $title
+        $description
+        $mime-type))
+   (let $pairs-1
+     ()
+     (let $pairs-2
+       (codex:append-optional-json-value-pair
+         $pairs-1
+         "annotations"
+         $annotations)
+       (let $pairs-3
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "uriTemplate"
+           (JsonString $uri-template))
+         (let $pairs-4
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "name"
+             (JsonString $name))
+           (let $pairs-5
+             (codex:append-optional-json-string-pair
+               $pairs-4
+               "title"
+               $title)
+             (let $pairs-6
+               (codex:append-optional-json-string-pair
+                 $pairs-5
+                 "description"
+                 $description)
+               (JsonObject
+                 (codex:append-optional-json-string-pair
+                   $pairs-6
+                   "mimeType"
+                   $mime-type)))))))))
+
+(= (codex:mcp-map-entry-key (CodexMcpMapEntry $key $value))
+   $key)
+
+(= (codex:mcp-map-entry-value (CodexMcpMapEntry $key $value))
+   $value)
+
+(= (codex:mcp-tool-map-json $entries)
+   (JsonObject
+     (map-atom-strict
+       $entries
+       $entry
+       (JsonPair
+         (codex:mcp-map-entry-key $entry)
+         (codex:mcp-tool-json
+           (codex:mcp-map-entry-value $entry))))))
+
+(= (codex:mcp-resources-json $resources)
+   (JsonArray
+     (map-atom-strict
+       $resources
+       $resource
+       (codex:mcp-resource-json $resource))))
+
+(= (codex:mcp-resource-map-json $entries)
+   (JsonObject
+     (map-atom-strict
+       $entries
+       $entry
+       (JsonPair
+         (codex:mcp-map-entry-key $entry)
+         (codex:mcp-resources-json
+           (codex:mcp-map-entry-value $entry))))))
+
+(= (codex:mcp-resource-templates-json $templates)
+   (JsonArray
+     (map-atom-strict
+       $templates
+       $template
+       (codex:mcp-resource-template-json $template))))
+
+(= (codex:mcp-resource-template-map-json $entries)
+   (JsonObject
+     (map-atom-strict
+       $entries
+       $entry
+       (JsonPair
+         (codex:mcp-map-entry-key $entry)
+         (codex:mcp-resource-templates-json
+           (codex:mcp-map-entry-value $entry))))))
+
+(= (codex:mcp-auth-status-map-json $entries)
+   (JsonObject
+     (map-atom-strict
+       $entries
+       $entry
+       (JsonPair
+         (codex:mcp-map-entry-key $entry)
+         (codex:mcp-auth-status-json
+           (codex:mcp-map-entry-value $entry))))))
 
 (= (codex:mcp-startup-status-json
       (CodexMcpStartupStatusStarting))
@@ -7215,6 +7536,23 @@
              $pairs-3
              "result"
              (codex:mcp-tool-call-result-json $result)))))))
+
+(= (codex:item-json
+      (CodexEventMcpListToolsResponse
+        $tools
+        $resources
+        $resource-templates
+        $auth-statuses))
+   (JsonObject
+     ((JsonPair "type" (JsonString "mcp_list_tools_response"))
+      (JsonPair "tools" (codex:mcp-tool-map-json $tools))
+      (JsonPair "resources" (codex:mcp-resource-map-json $resources))
+      (JsonPair
+        "resource_templates"
+        (codex:mcp-resource-template-map-json $resource-templates))
+      (JsonPair
+        "auth_statuses"
+        (codex:mcp-auth-status-map-json $auth-statuses)))))
 
 (= (codex:item-json
       (CodexEventMcpStartupUpdate $server $status))
