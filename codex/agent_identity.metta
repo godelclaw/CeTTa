@@ -8,6 +8,7 @@
 ; - AgentBillOfMaterials / build_abom
 ; - AgentAssertionEnvelope serialization and RegisterTaskRequest JSON shape
 ; - RegisterTaskResponse parsing and task-id selection branch order
+; - signing/decryption seam control flow and Rust error messages
 ; - agent_identity_request_id
 ; - agent_registration_url, agent_task_registration_url, agent_identity_biscuit_url
 ; - normalize_chatgpt_base_url
@@ -19,6 +20,9 @@
 ; - task-id selection exposes a `with-decryption-result` seam so direct and
 ;   missing-id Rust branches are exact while encrypted-id decryption waits for
 ;   the crypto runtime helper.
+; - signing-key and decrypt helpers below model Rust's result/error flow with
+;   injected crypto-step results. They intentionally do not implement Ed25519,
+;   PKCS#8, base64 decode, crypto_box unseal, or byte-level UTF-8 decoding.
 
 !(import! &self str)
 !(import! &self system)
@@ -159,6 +163,123 @@
       (CodexAgentIdentityAuthHeaderErr $message))
    $message)
 
+(= (codex:agent-identity-string-result-ok $value)
+   (CodexAgentIdentityStringResultOk $value))
+
+(= (codex:agent-identity-string-result-err $message)
+   (CodexAgentIdentityStringResultErr $message))
+
+(= (codex:agent-identity-string-result-value
+      (CodexAgentIdentityStringResultOk $value))
+   $value)
+
+(= (codex:agent-identity-string-result-error
+      (CodexAgentIdentityStringResultErr $message))
+   $message)
+
+(= (codex:agent-identity-crypto-step-ok $value)
+   (CodexAgentIdentityCryptoStepOk $value))
+
+(= (codex:agent-identity-crypto-step-err $message)
+   (CodexAgentIdentityCryptoStepErr $message))
+
+(= (codex:agent-identity-error-stored-private-key-base64)
+   "stored agent identity private key is not valid base64")
+
+(= (codex:agent-identity-error-stored-private-key-pkcs8)
+   "stored agent identity private key is not valid PKCS#8")
+
+(= (codex:agent-identity-error-encrypted-task-id-base64)
+   "encrypted task id is not valid base64")
+
+(= (codex:agent-identity-error-decrypt-encrypted-task-id)
+   "failed to decrypt encrypted task id")
+
+(= (codex:agent-identity-error-decrypted-task-id-utf8)
+   "decrypted task id is not valid UTF-8")
+
+(= (codex:signing-key-from-private-key-pkcs8-base64-with-crypto-results
+      $private-key-pkcs8-base64
+      $private-key-base64-result
+      $pkcs8-result)
+   (case $private-key-base64-result
+     (((CodexAgentIdentityCryptoStepErr $message)
+       (codex:agent-identity-string-result-err
+         (codex:agent-identity-error-stored-private-key-base64)))
+      ((CodexAgentIdentityCryptoStepOk $private-key-der)
+       (case $pkcs8-result
+         (((CodexAgentIdentityCryptoStepErr $pkcs8-message)
+           (codex:agent-identity-string-result-err
+             (codex:agent-identity-error-stored-private-key-pkcs8)))
+          ((CodexAgentIdentityCryptoStepOk $signing-key)
+           (codex:agent-identity-string-result-ok $signing-key))))))))
+
+(= (codex:signing-key-from-agent-identity-key-with-crypto-results
+      $key
+      $private-key-base64-result
+      $pkcs8-result)
+   (codex:signing-key-from-private-key-pkcs8-base64-with-crypto-results
+     (codex:agent-identity-key-private-key-pkcs8-base64 $key)
+     $private-key-base64-result
+     $pkcs8-result))
+
+(= (codex:task-registration-signing-payload $key $timestamp)
+   (str-concat
+     (str-concat
+       (codex:agent-identity-key-agent-runtime-id $key)
+       ":")
+     $timestamp))
+
+(= (codex:agent-assertion-signing-payload $key $task-id $timestamp)
+   (str-concat
+     (str-concat
+       (str-concat
+         (str-concat
+           (codex:agent-identity-key-agent-runtime-id $key)
+           ":")
+         $task-id)
+       ":")
+     $timestamp))
+
+(= (codex:sign-task-registration-payload-with-signature-result
+      $key
+      $timestamp
+      $signing-key-result
+      $signature-base64)
+   (case $signing-key-result
+     (((CodexAgentIdentityStringResultErr $message)
+       (codex:agent-identity-string-result-err $message))
+      ((CodexAgentIdentityStringResultOk $signing-key)
+       (codex:agent-identity-string-result-ok $signature-base64)))))
+
+(= (codex:decrypt-task-id-response-with-crypto-results
+      $key
+      $encrypted-task-id
+      $signing-key-result
+      $encrypted-task-id-base64-result
+      $unseal-result
+      $utf8-result)
+   (case $signing-key-result
+     (((CodexAgentIdentityStringResultErr $message)
+       (codex:agent-identity-string-result-err $message))
+      ((CodexAgentIdentityStringResultOk $signing-key)
+       (case $encrypted-task-id-base64-result
+         (((CodexAgentIdentityCryptoStepErr $base64-message)
+           (codex:agent-identity-string-result-err
+             (codex:agent-identity-error-encrypted-task-id-base64)))
+          ((CodexAgentIdentityCryptoStepOk $ciphertext)
+           (case $unseal-result
+             (((CodexAgentIdentityCryptoStepErr $unseal-message)
+               (codex:agent-identity-string-result-err
+                 (codex:agent-identity-error-decrypt-encrypted-task-id)))
+              ((CodexAgentIdentityCryptoStepOk $plaintext-bytes)
+               (case $utf8-result
+                 (((CodexAgentIdentityCryptoStepErr $utf8-message)
+                   (codex:agent-identity-string-result-err
+                     (codex:agent-identity-error-decrypted-task-id-utf8)))
+                  ((CodexAgentIdentityCryptoStepOk $plaintext)
+                   (codex:agent-identity-string-result-ok $plaintext))))))))))))))
+
 (= (codex:authorization-header-for-agent-task-with-signature-timestamp
       $key
       $target
@@ -296,6 +417,24 @@
 (= (codex:agent-task-id-result-error
       (CodexAgentTaskIdResultErr $message))
    $message)
+
+(= (codex:agent-task-id-result-from-agent-identity-string-result
+      (CodexAgentIdentityStringResultOk $value))
+   (codex:agent-task-id-result-ok $value))
+
+(= (codex:agent-task-id-result-from-agent-identity-string-result
+      (CodexAgentIdentityStringResultErr $message))
+   (codex:agent-task-id-result-err $message))
+
+(= (codex:task-id-from-register-task-response-with-agent-identity-decryption-result
+      $key
+      $response
+      $decryption-result)
+   (codex:task-id-from-register-task-response-with-decryption-result
+     $key
+     $response
+     (codex:agent-task-id-result-from-agent-identity-string-result
+       $decryption-result)))
 
 (= (codex:task-id-from-register-task-response-with-decryption-result
       $key

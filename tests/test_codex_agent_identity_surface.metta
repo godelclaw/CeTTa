@@ -216,6 +216,142 @@
   ("agent task registration response omitted task id"))
 
 !(assertEqualToResult
+  (codex:agent-identity-string-result-value
+    (codex:signing-key-from-agent-identity-key-with-crypto-results
+      (codex-agent-identity-key)
+      (codex:agent-identity-crypto-step-ok "private-key-der")
+      (codex:agent-identity-crypto-step-ok "signing-key")))
+  ("signing-key"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-error
+    (codex:signing-key-from-agent-identity-key-with-crypto-results
+      (codex-agent-identity-key)
+      (codex:agent-identity-crypto-step-err "decoder detail")
+      (codex:agent-identity-crypto-step-ok "signing-key")))
+  ("stored agent identity private key is not valid base64"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-error
+    (codex:signing-key-from-agent-identity-key-with-crypto-results
+      (codex-agent-identity-key)
+      (codex:agent-identity-crypto-step-ok "private-key-der")
+      (codex:agent-identity-crypto-step-err "pkcs8 detail")))
+  ("stored agent identity private key is not valid PKCS#8"))
+
+!(assertEqualToResult
+  (codex:task-registration-signing-payload
+    (codex-agent-identity-key)
+    "2026-05-18T10:20:30Z")
+  ("agent-123:2026-05-18T10:20:30Z"))
+
+!(assertEqualToResult
+  (codex:agent-assertion-signing-payload
+    (codex-agent-identity-key)
+    "task-456"
+    "2026-05-18T10:20:30Z")
+  ("agent-123:task-456:2026-05-18T10:20:30Z"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-value
+    (codex:sign-task-registration-payload-with-signature-result
+      (codex-agent-identity-key)
+      "2026-05-18T10:20:30Z"
+      (codex:agent-identity-string-result-ok "signing-key")
+      "signature-base64"))
+  ("signature-base64"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-error
+    (codex:sign-task-registration-payload-with-signature-result
+      (codex-agent-identity-key)
+      "2026-05-18T10:20:30Z"
+      (codex:agent-identity-string-result-err
+        "stored agent identity private key is not valid PKCS#8")
+      "signature-base64"))
+  ("stored agent identity private key is not valid PKCS#8"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-value
+    (codex:decrypt-task-id-response-with-crypto-results
+      (codex-agent-identity-key)
+      "encrypted-task-id"
+      (codex:agent-identity-string-result-ok "signing-key")
+      (codex:agent-identity-crypto-step-ok "ciphertext")
+      (codex:agent-identity-crypto-step-ok "plaintext-bytes")
+      (codex:agent-identity-crypto-step-ok "decrypted-task")))
+  ("decrypted-task"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-error
+    (codex:decrypt-task-id-response-with-crypto-results
+      (codex-agent-identity-key)
+      "encrypted-task-id"
+      (codex:agent-identity-string-result-err
+        "stored agent identity private key is not valid base64")
+      (codex:agent-identity-crypto-step-ok "ciphertext")
+      (codex:agent-identity-crypto-step-ok "plaintext-bytes")
+      (codex:agent-identity-crypto-step-ok "decrypted-task")))
+  ("stored agent identity private key is not valid base64"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-error
+    (codex:decrypt-task-id-response-with-crypto-results
+      (codex-agent-identity-key)
+      "encrypted-task-id"
+      (codex:agent-identity-string-result-ok "signing-key")
+      (codex:agent-identity-crypto-step-err "base64 detail")
+      (codex:agent-identity-crypto-step-ok "plaintext-bytes")
+      (codex:agent-identity-crypto-step-ok "decrypted-task")))
+  ("encrypted task id is not valid base64"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-error
+    (codex:decrypt-task-id-response-with-crypto-results
+      (codex-agent-identity-key)
+      "encrypted-task-id"
+      (codex:agent-identity-string-result-ok "signing-key")
+      (codex:agent-identity-crypto-step-ok "ciphertext")
+      (codex:agent-identity-crypto-step-err "unseal detail")
+      (codex:agent-identity-crypto-step-ok "decrypted-task")))
+  ("failed to decrypt encrypted task id"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-error
+    (codex:decrypt-task-id-response-with-crypto-results
+      (codex-agent-identity-key)
+      "encrypted-task-id"
+      (codex:agent-identity-string-result-ok "signing-key")
+      (codex:agent-identity-crypto-step-ok "ciphertext")
+      (codex:agent-identity-crypto-step-ok "plaintext-bytes")
+      (codex:agent-identity-crypto-step-err "utf8 detail")))
+  ("decrypted task id is not valid UTF-8"))
+
+!(assertEqualToResult
+  (codex:agent-task-id-result-value
+    (codex:task-id-from-register-task-response-with-agent-identity-decryption-result
+      (codex-agent-identity-key)
+      (codex:register-task-response
+        CodexAbsent
+        CodexAbsent
+        "enc-snake"
+        CodexAbsent)
+      (codex:agent-identity-string-result-ok "decrypted-task")))
+  ("decrypted-task"))
+
+!(assertEqualToResult
+  (codex:agent-task-id-result-value
+    (codex:task-id-from-register-task-response-with-agent-identity-decryption-result
+      (codex-agent-identity-key)
+      (codex:register-task-response
+        "snake-task"
+        CodexAbsent
+        "enc-snake"
+        CodexAbsent)
+      (codex:agent-identity-string-result-err "decrypt should not be used")))
+  ("snake-task"))
+
+!(assertEqualToResult
   (codex:agent-bill-of-materials-agent-version
     (codex:build-agent-bill-of-materials-with-version-os
       (codex:session-source-vscode)
