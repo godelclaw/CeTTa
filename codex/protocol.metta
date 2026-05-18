@@ -64,6 +64,7 @@
 ; - Op::RequestPermissionsResponse / RequestPermissionsResponse
 ; - RequestPermissionsEvent JSON projection
 ; - Op::DynamicToolResponse / DynamicToolResponse
+; - ApplyPatchApprovalRequestEvent JSON projection
 ; - Op::InterAgentCommunication / InterAgentCommunication
 ; - Op::AddToHistory / GetHistoryEntryRequest / ListMcpTools
 ; - Op::RefreshMcpServers / ReloadUserConfig / ListSkills
@@ -121,9 +122,10 @@
 ; surfaces, preserving the same visible queue-envelope JSON for the supported
 ; subset.
 ;
-; Rust represents `PatchApply*Event.changes` as `HashMap<PathBuf, FileChange>`.
-; This CeTTa slice models the same visible payload as an ordered list of keyed
-; entries and projects it back to the Rust JSON object shape at serialization.
+; Rust represents `PatchApply*Event.changes` and
+; `ApplyPatchApprovalRequestEvent.changes` as `HashMap<PathBuf, FileChange>`.
+; This CeTTa slice models the same visible payloads as ordered lists of keyed
+; entries and projects them back to the Rust JSON object shape at serialization.
 ;
 ; Rust also represents `CollabWaitingEndEvent.statuses` as
 ; `HashMap<ThreadId, AgentStatus>`. This CeTTa slice uses the same ordered-list
@@ -545,6 +547,22 @@
 
 (= (codex:file-change-update $unified-diff $move-path)
    (CodexFileChangeUpdate $unified-diff $move-path))
+
+(= (codex:file-change-map-entry $path $change)
+   (CodexFileChangeMapEntry $path $change))
+
+(= (codex:apply-patch-approval-request-event
+      $call-id
+      $turn-id
+      $changes
+      $reason
+      $grant-root)
+   (CodexEventApplyPatchApprovalRequest
+     $call-id
+     $turn-id
+     $changes
+     $reason
+     $grant-root))
 
 (= (codex:chunk $orig-index $deleted-lines $inserted-lines)
    (CodexChunk $orig-index $deleted-lines $inserted-lines))
@@ -3221,6 +3239,15 @@
    "elicitation_request")
 
 (= (codex:item-type
+      (CodexEventApplyPatchApprovalRequest
+        $call-id
+        $turn-id
+        $changes
+        $reason
+        $grant-root))
+   "apply_patch_approval_request")
+
+(= (codex:item-type
       (CodexEventAgentMessage $message $phase $memory-citation))
    "agent_message")
 
@@ -5504,6 +5531,24 @@
    (JsonArray
      (map-atom-strict $changes $item (codex:file-change-json $item))))
 
+(= (codex:file-change-map-entry-path
+      (CodexFileChangeMapEntry $path $change))
+   $path)
+
+(= (codex:file-change-map-entry-change
+      (CodexFileChangeMapEntry $path $change))
+   $change)
+
+(= (codex:file-change-map-json $changes)
+   (JsonObject
+     (map-atom-strict
+       $changes
+       $entry
+       (JsonPair
+         (codex:file-change-map-entry-path $entry)
+         (codex:file-change-json
+           (codex:file-change-map-entry-change $entry))))))
+
 (= (codex:chunk-json
       (CodexChunk $orig-index $deleted-lines $inserted-lines))
    (JsonObject
@@ -7668,6 +7713,44 @@
        $server-name
        $id
        $request)))
+
+(= (codex:apply-patch-approval-request-event-json
+      (CodexEventApplyPatchApprovalRequest
+        $call-id
+        $turn-id
+        $changes
+        $reason
+        $grant-root))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "apply_patch_approval_request"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair "changes" (codex:file-change-map-json $changes)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "reason"
+         $reason)
+       (JsonObject
+         (codex:append-optional-json-string-pair
+           $pairs-2
+           "grant_root"
+           $grant-root)))))
+
+(= (codex:item-json
+      (CodexEventApplyPatchApprovalRequest
+        $call-id
+        $turn-id
+        $changes
+        $reason
+        $grant-root))
+   (codex:apply-patch-approval-request-event-json
+     (CodexEventApplyPatchApprovalRequest
+       $call-id
+       $turn-id
+       $changes
+       $reason
+       $grant-root)))
 
 (= (codex:item-json
       (CodexEventAgentMessage $message $phase $memory-citation))
