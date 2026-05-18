@@ -27,7 +27,6 @@
 !(import! &self list)
 !(import! &self login_auth)
 !(import! &self model_provider_info)
-!(import! &self path)
 !(import! &self process)
 !(import! &self str)
 
@@ -202,12 +201,27 @@
 (= (codex:external-bearer-command-has-path-components $command)
    (> (list:len (str-split "/" $command)) 1))
 
+(= (codex:external-bearer-command-is-absolute $command)
+   (str-starts-with? $command "/"))
+
+(= (codex:external-bearer-strip-current-dir-prefix $command)
+   (if (str-starts-with? $command "./")
+       (str-slice $command 2 (str-length $command))
+       $command))
+
+(= (codex:external-bearer-join-cwd-command $cwd $command)
+   (let $rel (codex:external-bearer-strip-current-dir-prefix $command)
+     (if (str-ends-with? $cwd "/")
+         (str-concat $cwd $rel)
+         (str-concat (str-concat $cwd "/") $rel))))
+
 (= (codex:resolve-provider-auth-program $command $cwd)
-   (if (path-is-absolute? $command)
-       (path-normalize $command)
-       (if (codex:external-bearer-command-has-path-components $command)
-           (path-join $cwd $command)
-           $command)))
+   (case (codex:external-bearer-command-is-absolute $command)
+     ((True $command)
+      (False
+       (case (codex:external-bearer-command-has-path-components $command)
+         ((True (codex:external-bearer-join-cwd-command $cwd $command))
+          (False $command)))))))
 
 (= (codex:external-bearer-argv $program $args)
    (cons-atom $program $args))
