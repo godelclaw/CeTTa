@@ -100,6 +100,42 @@
      False
      False))
 
+(= (test:model-provider-api-shape-provider
+      $base-url
+      $query-params
+      $http-headers
+      $env-http-headers
+      $request-max-retries
+      $stream-idle-timeout-ms)
+   (codex:model-provider-info-full
+     "API Shape"
+     $base-url
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     (codex:wire-api-responses)
+     $query-params
+     $http-headers
+     $env-http-headers
+     $request-max-retries
+     CodexAbsent
+     $stream-idle-timeout-ms
+     CodexAbsent
+     False
+     False))
+
+(= (test:model-provider-to-api-provider
+      $provider
+      $auth-mode
+      $env-values)
+   (codex:model-provider-to-api-provider-result-value
+     (codex:model-provider-info-to-api-provider-from-env-values
+       $provider
+       $auth-mode
+       $env-values)))
+
 !(assertEqualToResult
   (codex:wire-api-display (codex:wire-api-responses))
   ("responses"))
@@ -186,6 +222,122 @@
    (codex:model-provider-info-effective-websocket-connect-timeout-ms
       (codex:default-model-provider-info)))
   ((4 5 300000 15000)))
+
+!(assertEqualToResult
+  ((codex:api-provider-base-url
+      (test:model-provider-to-api-provider
+        (test:model-provider-api-shape-provider
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent)
+        CodexAbsent
+        ()))
+   (codex:api-provider-base-url
+      (test:model-provider-to-api-provider
+        (test:model-provider-api-shape-provider
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent)
+        (CodexAuthModeChatgpt)
+        ()))
+   (codex:api-provider-base-url
+      (test:model-provider-to-api-provider
+        (test:model-provider-api-shape-provider
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent)
+        (CodexAuthModeChatgptAuthTokens)
+        ()))
+   (codex:api-provider-base-url
+      (test:model-provider-to-api-provider
+        (test:model-provider-api-shape-provider
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent)
+        (CodexAuthModeAgentIdentity)
+        ()))
+   (codex:api-provider-base-url
+      (test:model-provider-to-api-provider
+        (test:model-provider-api-shape-provider
+          "https://custom.example/v1"
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent)
+        (CodexAuthModeChatgpt)
+        ())))
+  (("https://api.openai.com/v1"
+    "https://chatgpt.com/backend-api/codex"
+    "https://chatgpt.com/backend-api/codex"
+    "https://chatgpt.com/backend-api/codex"
+    "https://custom.example/v1")))
+
+!(assertEqualToResult
+  (let $api-provider
+    (test:model-provider-to-api-provider
+      (test:model-provider-api-shape-provider
+        CodexAbsent
+        ((codex:model-provider-header "api-version" "2025-04-01-preview"))
+        CodexAbsent
+        CodexAbsent
+        150
+        1234)
+      CodexAbsent
+      ())
+    (let $retry (codex:api-provider-retry $api-provider)
+      ((codex:api-provider-name $api-provider)
+       (codex:api-provider-query-params $api-provider)
+       (codex:api-retry-config-max-attempts $retry)
+       (codex:api-retry-config-base-delay-ms $retry)
+       (codex:api-retry-config-retry-429 $retry)
+       (codex:api-retry-config-retry-5xx $retry)
+       (codex:api-retry-config-retry-transport $retry)
+       (codex:api-provider-stream-idle-timeout-ms $api-provider))))
+  (("API Shape"
+    ((CodexModelProviderHeader "api-version" "2025-04-01-preview"))
+    100
+    200
+    False
+    True
+    True
+    1234)))
+
+!(assertEqualToResult
+  (let $api-provider
+    (test:model-provider-to-api-provider
+      (test:model-provider-api-shape-provider
+        CodexAbsent
+        CodexAbsent
+        ((codex:model-provider-header "X-Static" "static")
+         (codex:model-provider-header "X-Override" "static-old"))
+        ((codex:model-provider-header "X-Env" "ENV_TOKEN")
+         (codex:model-provider-header "X-Blank" "ENV_BLANK")
+         (codex:model-provider-header "x-override" "ENV_OVERRIDE"))
+        CodexAbsent
+        CodexAbsent)
+      CodexAbsent
+      ((codex:model-provider-env-value "ENV_TOKEN" "env-value")
+       (codex:model-provider-env-value "ENV_BLANK" "   ")
+       (codex:model-provider-env-value "ENV_OVERRIDE" "env-new")))
+    (let $headers (codex:api-provider-headers $api-provider)
+      ((codex:model-provider-headers-get $headers "X-Static")
+       (codex:model-provider-headers-get $headers "X-Env")
+       (codex:model-provider-headers-get $headers "X-Blank")
+       (codex:model-provider-headers-get $headers "X-Override"))))
+  (("static" "env-value" CodexAbsent "env-new")))
 
 !(assertEqualToResult
   ((codex:model-provider-info-request-max-retries

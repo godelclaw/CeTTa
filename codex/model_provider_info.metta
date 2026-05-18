@@ -14,6 +14,8 @@
 ; - ModelProviderInfo::validate auth/AWS conflict rules
 ; - built_in_model_providers and merge_configured_model_providers catalog rules
 ; - supports_remote_compaction and Azure Responses provider detection
+; - ModelProviderInfo::to_api_provider default URL, headers, retry, and timeout
+;   projection
 ;
 ; Required CeTTa representation notes for audit:
 ; - Rust returns Result<Option<String>, CodexErr>. CeTTa represents that as
@@ -27,6 +29,14 @@
 ; - Rust provider catalogs are HashMap<String, ModelProviderInfo>. CeTTa uses an
 ;   ordered entry list so tests can inspect it deterministically; lookup,
 ;   insert-if-absent, and replace preserve Rust HashMap semantics.
+; - Rust HeaderMap is represented as a list of CodexModelProviderHeader values.
+;   Insertion removes any existing case-insensitive key before consing the new
+;   header, preserving HeaderMap replacement semantics. CeTTa currently skips
+;   CR/LF header values; full byte-level HeaderName/HeaderValue validation
+;   belongs with the future HTTP library.
+; - Rust build_header_map reads std::env directly. The pure
+;   to-api-provider-from-env-values seam mirrors that behavior with injected
+;   environment values so tests do not depend on process-global environment.
 
 !(import! &self error)
 !(import! &self str)
@@ -67,6 +77,12 @@
 
 (= (codex:amazon-bedrock-default-base-url)
    "https://bedrock-mantle.us-east-1.api.aws/v1")
+
+(= (codex:openai-api-default-base-url)
+   "https://api.openai.com/v1")
+
+(= (codex:chatgpt-codex-backend-base-url)
+   "https://chatgpt.com/backend-api/codex")
 
 (= (codex:legacy-ollama-chat-provider-id)
    "ollama-chat")
@@ -126,6 +142,164 @@
 (= (codex:model-provider-header-value
       (CodexModelProviderHeader $name $value))
    $value)
+
+(= (codex:model-provider-env-value $name $value)
+   (CodexModelProviderEnvValue $name $value))
+
+(= (codex:model-provider-env-value-name
+      (CodexModelProviderEnvValue $name $value))
+   $name)
+
+(= (codex:model-provider-env-value-value
+      (CodexModelProviderEnvValue $name $value))
+   $value)
+
+(= (codex:api-retry-config
+      $max-attempts
+      $base-delay-ms
+      $retry-429
+      $retry-5xx
+      $retry-transport)
+   (CodexApiRetryConfig
+     $max-attempts
+     $base-delay-ms
+     $retry-429
+     $retry-5xx
+     $retry-transport))
+
+(= (codex:api-retry-config-max-attempts
+      (CodexApiRetryConfig
+        $max-attempts
+        $base-delay-ms
+        $retry-429
+        $retry-5xx
+        $retry-transport))
+   $max-attempts)
+
+(= (codex:api-retry-config-base-delay-ms
+      (CodexApiRetryConfig
+        $max-attempts
+        $base-delay-ms
+        $retry-429
+        $retry-5xx
+        $retry-transport))
+   $base-delay-ms)
+
+(= (codex:api-retry-config-retry-429
+      (CodexApiRetryConfig
+        $max-attempts
+        $base-delay-ms
+        $retry-429
+        $retry-5xx
+        $retry-transport))
+   $retry-429)
+
+(= (codex:api-retry-config-retry-5xx
+      (CodexApiRetryConfig
+        $max-attempts
+        $base-delay-ms
+        $retry-429
+        $retry-5xx
+        $retry-transport))
+   $retry-5xx)
+
+(= (codex:api-retry-config-retry-transport
+      (CodexApiRetryConfig
+        $max-attempts
+        $base-delay-ms
+        $retry-429
+        $retry-5xx
+        $retry-transport))
+   $retry-transport)
+
+(= (codex:api-provider
+      $name
+      $base-url
+      $query-params
+      $headers
+      $retry
+      $stream-idle-timeout-ms)
+   (CodexApiProvider
+     $name
+     $base-url
+     $query-params
+     $headers
+     $retry
+     $stream-idle-timeout-ms))
+
+(= (codex:api-provider-name
+      (CodexApiProvider
+        $name
+        $base-url
+        $query-params
+        $headers
+        $retry
+        $stream-idle-timeout-ms))
+   $name)
+
+(= (codex:api-provider-base-url
+      (CodexApiProvider
+        $name
+        $base-url
+        $query-params
+        $headers
+        $retry
+        $stream-idle-timeout-ms))
+   $base-url)
+
+(= (codex:api-provider-query-params
+      (CodexApiProvider
+        $name
+        $base-url
+        $query-params
+        $headers
+        $retry
+        $stream-idle-timeout-ms))
+   $query-params)
+
+(= (codex:api-provider-headers
+      (CodexApiProvider
+        $name
+        $base-url
+        $query-params
+        $headers
+        $retry
+        $stream-idle-timeout-ms))
+   $headers)
+
+(= (codex:api-provider-retry
+      (CodexApiProvider
+        $name
+        $base-url
+        $query-params
+        $headers
+        $retry
+        $stream-idle-timeout-ms))
+   $retry)
+
+(= (codex:api-provider-stream-idle-timeout-ms
+      (CodexApiProvider
+        $name
+        $base-url
+        $query-params
+        $headers
+        $retry
+        $stream-idle-timeout-ms))
+   $stream-idle-timeout-ms)
+
+(= (codex:model-provider-to-api-provider-ok $provider)
+   (CodexModelProviderToApiProviderOk $provider))
+
+(= (codex:model-provider-to-api-provider-err $message)
+   (CodexModelProviderToApiProviderErr $message))
+
+(= (codex:model-provider-to-api-provider-result-value
+      (CodexModelProviderToApiProviderOk $provider))
+   $provider)
+
+(= (codex:model-provider-to-api-provider-result-error
+      (CodexModelProviderToApiProviderErr $message))
+   $message)
 
 (= (codex:model-provider-auth-info
       $command
@@ -899,6 +1073,237 @@
 (= (codex:model-provider-info-eq-ignore-ascii-case $lhs $rhs)
    (== (codex:model-provider-info-ascii-lower-text $lhs)
        (codex:model-provider-info-ascii-lower-text $rhs)))
+
+(= (codex:model-provider-header-name-eq $lhs $rhs)
+   (codex:model-provider-info-eq-ignore-ascii-case $lhs $rhs))
+
+(= (codex:model-provider-header-text-contains $text $needle)
+   (case (str-find $text $needle)
+     ((Empty False)
+      ($index True))))
+
+(= (codex:model-provider-header-name-valid $name)
+   (if (== $name "")
+       False
+       (if (codex:model-provider-header-text-contains $name "\n")
+           False
+           (if (codex:model-provider-header-text-contains $name "\r")
+               False
+               (if (codex:model-provider-header-text-contains $name " ")
+                   False
+                   True)))))
+
+(= (codex:model-provider-header-value-valid $value)
+   (if (codex:model-provider-header-text-contains $value "\n")
+       False
+       (if (codex:model-provider-header-text-contains $value "\r")
+           False
+           True)))
+
+(= (codex:model-provider-header-valid $name $value)
+   (if (codex:model-provider-header-name-valid $name)
+       (codex:model-provider-header-value-valid $value)
+       False))
+
+(= (codex:model-provider-headers-remove () $name)
+   ())
+
+(= (codex:model-provider-headers-remove $headers $name)
+   (let ($head $tail) (decons-atom $headers)
+     (case (codex:model-provider-headers-remove $tail $name)
+       (($rest
+         (if (codex:model-provider-header-name-eq
+               (codex:model-provider-header-name $head)
+               $name)
+             $rest
+             (cons-atom $head $rest)))))))
+
+(= (codex:model-provider-headers-insert $headers $name $value)
+   (if (codex:model-provider-header-valid $name $value)
+       (cons-atom
+         (codex:model-provider-header $name $value)
+         (codex:model-provider-headers-remove $headers $name))
+       $headers))
+
+(= (codex:model-provider-headers-get () $name)
+   CodexAbsent)
+
+(= (codex:model-provider-headers-get $headers $name)
+   (let ($head $tail) (decons-atom $headers)
+     (if (codex:model-provider-header-name-eq
+           (codex:model-provider-header-name $head)
+           $name)
+         (codex:model-provider-header-value $head)
+         (case (codex:model-provider-headers-get $tail $name)
+           (($found $found))))))
+
+(= (codex:model-provider-env-values-get () $name)
+   CodexAbsent)
+
+(= (codex:model-provider-env-values-get $env-values $name)
+   (let ($head $tail) (decons-atom $env-values)
+     (if (== (codex:model-provider-env-value-name $head) $name)
+         (codex:model-provider-env-value-value $head)
+         (case (codex:model-provider-env-values-get $tail $name)
+           (($found $found))))))
+
+(= (codex:model-provider-info-insert-env-header
+      $headers
+      $name
+      CodexAbsent)
+   $headers)
+
+(= (codex:model-provider-info-insert-env-header
+      $headers
+      $name
+      $value)
+   (if (== (str-trim $value) "")
+       $headers
+       (codex:model-provider-headers-insert $headers $name $value)))
+
+(= (codex:model-provider-info-fold-static-headers CodexAbsent $headers)
+   $headers)
+
+(= (codex:model-provider-info-fold-static-headers () $headers)
+   $headers)
+
+(= (codex:model-provider-info-fold-static-headers $entries $headers)
+   (let ($entry $tail) (decons-atom $entries)
+     (case (codex:model-provider-info-fold-static-headers
+             $tail
+             (codex:model-provider-headers-insert
+               $headers
+               (codex:model-provider-header-name $entry)
+               (codex:model-provider-header-value $entry)))
+       (($next-headers $next-headers)))))
+
+(= (codex:model-provider-info-fold-env-headers-from-values
+      CodexAbsent
+      $env-values
+      $headers)
+   $headers)
+
+(= (codex:model-provider-info-fold-env-headers-from-values
+      ()
+      $env-values
+      $headers)
+   $headers)
+
+(= (codex:model-provider-info-fold-env-headers-from-values
+      $entries
+      $env-values
+      $headers)
+   (let ($entry $tail) (decons-atom $entries)
+     (let $env-value
+       (codex:model-provider-env-values-get
+         $env-values
+         (codex:model-provider-header-value $entry))
+       (case (codex:model-provider-info-fold-env-headers-from-values
+               $tail
+               $env-values
+               (codex:model-provider-info-insert-env-header
+                 $headers
+                 (codex:model-provider-header-name $entry)
+                 $env-value))
+         (($next-headers $next-headers))))))
+
+(= (codex:model-provider-info-fold-env-headers-from-system
+      CodexAbsent
+      $headers)
+   $headers)
+
+(= (codex:model-provider-info-fold-env-headers-from-system
+      ()
+      $headers)
+   $headers)
+
+(= (codex:model-provider-info-fold-env-headers-from-system
+      $entries
+      $headers)
+   (let ($entry $tail) (decons-atom $entries)
+     (case (system-getenv-or-default
+             (codex:model-provider-header-value $entry)
+             CodexAbsent)
+       (($env-value
+         (case (codex:model-provider-info-fold-env-headers-from-system
+                 $tail
+                 (codex:model-provider-info-insert-env-header
+                   $headers
+                   (codex:model-provider-header-name $entry)
+                   $env-value))
+           (($next-headers $next-headers))))))))
+
+(= (codex:model-provider-info-build-header-map-from-env-values
+      $provider
+      $env-values)
+   (let $static-headers
+     (codex:model-provider-info-fold-static-headers
+       (codex:model-provider-info-http-headers $provider)
+       ())
+     (codex:model-provider-info-fold-env-headers-from-values
+       (codex:model-provider-info-env-http-headers $provider)
+       $env-values
+       $static-headers)))
+
+(= (codex:model-provider-info-build-header-map $provider)
+   (let $static-headers
+     (codex:model-provider-info-fold-static-headers
+       (codex:model-provider-info-http-headers $provider)
+       ())
+     (codex:model-provider-info-fold-env-headers-from-system
+       (codex:model-provider-info-env-http-headers $provider)
+       $static-headers)))
+
+(= (codex:model-provider-info-codex-backend-auth-mode $auth-mode)
+   (case $auth-mode
+     (((CodexAuthModeChatgpt) True)
+      ((CodexAuthModeChatgptAuthTokens) True)
+      ((CodexAuthModeAgentIdentity) True)
+      ($other False))))
+
+(= (codex:model-provider-info-default-base-url $auth-mode)
+   (if (codex:model-provider-info-codex-backend-auth-mode $auth-mode)
+       (codex:chatgpt-codex-backend-base-url)
+       (codex:openai-api-default-base-url)))
+
+(= (codex:model-provider-info-effective-base-url $provider $auth-mode)
+   (let $base-url (codex:model-provider-info-base-url $provider)
+     (if (== $base-url CodexAbsent)
+         (codex:model-provider-info-default-base-url $auth-mode)
+         $base-url)))
+
+(= (codex:model-provider-info-api-retry-config $provider)
+   (codex:api-retry-config
+     (codex:model-provider-info-request-max-retries $provider)
+     200
+     False
+     True
+     True))
+
+(= (codex:model-provider-info-to-api-provider-from-env-values
+      $provider
+      $auth-mode
+      $env-values)
+   (codex:model-provider-to-api-provider-ok
+     (codex:api-provider
+       (codex:model-provider-info-name $provider)
+       (codex:model-provider-info-effective-base-url $provider $auth-mode)
+       (codex:model-provider-info-query-params $provider)
+       (codex:model-provider-info-build-header-map-from-env-values
+         $provider
+         $env-values)
+       (codex:model-provider-info-api-retry-config $provider)
+       (codex:model-provider-info-effective-stream-idle-timeout-ms $provider))))
+
+(= (codex:model-provider-info-to-api-provider $provider $auth-mode)
+   (codex:model-provider-to-api-provider-ok
+     (codex:api-provider
+       (codex:model-provider-info-name $provider)
+       (codex:model-provider-info-effective-base-url $provider $auth-mode)
+       (codex:model-provider-info-query-params $provider)
+       (codex:model-provider-info-build-header-map $provider)
+       (codex:model-provider-info-api-retry-config $provider)
+       (codex:model-provider-info-effective-stream-idle-timeout-ms $provider))))
 
 (= (codex:model-provider-info-text-contains $text $needle)
    (case (str-find $text $needle)
