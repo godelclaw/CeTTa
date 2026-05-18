@@ -19,6 +19,9 @@
 (= (codex-external-bearer-manager-root)
    "/home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/manager")
 
+(= (codex-external-bearer-recovery-root)
+   "/home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/recovery")
+
 (= (codex-external-bearer-fail-root)
    "/home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/fail")
 
@@ -31,7 +34,7 @@
 !(assertEqualToResult
   (process-result-exit-code
     (process-run-shell
-      "rm -rf /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer && mkdir -p /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/cache /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/stale /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/zero /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/manager /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/fail /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/empty /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/slow && for d in cache stale zero manager; do printf 'provider-token\\nnext-token\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/$d/tokens.txt; cat > /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/$d/print-token.sh <<'SH'\n#!/bin/sh\nfirst_line=$(sed -n '1p' tokens.txt)\nprintf '%s\\n' \"$first_line\"\ntail -n +2 tokens.txt > tokens.next\nmv tokens.next tokens.txt\nSH\nchmod +x /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/$d/print-token.sh; done && cat > /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/fail/fail.sh <<'SH'\n#!/bin/sh\nprintf 'bad token source\\n' >&2\nexit 1\nSH\nchmod +x /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/fail/fail.sh && cat > /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/empty/empty.sh <<'SH'\n#!/bin/sh\nprintf '   \\n'\nSH\nchmod +x /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/empty/empty.sh && cat > /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/slow/slow.sh <<'SH'\n#!/bin/sh\nsleep 1\nprintf late\nSH\nchmod +x /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/slow/slow.sh"))
+      "rm -rf /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer && mkdir -p /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/cache /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/stale /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/zero /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/manager /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/recovery /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/fail /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/empty /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/slow && for d in cache stale zero manager recovery; do printf 'provider-token\\nnext-token\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/$d/tokens.txt; cat > /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/$d/print-token.sh <<'SH'\n#!/bin/sh\nfirst_line=$(sed -n '1p' tokens.txt)\nprintf '%s\\n' \"$first_line\"\ntail -n +2 tokens.txt > tokens.next\nmv tokens.next tokens.txt\nSH\nchmod +x /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/$d/print-token.sh; done && cat > /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/fail/fail.sh <<'SH'\n#!/bin/sh\nprintf 'bad token source\\n' >&2\nexit 1\nSH\nchmod +x /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/fail/fail.sh && cat > /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/empty/empty.sh <<'SH'\n#!/bin/sh\nprintf '   \\n'\nSH\nchmod +x /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/empty/empty.sh && cat > /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/slow/slow.sh <<'SH'\n#!/bin/sh\nsleep 1\nprintf late\nSH\nchmod +x /home/zarclaw/repos/CeTTa/runtime/codex-external-bearer/slow/slow.sh"))
   (0))
 
 (= (codex-external-bearer-config $cwd $refresh-interval-ms)
@@ -175,3 +178,79 @@
       (codex:external-bearer-auth-manager-auth-auth
         (codex-external-bearer-manager-auth))))
   ("provider-token"))
+
+!(assertEqualToResult
+  (case (codex:external-bearer-auth-manager-auth-at
+          (codex:external-bearer-auth-manager
+            (codex:bearer-token-refresher-new
+              (codex-external-bearer-config
+                (codex-external-bearer-recovery-root)
+                0)))
+          1000)
+    (((CodexExternalBearerAuthManagerAuthOk $initial-manager $initial-auth)
+      (let $recovery
+        (codex:auth-manager-unauthorized-recovery $initial-manager)
+        (case (codex:unauthorized-recovery-next-at $recovery 2000)
+          (((CodexUnauthorizedRecoveryNextOk $done-recovery $step-result)
+            (case (codex:external-bearer-auth-manager-auth-at
+                    (codex:unauthorized-recovery-manager $done-recovery)
+                    3000)
+              (((CodexExternalBearerAuthManagerAuthOk $refreshed-manager $refreshed-auth)
+                ((codex:unauthorized-recovery-mode-name $recovery)
+                 (codex:unauthorized-recovery-step-name $recovery)
+                 (codex:unauthorized-recovery-has-next $recovery)
+                 (codex:unauthorized-recovery-unavailable-reason $recovery)
+                 (codex:codex-auth-token-result-value
+                   (codex:codex-auth-get-token $initial-auth))
+                 (codex:unauthorized-recovery-step-result-auth-state-changed
+                   $step-result)
+                 (codex:unauthorized-recovery-step-name $done-recovery)
+                 (codex:unauthorized-recovery-has-next $done-recovery)
+                 (codex:unauthorized-recovery-unavailable-reason $done-recovery)
+                 (codex:codex-auth-token-result-value
+                   (codex:codex-auth-get-token $refreshed-auth)))))))))))))
+  (("external"
+    "external_refresh"
+    True
+    "ready"
+    "provider-token"
+    True
+    "done"
+    False
+    "recovery_exhausted"
+    "next-token")))
+
+!(assertEqualToResult
+  (codex:unauthorized-recovery-next-result-message
+    (codex:unauthorized-recovery-next-at
+      (codex:unauthorized-recovery
+        (codex:external-bearer-auth-manager
+          (codex:bearer-token-refresher-new
+            (codex-external-bearer-config
+              (codex-external-bearer-manager-root)
+              60000)))
+        CodexAbsent
+        (codex:unauthorized-recovery-mode-external)
+        (codex:unauthorized-recovery-step-done))
+      5000))
+  ("No more recovery steps available."))
+
+!(assertEqualToResult
+  (case (codex:unauthorized-recovery-next-at
+          (codex:auth-manager-unauthorized-recovery
+            (codex:external-bearer-auth-manager
+              (codex:bearer-token-refresher-new
+                (codex:model-provider-auth-info
+                  "./fail.sh"
+                  ()
+                  1000
+                  60000
+                  (codex-external-bearer-fail-root)))))
+          6000)
+    (((CodexUnauthorizedRecoveryNextErr $recovery $message)
+      ($message
+       (codex:unauthorized-recovery-step-name $recovery)
+       (codex:unauthorized-recovery-has-next $recovery)))))
+  (("provider auth command `./fail.sh` exited with status exit status: 1: bad token source"
+    "external_refresh"
+    True)))

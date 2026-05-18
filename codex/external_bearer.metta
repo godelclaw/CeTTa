@@ -10,6 +10,7 @@
 ; - provider auth command execution and stdout trimming
 ; - cached token reuse by refresh_interval_ms
 ; - explicit refresh replacing the cached token
+; - external-bearer UnauthorizedRecovery refresh step
 ;
 ; Required CeTTa representation notes for audit:
 ; - Rust uses Arc<Mutex<State>> and Instant::now(). CeTTa does not yet expose a
@@ -49,6 +50,97 @@
 
 (= (codex:external-auth-refresh-context $reason $previous-account-id)
    (CodexExternalAuthRefreshContext $reason $previous-account-id))
+
+(= (codex:unauthorized-recovery-mode-external)
+   (CodexUnauthorizedRecoveryModeExternal))
+
+(= (codex:unauthorized-recovery-step-external-refresh)
+   (CodexUnauthorizedRecoveryStepExternalRefresh))
+
+(= (codex:unauthorized-recovery-step-done)
+   (CodexUnauthorizedRecoveryStepDone))
+
+(= (codex:unauthorized-recovery $manager $expected-account-id $mode $step)
+   (CodexUnauthorizedRecovery $manager $expected-account-id $mode $step))
+
+(= (codex:unauthorized-recovery-manager
+      (CodexUnauthorizedRecovery $manager $expected-account-id $mode $step))
+   $manager)
+
+(= (codex:unauthorized-recovery-step
+      (CodexUnauthorizedRecovery $manager $expected-account-id $mode $step))
+   $step)
+
+(= (codex:unauthorized-recovery-step-result $auth-state-changed)
+   (CodexUnauthorizedRecoveryStepResult $auth-state-changed))
+
+(= (codex:unauthorized-recovery-step-result-auth-state-changed
+      (CodexUnauthorizedRecoveryStepResult $auth-state-changed))
+   $auth-state-changed)
+
+(= (codex:unauthorized-recovery-next-ok $recovery $step-result)
+   (CodexUnauthorizedRecoveryNextOk $recovery $step-result))
+
+(= (codex:unauthorized-recovery-next-err $recovery $message)
+   (CodexUnauthorizedRecoveryNextErr $recovery $message))
+
+(= (codex:unauthorized-recovery-next-result-recovery
+      (CodexUnauthorizedRecoveryNextOk $recovery $step-result))
+   $recovery)
+
+(= (codex:unauthorized-recovery-next-result-recovery
+      (CodexUnauthorizedRecoveryNextErr $recovery $message))
+   $recovery)
+
+(= (codex:unauthorized-recovery-next-result-step-result
+      (CodexUnauthorizedRecoveryNextOk $recovery $step-result))
+   $step-result)
+
+(= (codex:unauthorized-recovery-next-result-message
+      (CodexUnauthorizedRecoveryNextErr $recovery $message))
+   $message)
+
+(= (codex:unauthorized-recovery-mode-name
+      (CodexUnauthorizedRecovery
+        $manager
+        $expected-account-id
+        (CodexUnauthorizedRecoveryModeExternal)
+        $step))
+   "external")
+
+(= (codex:unauthorized-recovery-step-name
+      (CodexUnauthorizedRecovery
+        $manager
+        $expected-account-id
+        $mode
+        (CodexUnauthorizedRecoveryStepExternalRefresh)))
+   "external_refresh")
+
+(= (codex:unauthorized-recovery-step-name
+      (CodexUnauthorizedRecovery
+        $manager
+        $expected-account-id
+        $mode
+        (CodexUnauthorizedRecoveryStepDone)))
+   "done")
+
+(= (codex:unauthorized-recovery-has-next
+      (CodexUnauthorizedRecovery
+        $manager
+        $expected-account-id
+        (CodexUnauthorizedRecoveryModeExternal)
+        $step))
+   (not (== $step (codex:unauthorized-recovery-step-done))))
+
+(= (codex:unauthorized-recovery-unavailable-reason
+      (CodexUnauthorizedRecovery
+        $manager
+        $expected-account-id
+        (CodexUnauthorizedRecoveryModeExternal)
+        $step))
+   (if (== $step (codex:unauthorized-recovery-step-done))
+       "recovery_exhausted"
+       "ready"))
 
 (= (codex:cached-external-bearer-token $access-token $fetched-at-ms)
    (CodexCachedExternalBearerToken $access-token $fetched-at-ms))
@@ -208,6 +300,14 @@
 (= (codex:external-bearer-auth-manager $refresher)
    (CodexAuthManagerExternalBearerOnly $refresher))
 
+(= (codex:auth-manager-unauthorized-recovery
+      (CodexAuthManagerExternalBearerOnly $refresher))
+   (codex:unauthorized-recovery
+     (CodexAuthManagerExternalBearerOnly $refresher)
+     CodexAbsent
+     (codex:unauthorized-recovery-mode-external)
+     (codex:unauthorized-recovery-step-external-refresh)))
+
 (= (codex:external-bearer-auth-manager-auth-ok $manager $auth)
    (CodexExternalBearerAuthManagerAuthOk $manager $auth))
 
@@ -243,3 +343,45 @@
        (codex:external-bearer-resolve-ok
          (CodexAuthManagerExternalBearerOnly $next-refresher)
          $tokens)))))
+
+(= (codex:unauthorized-recovery-next-at
+      (CodexUnauthorizedRecovery
+        (CodexAuthManagerExternalBearerOnly $refresher)
+        $expected-account-id
+        (CodexUnauthorizedRecoveryModeExternal)
+        (CodexUnauthorizedRecoveryStepExternalRefresh))
+      $now-ms)
+   (case (codex:external-bearer-auth-manager-refresh-at
+           (CodexAuthManagerExternalBearerOnly $refresher)
+           $now-ms)
+     (((CodexExternalBearerResolveErr $message)
+       (codex:unauthorized-recovery-next-err
+         (codex:unauthorized-recovery
+           (CodexAuthManagerExternalBearerOnly $refresher)
+           $expected-account-id
+           (codex:unauthorized-recovery-mode-external)
+           (codex:unauthorized-recovery-step-external-refresh))
+         $message))
+      ((CodexExternalBearerResolveOk $next-manager $tokens)
+       (codex:unauthorized-recovery-next-ok
+         (codex:unauthorized-recovery
+           $next-manager
+           $expected-account-id
+           (codex:unauthorized-recovery-mode-external)
+           (codex:unauthorized-recovery-step-done))
+         (codex:unauthorized-recovery-step-result True))))))
+
+(= (codex:unauthorized-recovery-next-at
+      (CodexUnauthorizedRecovery
+        (CodexAuthManagerExternalBearerOnly $refresher)
+        $expected-account-id
+        (CodexUnauthorizedRecoveryModeExternal)
+        (CodexUnauthorizedRecoveryStepDone))
+      $now-ms)
+   (codex:unauthorized-recovery-next-err
+     (codex:unauthorized-recovery
+       (CodexAuthManagerExternalBearerOnly $refresher)
+       $expected-account-id
+       (codex:unauthorized-recovery-mode-external)
+       (codex:unauthorized-recovery-step-done))
+     "No more recovery steps available."))
