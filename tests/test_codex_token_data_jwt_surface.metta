@@ -32,6 +32,24 @@
 (= (codex-token-data-jwt-enterprise-cbp)
    "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20iLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9wbGFuX3R5cGUiOiJlbnRlcnByaXNlX2NicF91c2FnZV9iYXNlZCJ9fQ.c2ln")
 
+(= (codex-token-data-jwt-exp)
+   "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjE3MDAwMDAwMDB9.c2ln")
+
+(= (codex-token-data-jwt-exp-negative)
+   "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOi0xfQ.c2ln")
+
+(= (codex-token-data-jwt-exp-null)
+   "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOm51bGx9.c2ln")
+
+(= (codex-token-data-jwt-exp-out-of-range)
+   "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjgyMTAyNjY4NzY4MDB9.c2ln")
+
+(= (codex-token-data-jwt-exp-fractional)
+   "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjEuNX0.c2ln")
+
+(= (codex-token-data-jwt-exp-string)
+   "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOiIxNzAwMDAwMDAwIn0.c2ln")
+
 (= (codex-token-data-parse-info $jwt)
    (codex:id-token-info-parse-result-value
      (codex:parse-chatgpt-jwt-claims $jwt)))
@@ -140,3 +158,44 @@
   (codex:id-token-info-parse-result-reason
     (codex:parse-chatgpt-jwt-claims "not-a-jwt"))
   (CodexIdTokenInfoErrorInvalidFormat))
+
+!(assertEqualToResult
+  (codex:id-token-info-parse-result-value
+    (codex:parse-jwt-expiration (codex-token-data-jwt-exp)))
+  ((CodexDateTimeUtc 1700000000 0)))
+
+!(assertEqualToResult
+  (codex:date-time-utc-seconds
+    (codex:id-token-info-parse-result-value
+      (codex:parse-jwt-expiration (codex-token-data-jwt-exp-negative))))
+  (-1))
+
+!(assertEqualToResult
+  (codex:id-token-info-parse-result-value
+    (codex:parse-jwt-expiration (codex-token-data-jwt-missing)))
+  (CodexAbsent))
+
+!(assertEqualToResult
+  (codex:id-token-info-parse-result-value
+    (codex:parse-jwt-expiration (codex-token-data-jwt-exp-null)))
+  (CodexAbsent))
+
+!(assertEqualToResult
+  (codex:id-token-info-parse-result-value
+    (codex:parse-jwt-expiration (codex-token-data-jwt-exp-out-of-range)))
+  (CodexAbsent))
+
+!(assertEqualToResult
+  (codex:id-token-info-parse-result-reason
+    (codex:parse-jwt-expiration "not-a-jwt"))
+  (CodexIdTokenInfoErrorInvalidFormat))
+
+!(assertEqualToResult
+  (codex:id-token-info-parse-result-reason
+    (codex:parse-jwt-expiration (codex-token-data-jwt-exp-fractional)))
+  (CodexIdTokenInfoErrorJson))
+
+!(assertEqualToResult
+  (codex:id-token-info-parse-result-reason
+    (codex:parse-jwt-expiration (codex-token-data-jwt-exp-string)))
+  (CodexIdTokenInfoErrorJson))

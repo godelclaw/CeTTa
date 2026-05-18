@@ -7,6 +7,7 @@
 ; - TokenData and IdTokenInfo data shapes
 ; - IdTokenInfo helper methods over auth::PlanType
 ; - JWT payload decoding and IdClaims/AuthClaims field extraction
+; - StandardJwtClaims expiration extraction
 
 !(import! &self auth)
 !(import! &self json)
@@ -187,6 +188,24 @@
      (codex:id-token-info-error-json)
      $message))
 
+; CeTTa does not have chrono's DateTime<Utc> value kind yet. This preserves the
+; Rust value semantics as UTC Unix timestamp seconds plus nanoseconds.
+(= (codex:date-time-utc $seconds $nanoseconds)
+   (CodexDateTimeUtc $seconds $nanoseconds))
+
+(= (codex:date-time-utc-seconds (CodexDateTimeUtc $seconds $nanoseconds))
+   $seconds)
+
+(= (codex:date-time-utc-nanoseconds (CodexDateTimeUtc $seconds $nanoseconds))
+   $nanoseconds)
+
+(= (codex:date-time-utc-from-timestamp $seconds)
+   (if (< $seconds -8334601228800)
+       CodexAbsent
+       (if (> $seconds 8210266876799)
+           CodexAbsent
+           (codex:date-time-utc $seconds 0))))
+
 (= (codex:jwt-parts-three $header $payload $signature)
    (if (== $header "")
        (codex:id-token-info-parse-invalid-format)
@@ -229,6 +248,140 @@
      ((Empty CodexAbsent)
       (JsonNull CodexAbsent)
       ($value $value))))
+
+(= (codex:token-data-decimal-digit-value $digit)
+   (case $digit
+     (("0" 0)
+      ("1" 1)
+      ("2" 2)
+      ("3" 3)
+      ("4" 4)
+      ("5" 5)
+      ("6" 6)
+      ("7" 7)
+      ("8" 8)
+      ("9" 9))))
+
+(= (codex:token-data-is-decimal-digit $digit)
+   (case $digit
+     (("0" True)
+      ("1" True)
+      ("2" True)
+      ("3" True)
+      ("4" True)
+      ("5" True)
+      ("6" True)
+      ("7" True)
+      ("8" True)
+      ("9" True)
+      ($other False))))
+
+(= (codex:token-data-is-unsigned-integer-text-from $text $index)
+   (if (== $index (str-length $text))
+       True
+       (case (codex:token-data-is-decimal-digit
+               (str-slice $text $index (+ $index 1)))
+         ((True
+           (codex:token-data-is-unsigned-integer-text-from
+             $text
+             (+ $index 1)))
+          (False False)))))
+
+(= (codex:token-data-is-unsigned-integer-text $text)
+   (if (== $text "")
+       False
+       (codex:token-data-is-unsigned-integer-text-from $text 0)))
+
+(= (codex:token-data-signed-integer-text-parts $text)
+   (if (== (str-length $text) 0)
+       CodexInvalidIntegerText
+       (if (== (str-slice $text 0 1) "-")
+           (let $digits (str-slice $text 1 (str-length $text))
+             (case (codex:token-data-is-unsigned-integer-text $digits)
+               ((True (CodexSignedIntegerText True $digits))
+                (False CodexInvalidIntegerText))))
+           (case (codex:token-data-is-unsigned-integer-text $text)
+             ((True (CodexSignedIntegerText False $text))
+              (False CodexInvalidIntegerText))))))
+
+(= (codex:token-data-unsigned-digits-within-bound-from $digits $bound $index)
+   (if (== $index (str-length $digits))
+       True
+       (let $lhs (codex:token-data-decimal-digit-value
+                   (str-slice $digits $index (+ $index 1)))
+         (let $rhs (codex:token-data-decimal-digit-value
+                     (str-slice $bound $index (+ $index 1)))
+           (if (< $lhs $rhs)
+               True
+               (if (> $lhs $rhs)
+                   False
+                   (codex:token-data-unsigned-digits-within-bound-from
+                     $digits
+                     $bound
+                     (+ $index 1))))))))
+
+(= (codex:token-data-unsigned-digits-within-bound $digits $bound)
+   (if (< (str-length $digits) (str-length $bound))
+       True
+       (if (> (str-length $digits) (str-length $bound))
+           False
+           (codex:token-data-unsigned-digits-within-bound-from
+             $digits
+             $bound
+             0))))
+
+(= (codex:token-data-decimal-string-to-number $text)
+   (codex:token-data-decimal-string-to-number-from $text 0 0))
+
+(= (codex:token-data-decimal-string-to-number-from $text $index $acc)
+   (if (== $index (str-length $text))
+       $acc
+       (let $digit-char (str-slice $text $index (+ $index 1))
+         (codex:token-data-decimal-string-to-number-from
+           $text
+           (+ $index 1)
+           (+ (* $acc 10)
+              (codex:token-data-decimal-digit-value $digit-char))))))
+
+(= (codex:token-data-exp-integer-from-parts
+      (CodexSignedIntegerText True $digits))
+   (case (codex:token-data-unsigned-digits-within-bound
+           $digits
+           "8334601228800")
+     ((True
+       (codex:id-token-info-parse-ok
+         (- 0 (codex:token-data-decimal-string-to-number $digits))))
+      (False
+       (codex:id-token-info-parse-ok CodexAbsent)))))
+
+(= (codex:token-data-exp-integer-from-parts
+      (CodexSignedIntegerText False $digits))
+   (case (codex:token-data-unsigned-digits-within-bound
+           $digits
+           "8210266876799")
+     ((True
+       (codex:id-token-info-parse-ok
+         (codex:token-data-decimal-string-to-number $digits)))
+      (False
+       (codex:id-token-info-parse-ok CodexAbsent)))))
+
+(= (codex:token-data-exp-integer-result $text)
+   (case (codex:token-data-signed-integer-text-parts $text)
+     ((CodexInvalidIntegerText
+       (codex:id-token-info-parse-json-error
+         "invalid type for `exp`; expected integer or null"))
+      ($parts
+       (codex:token-data-exp-integer-from-parts $parts)))))
+
+(= (codex:token-data-json-object-optional-exp-result $object)
+   (case (codex:token-data-json-object-optional-value $object "exp")
+     ((CodexAbsent
+       (codex:id-token-info-parse-ok CodexAbsent))
+      ((JsonNumber $text)
+       (codex:token-data-exp-integer-result $text))
+      ($other
+       (codex:id-token-info-parse-json-error
+         "invalid type for `exp`; expected integer or null")))))
 
 (= (codex:token-data-json-object-optional-string-result $object $key)
    (case (codex:token-data-json-object-optional-value $object $key)
@@ -447,6 +600,26 @@
        (codex:parse-chatgpt-id-claims-object
          $jwt
          (JsonObject $pairs)))
+      ((CodexIdTokenInfoParseOk $other)
+       (codex:id-token-info-parse-json-error
+         "invalid JWT payload JSON; expected object")))))
+
+(= (codex:parse-jwt-expiration-object $object)
+   (case (codex:token-data-json-object-optional-exp-result $object)
+     (((CodexIdTokenInfoParseError $reason $message)
+       (CodexIdTokenInfoParseError $reason $message))
+      ((CodexIdTokenInfoParseOk CodexAbsent)
+       (codex:id-token-info-parse-ok CodexAbsent))
+      ((CodexIdTokenInfoParseOk $seconds)
+       (codex:id-token-info-parse-ok
+         (codex:date-time-utc-from-timestamp $seconds))))))
+
+(= (codex:parse-jwt-expiration $jwt)
+   (case (codex:decode-jwt-payload-json $jwt)
+     (((CodexIdTokenInfoParseError $reason $message)
+       (CodexIdTokenInfoParseError $reason $message))
+      ((CodexIdTokenInfoParseOk (JsonObject $pairs))
+       (codex:parse-jwt-expiration-object (JsonObject $pairs)))
       ((CodexIdTokenInfoParseOk $other)
        (codex:id-token-info-parse-json-error
          "invalid JWT payload JSON; expected object")))))
