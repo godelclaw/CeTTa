@@ -6,6 +6,7 @@
 ; Covered in this increment:
 ; - AgentIdentityKey / AgentTaskAuthorizationTarget data shapes
 ; - AgentBillOfMaterials / build_abom
+; - GeneratedAgentKeyMaterial and key-material helper control-flow seams
 ; - AgentAssertionEnvelope serialization and RegisterTaskRequest JSON shape
 ; - RegisterTaskResponse parsing and task-id selection branch order
 ; - signing/decryption seam control flow and Rust error messages
@@ -23,11 +24,14 @@
 ; - signing-key and decrypt helpers below model Rust's result/error flow with
 ;   injected crypto-step results. They intentionally do not implement Ed25519,
 ;   PKCS#8, base64 decode, crypto_box unseal, or byte-level UTF-8 decoding.
+; - SSH public-key encoding preserves Rust's two append_ssh_string calls as
+;   materialized blob fragments, with the final binary-base64 value injected.
 
 !(import! &self str)
 !(import! &self system)
 !(import! &self protocol)
 !(import! &self json)
+!(import! &self list)
 !(import! &self str_base64url)
 
 (= (codex:agent-identity-key
@@ -87,6 +91,25 @@
         $agent-harness-id
         $running-location))
    $running-location)
+
+(= (codex:generated-agent-key-material
+      $private-key-pkcs8-base64
+      $public-key-ssh)
+   (CodexGeneratedAgentKeyMaterial
+     $private-key-pkcs8-base64
+     $public-key-ssh))
+
+(= (codex:generated-agent-key-material-private-key-pkcs8-base64
+      (CodexGeneratedAgentKeyMaterial
+        $private-key-pkcs8-base64
+        $public-key-ssh))
+   $private-key-pkcs8-base64)
+
+(= (codex:generated-agent-key-material-public-key-ssh
+      (CodexGeneratedAgentKeyMaterial
+        $private-key-pkcs8-base64
+        $public-key-ssh))
+   $public-key-ssh)
 
 (= (codex:agent-assertion-envelope
       $agent-runtime-id
@@ -183,11 +206,31 @@
 (= (codex:agent-identity-crypto-step-err $message)
    (CodexAgentIdentityCryptoStepErr $message))
 
+(= (codex:agent-identity-key-material-result-ok $material)
+   (CodexAgentIdentityKeyMaterialResultOk $material))
+
+(= (codex:agent-identity-key-material-result-err $message)
+   (CodexAgentIdentityKeyMaterialResultErr $message))
+
+(= (codex:agent-identity-key-material-result-value
+      (CodexAgentIdentityKeyMaterialResultOk $material))
+   $material)
+
+(= (codex:agent-identity-key-material-result-error
+      (CodexAgentIdentityKeyMaterialResultErr $message))
+   $message)
+
 (= (codex:agent-identity-error-stored-private-key-base64)
    "stored agent identity private key is not valid base64")
 
 (= (codex:agent-identity-error-stored-private-key-pkcs8)
    "stored agent identity private key is not valid PKCS#8")
+
+(= (codex:agent-identity-error-generate-private-key-bytes)
+   "failed to generate agent identity private key bytes")
+
+(= (codex:agent-identity-error-encode-private-key-pkcs8)
+   "failed to encode agent identity private key as PKCS#8")
 
 (= (codex:agent-identity-error-encrypted-task-id-base64)
    "encrypted task id is not valid base64")
@@ -197,6 +240,47 @@
 
 (= (codex:agent-identity-error-decrypted-task-id-utf8)
    "decrypted task id is not valid UTF-8")
+
+(= (codex:ssh-ed25519-key-type)
+   "ssh-ed25519")
+
+(= (codex:ssh-ed25519-key-type-byte-length)
+   11)
+
+(= (codex:ssh-ed25519-verifying-key-byte-length)
+   32)
+
+(= (codex:ssh-string-fragment $byte-length $value)
+   (CodexSshStringFragment $byte-length $value))
+
+(= (codex:ssh-string-fragment-byte-length
+      (CodexSshStringFragment $byte-length $value))
+   $byte-length)
+
+(= (codex:ssh-string-fragment-value
+      (CodexSshStringFragment $byte-length $value))
+   $value)
+
+(= (codex:append-ssh-string $buf $byte-length $value)
+   (list:append
+     $buf
+     ((codex:ssh-string-fragment $byte-length $value))))
+
+(= (codex:ssh-ed25519-public-key-blob-fragments $verifying-key-bytes)
+   (codex:append-ssh-string
+     (codex:append-ssh-string
+       ()
+       (codex:ssh-ed25519-key-type-byte-length)
+       (codex:ssh-ed25519-key-type))
+     (codex:ssh-ed25519-verifying-key-byte-length)
+     $verifying-key-bytes))
+
+(= (codex:encode-ssh-ed25519-public-key-with-blob-base64
+      $verifying-key-bytes
+      $blob-base64)
+   (str-concat
+     (str-concat (codex:ssh-ed25519-key-type) " ")
+     $blob-base64))
 
 (= (codex:signing-key-from-private-key-pkcs8-base64-with-crypto-results
       $private-key-pkcs8-base64
@@ -251,6 +335,96 @@
        (codex:agent-identity-string-result-err $message))
       ((CodexAgentIdentityStringResultOk $signing-key)
        (codex:agent-identity-string-result-ok $signature-base64)))))
+
+(= (codex:generate-agent-key-material-with-crypto-results
+      $secret-key-bytes-result
+      $private-key-pkcs8-base64-result
+      $public-key-ssh)
+   (case $secret-key-bytes-result
+     (((CodexAgentIdentityCryptoStepErr $message)
+       (codex:agent-identity-key-material-result-err
+         (codex:agent-identity-error-generate-private-key-bytes)))
+      ((CodexAgentIdentityCryptoStepOk $secret-key-bytes)
+       (case $private-key-pkcs8-base64-result
+         (((CodexAgentIdentityCryptoStepErr $pkcs8-message)
+           (codex:agent-identity-key-material-result-err
+             (codex:agent-identity-error-encode-private-key-pkcs8)))
+          ((CodexAgentIdentityCryptoStepOk $private-key-pkcs8-base64)
+           (codex:agent-identity-key-material-result-ok
+             (codex:generated-agent-key-material
+               $private-key-pkcs8-base64
+               $public-key-ssh)))))))))
+
+(= (codex:public-key-ssh-from-signing-key-result
+      $signing-key-result
+      $public-key-ssh)
+   (case $signing-key-result
+     (((CodexAgentIdentityStringResultErr $message)
+       (codex:agent-identity-string-result-err $message))
+      ((CodexAgentIdentityStringResultOk $signing-key)
+       (codex:agent-identity-string-result-ok $public-key-ssh)))))
+
+(= (codex:public-key-ssh-from-private-key-pkcs8-base64-with-crypto-results
+      $private-key-pkcs8-base64
+      $private-key-base64-result
+      $pkcs8-result
+      $public-key-ssh)
+   (codex:public-key-ssh-from-signing-key-result
+     (codex:signing-key-from-private-key-pkcs8-base64-with-crypto-results
+       $private-key-pkcs8-base64
+       $private-key-base64-result
+       $pkcs8-result)
+     $public-key-ssh))
+
+(= (codex:verifying-key-from-signing-key-result
+      $signing-key-result
+      $verifying-key)
+   (case $signing-key-result
+     (((CodexAgentIdentityStringResultErr $message)
+       (codex:agent-identity-string-result-err $message))
+      ((CodexAgentIdentityStringResultOk $signing-key)
+       (codex:agent-identity-string-result-ok $verifying-key)))))
+
+(= (codex:verifying-key-from-private-key-pkcs8-base64-with-crypto-results
+      $private-key-pkcs8-base64
+      $private-key-base64-result
+      $pkcs8-result
+      $verifying-key)
+   (codex:verifying-key-from-signing-key-result
+     (codex:signing-key-from-private-key-pkcs8-base64-with-crypto-results
+       $private-key-pkcs8-base64
+       $private-key-base64-result
+       $pkcs8-result)
+     $verifying-key))
+
+(= (codex:curve25519-secret-key-from-signing-key-with-derived-secret
+      $signing-key
+      $curve25519-secret-key)
+   $curve25519-secret-key)
+
+(= (codex:curve25519-secret-key-from-signing-key-result
+      $signing-key-result
+      $curve25519-secret-key)
+   (case $signing-key-result
+     (((CodexAgentIdentityStringResultErr $message)
+       (codex:agent-identity-string-result-err $message))
+      ((CodexAgentIdentityStringResultOk $signing-key)
+       (codex:agent-identity-string-result-ok
+         (codex:curve25519-secret-key-from-signing-key-with-derived-secret
+           $signing-key
+           $curve25519-secret-key))))))
+
+(= (codex:curve25519-secret-key-from-private-key-pkcs8-base64-with-crypto-results
+      $private-key-pkcs8-base64
+      $private-key-base64-result
+      $pkcs8-result
+      $curve25519-secret-key)
+   (codex:curve25519-secret-key-from-signing-key-result
+     (codex:signing-key-from-private-key-pkcs8-base64-with-crypto-results
+       $private-key-pkcs8-base64
+       $private-key-base64-result
+       $pkcs8-result)
+     $curve25519-secret-key))
 
 (= (codex:decrypt-task-id-response-with-crypto-results
       $key

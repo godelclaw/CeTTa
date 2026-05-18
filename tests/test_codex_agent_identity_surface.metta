@@ -3,6 +3,7 @@
 !(import! &self codex:protocol)
 !(import! &self str)
 !(import! &self json)
+!(import! &self list)
 
 (= (codex-agent-identity-key)
    (codex:agent-identity-key "agent-123" "pkcs8-base64"))
@@ -350,6 +351,147 @@
         CodexAbsent)
       (codex:agent-identity-string-result-err "decrypt should not be used")))
   ("snake-task"))
+
+!(assertEqualToResult
+  (codex:generated-agent-key-material-private-key-pkcs8-base64
+    (codex:generated-agent-key-material
+      "private-key-base64"
+      "ssh-ed25519 public-key"))
+  ("private-key-base64"))
+
+!(assertEqualToResult
+  (codex:generated-agent-key-material-public-key-ssh
+    (codex:generated-agent-key-material
+      "private-key-base64"
+      "ssh-ed25519 public-key"))
+  ("ssh-ed25519 public-key"))
+
+!(assertEqualToResult
+  (codex:generated-agent-key-material-private-key-pkcs8-base64
+    (codex:agent-identity-key-material-result-value
+      (codex:generate-agent-key-material-with-crypto-results
+        (codex:agent-identity-crypto-step-ok "secret-key-bytes")
+        (codex:agent-identity-crypto-step-ok "private-key-base64")
+        "ssh-ed25519 public-key")))
+  ("private-key-base64"))
+
+!(assertEqualToResult
+  (codex:generated-agent-key-material-public-key-ssh
+    (codex:agent-identity-key-material-result-value
+      (codex:generate-agent-key-material-with-crypto-results
+        (codex:agent-identity-crypto-step-ok "secret-key-bytes")
+        (codex:agent-identity-crypto-step-ok "private-key-base64")
+        "ssh-ed25519 public-key")))
+  ("ssh-ed25519 public-key"))
+
+!(assertEqualToResult
+  (codex:agent-identity-key-material-result-error
+    (codex:generate-agent-key-material-with-crypto-results
+      (codex:agent-identity-crypto-step-err "rng detail")
+      (codex:agent-identity-crypto-step-ok "private-key-base64")
+      "ssh-ed25519 public-key"))
+  ("failed to generate agent identity private key bytes"))
+
+!(assertEqualToResult
+  (codex:agent-identity-key-material-result-error
+    (codex:generate-agent-key-material-with-crypto-results
+      (codex:agent-identity-crypto-step-ok "secret-key-bytes")
+      (codex:agent-identity-crypto-step-err "pkcs8 encode detail")
+      "ssh-ed25519 public-key"))
+  ("failed to encode agent identity private key as PKCS#8"))
+
+!(assertEqualToResult
+  (list:len
+    (codex:ssh-ed25519-public-key-blob-fragments "verifying-key-bytes"))
+  (2))
+
+!(assertEqualToResult
+  (codex:ssh-string-fragment-byte-length
+    (list:at
+      (codex:ssh-ed25519-public-key-blob-fragments "verifying-key-bytes")
+      0))
+  (11))
+
+!(assertEqualToResult
+  (codex:ssh-string-fragment-value
+    (list:at
+      (codex:ssh-ed25519-public-key-blob-fragments "verifying-key-bytes")
+      0))
+  ("ssh-ed25519"))
+
+!(assertEqualToResult
+  (codex:ssh-string-fragment-byte-length
+    (list:at
+      (codex:ssh-ed25519-public-key-blob-fragments "verifying-key-bytes")
+      1))
+  (32))
+
+!(assertEqualToResult
+  (codex:ssh-string-fragment-value
+    (list:at
+      (codex:ssh-ed25519-public-key-blob-fragments "verifying-key-bytes")
+      1))
+  ("verifying-key-bytes"))
+
+!(assertEqualToResult
+  (codex:encode-ssh-ed25519-public-key-with-blob-base64
+    "verifying-key-bytes"
+    "blob-base64")
+  ("ssh-ed25519 blob-base64"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-value
+    (codex:public-key-ssh-from-private-key-pkcs8-base64-with-crypto-results
+      "private-key-base64"
+      (codex:agent-identity-crypto-step-ok "private-key-der")
+      (codex:agent-identity-crypto-step-ok "signing-key")
+      "ssh-ed25519 public-key"))
+  ("ssh-ed25519 public-key"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-error
+    (codex:public-key-ssh-from-private-key-pkcs8-base64-with-crypto-results
+      "private-key-base64"
+      (codex:agent-identity-crypto-step-err "decoder detail")
+      (codex:agent-identity-crypto-step-ok "signing-key")
+      "ssh-ed25519 public-key"))
+  ("stored agent identity private key is not valid base64"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-value
+    (codex:verifying-key-from-private-key-pkcs8-base64-with-crypto-results
+      "private-key-base64"
+      (codex:agent-identity-crypto-step-ok "private-key-der")
+      (codex:agent-identity-crypto-step-ok "signing-key")
+      "verifying-key"))
+  ("verifying-key"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-error
+    (codex:verifying-key-from-private-key-pkcs8-base64-with-crypto-results
+      "private-key-base64"
+      (codex:agent-identity-crypto-step-ok "private-key-der")
+      (codex:agent-identity-crypto-step-err "pkcs8 detail")
+      "verifying-key"))
+  ("stored agent identity private key is not valid PKCS#8"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-value
+    (codex:curve25519-secret-key-from-private-key-pkcs8-base64-with-crypto-results
+      "private-key-base64"
+      (codex:agent-identity-crypto-step-ok "private-key-der")
+      (codex:agent-identity-crypto-step-ok "signing-key")
+      "curve25519-secret"))
+  ("curve25519-secret"))
+
+!(assertEqualToResult
+  (codex:agent-identity-string-result-error
+    (codex:curve25519-secret-key-from-private-key-pkcs8-base64-with-crypto-results
+      "private-key-base64"
+      (codex:agent-identity-crypto-step-err "decoder detail")
+      (codex:agent-identity-crypto-step-ok "signing-key")
+      "curve25519-secret"))
+  ("stored agent identity private key is not valid base64"))
 
 !(assertEqualToResult
   (codex:agent-bill-of-materials-agent-version
