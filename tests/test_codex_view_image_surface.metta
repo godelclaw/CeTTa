@@ -1,6 +1,5 @@
 !(register-module! ../codex)
 !(import! &self json)
-!(import! &self fs)
 !(import! &self process)
 !(import! &self codex:protocol)
 !(import! &self codex:view_image)
@@ -20,10 +19,8 @@
 !(assertEqualToResult
   (process-result-exit-code
     (process-run-shell
-      "rm -rf /home/zarclaw/repos/CeTTa/runtime/codex-view-image-fixture && mkdir -p /home/zarclaw/repos/CeTTa/runtime/codex-view-image-fixture/subdir && printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6x0AAAAASUVORK5CYII=' | base64 -d > /home/zarclaw/repos/CeTTa/runtime/codex-view-image-fixture/pixel.png"))
+      "rm -rf /home/zarclaw/repos/CeTTa/runtime/codex-view-image-fixture && mkdir -p /home/zarclaw/repos/CeTTa/runtime/codex-view-image-fixture/subdir && printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6x0AAAAASUVORK5CYII=' | base64 -d > /home/zarclaw/repos/CeTTa/runtime/codex-view-image-fixture/pixel.png && printf 'not an image' > /home/zarclaw/repos/CeTTa/runtime/codex-view-image-fixture/note.txt"))
   (0))
-
-!(fs-write-text (codex-view-image-note-path) "not an image")
 
 !(assertEqualToResult
   (json-stringify

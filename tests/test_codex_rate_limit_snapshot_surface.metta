@@ -1,4 +1,5 @@
 !(register-module! ../codex)
+!(import! &self codex:account)
 !(import! &self codex:protocol)
 
 !(assertEqualToResult
@@ -47,9 +48,9 @@
       (codex:rate-limit-window 12.5 5 1712000000)
       CodexAbsent
       (codex:credits-snapshot True False "$12.34")
-      "pro"
+      (codex:plan-type-pro)
       (codex:rate-limit-reached-type-workspace-member-usage-limit-reached)))
-  ("pro"))
+  ((CodexPlanTypePro)))
 
 !(assertEqualToResult
   (codex:rate-limit-snapshot-rate-limit-reached-type
@@ -59,7 +60,7 @@
       (codex:rate-limit-window 12.5 5 1712000000)
       CodexAbsent
       (codex:credits-snapshot True False "$12.34")
-      "pro"
+      (codex:plan-type-pro)
       (codex:rate-limit-reached-type-workspace-member-usage-limit-reached)))
   ("workspace_member_usage_limit_reached"))
 

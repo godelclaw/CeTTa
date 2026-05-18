@@ -120,10 +120,6 @@
 ; `HashMap<ThreadId, AgentStatus>`. This CeTTa slice uses the same ordered-list
 ; projection approach there so the visible JSON object shape remains identical.
 ;
-; This restart subset does not yet port `account::PlanType`, so the
-; `RateLimitSnapshot.plan_type` field is currently carried through as the same
-; visible raw value/string supplied by callers.
-;
 ; The unified-exec delta event stores raw bytes in Rust and serializes them as
 ; base64. The current CeTTa surface therefore models the event payload as text
 ; whose current byte sequence is base64-encoded at JSON projection time.
@@ -6391,6 +6387,17 @@
 (= (codex:rate-limit-reached-type-json $text)
    (JsonString $text))
 
+(= (codex:rate-limit-plan-type-json CodexAbsent)
+   JsonNull)
+
+; CeTTa module-boundary note: typed plan_type callers import codex:account
+; alongside codex:protocol. Importing account from protocol perturbs unrelated
+; he_extended protocol consumers, so the Rust PlanType wire mapping stays in the
+; account helper and this projector calls it only when that helper is present.
+(= (codex:rate-limit-plan-type-json $plan-type)
+   (case (codex:plan-type-wire-name $plan-type)
+     (($wire-name (JsonString $wire-name)))))
+
 (= (codex:rate-limit-snapshot-json
       (CodexRateLimitSnapshot
         $limit-id
@@ -6424,7 +6431,7 @@
             (codex:credits-snapshot-json $credits)))
       (JsonPair
         "plan_type"
-        (if (== $plan-type CodexAbsent) JsonNull (JsonString $plan-type)))
+        (codex:rate-limit-plan-type-json $plan-type))
       (JsonPair
         "rate_limit_reached_type"
         (if (== $rate-limit-reached-type CodexAbsent)

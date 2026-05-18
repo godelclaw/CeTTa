@@ -1,5 +1,6 @@
 !(register-module! ../codex)
 !(import! &self json)
+!(import! &self codex:account)
 !(import! &self codex:protocol)
 
 !(assertEqualToResult
@@ -305,7 +306,7 @@
           (codex:rate-limit-window 50.0 60 1712349999)
           CodexAbsent
           (codex:credits-snapshot True False "$12.34")
-          "plus"
+          (codex:plan-type-plus)
           (codex:rate-limit-reached-type-rate-limit-reached)))))
   ("{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":100,\"cached_input_tokens\":20,\"output_tokens\":30,\"reasoning_output_tokens\":4,\"total_tokens\":130},\"last_token_usage\":{\"input_tokens\":10,\"cached_input_tokens\":2,\"output_tokens\":3,\"reasoning_output_tokens\":1,\"total_tokens\":13},\"model_context_window\":32000},\"rate_limits\":{\"limit_id\":\"limit-1\",\"limit_name\":\"gpt-5\",\"primary\":{\"used_percent\":50,\"window_minutes\":60,\"resets_at\":1712349999},\"secondary\":null,\"credits\":{\"has_credits\":true,\"unlimited\":false,\"balance\":\"$12.34\"},\"plan_type\":\"plus\",\"rate_limit_reached_type\":\"rate_limit_reached\"}}"))
 
