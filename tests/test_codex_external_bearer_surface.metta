@@ -76,44 +76,30 @@
                (codex:external-auth-tokens-access-token $refresh-tokens)))))))))))
   (("provider-token" "provider-token" "next-token")))
 
-(= (codex-external-bearer-stale-first)
-   (codex:bearer-token-refresher-resolve-at
-     (codex:bearer-token-refresher-new
-       (codex-external-bearer-config
-         (codex-external-bearer-stale-root)
-         50))
-     1000))
-
-(= (codex-external-bearer-stale-second)
-   (codex:bearer-token-refresher-resolve-at
-     (codex:external-bearer-resolve-result-refresher
-       (codex-external-bearer-stale-first))
-     1100))
-
 !(assertEqualToResult
-  (codex:external-auth-tokens-access-token
-    (codex:external-bearer-resolve-result-tokens
-      (codex-external-bearer-stale-second)))
+  (case (codex:bearer-token-refresher-resolve-at
+          (codex:bearer-token-refresher-new
+            (codex-external-bearer-config
+              (codex-external-bearer-stale-root)
+              50))
+          1000)
+    (((CodexExternalBearerResolveOk $first-refresher $first-tokens)
+      (case (codex:bearer-token-refresher-resolve-at $first-refresher 1100)
+        (((CodexExternalBearerResolveOk $second-refresher $second-tokens)
+          (codex:external-auth-tokens-access-token $second-tokens)))))))
   ("next-token"))
 
-(= (codex-external-bearer-zero-first)
-   (codex:bearer-token-refresher-resolve-at
-     (codex:bearer-token-refresher-new
-       (codex-external-bearer-config
-         (codex-external-bearer-zero-root)
-         0))
-     1000))
-
-(= (codex-external-bearer-zero-second)
-   (codex:bearer-token-refresher-resolve-at
-     (codex:external-bearer-resolve-result-refresher
-       (codex-external-bearer-zero-first))
-     1000000))
-
 !(assertEqualToResult
-  (codex:external-auth-tokens-access-token
-    (codex:external-bearer-resolve-result-tokens
-      (codex-external-bearer-zero-second)))
+  (case (codex:bearer-token-refresher-resolve-at
+          (codex:bearer-token-refresher-new
+            (codex-external-bearer-config
+              (codex-external-bearer-zero-root)
+              0))
+          1000)
+    (((CodexExternalBearerResolveOk $first-refresher $first-tokens)
+      (case (codex:bearer-token-refresher-resolve-at $first-refresher 1000000)
+        (((CodexExternalBearerResolveOk $second-refresher $second-tokens)
+          (codex:external-auth-tokens-access-token $second-tokens)))))))
   ("provider-token"))
 
 !(assertEqualToResult

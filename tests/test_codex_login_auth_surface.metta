@@ -54,6 +54,30 @@
    (codex:codex-auth-chatgpt-auth-tokens
      (codex-login-auth-team-token-data)))
 
+(= (codex-login-auth-agent-record)
+   (codex:agent-identity-auth-record
+     "agent-runtime-1"
+     "private-key"
+     "agent-account"
+     "agent-user"
+     "agent@example.com"
+     (codex:plan-type-enterprise)
+     True))
+
+(= (codex-login-auth-agent)
+   (codex:agent-identity-auth
+     (codex-login-auth-agent-record)))
+
+(= (codex-login-auth-agent-initialized)
+   (codex:agent-identity-auth-with-runtime
+     (codex-login-auth-agent-record)
+     "task-123"
+     "Bearer signed-agent-token"))
+
+(= (codex-login-auth-agent-codex-auth)
+   (codex:codex-auth-agent-identity
+     (codex-login-auth-agent)))
+
 !(assertEqualToResult
   (codex:codex-auth-auth-mode (codex-login-auth-api-key))
   ((CodexAuthModeApiKey)))
@@ -71,6 +95,14 @@
   ((CodexAuthModeChatgptAuthTokens)))
 
 !(assertEqualToResult
+  (codex:codex-auth-auth-mode (codex-login-auth-agent-codex-auth))
+  ((CodexAuthModeAgentIdentity)))
+
+!(assertEqualToResult
+  (codex:codex-auth-api-auth-mode (codex-login-auth-agent-codex-auth))
+  ((CodexAuthModeAgentIdentity)))
+
+!(assertEqualToResult
   (codex:codex-auth-eq
     (codex-login-auth-api-key)
     (codex:codex-auth-api-key "different-key"))
@@ -83,6 +115,21 @@
   (False))
 
 !(assertEqualToResult
+  (codex:codex-auth-eq
+    (codex-login-auth-agent-codex-auth)
+    (codex:codex-auth-agent-identity
+      (codex:agent-identity-auth
+        (codex:agent-identity-auth-record
+          "agent-runtime-2"
+          "different-key"
+          "other-account"
+          "other-user"
+          "other@example.com"
+          (codex:plan-type-pro)
+          False))))
+  (True))
+
+!(assertEqualToResult
   ((codex:codex-auth-is-api-key-auth (codex-login-auth-api-key))
    (codex:codex-auth-is-api-key-auth (codex-login-auth-chatgpt))
    (codex:codex-auth-is-chatgpt-auth (codex-login-auth-chatgpt))
@@ -90,8 +137,11 @@
    (codex:codex-auth-uses-codex-backend (codex-login-auth-api-key))
    (codex:codex-auth-uses-codex-backend (codex-login-auth-chatgpt))
    (codex:codex-auth-is-external-chatgpt-tokens
-     (codex-login-auth-external-chatgpt)))
-  ((True False True True False True True)))
+     (codex-login-auth-external-chatgpt))
+   (codex:codex-auth-is-chatgpt-auth (codex-login-auth-agent-codex-auth))
+   (codex:codex-auth-uses-codex-backend
+     (codex-login-auth-agent-codex-auth)))
+  ((True False True True False True True False True)))
 
 !(assertEqualToResult
   (codex:codex-auth-api-key-option (codex-login-auth-api-key))
@@ -135,3 +185,79 @@
 !(assertEqualToResult
   (codex:codex-auth-is-workspace-account (codex-login-auth-api-key))
   (False))
+
+!(assertEqualToResult
+  ((codex:agent-identity-auth-record-agent-runtime-id
+     (codex-login-auth-agent-record))
+   (codex:agent-identity-auth-record-agent-private-key
+     (codex-login-auth-agent-record))
+   (codex:agent-identity-auth-record-account-id
+     (codex-login-auth-agent-record))
+   (codex:agent-identity-auth-record-chatgpt-user-id
+     (codex-login-auth-agent-record))
+   (codex:agent-identity-auth-record-email
+     (codex-login-auth-agent-record))
+   (codex:agent-identity-auth-record-plan-type
+     (codex-login-auth-agent-record))
+   (codex:agent-identity-auth-record-is-fedramp-account
+     (codex-login-auth-agent-record)))
+  (("agent-runtime-1"
+    "private-key"
+    "agent-account"
+    "agent-user"
+    "agent@example.com"
+    (CodexPlanTypeEnterprise)
+    True)))
+
+!(assertEqualToResult
+  ((codex:codex-auth-get-account-id (codex-login-auth-agent-codex-auth))
+   (codex:codex-auth-get-account-email (codex-login-auth-agent-codex-auth))
+   (codex:codex-auth-get-chatgpt-user-id
+     (codex-login-auth-agent-codex-auth))
+   (codex:codex-auth-account-plan-type (codex-login-auth-agent-codex-auth))
+   (codex:codex-auth-is-fedramp-account (codex-login-auth-agent-codex-auth))
+   (codex:codex-auth-is-workspace-account
+     (codex-login-auth-agent-codex-auth)))
+  (("agent-account"
+    "agent@example.com"
+    "agent-user"
+    (CodexPlanTypeEnterprise)
+    True
+    True)))
+
+!(assertEqualToResult
+  (codex:codex-auth-token-result-message
+    (codex:codex-auth-get-token
+      (codex-login-auth-agent-codex-auth)))
+  ("agent identity auth does not expose a bearer token"))
+
+!(assertEqualToResult
+  ((codex:headers-get
+      (codex:auth-provider-to-auth-headers
+        (codex:auth-provider-from-auth
+          (codex-login-auth-agent-codex-auth)))
+      "authorization")
+   (codex:headers-get
+      (codex:auth-provider-to-auth-headers
+        (codex:auth-provider-from-auth
+          (codex-login-auth-agent-codex-auth)))
+      "ChatGPT-Account-ID")
+   (codex:headers-get
+      (codex:auth-provider-to-auth-headers
+        (codex:auth-provider-from-auth
+          (codex-login-auth-agent-codex-auth)))
+      "X-OpenAI-Fedramp"))
+  ((CodexAbsent "agent-account" "true")))
+
+!(assertEqualToResult
+  ((codex:headers-get
+      (codex:auth-provider-to-auth-headers
+        (codex:agent-identity-auth-provider
+          (codex-login-auth-agent-initialized)))
+      "authorization")
+   (codex:headers-get
+      (codex:auth-provider-to-auth-headers
+        (codex:agent-identity-auth-provider
+          (codex-login-auth-agent-initialized)))
+      "ChatGPT-Account-ID"))
+  (("Bearer signed-agent-token" "agent-account")))
