@@ -222,6 +222,7 @@ typedef struct {
     X(lib_system_exit_with_code, "__cetta_lib_system_exit_with_code") \
     X(lib_system_cwd, "__cetta_lib_system_cwd") \
     X(lib_system_os, "__cetta_lib_system_os") \
+    X(lib_system_random_base64url_no_pad, "__cetta_lib_system_random_base64url_no_pad") \
     X(lib_fs_exists, "__cetta_lib_fs_exists") \
     X(lib_fs_read_text, "__cetta_lib_fs_read_text") \
     X(lib_fs_write_text, "__cetta_lib_fs_write_text") \

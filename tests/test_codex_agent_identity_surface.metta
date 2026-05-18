@@ -1,6 +1,7 @@
 !(register-module! ../codex)
 !(import! &self codex:agent_identity)
 !(import! &self codex:protocol)
+!(import! &self str)
 
 (= (codex-agent-identity-key)
    (codex:agent-identity-key "agent-123" "pkcs8-base64"))
@@ -66,6 +67,16 @@
       "0.124.0"
       "linux"))
   ("mcp-linux"))
+
+!(assertEqualToResult
+  (str-starts-with?
+    (codex:agent-identity-request-id)
+    (codex:agent-identity-request-id-prefix))
+  (True))
+
+!(assertEqualToResult
+  (str-length (codex:agent-identity-request-id))
+  (43))
 
 !(assertEqualToResult
   (codex:normalize-chatgpt-base-url "https://chatgpt.com/codex")

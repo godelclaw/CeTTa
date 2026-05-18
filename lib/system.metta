@@ -42,3 +42,8 @@
    (function
      (case (__cetta_lib_system_os ())
        (($result (return $result))))))
+
+(= (system-random-base64url-no-pad $byte-count)
+   (function
+     (case (__cetta_lib_system_random_base64url_no_pad $byte-count)
+       (($result (return $result))))))

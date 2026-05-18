@@ -1968,6 +1968,85 @@ static char *library_base64_encode_bytes(const uint8_t *bytes, size_t len) {
     return encoded;
 }
 
+static char *library_base64url_no_pad_encode_bytes(const uint8_t *bytes, size_t len) {
+    static const char table[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    size_t out_len = (len / 3u) * 4u;
+    size_t rem = len % 3u;
+    size_t in_ix = 0;
+    size_t out_ix = 0;
+    char *encoded;
+
+    if (rem == 1u) out_len += 2u;
+    if (rem == 2u) out_len += 3u;
+
+    encoded = cetta_malloc(out_len + 1u);
+    while (in_ix + 3u <= len) {
+        unsigned char b0 = bytes[in_ix];
+        unsigned char b1 = bytes[in_ix + 1u];
+        unsigned char b2 = bytes[in_ix + 2u];
+        encoded[out_ix++] = table[b0 >> 2];
+        encoded[out_ix++] = table[((b0 & 0x03u) << 4) | (b1 >> 4)];
+        encoded[out_ix++] = table[((b1 & 0x0fu) << 2) | (b2 >> 6)];
+        encoded[out_ix++] = table[b2 & 0x3fu];
+        in_ix += 3u;
+    }
+    if (rem == 1u) {
+        unsigned char b0 = bytes[in_ix];
+        encoded[out_ix++] = table[b0 >> 2];
+        encoded[out_ix++] = table[(b0 & 0x03u) << 4];
+    } else if (rem == 2u) {
+        unsigned char b0 = bytes[in_ix];
+        unsigned char b1 = bytes[in_ix + 1u];
+        encoded[out_ix++] = table[b0 >> 2];
+        encoded[out_ix++] = table[((b0 & 0x03u) << 4) | (b1 >> 4)];
+        encoded[out_ix++] = table[(b1 & 0x0fu) << 2];
+    }
+    encoded[out_ix] = '\0';
+    return encoded;
+}
+
+static bool library_fill_os_random_bytes(uint8_t *bytes, size_t len,
+                                         char *errbuf, size_t errbuf_sz) {
+    FILE *fp;
+    size_t off = 0;
+
+    if (len == 0) return true;
+
+    fp = fopen("/dev/urandom", "rb");
+    if (!fp) {
+        if (errbuf && errbuf_sz > 0) {
+            snprintf(errbuf, errbuf_sz, "cannot open /dev/urandom: %s",
+                     strerror(errno));
+        }
+        return false;
+    }
+
+    while (off < len) {
+        size_t nread = fread(bytes + off, 1, len - off, fp);
+        if (nread > 0) {
+            off += nread;
+            continue;
+        }
+        if (ferror(fp)) {
+            if (errbuf && errbuf_sz > 0) {
+                snprintf(errbuf, errbuf_sz, "cannot read /dev/urandom: %s",
+                         strerror(errno));
+            }
+            fclose(fp);
+            return false;
+        }
+        if (errbuf && errbuf_sz > 0) {
+            snprintf(errbuf, errbuf_sz, "unexpected EOF reading /dev/urandom");
+        }
+        fclose(fp);
+        return false;
+    }
+
+    fclose(fp);
+    return true;
+}
+
 static const char *library_image_mime_type(const uint8_t *bytes, size_t len,
                                            const char *path) {
     const char *ext;
@@ -2212,6 +2291,34 @@ static Atom *system_os(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     return atom_string(a, system_os_name());
 }
 
+static Atom *system_random_base64url_no_pad(Arena *a, Atom *head,
+                                            Atom **args, uint32_t nargs) {
+    int byte_count;
+    uint8_t *bytes;
+    char *encoded;
+    char errbuf[256];
+    Atom *result;
+
+    if (nargs != 1 || !library_int_arg(args[0], &byte_count) || byte_count < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected non-negative byte count");
+    }
+
+    bytes = cetta_malloc((size_t)byte_count ? (size_t)byte_count : 1u);
+    if (!library_fill_os_random_bytes(bytes, (size_t)byte_count,
+                                      errbuf, sizeof(errbuf))) {
+        free(bytes);
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, errbuf));
+    }
+
+    encoded = library_base64url_no_pad_encode_bytes(bytes, (size_t)byte_count);
+    free(bytes);
+    result = atom_string(a, encoded);
+    free(encoded);
+    return result;
+}
+
 static Atom *cetta_library_dispatch_system(const CettaLibraryContext *ctx,
                                            Arena *a, Atom *head,
                                            Atom **args, uint32_t nargs) {
@@ -2243,6 +2350,9 @@ static Atom *cetta_library_dispatch_system(const CettaLibraryContext *ctx,
     }
     if (head_id == g_builtin_syms.lib_system_os) {
         return system_os(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_system_random_base64url_no_pad) {
+        return system_random_base64url_no_pad(a, head, args, nargs);
     }
     return NULL;
 }
@@ -8689,6 +8799,21 @@ static Atom *str_split_middle_bytes(Arena *a, Atom *head,
 static Atom *str_base64url_decode(Arena *a, Atom *head,
                                   Atom **args, uint32_t nargs);
 
+static Atom *str_base64url_encode_no_pad(Arena *a, Atom *head,
+                                         Atom **args, uint32_t nargs) {
+    const char *text;
+    char *encoded;
+    Atom *result;
+
+    if (nargs != 1 || !(text = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected text argument");
+    }
+    encoded = library_base64url_no_pad_encode_bytes((const uint8_t *)text, strlen(text));
+    result = atom_string(a, encoded);
+    free(encoded);
+    return result;
+}
+
 static Atom *str_base64_encode(Arena *a, Atom *head,
                                Atom **args, uint32_t nargs) {
     static const char table[] =
@@ -8704,6 +8829,9 @@ static Atom *str_base64_encode(Arena *a, Atom *head,
        builtin symbol count changes perturb precompiled stdlib symbol IDs. */
     if (nargs == 2) {
         const char *mode = library_text_arg(args[0]);
+        if (mode && strcmp(mode, "__encode_url_no_pad") == 0) {
+            return str_base64url_encode_no_pad(a, head, args + 1, 1);
+        }
         if (mode && strcmp(mode, "__decode_url_no_pad") == 0) {
             return str_base64url_decode(a, head, args + 1, 1);
         }

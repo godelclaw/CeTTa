@@ -6,6 +6,7 @@
 ; Covered in this increment:
 ; - AgentIdentityKey / AgentTaskAuthorizationTarget data shapes
 ; - AgentBillOfMaterials / build_abom
+; - agent_identity_request_id
 ; - agent_registration_url, agent_task_registration_url, agent_identity_biscuit_url
 ; - normalize_chatgpt_base_url
 ;
@@ -78,6 +79,15 @@
 
 (= (codex:agent-identity-package-version)
    "0.124.0")
+
+(= (codex:agent-identity-request-id-prefix)
+   "codex-agent-identity-")
+
+(= (codex:agent-identity-request-id)
+   ; Rust uses OsRng for 16 bytes, then URL_SAFE_NO_PAD with this prefix.
+   (str-concat
+     (codex:agent-identity-request-id-prefix)
+     (system-random-base64url-no-pad 16)))
 
 (= (codex:agent-identity-harness-id $session-source)
    (case $session-source

@@ -1,4 +1,5 @@
 !(import! &self system)
+!(import! &self str)
 
 !(system-argc)
 !(system-has-args)
@@ -8,3 +9,6 @@
 !(system-getenv-or-default "CETTA_TEST_MISSING" "fallback")
 !(get-type (system-cwd))
 !(get-type (system-os))
+!(get-type (system-random-base64url-no-pad 16))
+!(assertEqual (str-length (system-random-base64url-no-pad 16)) 22)
+!(assertEqual (str-length (system-random-base64url-no-pad 0)) 0)
