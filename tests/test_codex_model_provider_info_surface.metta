@@ -40,6 +40,46 @@
      $requires-openai-auth
      $supports-websockets))
 
+(= (test:model-provider-custom-provider)
+   (codex:model-provider-info-full
+     "Custom"
+     "https://example.com/v1"
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     (codex:wire-api-responses)
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     False
+     False))
+
+(= (test:model-provider-custom-openai-provider)
+   (codex:model-provider-info-full
+     "Custom OpenAI"
+     "https://override.example/v1"
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     (codex:wire-api-responses)
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     False
+     False))
+
 !(assertEqualToResult
   (codex:wire-api-display (codex:wire-api-responses))
   ("responses"))
@@ -270,3 +310,98 @@
         False
         False)))
   ((True False True)))
+
+!(assertEqualToResult
+  (codex:model-provider-catalog-ids
+    (codex:built-in-model-providers "https://proxy.openai/v1"))
+  (("openai" "amazon-bedrock" "ollama" "lmstudio")))
+
+!(assertEqualToResult
+  ((codex:model-provider-info-base-url
+      (codex:model-provider-catalog-get
+        (codex:built-in-model-providers "https://proxy.openai/v1")
+        (codex:openai-provider-id)))
+   (codex:model-provider-info-is-amazon-bedrock
+      (codex:model-provider-catalog-get
+        (codex:built-in-model-providers CodexAbsent)
+        (codex:amazon-bedrock-provider-id)))
+   (codex:model-provider-info-base-url
+      (codex:model-provider-catalog-get
+        (codex:built-in-model-providers CodexAbsent)
+        (codex:lmstudio-oss-provider-id))))
+  (("https://proxy.openai/v1" True "http://localhost:1234/v1")))
+
+!(assertEqualToResult
+  ((codex:model-provider-info-name
+      (codex:model-provider-catalog-get
+        (codex:model-provider-catalog-result-value
+          (codex:merge-configured-model-providers
+            (codex:built-in-model-providers CodexAbsent)
+            ((codex:model-provider-catalog-entry
+               "custom"
+               (test:model-provider-custom-provider)))))
+        "custom"))
+   (list:len
+      (codex:model-provider-catalog-result-value
+        (codex:merge-configured-model-providers
+          (codex:built-in-model-providers CodexAbsent)
+          ((codex:model-provider-catalog-entry
+             "custom"
+             (test:model-provider-custom-provider)))))))
+  (("Custom" 5)))
+
+!(assertEqualToResult
+  (codex:model-provider-info-name
+    (codex:model-provider-catalog-get
+      (codex:model-provider-catalog-result-value
+        (codex:merge-configured-model-providers
+          (codex:built-in-model-providers CodexAbsent)
+          ((codex:model-provider-catalog-entry
+             (codex:openai-provider-id)
+             (test:model-provider-custom-openai-provider)))))
+      (codex:openai-provider-id)))
+  ("OpenAI"))
+
+!(assertEqualToResult
+  ((codex:model-provider-aws-auth-info-profile
+      (codex:model-provider-info-aws
+        (codex:model-provider-catalog-get
+          (codex:model-provider-catalog-result-value
+            (codex:merge-configured-model-providers
+              (codex:built-in-model-providers CodexAbsent)
+              ((codex:model-provider-catalog-entry
+                 (codex:amazon-bedrock-provider-id)
+                 (codex:model-provider-info-with-aws
+                   (codex:default-model-provider-info)
+                   (codex:model-provider-aws-auth-info
+                     "codex-bedrock"
+                     "us-west-2"))))))
+          (codex:amazon-bedrock-provider-id))))
+   (codex:model-provider-aws-auth-info-region
+      (codex:model-provider-info-aws
+        (codex:model-provider-catalog-get
+          (codex:model-provider-catalog-result-value
+            (codex:merge-configured-model-providers
+              (codex:built-in-model-providers CodexAbsent)
+              ((codex:model-provider-catalog-entry
+                 (codex:amazon-bedrock-provider-id)
+                 (codex:model-provider-info-with-aws
+                   (codex:default-model-provider-info)
+                   (codex:model-provider-aws-auth-info
+                     "codex-bedrock"
+                     "us-west-2"))))))
+          (codex:amazon-bedrock-provider-id)))))
+  (("codex-bedrock" "us-west-2")))
+
+!(assertEqualToResult
+  (codex:model-provider-catalog-result-error
+    (codex:merge-configured-model-providers
+      (codex:built-in-model-providers CodexAbsent)
+      ((codex:model-provider-catalog-entry
+         (codex:amazon-bedrock-provider-id)
+         (codex:model-provider-info-with-aws
+           (test:model-provider-custom-provider)
+           (codex:model-provider-aws-auth-info
+             "codex-bedrock"
+             CodexAbsent))))))
+  ("model_providers.amazon-bedrock only supports changing `aws.profile` and `aws.region`; other non-default provider fields are not supported"))

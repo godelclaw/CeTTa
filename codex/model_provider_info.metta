@@ -12,6 +12,7 @@
 ; - retry/timeout defaults and hard retry caps
 ; - OpenAI / Amazon Bedrock / base-url OSS provider constructor shape
 ; - ModelProviderInfo::validate auth/AWS conflict rules
+; - built_in_model_providers and merge_configured_model_providers catalog rules
 ;
 ; Required CeTTa representation notes for audit:
 ; - Rust returns Result<Option<String>, CodexErr>. CeTTa represents that as
@@ -22,6 +23,9 @@
 ; - Rust create_oss_provider reads CODEX_OSS_* from the process environment.
 ;   This slice includes the pure base-url constructor and default-port helper;
 ;   environment override parsing belongs with the runtime config/env layer.
+; - Rust provider catalogs are HashMap<String, ModelProviderInfo>. CeTTa uses an
+;   ordered entry list so tests can inspect it deterministically; lookup,
+;   insert-if-absent, and replace preserve Rust HashMap semantics.
 
 !(import! &self error)
 !(import! &self str)
@@ -872,6 +876,229 @@
 (= (codex:model-provider-info-has-command-auth $provider)
    (codex:model-provider-info-is-present
      (codex:model-provider-info-auth $provider)))
+
+(= (codex:model-provider-catalog-entry $id $provider)
+   (CodexModelProviderCatalogEntry $id $provider))
+
+(= (codex:model-provider-catalog-entry-id
+      (CodexModelProviderCatalogEntry $id $provider))
+   $id)
+
+(= (codex:model-provider-catalog-entry-provider
+      (CodexModelProviderCatalogEntry $id $provider))
+   $provider)
+
+(= (codex:model-provider-catalog-ok $catalog)
+   (CodexModelProviderCatalogOk $catalog))
+
+(= (codex:model-provider-catalog-err $message)
+   (CodexModelProviderCatalogErr $message))
+
+(= (codex:model-provider-catalog-result-value
+      (CodexModelProviderCatalogOk $catalog))
+   $catalog)
+
+(= (codex:model-provider-catalog-result-error
+      (CodexModelProviderCatalogErr $message))
+   $message)
+
+(= (codex:model-provider-catalog-get () $id)
+   CodexAbsent)
+
+(= (codex:model-provider-catalog-get $catalog $id)
+   (let ($entry $tail) (decons-atom $catalog)
+     (if (== (codex:model-provider-catalog-entry-id $entry) $id)
+         (codex:model-provider-catalog-entry-provider $entry)
+         (codex:model-provider-catalog-get $tail $id))))
+
+(= (codex:model-provider-catalog-ids ())
+   ())
+
+(= (codex:model-provider-catalog-ids $catalog)
+   (let ($entry $tail) (decons-atom $catalog)
+     (case (codex:model-provider-catalog-ids $tail)
+       (($tail-ids
+         (case (codex:model-provider-catalog-entry-id $entry)
+           (($id (cons-atom $id $tail-ids)))))))))
+
+(= (codex:model-provider-catalog-append-entry () $entry)
+   ($entry))
+
+(= (codex:model-provider-catalog-append-entry $catalog $entry)
+   (let ($head $tail) (decons-atom $catalog)
+     (case (codex:model-provider-catalog-append-entry $tail $entry)
+       (($next-tail
+         (cons-atom $head $next-tail))))))
+
+(= (codex:model-provider-catalog-insert-if-absent
+      $catalog
+      $id
+      $provider)
+   (if (== (codex:model-provider-catalog-get $catalog $id) CodexAbsent)
+       (codex:model-provider-catalog-append-entry
+         $catalog
+         (codex:model-provider-catalog-entry $id $provider))
+       $catalog))
+
+(= (codex:model-provider-catalog-replace () $id $provider)
+   ())
+
+(= (codex:model-provider-catalog-replace $catalog $id $provider)
+   (let ($entry $tail) (decons-atom $catalog)
+     (if (== (codex:model-provider-catalog-entry-id $entry) $id)
+         (cons-atom
+           (codex:model-provider-catalog-entry $id $provider)
+           $tail)
+         (case (codex:model-provider-catalog-replace $tail $id $provider)
+           (($next-tail
+             (cons-atom $entry $next-tail)))))))
+
+(= (codex:model-provider-info-with-aws
+      (CodexModelProviderInfo
+        $name
+        $base-url
+        $env-key
+        $env-key-instructions
+        $experimental-bearer-token
+        $auth
+        $aws
+        $wire-api
+        $query-params
+        $http-headers
+        $env-http-headers
+        $request-max-retries
+        $stream-max-retries
+        $stream-idle-timeout-ms
+        $websocket-connect-timeout-ms
+        $requires-openai-auth
+        $supports-websockets)
+      $next-aws)
+   (codex:model-provider-info-full
+     $name
+     $base-url
+     $env-key
+     $env-key-instructions
+     $experimental-bearer-token
+     $auth
+     $next-aws
+     $wire-api
+     $query-params
+     $http-headers
+     $env-http-headers
+     $request-max-retries
+     $stream-max-retries
+     $stream-idle-timeout-ms
+     $websocket-connect-timeout-ms
+     $requires-openai-auth
+     $supports-websockets))
+
+(= (codex:model-provider-info-default-except-aws $provider)
+   (== (codex:model-provider-info-with-aws $provider CodexAbsent)
+       (codex:default-model-provider-info)))
+
+(= (codex:model-provider-aws-auth-info-merge
+      (CodexModelProviderAwsAuthInfo $base-profile $base-region)
+      (CodexModelProviderAwsAuthInfo $override-profile $override-region))
+   (codex:model-provider-aws-auth-info
+     (if (== $override-profile CodexAbsent)
+         $base-profile
+         $override-profile)
+     (if (== $override-region CodexAbsent)
+         $base-region
+         $override-region)))
+
+(= (codex:model-provider-info-merge-aws-override
+      $built-in-provider
+      $aws-override)
+   (if (== $aws-override CodexAbsent)
+       $built-in-provider
+       (let $built-in-aws
+         (codex:model-provider-info-aws $built-in-provider)
+         (if (== $built-in-aws CodexAbsent)
+             $built-in-provider
+             (codex:model-provider-info-with-aws
+               $built-in-provider
+               (codex:model-provider-aws-auth-info-merge
+                 $built-in-aws
+                 $aws-override))))))
+
+(= (codex:built-in-model-providers $openai-base-url)
+   ((codex:model-provider-catalog-entry
+      (codex:openai-provider-id)
+      (codex:create-openai-provider $openai-base-url))
+    (codex:model-provider-catalog-entry
+      (codex:amazon-bedrock-provider-id)
+      (codex:create-amazon-bedrock-provider CodexAbsent))
+    (codex:model-provider-catalog-entry
+      (codex:ollama-oss-provider-id)
+      (codex:create-oss-provider-with-port
+        (codex:default-ollama-port)
+        (codex:wire-api-responses)))
+    (codex:model-provider-catalog-entry
+      (codex:lmstudio-oss-provider-id)
+      (codex:create-oss-provider-with-port
+        (codex:default-lmstudio-port)
+        (codex:wire-api-responses)))))
+
+(= (codex:merge-configured-amazon-bedrock-provider
+      $model-providers
+      $configured-provider)
+   (let $aws-override (codex:model-provider-info-aws $configured-provider)
+     (if (codex:model-provider-info-default-except-aws $configured-provider)
+         (let $built-in-provider
+           (codex:model-provider-catalog-get
+             $model-providers
+             (codex:amazon-bedrock-provider-id))
+           (if (== $built-in-provider CodexAbsent)
+               (codex:model-provider-catalog-ok $model-providers)
+               (codex:model-provider-catalog-ok
+                 (codex:model-provider-catalog-replace
+                   $model-providers
+                   (codex:amazon-bedrock-provider-id)
+                   (codex:model-provider-info-merge-aws-override
+                     $built-in-provider
+                     $aws-override)))))
+         (codex:model-provider-catalog-err
+           "model_providers.amazon-bedrock only supports changing `aws.profile` and `aws.region`; other non-default provider fields are not supported"))))
+
+(= (codex:merge-configured-model-provider-entry
+      $model-providers
+      (CodexModelProviderCatalogEntry $id $provider))
+   (if (== $id (codex:amazon-bedrock-provider-id))
+       (codex:merge-configured-amazon-bedrock-provider
+         $model-providers
+         $provider)
+       (codex:model-provider-catalog-ok
+         (codex:model-provider-catalog-insert-if-absent
+           $model-providers
+           $id
+           $provider))))
+
+(= (codex:merge-configured-model-providers-loop
+      $model-providers
+      ())
+   (codex:model-provider-catalog-ok $model-providers))
+
+(= (codex:merge-configured-model-providers-loop
+      $model-providers
+      $configured-model-providers)
+   (let ($entry $tail) (decons-atom $configured-model-providers)
+     (case (codex:merge-configured-model-provider-entry
+             $model-providers
+             $entry)
+       (((CodexModelProviderCatalogErr $message)
+         (codex:model-provider-catalog-err $message))
+        ((CodexModelProviderCatalogOk $next-model-providers)
+         (codex:merge-configured-model-providers-loop
+           $next-model-providers
+           $tail))))))
+
+(= (codex:merge-configured-model-providers
+      $model-providers
+      $configured-model-providers)
+   (codex:merge-configured-model-providers-loop
+     $model-providers
+     $configured-model-providers))
 
 (= (codex:model-provider-api-key-from-env-value $provider $env-value)
    (let $env-key (codex:model-provider-info-env-key $provider)
