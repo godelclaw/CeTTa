@@ -87,6 +87,135 @@
   (30))
 
 !(assertEqualToResult
+  (codex:register-task-response-task-id
+    (codex:register-task-response
+      "snake-task"
+      "camel-task"
+      "enc-snake"
+      "enc-camel"))
+  ("snake-task"))
+
+!(assertEqualToResult
+  (codex:register-task-response-task-id-camel
+    (codex:register-task-response-from-json
+      (json-parse "{\"taskId\":\"camel-task\"}")))
+  ("camel-task"))
+
+!(assertEqualToResult
+  (codex:register-task-response-encrypted-task-id
+    (codex:register-task-response-from-json
+      (json-parse "{\"encrypted_task_id\":\"enc-snake\"}")))
+  ("enc-snake"))
+
+!(assertEqualToResult
+  (codex:register-task-response-encrypted-task-id-camel
+    (codex:register-task-response-from-json
+      (json-parse "{\"encryptedTaskId\":\"enc-camel\"}")))
+  ("enc-camel"))
+
+!(assertEqualToResult
+  (codex:register-task-response-selected-task-id
+    (codex:register-task-response
+      "snake-task"
+      "camel-task"
+      "enc-snake"
+      "enc-camel"))
+  ("snake-task"))
+
+!(assertEqualToResult
+  (codex:register-task-response-selected-task-id
+    (codex:register-task-response
+      CodexAbsent
+      "camel-task"
+      "enc-snake"
+      "enc-camel"))
+  ("camel-task"))
+
+!(assertEqualToResult
+  (codex:register-task-response-selected-encrypted-task-id
+    (codex:register-task-response
+      CodexAbsent
+      CodexAbsent
+      "enc-snake"
+      "enc-camel"))
+  ("enc-snake"))
+
+!(assertEqualToResult
+  (codex:register-task-response-selected-encrypted-task-id
+    (codex:register-task-response
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent
+      "enc-camel"))
+  ("enc-camel"))
+
+!(assertEqualToResult
+  (codex:register-task-response-selected-task-id
+    (codex:register-task-response-from-json
+      (json-parse "{\"task_id\":null,\"taskId\":\"camel-task\"}")))
+  ("camel-task"))
+
+!(assertEqualToResult
+  (codex:agent-task-id-result-value
+    (codex:task-id-from-register-task-response-with-decryption-result
+      (codex-agent-identity-key)
+      (codex:register-task-response
+        "snake-task"
+        "camel-task"
+        "enc-snake"
+        "enc-camel")
+      (codex:agent-task-id-result-ok "decrypted-task")))
+  ("snake-task"))
+
+!(assertEqualToResult
+  (codex:agent-task-id-result-value
+    (codex:task-id-from-register-task-response-with-decryption-result
+      (codex-agent-identity-key)
+      (codex:register-task-response
+        CodexAbsent
+        "camel-task"
+        "enc-snake"
+        "enc-camel")
+      (codex:agent-task-id-result-ok "decrypted-task")))
+  ("camel-task"))
+
+!(assertEqualToResult
+  (codex:agent-task-id-result-value
+    (codex:task-id-from-register-task-response-with-decryption-result
+      (codex-agent-identity-key)
+      (codex:register-task-response
+        CodexAbsent
+        CodexAbsent
+        "enc-snake"
+        "enc-camel")
+      (codex:agent-task-id-result-ok "decrypted-task")))
+  ("decrypted-task"))
+
+!(assertEqualToResult
+  (codex:agent-task-id-result-error
+    (codex:task-id-from-register-task-response-with-decryption-result
+      (codex-agent-identity-key)
+      (codex:register-task-response
+        CodexAbsent
+        CodexAbsent
+        "enc-snake"
+        CodexAbsent)
+      (codex:agent-task-id-result-err "decrypt failed")))
+  ("decrypt failed"))
+
+!(assertEqualToResult
+  (codex:agent-task-id-result-error
+    (codex:task-id-from-register-task-response-with-decryption-result
+      (codex-agent-identity-key)
+      (codex:register-task-response
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent)
+      (codex:agent-task-id-result-ok "decrypted-task")))
+  ("agent task registration response omitted task id"))
+
+!(assertEqualToResult
   (codex:agent-bill-of-materials-agent-version
     (codex:build-agent-bill-of-materials-with-version-os
       (codex:session-source-vscode)

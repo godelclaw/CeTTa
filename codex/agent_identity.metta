@@ -7,6 +7,7 @@
 ; - AgentIdentityKey / AgentTaskAuthorizationTarget data shapes
 ; - AgentBillOfMaterials / build_abom
 ; - AgentAssertionEnvelope serialization and RegisterTaskRequest JSON shape
+; - RegisterTaskResponse parsing and task-id selection branch order
 ; - agent_identity_request_id
 ; - agent_registration_url, agent_task_registration_url, agent_identity_biscuit_url
 ; - normalize_chatgpt_base_url
@@ -15,6 +16,9 @@
 ; - Rust signing/decryption/key-material helpers depend on Ed25519 PKCS#8,
 ;   SHA-512, and crypto_box seal support. Those are runtime-library work, not
 ;   pure MeTTa rewrites, and are intentionally not claimed by this helper slice.
+; - task-id selection exposes a `with-decryption-result` seam so direct and
+;   missing-id Rust branches are exact while encrypted-id decryption waits for
+;   the crypto runtime helper.
 
 !(import! &self str)
 !(import! &self system)
@@ -203,6 +207,110 @@
 
 (= (codex:agent-task-registration-timeout-seconds)
    30)
+
+(= (codex:register-task-response
+      $task-id
+      $task-id-camel
+      $encrypted-task-id
+      $encrypted-task-id-camel)
+   (CodexRegisterTaskResponse
+     $task-id
+     $task-id-camel
+     $encrypted-task-id
+     $encrypted-task-id-camel))
+
+(= (codex:register-task-response-task-id
+      (CodexRegisterTaskResponse
+        $task-id
+        $task-id-camel
+        $encrypted-task-id
+        $encrypted-task-id-camel))
+   $task-id)
+
+(= (codex:register-task-response-task-id-camel
+      (CodexRegisterTaskResponse
+        $task-id
+        $task-id-camel
+        $encrypted-task-id
+        $encrypted-task-id-camel))
+   $task-id-camel)
+
+(= (codex:register-task-response-encrypted-task-id
+      (CodexRegisterTaskResponse
+        $task-id
+        $task-id-camel
+        $encrypted-task-id
+        $encrypted-task-id-camel))
+   $encrypted-task-id)
+
+(= (codex:register-task-response-encrypted-task-id-camel
+      (CodexRegisterTaskResponse
+        $task-id
+        $task-id-camel
+        $encrypted-task-id
+        $encrypted-task-id-camel))
+   $encrypted-task-id-camel)
+
+(= (codex:agent-identity-json-object-optional-value $object $key)
+   (case (json-object-get $object $key)
+     ((Empty CodexAbsent)
+      (JsonNull CodexAbsent)
+      ($value $value))))
+
+(= (codex:agent-identity-json-object-optional-string $object $key)
+   (case (codex:agent-identity-json-object-optional-value $object $key)
+     ((CodexAbsent CodexAbsent)
+      ((JsonString $value) $value))))
+
+(= (codex:register-task-response-from-json $object)
+   (codex:register-task-response
+     (codex:agent-identity-json-object-optional-string $object "task_id")
+     (codex:agent-identity-json-object-optional-string $object "taskId")
+     (codex:agent-identity-json-object-optional-string $object "encrypted_task_id")
+     (codex:agent-identity-json-object-optional-string $object "encryptedTaskId")))
+
+(= (codex:register-task-response-selected-task-id $response)
+   (let $task-id
+     (codex:register-task-response-task-id $response)
+     (if (== $task-id CodexAbsent)
+         (codex:register-task-response-task-id-camel $response)
+         $task-id)))
+
+(= (codex:register-task-response-selected-encrypted-task-id $response)
+   (let $encrypted-task-id
+     (codex:register-task-response-encrypted-task-id $response)
+     (if (== $encrypted-task-id CodexAbsent)
+         (codex:register-task-response-encrypted-task-id-camel $response)
+         $encrypted-task-id)))
+
+(= (codex:agent-task-id-result-ok $task-id)
+   (CodexAgentTaskIdResultOk $task-id))
+
+(= (codex:agent-task-id-result-err $message)
+   (CodexAgentTaskIdResultErr $message))
+
+(= (codex:agent-task-id-result-value
+      (CodexAgentTaskIdResultOk $task-id))
+   $task-id)
+
+(= (codex:agent-task-id-result-error
+      (CodexAgentTaskIdResultErr $message))
+   $message)
+
+(= (codex:task-id-from-register-task-response-with-decryption-result
+      $key
+      $response
+      $decryption-result)
+   (let $task-id
+     (codex:register-task-response-selected-task-id $response)
+     (if (== $task-id CodexAbsent)
+         (let $encrypted-task-id
+           (codex:register-task-response-selected-encrypted-task-id $response)
+           (if (== $encrypted-task-id CodexAbsent)
+               (codex:agent-task-id-result-err
+                 "agent task registration response omitted task id")
+               $decryption-result))
+         (codex:agent-task-id-result-ok $task-id))))
 
 (= (codex:agent-identity-package-version)
    "0.124.0")
