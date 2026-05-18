@@ -58,6 +58,7 @@
 ; - Op::UserTurn
 ; - Op::OverrideTurnContext
 ; - Op::ResolveElicitation / RequestId / ElicitationAction
+; - ElicitationRequestEvent / ElicitationRequest JSON projection
 ; - Op::UserInputAnswer / RequestUserInputResponse
 ; - RequestUserInputEvent JSON projection
 ; - Op::RequestPermissionsResponse / RequestPermissionsResponse
@@ -1345,6 +1346,31 @@
 
 (= (codex:mcp-request-id-integer $value)
    (CodexMcpRequestIdInteger $value))
+
+(= (codex:elicitation-request-form $meta $message $requested-schema)
+   (CodexElicitationRequestForm $meta $message $requested-schema))
+
+(= (codex:elicitation-request-url $meta $message $url $elicitation-id)
+   (CodexElicitationRequestUrl $meta $message $url $elicitation-id))
+
+(= (codex:elicitation-request-message
+      (CodexElicitationRequestForm $meta $message $requested-schema))
+   $message)
+
+(= (codex:elicitation-request-message
+      (CodexElicitationRequestUrl $meta $message $url $elicitation-id))
+   $message)
+
+(= (codex:elicitation-request-event
+      $turn-id
+      $server-name
+      $id
+      $request)
+   (CodexEventElicitationRequest
+     $turn-id
+     $server-name
+     $id
+     $request))
 
 (= (codex:elicitation-action-accept)
    (CodexElicitationActionAccept))
@@ -3185,6 +3211,14 @@
         $error
         $duration))
    "dynamic_tool_call_response")
+
+(= (codex:item-type
+      (CodexEventElicitationRequest
+        $turn-id
+        $server-name
+        $id
+        $request))
+   "elicitation_request")
 
 (= (codex:item-type
       (CodexEventAgentMessage $message $phase $memory-citation))
@@ -5164,6 +5198,70 @@
 (= (codex:mcp-request-id-json
       (CodexMcpRequestIdInteger $value))
    (JsonNumber $value))
+
+(= (codex:elicitation-request-json
+      (CodexElicitationRequestForm $meta $message $requested-schema))
+   (let $pairs-1
+     ((JsonPair "mode" (JsonString "form")))
+     (let $pairs-2
+       (codex:append-optional-json-value-pair
+         $pairs-1
+         "_meta"
+         $meta)
+       (JsonObject
+         (codex:protocol-append-json-pair
+           (codex:protocol-append-json-pair
+             $pairs-2
+             "message"
+             (JsonString $message))
+           "requested_schema"
+           $requested-schema)))))
+
+(= (codex:elicitation-request-json
+      (CodexElicitationRequestUrl $meta $message $url $elicitation-id))
+   (let $pairs-1
+     ((JsonPair "mode" (JsonString "url")))
+     (let $pairs-2
+       (codex:append-optional-json-value-pair
+         $pairs-1
+         "_meta"
+         $meta)
+       (JsonObject
+         (codex:protocol-append-json-pair
+           (codex:protocol-append-json-pair
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "message"
+               (JsonString $message))
+             "url"
+             (JsonString $url))
+           "elicitation_id"
+           (JsonString $elicitation-id))))))
+
+(= (codex:elicitation-request-event-json
+      (CodexEventElicitationRequest
+        $turn-id
+        $server-name
+        $id
+        $request))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "elicitation_request")))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "turn_id"
+         $turn-id)
+       (JsonObject
+         (codex:protocol-append-json-pair
+           (codex:protocol-append-json-pair
+             (codex:protocol-append-json-pair
+               $pairs-2
+               "server_name"
+               (JsonString $server-name))
+             "id"
+             (codex:mcp-request-id-json $id))
+           "request"
+           (codex:elicitation-request-json $request))))))
 
 (= (codex:elicitation-action-json
       (CodexElicitationActionAccept))
@@ -7557,6 +7655,19 @@
         "error"
         (codex:protocol-nullable-string-json $error))
       (JsonPair "duration" (codex:duration-json $duration)))))
+
+(= (codex:item-json
+      (CodexEventElicitationRequest
+        $turn-id
+        $server-name
+        $id
+        $request))
+   (codex:elicitation-request-event-json
+     (CodexEventElicitationRequest
+       $turn-id
+       $server-name
+       $id
+       $request)))
 
 (= (codex:item-json
       (CodexEventAgentMessage $message $phase $memory-citation))
