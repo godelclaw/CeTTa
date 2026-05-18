@@ -45,6 +45,10 @@
 ; - RealtimeConversationStarted/Realtime/Closed/Sdp / RealtimeVoice
 ; - RealtimeAudioFrame / RealtimeEvent::AudioOut
 ; - Op::RealtimeConversationStart/Audio/Text/Close/ListVoices
+; - ExecCommandSource / ExecCommandStatus / ExecCommandBeginEvent /
+;   ExecCommandEndEvent JSON projection
+; - DynamicToolCallRequest / DynamicToolCallResponseEvent JSON projection
+; - McpToolCallEndEvent / CallToolResult JSON projection
 ; - Submission / W3cTraceContext / Event queue wrappers
 ; - Op::Interrupt / CleanBackgroundTerminals
 ; - Op::UserInput / UserInput / TurnEnvironmentSelection
@@ -232,6 +236,82 @@
 (= (codex:terminal-interaction-event $call_id $process_id $stdin)
    (CodexEventTerminalInteraction $call_id $process_id $stdin))
 
+(= (codex:exec-command-source-agent)
+   (CodexExecCommandSourceAgent))
+
+(= (codex:exec-command-source-user-shell)
+   (CodexExecCommandSourceUserShell))
+
+(= (codex:exec-command-source-unified-exec-startup)
+   (CodexExecCommandSourceUnifiedExecStartup))
+
+(= (codex:exec-command-source-unified-exec-interaction)
+   (CodexExecCommandSourceUnifiedExecInteraction))
+
+(= (codex:exec-command-status-completed)
+   (CodexExecCommandStatusCompleted))
+
+(= (codex:exec-command-status-failed)
+   (CodexExecCommandStatusFailed))
+
+(= (codex:exec-command-status-declined)
+   (CodexExecCommandStatusDeclined))
+
+(= (codex:duration $secs $nanos)
+   (CodexDuration $secs $nanos))
+
+(= (codex:exec-command-begin-event
+      $call-id
+      $process-id
+      $turn-id
+      $command
+      $cwd
+      $parsed-cmd
+      $source
+      $interaction-input)
+   (CodexEventExecCommandBegin
+     $call-id
+     $process-id
+     $turn-id
+     $command
+     $cwd
+     $parsed-cmd
+     $source
+     $interaction-input))
+
+(= (codex:exec-command-end-event
+      $call-id
+      $process-id
+      $turn-id
+      $command
+      $cwd
+      $parsed-cmd
+      $source
+      $interaction-input
+      $stdout
+      $stderr
+      $aggregated-output
+      $exit-code
+      $duration
+      $formatted-output
+      $status)
+   (CodexEventExecCommandEnd
+     $call-id
+     $process-id
+     $turn-id
+     $command
+     $cwd
+     $parsed-cmd
+     $source
+     $interaction-input
+     $stdout
+     $stderr
+     $aggregated-output
+     $exit-code
+     $duration
+     $formatted-output
+     $status))
+
 (= (codex:message-phase-commentary)
    (CodexMessagePhaseCommentary))
 
@@ -287,6 +367,36 @@
 
 (= (codex:mcp-tool-call-begin-event $call_id $invocation $mcp_app_resource_uri)
    (CodexEventMcpToolCallBegin $call_id $invocation $mcp_app_resource_uri))
+
+(= (codex:mcp-call-tool-result
+      $content
+      $structured-content
+      $is-error
+      $meta)
+   (CodexMcpCallToolResult
+     $content
+     $structured-content
+     $is-error
+     $meta))
+
+(= (codex:mcp-tool-call-result-ok $result)
+   (CodexMcpToolCallResultOk $result))
+
+(= (codex:mcp-tool-call-result-err $message)
+   (CodexMcpToolCallResultErr $message))
+
+(= (codex:mcp-tool-call-end-event
+      $call-id
+      $invocation
+      $mcp-app-resource-uri
+      $duration
+      $result)
+   (CodexEventMcpToolCallEnd
+     $call-id
+     $invocation
+     $mcp-app-resource-uri
+     $duration
+     $result))
 
 (= (codex:mcp-startup-status-starting)
    (CodexMcpStartupStatusStarting))
@@ -1224,6 +1334,40 @@
 
 (= (codex:protocol-dynamic-tool-output-item-input-image $image-url)
    (CodexDynamicToolCallOutputContentItemInputImage $image-url))
+
+(= (codex:dynamic-tool-call-request-event
+      $call-id
+      $turn-id
+      $namespace
+      $tool
+      $arguments)
+   (CodexEventDynamicToolCallRequest
+     $call-id
+     $turn-id
+     $namespace
+     $tool
+     $arguments))
+
+(= (codex:dynamic-tool-call-response-event
+      $call-id
+      $turn-id
+      $namespace
+      $tool
+      $arguments
+      $content-items
+      $success
+      $error
+      $duration)
+   (CodexEventDynamicToolCallResponse
+     $call-id
+     $turn-id
+     $namespace
+     $tool
+     $arguments
+     $content-items
+     $success
+     $error
+     $duration))
 
 (= (codex:protocol-dynamic-tool-response $content-items $success)
    (CodexDynamicToolResponse $content-items $success))
@@ -2846,12 +2990,65 @@
    "image_generation_call")
 
 (= (codex:item-type
+      (CodexEventExecCommandBegin
+        $call-id
+        $process-id
+        $turn-id
+        $command
+        $cwd
+        $parsed-cmd
+        $source
+        $interaction-input))
+   "exec_command_begin")
+
+(= (codex:item-type
       (CodexEventExecCommandOutputDelta $call_id $stream $chunk))
    "exec_command_output_delta")
 
 (= (codex:item-type
       (CodexEventTerminalInteraction $call_id $process_id $stdin))
    "terminal_interaction")
+
+(= (codex:item-type
+      (CodexEventExecCommandEnd
+        $call-id
+        $process-id
+        $turn-id
+        $command
+        $cwd
+        $parsed-cmd
+        $source
+        $interaction-input
+        $stdout
+        $stderr
+        $aggregated-output
+        $exit-code
+        $duration
+        $formatted-output
+        $status))
+   "exec_command_end")
+
+(= (codex:item-type
+      (CodexEventDynamicToolCallRequest
+        $call-id
+        $turn-id
+        $namespace
+        $tool
+        $arguments))
+   "dynamic_tool_call_request")
+
+(= (codex:item-type
+      (CodexEventDynamicToolCallResponse
+        $call-id
+        $turn-id
+        $namespace
+        $tool
+        $arguments
+        $content-items
+        $success
+        $error
+        $duration))
+   "dynamic_tool_call_response")
 
 (= (codex:item-type
       (CodexEventAgentMessage $message $phase $memory-citation))
@@ -2892,6 +3089,15 @@
 (= (codex:item-type
       (CodexEventMcpToolCallBegin $call_id $invocation $mcp_app_resource_uri))
    "mcp_tool_call_begin")
+
+(= (codex:item-type
+      (CodexEventMcpToolCallEnd
+        $call-id
+        $invocation
+        $mcp-app-resource-uri
+        $duration
+        $result))
+   "mcp_tool_call_end")
 
 (= (codex:item-type
       (CodexEventMcpStartupUpdate $server $status))
@@ -3771,14 +3977,50 @@
 
 (= (codex:mcp-invocation-json
       (CodexMcpInvocation $server $tool $arguments))
-   (if (== $arguments CodexAbsent)
-       (JsonObject
-         ((JsonPair "server" (JsonString $server))
-          (JsonPair "tool" (JsonString $tool))))
-       (JsonObject
-         ((JsonPair "server" (JsonString $server))
-          (JsonPair "tool" (JsonString $tool))
-          (JsonPair "arguments" $arguments)))))
+   (JsonObject
+     ((JsonPair "server" (JsonString $server))
+      (JsonPair "tool" (JsonString $tool))
+      (JsonPair
+        "arguments"
+        (if (== $arguments CodexAbsent)
+            JsonNull
+            $arguments)))))
+
+(= (codex:mcp-call-tool-result-json
+      (CodexMcpCallToolResult
+        $content
+        $structured-content
+        $is-error
+        $meta))
+   (let $pairs-1
+     ((JsonPair "content" (JsonArray $content)))
+     (let $pairs-2
+       (codex:append-optional-json-value-pair
+         $pairs-1
+         "structuredContent"
+         $structured-content)
+       (let $pairs-3
+         (codex:append-optional-json-value-pair
+           $pairs-2
+           "isError"
+           (if (== $is-error CodexAbsent)
+               CodexAbsent
+               (JsonBool $is-error)))
+         (JsonObject
+           (codex:append-optional-json-value-pair
+             $pairs-3
+             "_meta"
+             $meta))))))
+
+(= (codex:mcp-tool-call-result-json
+      (CodexMcpToolCallResultOk $result))
+   (JsonObject
+     ((JsonPair "Ok" (codex:mcp-call-tool-result-json $result)))))
+
+(= (codex:mcp-tool-call-result-json
+      (CodexMcpToolCallResultErr $message))
+   (JsonObject
+     ((JsonPair "Err" (JsonString $message)))))
 
 (= (codex:mcp-startup-status-json
       (CodexMcpStartupStatusStarting))
@@ -4656,6 +4898,11 @@
          $items
          $item
          (codex:protocol-dynamic-tool-output-item-json $item)))))
+
+(= (codex:protocol-nullable-string-json $value)
+   (if (== $value CodexAbsent)
+       JsonNull
+       (JsonString $value)))
 
 (= (codex:protocol-dynamic-tool-response-json
       (CodexDynamicToolResponse $content-items $success))
@@ -5858,6 +6105,87 @@
    (JsonArray
      (map-atom-strict $items $item (JsonString $item))))
 
+(= (codex:duration-json (CodexDuration $secs $nanos))
+   (JsonObject
+     ((JsonPair "secs" (JsonNumber $secs))
+      (JsonPair "nanos" (JsonNumber $nanos)))))
+
+(= (codex:exec-command-source-json
+      (CodexExecCommandSourceAgent))
+   (JsonString "agent"))
+
+(= (codex:exec-command-source-json
+      (CodexExecCommandSourceUserShell))
+   (JsonString "user_shell"))
+
+(= (codex:exec-command-source-json
+      (CodexExecCommandSourceUnifiedExecStartup))
+   (JsonString "unified_exec_startup"))
+
+(= (codex:exec-command-source-json
+      (CodexExecCommandSourceUnifiedExecInteraction))
+   (JsonString "unified_exec_interaction"))
+
+(= (codex:exec-command-status-json
+      (CodexExecCommandStatusCompleted))
+   (JsonString "completed"))
+
+(= (codex:exec-command-status-json
+      (CodexExecCommandStatusFailed))
+   (JsonString "failed"))
+
+(= (codex:exec-command-status-json
+      (CodexExecCommandStatusDeclined))
+   (JsonString "declined"))
+
+(= (codex:protocol-parsed-command-json
+      (CodexParsedCommandRead $cmd $name $path))
+   (JsonObject
+     ((JsonPair "type" (JsonString "read"))
+      (JsonPair "cmd" (JsonString $cmd))
+      (JsonPair "name" (JsonString $name))
+      (JsonPair "path" (JsonString $path)))))
+
+(= (codex:protocol-parsed-command-json
+      (CodexParsedCommandListFiles $cmd $path))
+   (JsonObject
+     ((JsonPair "type" (JsonString "list_files"))
+      (JsonPair "cmd" (JsonString $cmd))
+      (JsonPair
+        "path"
+        (if (== $path CodexAbsent)
+            JsonNull
+            (JsonString $path))))))
+
+(= (codex:protocol-parsed-command-json
+      (CodexParsedCommandSearch $cmd $query $path))
+   (JsonObject
+     ((JsonPair "type" (JsonString "search"))
+      (JsonPair "cmd" (JsonString $cmd))
+      (JsonPair
+        "query"
+        (if (== $query CodexAbsent)
+            JsonNull
+            (JsonString $query)))
+      (JsonPair
+        "path"
+        (if (== $path CodexAbsent)
+            JsonNull
+            (JsonString $path))))))
+
+(= (codex:protocol-parsed-command-json
+      (CodexParsedCommandUnknown $cmd))
+   (JsonObject
+     ((JsonPair "type" (JsonString "unknown"))
+      (JsonPair "cmd" (JsonString $cmd)))))
+
+(= (codex:protocol-parsed-commands-json $items)
+   (JsonArray
+     (map-atom-strict
+       $items
+       $item
+       (codex:protocol-parsed-command-json $item))))
+
 (= (codex:session-approvals-reviewer-json
       (CodexSessionApprovalsReviewerUser))
    (JsonString "user"))
@@ -6559,6 +6887,147 @@
       (JsonPair "tools" (JsonArray $tools)))))
 
 (= (codex:item-json
+      (CodexEventExecCommandBegin
+        $call-id
+        $process-id
+        $turn-id
+        $command
+        $cwd
+        $parsed-cmd
+        $source
+        $interaction-input))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "exec_command_begin"))
+      (JsonPair "call_id" (JsonString $call-id)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "process_id"
+         $process-id)
+       (let $pairs-3
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "turn_id"
+           (JsonString $turn-id))
+         (let $pairs-4
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "command"
+             (codex:json-string-array $command))
+           (let $pairs-5
+             (codex:protocol-append-json-pair
+               $pairs-4
+               "cwd"
+               (JsonString $cwd))
+             (let $pairs-6
+               (codex:protocol-append-json-pair
+                 $pairs-5
+                 "parsed_cmd"
+                 (codex:protocol-parsed-commands-json $parsed-cmd))
+               (let $pairs-7
+                 (codex:protocol-append-json-pair
+                   $pairs-6
+                   "source"
+                   (codex:exec-command-source-json $source))
+                 (JsonObject
+                   (codex:append-optional-json-string-pair
+                     $pairs-7
+                     "interaction_input"
+                     $interaction-input))))))))))
+
+(= (codex:item-json
+      (CodexEventExecCommandEnd
+        $call-id
+        $process-id
+        $turn-id
+        $command
+        $cwd
+        $parsed-cmd
+        $source
+        $interaction-input
+        $stdout
+        $stderr
+        $aggregated-output
+        $exit-code
+        $duration
+        $formatted-output
+        $status))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "exec_command_end"))
+      (JsonPair "call_id" (JsonString $call-id)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "process_id"
+         $process-id)
+       (let $pairs-3
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "turn_id"
+           (JsonString $turn-id))
+         (let $pairs-4
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "command"
+             (codex:json-string-array $command))
+           (let $pairs-5
+             (codex:protocol-append-json-pair
+               $pairs-4
+               "cwd"
+               (JsonString $cwd))
+             (let $pairs-6
+               (codex:protocol-append-json-pair
+                 $pairs-5
+                 "parsed_cmd"
+                 (codex:protocol-parsed-commands-json $parsed-cmd))
+               (let $pairs-7
+                 (codex:protocol-append-json-pair
+                   $pairs-6
+                   "source"
+                   (codex:exec-command-source-json $source))
+                 (let $pairs-8
+                   (codex:append-optional-json-string-pair
+                     $pairs-7
+                     "interaction_input"
+                     $interaction-input)
+                   (let $pairs-9
+                     (codex:protocol-append-json-pair
+                       $pairs-8
+                       "stdout"
+                       (JsonString $stdout))
+                     (let $pairs-10
+                       (codex:protocol-append-json-pair
+                         $pairs-9
+                         "stderr"
+                         (JsonString $stderr))
+                       (let $pairs-11
+                         (codex:protocol-append-json-pair
+                           $pairs-10
+                           "aggregated_output"
+                           (JsonString $aggregated-output))
+                         (let $pairs-12
+                           (codex:protocol-append-json-pair
+                             $pairs-11
+                             "exit_code"
+                             (JsonNumber $exit-code))
+                           (let $pairs-13
+                             (codex:protocol-append-json-pair
+                               $pairs-12
+                               "duration"
+                               (codex:duration-json $duration))
+                             (let $pairs-14
+                               (codex:protocol-append-json-pair
+                                 $pairs-13
+                                 "formatted_output"
+                                 (JsonString $formatted-output))
+                               (JsonObject
+                                 (codex:protocol-append-json-pair
+                                   $pairs-14
+                                   "status"
+                                   (codex:exec-command-status-json
+                                     $status))))))))))))))))))
+
+(= (codex:item-json
       (CodexEventExecCommandOutputDelta $call_id $stream $chunk))
    (JsonObject
      ((JsonPair "type" (JsonString "exec_command_output_delta"))
@@ -6573,6 +7042,52 @@
       (JsonPair "call_id" (JsonString $call_id))
       (JsonPair "process_id" (JsonString $process_id))
       (JsonPair "stdin" (JsonString $stdin)))))
+
+(= (codex:item-json
+      (CodexEventDynamicToolCallRequest
+        $call-id
+        $turn-id
+        $namespace
+        $tool
+        $arguments))
+   (JsonObject
+     ((JsonPair "type" (JsonString "dynamic_tool_call_request"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair
+        "namespace"
+        (codex:protocol-nullable-string-json $namespace))
+      (JsonPair "tool" (JsonString $tool))
+      (JsonPair "arguments" $arguments))))
+
+(= (codex:item-json
+      (CodexEventDynamicToolCallResponse
+        $call-id
+        $turn-id
+        $namespace
+        $tool
+        $arguments
+        $content-items
+        $success
+        $error
+        $duration))
+   (JsonObject
+     ((JsonPair "type" (JsonString "dynamic_tool_call_response"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "turn_id" (JsonString $turn-id))
+      (JsonPair
+        "namespace"
+        (codex:protocol-nullable-string-json $namespace))
+      (JsonPair "tool" (JsonString $tool))
+      (JsonPair "arguments" $arguments)
+      (JsonPair
+        "content_items"
+        (codex:protocol-dynamic-tool-output-items-json $content-items))
+      (JsonPair "success" (JsonBool $success))
+      (JsonPair
+        "error"
+        (codex:protocol-nullable-string-json $error))
+      (JsonPair "duration" (codex:duration-json $duration)))))
 
 (= (codex:item-json
       (CodexEventAgentMessage $message $phase $memory-citation))
@@ -6673,6 +7188,33 @@
           (JsonPair "call_id" (JsonString $call_id))
          (JsonPair "invocation" (codex:mcp-invocation-json $invocation))
          (JsonPair "mcp_app_resource_uri" (JsonString $mcp_app_resource_uri))))))
+
+(= (codex:item-json
+      (CodexEventMcpToolCallEnd
+        $call-id
+        $invocation
+        $mcp-app-resource-uri
+        $duration
+        $result))
+   (let $pairs-1
+     ((JsonPair "type" (JsonString "mcp_tool_call_end"))
+      (JsonPair "call_id" (JsonString $call-id))
+      (JsonPair "invocation" (codex:mcp-invocation-json $invocation)))
+     (let $pairs-2
+       (codex:append-optional-json-string-pair
+         $pairs-1
+         "mcp_app_resource_uri"
+         $mcp-app-resource-uri)
+       (let $pairs-3
+         (codex:protocol-append-json-pair
+           $pairs-2
+           "duration"
+           (codex:duration-json $duration))
+         (JsonObject
+           (codex:protocol-append-json-pair
+             $pairs-3
+             "result"
+             (codex:mcp-tool-call-result-json $result)))))))
 
 (= (codex:item-json
       (CodexEventMcpStartupUpdate $server $status))
