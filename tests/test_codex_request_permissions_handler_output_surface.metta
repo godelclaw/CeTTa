@@ -26,18 +26,22 @@
      (codex-rp-normalized-requested-profile)
      (codex-rp-root)))
 
+(= (codex-rp-normalized-response)
+   (CodexRequestPermissionsResponse
+     (CodexRequestPermissionProfile
+       CodexAbsent
+       (CodexRequestPermissionsFileSystem
+         ()
+         ("/home/zarclaw/repos/CeTTa/runtime")))
+     (codex:permission-grant-scope-turn)
+     False))
+
 !(assertEqual
   (once
     (eval
       (codex:record-granted-request-permissions-for-state
         (codex:empty-request-permissions-state)
-        (codex:normalize-request-permissions-response
-          (codex-rp-normalized-requested-profile)
-          (codex:request-permissions-response
-            (codex-rp-granted-profile)
-            (codex:permission-grant-scope-turn)
-            False)
-          (codex-rp-root)))))
+        (codex-rp-normalized-response))))
   (CodexRequestPermissionsState
     CodexAbsent
     (CodexRequestPermissionProfile

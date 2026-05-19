@@ -15,6 +15,9 @@
 ;   slice only expands `bash|sh|zsh -c|-lc` wrappers through `shell-plain-commands`
 ; - user-facing reason strings currently use simple token-joining instead of
 ;   Rust's full shlex rendering
+; - Rust has a Windows-only ReadOnly-sandbox no-protection branch in
+;   `render_decision_for_unmatched_command`; this Unix CeTTa runtime slice does
+;   not claim Windows command execution yet.
 
 !(import! &self command)
 !(import! &self exec_policy)
@@ -56,6 +59,66 @@
 
 (= (codex:file-system-sandbox-unrestricted)
    "unrestricted")
+
+(= (codex:file-system-sandbox-external-sandbox)
+   "external-sandbox")
+
+(= (codex:approval-sandbox-policy-danger-full-access)
+   (CodexApprovalSandboxPolicyDangerFullAccess))
+
+(= (codex:approval-sandbox-policy-read-only)
+   (CodexApprovalSandboxPolicyReadOnly))
+
+(= (codex:approval-sandbox-policy-external-sandbox)
+   (CodexApprovalSandboxPolicyExternalSandbox))
+
+(= (codex:approval-sandbox-policy-workspace-write)
+   (CodexApprovalSandboxPolicyWorkspaceWrite))
+
+(= (codex:approval-sandbox-policy-from-file-system-kind $file_system_sandbox_kind)
+   (if (== $file_system_sandbox_kind
+            (codex:file-system-sandbox-unrestricted))
+       (codex:approval-sandbox-policy-danger-full-access)
+       (if (== $file_system_sandbox_kind
+                (codex:file-system-sandbox-external-sandbox))
+           (codex:approval-sandbox-policy-external-sandbox)
+           (codex:approval-sandbox-policy-read-only))))
+
+(= (codex:is-approval-sandbox-policy-explicitly-disabled $sandbox_policy)
+   (case $sandbox_policy
+     (((CodexApprovalSandboxPolicyDangerFullAccess) True)
+      ((CodexApprovalSandboxPolicyExternalSandbox) True)
+      ($other False))))
+
+(= (codex:approval-sandbox-permissions-use-default)
+   "use_default")
+
+(= (codex:approval-sandbox-permissions-with-additional-permissions)
+   "with_additional_permissions")
+
+(= (codex:approval-sandbox-permissions-require-escalated)
+   "require_escalated")
+
+(= (codex:is-approval-sandbox-permissions-override $sandbox_permissions)
+   (not (== $sandbox_permissions
+            (codex:approval-sandbox-permissions-use-default))))
+
+(= (codex:is-file-system-sandbox-kind-unrestricted-or-external
+      $file_system_sandbox_kind)
+   (if (== $file_system_sandbox_kind
+            (codex:file-system-sandbox-unrestricted))
+       True
+       (== $file_system_sandbox_kind
+           (codex:file-system-sandbox-external-sandbox))))
+
+(= (codex:prompt-conflict-reason)
+   "approval required by policy, but AskForApproval is set to Never")
+
+(= (codex:reject-sandbox-approval-reason)
+   "approval required by policy, but AskForApproval::Granular.sandbox_approval is false")
+
+(= (codex:reject-rules-approval-reason)
+   "approval required by policy rule, but AskForApproval::Granular.rules is false")
 
 (= (codex:approval-skip $bypass_sandbox)
    (codex:approval-skip $bypass_sandbox CodexAbsent))
@@ -169,45 +232,67 @@
       $file_system_sandbox_kind
       $command
       $used_complex_parsing)
+   (codex:render-decision-for-unmatched-command-with-sandbox
+     $approval_policy
+     (codex:approval-sandbox-policy-from-file-system-kind
+       $file_system_sandbox_kind)
+     $file_system_sandbox_kind
+     (codex:approval-sandbox-permissions-use-default)
+     $command
+     $used_complex_parsing))
+
+(= (codex:render-decision-for-unmatched-command-with-sandbox
+      $approval_policy
+      $sandbox_policy
+      $file_system_sandbox_kind
+      $sandbox_permissions
+      $command
+      $used_complex_parsing)
    (if (codex:is-known-safe-command? $command)
        (if $used_complex_parsing
            (codex:render-decision-for-unmatched-nonsafe
              $approval_policy
+             $sandbox_policy
              $file_system_sandbox_kind
+             $sandbox_permissions
              $command)
            (codex:decision-allow))
        (codex:render-decision-for-unmatched-nonsafe
          $approval_policy
+         $sandbox_policy
          $file_system_sandbox_kind
+         $sandbox_permissions
          $command)))
 
 (= (codex:render-decision-for-unmatched-nonsafe
       $approval_policy
+      $sandbox_policy
       $file_system_sandbox_kind
+      $sandbox_permissions
       $command)
    (if (codex:is-command-dangerous $command)
        (codex:render-decision-for-dangerous-command
          $approval_policy
-         $file_system_sandbox_kind)
+         $sandbox_policy)
        (codex:render-decision-for-unmatched-unsafe
          $approval_policy
-         $file_system_sandbox_kind)))
+         $file_system_sandbox_kind
+         $sandbox_permissions)))
 
 (= (codex:render-decision-for-dangerous-command
       $approval_policy
-      $file_system_sandbox_kind)
-   ; Rust checks the full SandboxPolicy here. This restarted CeTTa approval
-   ; API currently carries only FileSystemSandboxKind, so `unrestricted` is
-   ; the visible proxy for Rust's explicitly disabled/external sandbox cases.
+      $sandbox_policy)
    (if (== $approval_policy (codex:ask-for-approval-never))
-       (if (== $file_system_sandbox_kind (codex:file-system-sandbox-unrestricted))
+       (if (codex:is-approval-sandbox-policy-explicitly-disabled
+             $sandbox_policy)
            (codex:decision-allow)
            (codex:decision-forbidden))
        (codex:decision-prompt)))
 
 (= (codex:render-decision-for-unmatched-unsafe
       $approval_policy
-      $file_system_sandbox_kind)
+      $file_system_sandbox_kind
+      $sandbox_permissions)
    (if (== $approval_policy (codex:ask-for-approval-never))
        (codex:decision-allow)
        (if (== $approval_policy (codex:ask-for-approval-on-failure))
@@ -215,30 +300,59 @@
            (if (== $approval_policy (codex:ask-for-approval-unless-trusted))
                (codex:decision-prompt)
                (if (== $approval_policy (codex:ask-for-approval-on-request))
-                   (if (== $file_system_sandbox_kind
-                            (codex:file-system-sandbox-unrestricted))
+                   (if (codex:is-file-system-sandbox-kind-unrestricted-or-external
+                         $file_system_sandbox_kind)
                        (codex:decision-allow)
-                       (codex:decision-allow))
-                   (codex:decision-allow))))))
+                       (if (codex:is-approval-sandbox-permissions-override
+                             $sandbox_permissions)
+                           (codex:decision-prompt)
+                           (codex:decision-allow)))
+                   (if (codex:is-file-system-sandbox-kind-unrestricted-or-external
+                         $file_system_sandbox_kind)
+                       (codex:decision-allow)
+                       (if (codex:is-approval-sandbox-permissions-override
+                             $sandbox_permissions)
+                           (codex:decision-prompt)
+                           (codex:decision-allow))))))))
 
 (= (codex:approval-heuristics-fallback
       $approval_policy
       $file_system_sandbox_kind
       $used_complex_parsing)
+   (codex:approval-heuristics-fallback-with-sandbox
+     $approval_policy
+     (codex:approval-sandbox-policy-from-file-system-kind
+       $file_system_sandbox_kind)
+     $file_system_sandbox_kind
+     (codex:approval-sandbox-permissions-use-default)
+     $used_complex_parsing))
+
+(= (codex:approval-heuristics-fallback-with-sandbox
+      $approval_policy
+      $sandbox_policy
+      $file_system_sandbox_kind
+      $sandbox_permissions
+      $used_complex_parsing)
    (CodexApprovalHeuristicsFallback
      $approval_policy
+     $sandbox_policy
      $file_system_sandbox_kind
+     $sandbox_permissions
      $used_complex_parsing))
 
 (= (codex:heuristics-fallback-decision-for-command
       (CodexApprovalHeuristicsFallback
         $approval_policy
+        $sandbox_policy
         $file_system_sandbox_kind
+        $sandbox_permissions
         $used_complex_parsing)
       $command)
-   (codex:render-decision-for-unmatched-command
+   (codex:render-decision-for-unmatched-command-with-sandbox
      $approval_policy
+     $sandbox_policy
      $file_system_sandbox_kind
+     $sandbox_permissions
      $command
      $used_complex_parsing))
 
@@ -504,6 +618,33 @@
          True
          (codex:any-policy-rule-match-for-decision? $tail $decision))))
 
+(= (codex:approval-policy-prompt-rejection-reason
+      $approval_policy
+      $prompt_is_rule)
+   (if (== $approval_policy (codex:ask-for-approval-never))
+       (codex:prompt-conflict-reason)
+       (case $approval_policy
+         (((CodexAskForApprovalGranular False)
+           (if $prompt_is_rule
+               CodexAbsent
+               (codex:reject-sandbox-approval-reason)))
+          ((CodexAskForApprovalGranular True)
+           CodexAbsent)
+          ((CodexAskForApprovalGranularConfig
+             $sandbox-approval
+             $rules
+             $skill-approval
+             $request-permissions
+             $mcp-elicitations)
+           (if $prompt_is_rule
+               (if $rules
+                   CodexAbsent
+                   (codex:reject-rules-approval-reason))
+               (if $sandbox-approval
+                   CodexAbsent
+                   (codex:reject-sandbox-approval-reason))))
+          ($other CodexAbsent)))))
+
 (= (codex:first-heuristics-command-for-decision () $decision)
    CodexAbsent)
 
@@ -632,16 +773,38 @@
       $file_system_sandbox_kind
       $commands
       $used_complex_parsing)
+   (codex:prefix-rule-would-approve-all-commands-with-sandbox?
+     $policy
+     $prefix_rule
+     $approval_policy
+     (codex:approval-sandbox-policy-from-file-system-kind
+       $file_system_sandbox_kind)
+     $file_system_sandbox_kind
+     (codex:approval-sandbox-permissions-use-default)
+     $commands
+     $used_complex_parsing))
+
+(= (codex:prefix-rule-would-approve-all-commands-with-sandbox?
+      $policy
+      $prefix_rule
+      $approval_policy
+      $sandbox_policy
+      $file_system_sandbox_kind
+      $sandbox_permissions
+      $commands
+      $used_complex_parsing)
    (let $amended_policy
      (codex:policy-add-prefix-rule
        $policy
        $prefix_rule
        (codex:decision-allow))
      (let $evaluation
-       (codex:approval-evaluation
+       (codex:approval-evaluation-with-sandbox
          $amended_policy
          $approval_policy
+         $sandbox_policy
          $file_system_sandbox_kind
+         $sandbox_permissions
          $commands
          $used_complex_parsing)
        (== (codex:check-output-decision $evaluation) (codex:decision-allow)))))
@@ -654,6 +817,28 @@
       $file_system_sandbox_kind
       $commands
       $used_complex_parsing)
+   (codex:derive-requested-execpolicy-amendment-from-prefix-rule-with-sandbox
+     $prefix_rule
+     $matched_rules
+     $policy
+     $approval_policy
+     (codex:approval-sandbox-policy-from-file-system-kind
+       $file_system_sandbox_kind)
+     $file_system_sandbox_kind
+     (codex:approval-sandbox-permissions-use-default)
+     $commands
+     $used_complex_parsing))
+
+(= (codex:derive-requested-execpolicy-amendment-from-prefix-rule-with-sandbox
+      $prefix_rule
+      $matched_rules
+      $policy
+      $approval_policy
+      $sandbox_policy
+      $file_system_sandbox_kind
+      $sandbox_permissions
+      $commands
+      $used_complex_parsing)
    (if (== $prefix_rule CodexAbsent)
        CodexAbsent
        (if (== $prefix_rule ())
@@ -662,11 +847,13 @@
                CodexAbsent
                (if (codex:any-policy-rule-match? $matched_rules)
                    CodexAbsent
-                   (if (codex:prefix-rule-would-approve-all-commands?
+                   (if (codex:prefix-rule-would-approve-all-commands-with-sandbox?
                          $policy
                          $prefix_rule
                          $approval_policy
+                         $sandbox_policy
                          $file_system_sandbox_kind
+                         $sandbox_permissions
                          $commands
                          $used_complex_parsing)
                        (CodexExecPolicyAmendment $prefix_rule)
@@ -727,12 +914,32 @@
       $file_system_sandbox_kind
       $commands
       $used_complex_parsing)
+   (codex:approval-evaluation-with-sandbox
+     $policy
+     $approval_policy
+     (codex:approval-sandbox-policy-from-file-system-kind
+       $file_system_sandbox_kind)
+     $file_system_sandbox_kind
+     (codex:approval-sandbox-permissions-use-default)
+     $commands
+     $used_complex_parsing))
+
+(= (codex:approval-evaluation-with-sandbox
+      $policy
+      $approval_policy
+      $sandbox_policy
+      $file_system_sandbox_kind
+      $sandbox_permissions
+      $commands
+      $used_complex_parsing)
    (codex:check-policy-multiple-with-options-and-heuristics
      $policy
      $commands
-     (codex:approval-heuristics-fallback
+     (codex:approval-heuristics-fallback-with-sandbox
        $approval_policy
+       $sandbox_policy
        $file_system_sandbox_kind
+       $sandbox_permissions
        $used_complex_parsing)
      (codex:match-options True)))
 
@@ -754,15 +961,51 @@
       $policy
       $command
       $prefix_rule)
+   (codex:approval-for-command-with-sandbox-and-prefix-rule
+     $approval_policy
+     (codex:approval-sandbox-policy-from-file-system-kind
+       $file_system_sandbox_kind)
+     $file_system_sandbox_kind
+     (codex:approval-sandbox-permissions-use-default)
+     $policy
+     $command
+     $prefix_rule))
+
+(= (codex:approval-for-command-with-sandbox
+      $approval_policy
+      $sandbox_policy
+      $file_system_sandbox_kind
+      $sandbox_permissions
+      $policy
+      $command)
+   (codex:approval-for-command-with-sandbox-and-prefix-rule
+     $approval_policy
+     $sandbox_policy
+     $file_system_sandbox_kind
+     $sandbox_permissions
+     $policy
+     $command
+     CodexAbsent))
+
+(= (codex:approval-for-command-with-sandbox-and-prefix-rule
+      $approval_policy
+      $sandbox_policy
+      $file_system_sandbox_kind
+      $sandbox_permissions
+      $policy
+      $command
+      $prefix_rule)
    (let $policy_commands (codex:commands-for-exec-policy $command)
      (let $commands (codex:exec-policy-command-list $policy_commands)
        (let $used_complex_parsing
          (codex:exec-policy-used-complex-parsing $policy_commands)
          (let $evaluation
-           (codex:approval-evaluation
+           (codex:approval-evaluation-with-sandbox
              $policy
              $approval_policy
+             $sandbox_policy
              $file_system_sandbox_kind
+             $sandbox_permissions
              $commands
              $used_complex_parsing)
            (let $matched_rules
@@ -770,12 +1013,14 @@
              (let $requested_amendment
                (once
                  (eval
-                   (codex:derive-requested-execpolicy-amendment-from-prefix-rule
+                   (codex:derive-requested-execpolicy-amendment-from-prefix-rule-with-sandbox
                      $prefix_rule
                      $matched_rules
                      $policy
                      $approval_policy
+                     $sandbox_policy
                      $file_system_sandbox_kind
+                     $sandbox_permissions
                      $commands
                      $used_complex_parsing)))
                (codex:approval-from-evaluation
@@ -829,14 +1074,20 @@
                    $command
                    $matched_rules))
                (if (== $decision (codex:decision-prompt))
-                   (if (== $approval_policy (codex:ask-for-approval-never))
+                   (let $prompt_rejection_reason
+                     (codex:approval-policy-prompt-rejection-reason
+                       $approval_policy
+                       (codex:any-policy-rule-match-for-decision?
+                         $matched_rules
+                         (codex:decision-prompt)))
+                     (if (== $prompt_rejection_reason CodexAbsent)
+                         (codex:approval-needs-approval
+                           (codex:derive-prompt-reason
+                             $command
+                             $matched_rules)
+                           $amendment)
                        (codex:approval-forbidden
-                         "approval required by policy, but AskForApproval is set to Never")
-                       (codex:approval-needs-approval
-                         (codex:derive-prompt-reason
-                           $command
-                           $matched_rules)
-                         $amendment))
+                         $prompt_rejection_reason)))
                    (codex:approval-skip
                      (codex:all-commands-explicitly-allowed? $policy $commands)
                      $amendment))))))))
