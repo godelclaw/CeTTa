@@ -11,8 +11,8 @@
 ; - approval-side proposed execpolicy amendments derived from matched rules
 ;
 ; Deliberate restart-slice limits:
-; - the heredoc/single-prefix complex shell parser is not present yet, so this
-;   slice only expands `bash|sh|zsh -c|-lc` wrappers through `shell-plain-commands`
+; - the heredoc/single-prefix complex shell parser is conservative compared to
+;   Rust's tree-sitter-backed parser and rejects ambiguous shell forms
 ; - user-facing reason strings currently use simple token-joining instead of
 ;   Rust's full shlex rendering
 ; - Rust has a Windows-only ReadOnly-sandbox no-protection branch in
@@ -211,7 +211,14 @@
              (if (codex:is-shell-wrapper-parts? $shell $flag)
                  (case (shell-plain-commands
                          (codex:rebuild-shell-wrapper $shell $flag $script))
-                   ((Empty (CodexExecPolicyCommands ($tokens) False))
+                   ((Empty
+                     (case
+                       (shell-single-command-prefix $shell $flag $script)
+                       ((Empty (CodexExecPolicyCommands ($tokens) False))
+                        ($single-command
+                         (CodexExecPolicyCommands
+                           ($single-command)
+                           True)))))
                     ($commands
                      (if (== $commands ())
                          (CodexExecPolicyCommands ($tokens) False)

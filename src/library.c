@@ -9214,6 +9214,127 @@ fail:
     return false;
 }
 
+static bool shell_is_variable_assignment_word(const char *word) {
+    const unsigned char *p = (const unsigned char *)word;
+    if (!p || !(isalpha(*p) || *p == '_')) return false;
+    p++;
+    while (*p && *p != '=') {
+        if (!(isalnum(*p) || *p == '_')) return false;
+        p++;
+    }
+    return *p == '=';
+}
+
+static bool shell_tail_is_space(const char *p) {
+    while (*p && isspace((unsigned char)*p)) p++;
+    return *p == '\0';
+}
+
+static const char *shell_skip_blank(const char *p) {
+    while (*p == ' ' || *p == '\t') p++;
+    return p;
+}
+
+static bool shell_line_after_heredoc_is_redirects_only(const char *p) {
+    while (*p && *p != '\n' && *p != '\r') {
+        char *target = NULL;
+        p = shell_skip_blank(p);
+        if (*p == '\0' || *p == '\n' || *p == '\r') return true;
+        if (*p != '>') return false;
+        p++;
+        if (*p == '>') p++;
+        p = shell_skip_blank(p);
+        if (*p == '\0' || *p == '\n' || *p == '\r') return false;
+        if (!shell_parse_word(&p, &target)) return false;
+        free(target);
+    }
+    return true;
+}
+
+static bool shell_find_heredoc_end(const char *p, const char *delimiter,
+                                   bool strip_tabs) {
+    size_t delimiter_len = strlen(delimiter);
+    while (*p) {
+        const char *line_start = p;
+        const char *line_end = strchr(p, '\n');
+        const char *content_end = line_end ? line_end : p + strlen(p);
+        const char *compare_start = line_start;
+        if (content_end > line_start && content_end[-1] == '\r') content_end--;
+        if (strip_tabs) {
+            while (compare_start < content_end && *compare_start == '\t') {
+                compare_start++;
+            }
+        }
+        if ((size_t)(content_end - compare_start) == delimiter_len &&
+            strncmp(compare_start, delimiter, delimiter_len) == 0) {
+            const char *tail = line_end ? line_end + 1 : content_end;
+            return shell_tail_is_space(tail);
+        }
+        if (!line_end) break;
+        p = line_end + 1;
+    }
+    return false;
+}
+
+static bool shell_parse_single_command_prefix_script(const char *script,
+                                                     ShellTextVec *words) {
+    const char *p = shell_skip_space(script);
+    bool saw_command_word = false;
+    shell_text_vec_init(words);
+
+    while (*p) {
+        char *word = NULL;
+        p = shell_skip_blank(p);
+        if (*p == '\0' || *p == '\n' || *p == '\r') goto fail;
+        if (shell_operator_start(*p)) goto fail;
+        if (p[0] == '<' && p[1] == '<') {
+            char *delimiter = NULL;
+            bool strip_tabs = false;
+            if (p[2] == '<') goto fail;
+            p += 2;
+            if (*p == '-') {
+                strip_tabs = true;
+                p++;
+            }
+            if (!shell_parse_word(&p, &delimiter)) goto fail;
+            if (!delimiter || delimiter[0] == '\0') {
+                free(delimiter);
+                goto fail;
+            }
+            if (!shell_line_after_heredoc_is_redirects_only(p)) {
+                free(delimiter);
+                goto fail;
+            }
+            while (*p && *p != '\n' && *p != '\r') p++;
+            if (*p == '\r') p++;
+            if (*p != '\n') {
+                free(delimiter);
+                goto fail;
+            }
+            p++;
+            if (!saw_command_word ||
+                !shell_find_heredoc_end(p, delimiter, strip_tabs)) {
+                free(delimiter);
+                goto fail;
+            }
+            free(delimiter);
+            return words->len > 0;
+        }
+        if (*p == '>' || *p == '<') goto fail;
+        if (!shell_parse_word(&p, &word)) goto fail;
+        if (!saw_command_word && shell_is_variable_assignment_word(word)) {
+            free(word);
+            continue;
+        }
+        saw_command_word = true;
+        shell_text_vec_push_owned(words, word);
+    }
+
+fail:
+    shell_text_vec_free(words);
+    return false;
+}
+
 static Atom *shell_commands_atom(Arena *a, const ShellCommandVec *commands) {
     Atom **items = arena_alloc(a, sizeof(Atom *) * (commands->len ? commands->len : 1));
     for (uint32_t i = 0; i < commands->len; i++) {
@@ -9250,12 +9371,41 @@ static Atom *shell_plain_commands(Arena *a, Atom *head, Atom **args, uint32_t na
     return result;
 }
 
+static Atom *shell_single_command_prefix(Arena *a, Atom *head, Atom **args,
+                                         uint32_t nargs) {
+    const char *shell;
+    const char *flag;
+    const char *script;
+    ShellTextVec words;
+    Atom *result;
+
+    if (nargs != 3 || !(shell = library_text_arg(args[0])) ||
+        !(flag = library_text_arg(args[1])) ||
+        !(script = library_text_arg(args[2]))) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected shell, flag, and script text");
+    }
+    if (!shell_supported_shell_name(shell) ||
+        !(strcmp(flag, "-lc") == 0 || strcmp(flag, "-c") == 0)) {
+        return atom_empty(a);
+    }
+    if (!shell_parse_single_command_prefix_script(script, &words)) {
+        return atom_empty(a);
+    }
+    result = library_string_list(a, words.items, words.len);
+    shell_text_vec_free(&words);
+    return result;
+}
+
 static Atom *cetta_library_dispatch_shell(Arena *a, Atom *head,
                                           Atom **args, uint32_t nargs) {
     if (head->kind != ATOM_SYMBOL) return NULL;
     SymbolId head_id = head->sym_id;
     if (head_id == g_builtin_syms.lib_shell_plain_commands) {
         return shell_plain_commands(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_shell_single_command_prefix) {
+        return shell_single_command_prefix(a, head, args, nargs);
     }
     return NULL;
 }

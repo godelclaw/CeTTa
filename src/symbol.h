@@ -244,6 +244,7 @@ typedef struct {
     X(lib_str_take_bytes_at_char_boundary, "__cetta_lib_str_take_bytes_at_char_boundary") \
     X(lib_str_base64_encode, "__cetta_lib_str_base64_encode") \
     X(lib_shell_plain_commands, "__cetta_lib_shell_plain_commands") \
+    X(lib_shell_single_command_prefix, "__cetta_lib_shell_single_command_prefix") \
     X(lib_process_run_shell, "__cetta_lib_process_run_shell") \
     X(lib_process_run_shell_timeout_ms, "__cetta_lib_process_run_shell_timeout_ms") \
     X(lib_process_run_shell_cwd_timeout_ms, "__cetta_lib_process_run_shell_cwd_timeout_ms") \
