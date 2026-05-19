@@ -15,6 +15,10 @@
 ;   emits one byte if no valid prefix is found
 ; - process_chunk's pending-buffer append, transcript append, stdout delta
 ;   emission cap, and continued transcript capture after the event cap
+; - resolve_aggregated_output
+; - emit_exec_end_for_unified_exec
+; - emit_failed_exec_end_for_unified_exec
+; - spawn_exit_watcher's post-cancellation/post-drain branch
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust mutates `Vec<u8>` and emits protocol events with byte chunks that are
@@ -24,8 +28,15 @@
 ; - Rust writes into `Arc<Mutex<HeadTailBuffer>>` and sends through `Session`.
 ;   This slice carries transcript bytes and emitted events in an immutable state
 ;   record so the same branch behavior is testable without async effects.
+; - Rust decodes HeadTailBuffer bytes with `String::from_utf8_lossy()` and
+;   computes `formatted_output` inside ToolEmitter from the turn truncation
+;   policy. These pure end-event helpers receive the already-materialized lossy
+;   transcript text and formatted output at the runtime boundary while
+;   preserving async_watcher's branch choices and protocol event fields.
 
+!(import! &self command)
 !(import! &self list)
+!(import! &self str)
 
 (= (codex:unified-exec-trailing-output-grace-ms)
    100)
@@ -418,3 +429,255 @@
                $call-id
                $max-deltas
                $max-delta-bytes))))))
+
+(= (codex:unified-exec-async-watcher-transcript
+      $retained-bytes
+      $text)
+   (CodexUnifiedExecAsyncWatcherTranscript $retained-bytes $text))
+
+(= (codex:unified-exec-async-watcher-transcript-retained-bytes
+      (CodexUnifiedExecAsyncWatcherTranscript
+        $retained-bytes
+        $text))
+   $retained-bytes)
+
+(= (codex:unified-exec-async-watcher-transcript-text
+      (CodexUnifiedExecAsyncWatcherTranscript
+        $retained-bytes
+        $text))
+   $text)
+
+(= (codex:unified-exec-async-watcher-transcript-from-state
+      $state
+      $materialized-text)
+   (codex:unified-exec-async-watcher-transcript
+     (list:len
+       (codex:unified-exec-async-watcher-chunk-state-transcript
+         $state))
+     $materialized-text))
+
+(= (codex:unified-exec-resolve-aggregated-output
+      $transcript
+      $fallback)
+   (if (== (codex:unified-exec-async-watcher-transcript-retained-bytes
+             $transcript)
+           0)
+       $fallback
+       (codex:unified-exec-async-watcher-transcript-text
+         $transcript)))
+
+(= (codex:unified-exec-exec-command-status-for-exit-code
+      $exit-code)
+   (if (== $exit-code 0)
+       (CodexExecCommandStatusCompleted)
+       (CodexExecCommandStatusFailed)))
+
+(= (codex:unified-exec-exit-code-or-default $exit-code)
+   (if (== $exit-code CodexAbsent)
+       -1
+       $exit-code))
+
+(= (codex:unified-exec-failed-aggregated-output
+      $stdout
+      $message)
+   (if (== $stdout "")
+       $message
+       (str-concat $stdout (str-concat "\n" $message))))
+
+(= (codex:unified-exec-emit-exec-end-for-unified-exec
+      $call-id
+      $turn-id
+      $command
+      $cwd
+      $process-id
+      $transcript
+      $fallback-output
+      $exit-code
+      $duration
+      $formatted-output)
+   (codex:unified-exec-emit-exec-end-for-unified-exec-with-parsed
+     $call-id
+     $turn-id
+     $command
+     $cwd
+     (codex:parse-command $command)
+     $process-id
+     $transcript
+     $fallback-output
+     $exit-code
+     $duration
+     $formatted-output))
+
+(= (codex:unified-exec-emit-exec-end-for-unified-exec-with-parsed
+      $call-id
+      $turn-id
+      $command
+      $cwd
+      $parsed-cmd
+      $process-id
+      $transcript
+      $fallback-output
+      $exit-code
+      $duration
+      $formatted-output)
+   (let $aggregated-output
+     (codex:unified-exec-resolve-aggregated-output
+       $transcript
+       $fallback-output)
+     (CodexEventExecCommandEnd
+       $call-id
+       $process-id
+       $turn-id
+       $command
+       $cwd
+       $parsed-cmd
+       (CodexExecCommandSourceUnifiedExecStartup)
+       CodexAbsent
+       $aggregated-output
+       ""
+       $aggregated-output
+       $exit-code
+       $duration
+       $formatted-output
+       (codex:unified-exec-exec-command-status-for-exit-code
+         $exit-code))))
+
+(= (codex:unified-exec-emit-failed-exec-end-for-unified-exec
+      $call-id
+      $turn-id
+      $command
+      $cwd
+      $process-id
+      $transcript
+      $message
+      $duration
+      $formatted-output)
+   (codex:unified-exec-emit-failed-exec-end-for-unified-exec-with-parsed
+     $call-id
+     $turn-id
+     $command
+     $cwd
+     (codex:parse-command $command)
+     $process-id
+     $transcript
+     $message
+     $duration
+     $formatted-output))
+
+(= (codex:unified-exec-emit-failed-exec-end-for-unified-exec-with-parsed
+      $call-id
+      $turn-id
+      $command
+      $cwd
+      $parsed-cmd
+      $process-id
+      $transcript
+      $message
+      $duration
+      $formatted-output)
+   (let $stdout
+     (codex:unified-exec-resolve-aggregated-output
+       $transcript
+       "")
+     (let $aggregated-output
+       (codex:unified-exec-failed-aggregated-output
+         $stdout
+         $message)
+       (CodexEventExecCommandEnd
+         $call-id
+         $process-id
+         $turn-id
+         $command
+         $cwd
+         $parsed-cmd
+         (CodexExecCommandSourceUnifiedExecStartup)
+         CodexAbsent
+         $stdout
+         $message
+         $aggregated-output
+         -1
+         $duration
+         $formatted-output
+         (CodexExecCommandStatusFailed)))))
+
+(= (codex:unified-exec-async-watcher-process-snapshot
+      $failure-message
+      $exit-code)
+   (CodexUnifiedExecAsyncWatcherProcessSnapshot
+     $failure-message
+     $exit-code))
+
+(= (codex:unified-exec-async-watcher-process-snapshot-failure-message
+      (CodexUnifiedExecAsyncWatcherProcessSnapshot
+        $failure-message
+        $exit-code))
+   $failure-message)
+
+(= (codex:unified-exec-async-watcher-process-snapshot-exit-code
+      (CodexUnifiedExecAsyncWatcherProcessSnapshot
+        $failure-message
+        $exit-code))
+   $exit-code)
+
+(= (codex:unified-exec-spawn-exit-watcher-finished-event
+      $process-snapshot
+      $call-id
+      $turn-id
+      $command
+      $cwd
+      $process-id
+      $transcript
+      $duration
+      $formatted-output)
+   (codex:unified-exec-spawn-exit-watcher-finished-event-with-parsed
+     $process-snapshot
+     $call-id
+     $turn-id
+     $command
+     $cwd
+     (codex:parse-command $command)
+     $process-id
+     $transcript
+     $duration
+     $formatted-output))
+
+(= (codex:unified-exec-spawn-exit-watcher-finished-event-with-parsed
+      $process-snapshot
+      $call-id
+      $turn-id
+      $command
+      $cwd
+      $parsed-cmd
+      $process-id
+      $transcript
+      $duration
+      $formatted-output)
+   (let $failure-message
+     (codex:unified-exec-async-watcher-process-snapshot-failure-message
+       $process-snapshot)
+     (if (== $failure-message CodexAbsent)
+         (codex:unified-exec-emit-exec-end-for-unified-exec-with-parsed
+           $call-id
+           $turn-id
+           $command
+           $cwd
+           $parsed-cmd
+           $process-id
+           $transcript
+           ""
+           (codex:unified-exec-exit-code-or-default
+             (codex:unified-exec-async-watcher-process-snapshot-exit-code
+               $process-snapshot))
+           $duration
+           $formatted-output)
+         (codex:unified-exec-emit-failed-exec-end-for-unified-exec-with-parsed
+           $call-id
+           $turn-id
+           $command
+           $cwd
+           $parsed-cmd
+           $process-id
+           $transcript
+           $failure-message
+           $duration
+           $formatted-output))))
