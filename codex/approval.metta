@@ -5,11 +5,12 @@
 ; - `ExecApprovalRequirement` result shapes
 ; - explicit prefix-rule allow/prompt/forbidden handling
 ; - default unmatched-command fallback for the currently restarted command set
+; - dangerous-command escalation from Rust command safety for the visible
+;   Unix command subset
 ; - prompt and forbidden reason rendering from the most specific matched rule
 ; - approval-side proposed execpolicy amendments derived from matched rules
 ;
 ; Deliberate restart-slice limits:
-; - dangerous-command escalation is deferred until the command-safety slice
 ; - the heredoc/single-prefix complex shell parser is not present yet, so this
 ;   slice only expands `bash|sh|zsh -c|-lc` wrappers through `shell-plain-commands`
 ; - user-facing reason strings currently use simple token-joining instead of
@@ -170,13 +171,39 @@
       $used_complex_parsing)
    (if (codex:is-known-safe-command? $command)
        (if $used_complex_parsing
-           (codex:render-decision-for-unmatched-unsafe
+           (codex:render-decision-for-unmatched-nonsafe
              $approval_policy
-             $file_system_sandbox_kind)
+             $file_system_sandbox_kind
+             $command)
            (codex:decision-allow))
+       (codex:render-decision-for-unmatched-nonsafe
+         $approval_policy
+         $file_system_sandbox_kind
+         $command)))
+
+(= (codex:render-decision-for-unmatched-nonsafe
+      $approval_policy
+      $file_system_sandbox_kind
+      $command)
+   (if (codex:is-command-dangerous $command)
+       (codex:render-decision-for-dangerous-command
+         $approval_policy
+         $file_system_sandbox_kind)
        (codex:render-decision-for-unmatched-unsafe
          $approval_policy
          $file_system_sandbox_kind)))
+
+(= (codex:render-decision-for-dangerous-command
+      $approval_policy
+      $file_system_sandbox_kind)
+   ; Rust checks the full SandboxPolicy here. This restarted CeTTa approval
+   ; API currently carries only FileSystemSandboxKind, so `unrestricted` is
+   ; the visible proxy for Rust's explicitly disabled/external sandbox cases.
+   (if (== $approval_policy (codex:ask-for-approval-never))
+       (if (== $file_system_sandbox_kind (codex:file-system-sandbox-unrestricted))
+           (codex:decision-allow)
+           (codex:decision-forbidden))
+       (codex:decision-prompt)))
 
 (= (codex:render-decision-for-unmatched-unsafe
       $approval_policy

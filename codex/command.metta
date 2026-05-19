@@ -14,13 +14,17 @@
 ; - `bash|sh|zsh -c|-lc` wrappers via the native shell plain-command splitter
 ; - pipeline helper dropping for small formatting commands (`head`, `tail`,
 ;   `sed`, `wc`) so summaries bias toward the main command
+; - the non-Windows `command_might_be_dangerous` checks from
+;   command_safety/is_dangerous_command.rs (`rm -f`, `rm -rf`, and `sudo`
+;   recursion), including shell-wrapper expansion through the native parser
 ;
 ; CeTTa-specific limitation for this first command slice:
 ; shell wrapper reconstruction still threads through a quoted wrapper string
 ; because the native shell parser is currently exposed at that boundary. The
 ; visible wrapper path therefore remains narrower than Rust for some scripts
 ; with complex quoting, even though absolute shell paths now follow basename
-; matching like the Rust helper.
+; matching like the Rust helper. Windows-only dangerous-command patterns are
+; intentionally outside this Unix runtime slice.
 
 !(import! &self json)
 !(import! &self list)
@@ -372,6 +376,52 @@
        (str-concat
          $flag
          (str-concat " '" (str-concat $script "'"))))))
+
+(= (codex:is-dangerous-to-call-with-exec ())
+   False)
+
+(= (codex:is-dangerous-to-call-with-exec $tokens)
+   (let $cmd0 (list:first $tokens)
+     (if (== $cmd0 "rm")
+         (if (> (list:len $tokens) 1)
+             (let $arg1 (list:at $tokens 1)
+               (if (== $arg1 "-f")
+                   True
+                   (if (== $arg1 "-rf")
+                       True
+                       False)))
+             False)
+         (if (== $cmd0 "sudo")
+             (codex:is-dangerous-to-call-with-exec (list:rest $tokens))
+             False))))
+
+(= (codex:any-dangerous-to-call-with-exec ())
+   False)
+
+(= (codex:any-dangerous-to-call-with-exec $commands)
+   (let ($head $tail) (decons-atom $commands)
+     (if (codex:is-dangerous-to-call-with-exec $head)
+         True
+         (codex:any-dangerous-to-call-with-exec $tail))))
+
+(= (codex:is-shell-wrapper-command-dangerous $tokens)
+   (if (== (list:len $tokens) 3)
+       (let $shell (list:at $tokens 0)
+         (let $flag (list:at $tokens 1)
+           (let $script (list:at $tokens 2)
+             (if (codex:is-shell-wrapper-parts? $shell $flag)
+                 (case (shell-plain-commands
+                         (codex:rebuild-shell-wrapper $shell $flag $script))
+                   ((Empty False)
+                    ($commands
+                     (codex:any-dangerous-to-call-with-exec $commands))))
+                 False))))
+       False))
+
+(= (codex:is-command-dangerous $tokens)
+   (if (codex:is-dangerous-to-call-with-exec $tokens)
+       True
+       (codex:is-shell-wrapper-command-dangerous $tokens)))
 
 (= (codex:parse-shell-wrapper $argv $shell $flag $script)
    (function

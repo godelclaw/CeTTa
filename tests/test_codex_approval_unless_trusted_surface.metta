@@ -6,20 +6,13 @@
 
 !(assertEqual
   (once
-    (case
-      (codex:approval-for-command
-        (codex:ask-for-approval-unless-trusted)
-        (codex:file-system-sandbox-restricted)
-        (codex:policy ())
-        ("rg" "-n" "TODO" "src"))
-      (((CodexExecApprovalRequirementSkip
-          $bypass-sandbox
-          $proposed-execpolicy-amendment)
-        "skip")
-       ((CodexExecApprovalRequirementNeedsApproval $reason $amendment)
-        "needs_approval")
-       ((CodexExecApprovalRequirementForbidden $reason)
-        "forbidden"))))
+    (eval
+      (codex:approval-requirement-type
+        (codex:approval-for-command
+          (codex:ask-for-approval-unless-trusted)
+          (codex:file-system-sandbox-restricted)
+          (codex:policy ())
+          ("rg" "-n" "TODO" "src")))))
   "skip")
 
 !(assertEqual
@@ -46,18 +39,16 @@
     False
     (CodexExecPolicyAmendment ("rg" "-n" "TODO" "src"))))
 
-!(assertEqual
-  (once
-    (eval
+!(assertEqualToResult
+  (json-stringify
+    (codex:approval-requirement-json
       (codex:approval-for-command-with-prefix-rule
         (codex:ask-for-approval-unless-trusted)
         (codex:file-system-sandbox-restricted)
         (codex:policy ())
         ("npm" "install")
         ("npm"))))
-  (CodexExecApprovalRequirementNeedsApproval
-    CodexAbsent
-    (CodexExecPolicyAmendment ("npm"))))
+  ("{\"type\":\"needs_approval\",\"reason\":null,\"proposed_execpolicy_amendment\":[\"npm\"]}"))
 
 !(assertEqualToResult
   (json-stringify

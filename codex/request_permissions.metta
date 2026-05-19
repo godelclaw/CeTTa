@@ -995,38 +995,51 @@
          $permissions
          $scope
          $strict-auto-review)
-       (if (and
-             $strict-auto-review
-             (== $scope (codex:permission-grant-scope-session)))
-           (CodexRequestPermissionsResponse
-             CodexAbsent
-             (codex:permission-grant-scope-turn)
-             False)
-           (let $normalized-permissions
-             (once
-               (eval
-                 (codex:normalize-request-permission-profile
-                   $cwd
-                   $permissions)))
-             (if (codex:is-request-permission-profile-empty?
-                   $normalized-permissions)
-                 (CodexRequestPermissionsResponse
-                   CodexAbsent
-                   $scope
-                   $strict-auto-review)
-                 (let $normalized-requested-permissions
-                   (once
-                     (eval
-                       (codex:normalize-request-permission-profile
-                         $cwd
-                         $requested-permissions)))
-                   (CodexRequestPermissionsResponse
-                     (codex:intersect-request-permission-profiles
-                       $normalized-requested-permissions
-                       $normalized-permissions
-                       $cwd)
-                     $scope
-                     $strict-auto-review)))))))))
+       (codex:normalize-request-permissions-response-materialized
+         $requested-permissions
+         $permissions
+         $scope
+         $strict-auto-review
+         $cwd)))))
+
+(= (codex:normalize-request-permissions-response-materialized
+      $requested-permissions
+      $permissions
+      $scope
+      $strict-auto-review
+      $cwd)
+   (if (and
+         $strict-auto-review
+         (== $scope (codex:permission-grant-scope-session)))
+       (CodexRequestPermissionsResponse
+         CodexAbsent
+         (codex:permission-grant-scope-turn)
+         False)
+       (let $normalized-permissions
+         (once
+           (eval
+             (codex:normalize-request-permission-profile
+               $cwd
+               $permissions)))
+         (if (codex:is-request-permission-profile-empty?
+               $normalized-permissions)
+             (CodexRequestPermissionsResponse
+               CodexAbsent
+               $scope
+               $strict-auto-review)
+             (let $normalized-requested-permissions
+               (once
+                 (eval
+                   (codex:normalize-request-permission-profile
+                     $cwd
+                     $requested-permissions)))
+               (CodexRequestPermissionsResponse
+                 (codex:intersect-request-permission-profiles
+                   $normalized-requested-permissions
+                   $normalized-permissions
+                   $cwd)
+                 $scope
+                 $strict-auto-review))))))
 
 (= (codex:record-granted-request-permissions-for-state $state $response)
    (case (codex:request-permissions-materialize $response)
