@@ -6,11 +6,10 @@
 ; - explicit prefix-rule allow/prompt/forbidden handling
 ; - default unmatched-command fallback for the currently restarted command set
 ; - prompt and forbidden reason rendering from the most specific matched rule
+; - approval-side proposed execpolicy amendments derived from matched rules
 ;
 ; Deliberate restart-slice limits:
 ; - dangerous-command escalation is deferred until the command-safety slice
-; - proposed execpolicy amendments still stay `null` in this approval slice
-;   until the approval-side amendment wiring lands
 ; - the heredoc/single-prefix complex shell parser is not present yet, so this
 ;   slice only expands `bash|sh|zsh -c|-lc` wrappers through `shell-plain-commands`
 ; - user-facing reason strings currently use simple token-joining instead of
@@ -58,10 +57,16 @@
    "unrestricted")
 
 (= (codex:approval-skip $bypass_sandbox)
-   (CodexExecApprovalRequirementSkip $bypass_sandbox CodexAbsent))
+   (codex:approval-skip $bypass_sandbox CodexAbsent))
+
+(= (codex:approval-skip $bypass_sandbox $amendment)
+   (CodexExecApprovalRequirementSkip $bypass_sandbox $amendment))
 
 (= (codex:approval-needs-approval $reason)
-   (CodexExecApprovalRequirementNeedsApproval $reason CodexAbsent))
+   (codex:approval-needs-approval $reason CodexAbsent))
+
+(= (codex:approval-needs-approval $reason $amendment)
+   (CodexExecApprovalRequirementNeedsApproval $reason $amendment))
 
 (= (codex:approval-forbidden $reason)
    (CodexExecApprovalRequirementForbidden $reason))
@@ -83,30 +88,32 @@
        JsonNull
        (JsonString $value)))
 
-(= (codex:approval-amendment-json $amendment)
+(= (codex:approval-amendment-json CodexAbsent)
    JsonNull)
 
-(= (codex:approval-requirement-json
-      (CodexExecApprovalRequirementSkip $bypass_sandbox $amendment))
-   (JsonObject
-     ((JsonPair "type" (JsonString "skip"))
-      (JsonPair "bypass_sandbox" (JsonBool $bypass_sandbox))
-      (JsonPair "proposed_execpolicy_amendment"
-        (codex:approval-amendment-json $amendment)))))
+(= (codex:approval-amendment-json
+      (CodexExecPolicyAmendment $command))
+   (codex:string-list-json $command))
 
-(= (codex:approval-requirement-json
-      (CodexExecApprovalRequirementNeedsApproval $reason $amendment))
-   (JsonObject
-     ((JsonPair "type" (JsonString "needs_approval"))
-      (JsonPair "reason" (codex:approval-optional-string-json $reason))
-      (JsonPair "proposed_execpolicy_amendment"
-        (codex:approval-amendment-json $amendment)))))
-
-(= (codex:approval-requirement-json
-      (CodexExecApprovalRequirementForbidden $reason))
-   (JsonObject
-     ((JsonPair "type" (JsonString "forbidden"))
-      (JsonPair "reason" (JsonString $reason)))))
+(= (codex:approval-requirement-json $requirement)
+   (case $requirement
+     (((CodexExecApprovalRequirementSkip $bypass_sandbox $amendment)
+       (JsonObject
+         ((JsonPair "type" (JsonString "skip"))
+          (JsonPair "bypass_sandbox" (JsonBool $bypass_sandbox))
+          (JsonPair "proposed_execpolicy_amendment"
+            (codex:approval-amendment-json (once (eval $amendment)))))))
+      ((CodexExecApprovalRequirementNeedsApproval $reason $amendment)
+       (JsonObject
+         ((JsonPair "type" (JsonString "needs_approval"))
+          (JsonPair "reason"
+            (codex:approval-optional-string-json (once (eval $reason))))
+          (JsonPair "proposed_execpolicy_amendment"
+            (codex:approval-amendment-json (once (eval $amendment)))))))
+      ((CodexExecApprovalRequirementForbidden $reason)
+       (JsonObject
+         ((JsonPair "type" (JsonString "forbidden"))
+          (JsonPair "reason" (JsonString $reason))))))))
 
 (= (codex:is-safe-parsed-command-type? $type)
    (if (== $type "read")
@@ -187,20 +194,87 @@
                        (codex:decision-allow))
                    (codex:decision-allow))))))
 
+(= (codex:approval-heuristics-fallback
+      $approval_policy
+      $file_system_sandbox_kind
+      $used_complex_parsing)
+   (CodexApprovalHeuristicsFallback
+     $approval_policy
+     $file_system_sandbox_kind
+     $used_complex_parsing))
+
+(= (codex:heuristics-fallback-decision-for-command
+      (CodexApprovalHeuristicsFallback
+        $approval_policy
+        $file_system_sandbox_kind
+        $used_complex_parsing)
+      $command)
+   (codex:render-decision-for-unmatched-command
+     $approval_policy
+     $file_system_sandbox_kind
+     $command
+     $used_complex_parsing))
+
 (= (codex:rule-match-prefix
       (CodexExecPolicyPrefixRuleMatch $matched_prefix $decision $justification))
+   $matched_prefix)
+
+(= (codex:rule-match-prefix
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $matched_prefix
+        $decision
+        $resolved_program
+        $justification))
    $matched_prefix)
 
 (= (codex:approval-rule-match-decision
       (CodexExecPolicyPrefixRuleMatch $matched_prefix $decision $justification))
    $decision)
 
+(= (codex:approval-rule-match-decision
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $matched_prefix
+        $decision
+        $resolved_program
+        $justification))
+   $decision)
+
+(= (codex:approval-rule-match-decision
+      (CodexExecPolicyHeuristicsRuleMatch $command $decision))
+   $decision)
+
 (= (codex:rule-match-justification
       (CodexExecPolicyPrefixRuleMatch $matched_prefix $decision $justification))
    $justification)
 
+(= (codex:rule-match-justification
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $matched_prefix
+        $decision
+        $resolved_program
+        $justification))
+   $justification)
+
+(= (codex:is-policy-rule-match?
+      (CodexExecPolicyPrefixRuleMatch $matched_prefix $decision $justification))
+   True)
+
+(= (codex:is-policy-rule-match?
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $matched_prefix
+        $decision
+        $resolved_program
+        $justification))
+   True)
+
+(= (codex:is-policy-rule-match?
+      (CodexExecPolicyHeuristicsRuleMatch $command $decision))
+   False)
+
 (= (codex:is-policy-match-for-decision? $rule_match $decision)
-   (== (codex:approval-rule-match-decision $rule_match) $decision))
+   (if (codex:is-policy-rule-match? $rule_match)
+       (== (codex:approval-rule-match-decision $rule_match) $decision)
+       False))
 
 (= (codex:best-rule-for-decision $matched_rules $decision)
    (codex:best-rule-for-decision-acc $matched_rules $decision CodexAbsent))
@@ -220,7 +294,10 @@
 
 (= (codex:pick-more-specific-rule-match
       (CodexExecPolicyPrefixRuleMatch $best_prefix $best_decision $best_justification)
-      (CodexExecPolicyPrefixRuleMatch $candidate_prefix $candidate_decision $candidate_justification))
+      (CodexExecPolicyPrefixRuleMatch
+        $candidate_prefix
+        $candidate_decision
+        $candidate_justification))
    (if (> (list:len $candidate_prefix) (list:len $best_prefix))
        (CodexExecPolicyPrefixRuleMatch
          $candidate_prefix
@@ -231,17 +308,95 @@
          $best_decision
          $best_justification)))
 
+(= (codex:pick-more-specific-rule-match
+      (CodexExecPolicyPrefixRuleMatch $best_prefix $best_decision $best_justification)
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $candidate_prefix
+        $candidate_decision
+        $candidate_resolved_program
+        $candidate_justification))
+   (if (> (list:len $candidate_prefix) (list:len $best_prefix))
+       (CodexExecPolicyPrefixRuleMatchResolved
+         $candidate_prefix
+         $candidate_decision
+         $candidate_resolved_program
+         $candidate_justification)
+       (CodexExecPolicyPrefixRuleMatch
+         $best_prefix
+         $best_decision
+         $best_justification)))
+
+(= (codex:pick-more-specific-rule-match
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $best_prefix
+        $best_decision
+        $best_resolved_program
+        $best_justification)
+      (CodexExecPolicyPrefixRuleMatch
+        $candidate_prefix
+        $candidate_decision
+        $candidate_justification))
+   (if (> (list:len $candidate_prefix) (list:len $best_prefix))
+       (CodexExecPolicyPrefixRuleMatch
+         $candidate_prefix
+         $candidate_decision
+         $candidate_justification)
+       (CodexExecPolicyPrefixRuleMatchResolved
+         $best_prefix
+         $best_decision
+         $best_resolved_program
+         $best_justification)))
+
+(= (codex:pick-more-specific-rule-match
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $best_prefix
+        $best_decision
+        $best_resolved_program
+        $best_justification)
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $candidate_prefix
+        $candidate_decision
+        $candidate_resolved_program
+        $candidate_justification))
+   (if (> (list:len $candidate_prefix) (list:len $best_prefix))
+       (CodexExecPolicyPrefixRuleMatchResolved
+         $candidate_prefix
+         $candidate_decision
+         $candidate_resolved_program
+         $candidate_justification)
+       (CodexExecPolicyPrefixRuleMatchResolved
+         $best_prefix
+         $best_decision
+         $best_resolved_program
+         $best_justification)))
+
 (= (codex:quoted-command-text $tokens)
    (str-concat "`" (str-concat (codex:join-command $tokens) "`")))
 
 (= (codex:derive-prompt-reason $command $matched_rules)
    (case (codex:best-rule-for-decision $matched_rules (codex:decision-prompt))
-     ((CodexAbsent Empty)
+     ((CodexAbsent CodexAbsent)
       ((CodexExecPolicyPrefixRuleMatch $matched_prefix $decision CodexAbsent)
        (str-concat
          (codex:quoted-command-text $command)
          " requires approval by policy"))
       ((CodexExecPolicyPrefixRuleMatch $matched_prefix $decision $justification)
+       (str-concat
+         (codex:quoted-command-text $command)
+         (str-concat " requires approval: " $justification)))
+      ((CodexExecPolicyPrefixRuleMatchResolved
+         $matched_prefix
+         $decision
+         $resolved_program
+         CodexAbsent)
+       (str-concat
+         (codex:quoted-command-text $command)
+         " requires approval by policy"))
+      ((CodexExecPolicyPrefixRuleMatchResolved
+         $matched_prefix
+         $decision
+         $resolved_program
+         $justification)
        (str-concat
          (codex:quoted-command-text $command)
          (str-concat " requires approval: " $justification))))))
@@ -261,6 +416,24 @@
       ((CodexExecPolicyPrefixRuleMatch $matched_prefix $decision $justification)
        (str-concat
          (codex:quoted-command-text $command)
+         (str-concat " rejected: " $justification)))
+      ((CodexExecPolicyPrefixRuleMatchResolved
+         $matched_prefix
+         $decision
+         $resolved_program
+         CodexAbsent)
+       (str-concat
+         (codex:quoted-command-text $command)
+         (str-concat
+           " rejected: policy forbids commands starting with "
+           (codex:quoted-command-text $matched_prefix))))
+      ((CodexExecPolicyPrefixRuleMatchResolved
+         $matched_prefix
+         $decision
+         $resolved_program
+         $justification)
+       (str-concat
+         (codex:quoted-command-text $command)
          (str-concat " rejected: " $justification))))))
 
 (= (codex:all-commands-explicitly-allowed? $policy ())
@@ -268,7 +441,11 @@
 
 (= (codex:all-commands-explicitly-allowed? $policy $commands)
    (let ($head $tail) (decons-atom $commands)
-     (let $matches (codex:matches-for-command $policy $head)
+     (let $matches
+       (codex:matches-for-command-with-options
+         $policy
+         $head
+         (codex:match-options True))
        (if (codex:any-allow-rule-match? $matches)
            (codex:all-commands-explicitly-allowed? $policy $tail)
            False))))
@@ -281,6 +458,192 @@
      (if (codex:is-policy-match-for-decision? $head (codex:decision-allow))
          True
          (codex:any-allow-rule-match? $tail))))
+
+(= (codex:any-policy-rule-match? ())
+   False)
+
+(= (codex:any-policy-rule-match? $matches)
+   (let ($head $tail) (decons-atom $matches)
+     (if (codex:is-policy-rule-match? $head)
+         True
+         (codex:any-policy-rule-match? $tail))))
+
+(= (codex:any-policy-rule-match-for-decision? () $decision)
+   False)
+
+(= (codex:any-policy-rule-match-for-decision? $matches $decision)
+   (let ($head $tail) (decons-atom $matches)
+     (if (codex:is-policy-match-for-decision? $head $decision)
+         True
+         (codex:any-policy-rule-match-for-decision? $tail $decision))))
+
+(= (codex:first-heuristics-command-for-decision () $decision)
+   CodexAbsent)
+
+(= (codex:first-heuristics-command-for-decision $matches $decision)
+   (let ($head $tail) (decons-atom $matches)
+     (case $head
+       (((CodexExecPolicyHeuristicsRuleMatch $command $match_decision)
+         (if (== $match_decision $decision)
+             $command
+             (codex:first-heuristics-command-for-decision $tail $decision)))
+        ($other
+         (codex:first-heuristics-command-for-decision $tail $decision))))))
+
+(= (codex:execpolicy-amendment-from-command-or-absent $command)
+   (if (== $command CodexAbsent)
+       CodexAbsent
+       (CodexExecPolicyAmendment $command)))
+
+(= (codex:try-derive-execpolicy-amendment-for-prompt-rules $matched_rules)
+   (if (codex:any-policy-rule-match-for-decision?
+         $matched_rules
+         (codex:decision-prompt))
+       CodexAbsent
+       (let $command
+         (once
+           (eval
+             (codex:first-heuristics-command-for-decision
+               $matched_rules
+               (codex:decision-prompt))))
+         (codex:execpolicy-amendment-from-command-or-absent $command))))
+
+(= (codex:try-derive-execpolicy-amendment-for-allow-rules $matched_rules)
+   (if (codex:any-policy-rule-match? $matched_rules)
+       CodexAbsent
+       (let $command
+         (once
+           (eval
+             (codex:first-heuristics-command-for-decision
+               $matched_rules
+               (codex:decision-allow))))
+         (codex:execpolicy-amendment-from-command-or-absent $command))))
+
+(= (codex:approval-auto-amendment
+      $used_complex_parsing
+      $matched_rules
+      $decision)
+   (if $used_complex_parsing
+       CodexAbsent
+       (if (== $decision (codex:decision-prompt))
+           (codex:try-derive-execpolicy-amendment-for-prompt-rules
+             $matched_rules)
+           (if (== $decision (codex:decision-allow))
+               (codex:try-derive-execpolicy-amendment-for-allow-rules
+                 $matched_rules)
+               CodexAbsent))))
+
+(= (codex:prefer-requested-amendment $requested_amendment $auto_amendment)
+   (if (== $requested_amendment CodexAbsent)
+       $auto_amendment
+       $requested_amendment))
+
+(= (codex:banned-prefix-suggestions)
+   (("python3")
+    ("python3" "-")
+    ("python3" "-c")
+    ("python")
+    ("python" "-")
+    ("python" "-c")
+    ("py")
+    ("py" "-3")
+    ("pythonw")
+    ("pyw")
+    ("pypy")
+    ("pypy3")
+    ("git")
+    ("bash")
+    ("bash" "-lc")
+    ("sh")
+    ("sh" "-c")
+    ("sh" "-lc")
+    ("zsh")
+    ("zsh" "-lc")
+    ("/bin/zsh")
+    ("/bin/zsh" "-lc")
+    ("/bin/bash")
+    ("/bin/bash" "-lc")
+    ("pwsh")
+    ("pwsh" "-Command")
+    ("pwsh" "-c")
+    ("powershell")
+    ("powershell" "-Command")
+    ("powershell" "-c")
+    ("powershell.exe")
+    ("powershell.exe" "-Command")
+    ("powershell.exe" "-c")
+    ("env")
+    ("sudo")
+    ("node")
+    ("node" "-e")
+    ("perl")
+    ("perl" "-e")
+    ("ruby")
+    ("ruby" "-e")
+    ("php")
+    ("php" "-r")
+    ("lua")
+    ("lua" "-e")
+    ("osascript")))
+
+(= (codex:prefix-in-list? $prefix ())
+   False)
+
+(= (codex:prefix-in-list? $prefix $prefixes)
+   (let ($head $tail) (decons-atom $prefixes)
+     (if (== $prefix $head)
+         True
+         (codex:prefix-in-list? $prefix $tail))))
+
+(= (codex:banned-prefix-suggestion? $prefix)
+   (codex:prefix-in-list? $prefix (codex:banned-prefix-suggestions)))
+
+(= (codex:prefix-rule-would-approve-all-commands?
+      $policy
+      $prefix_rule
+      $approval_policy
+      $file_system_sandbox_kind
+      $commands
+      $used_complex_parsing)
+   (let $amended_policy
+     (codex:policy-add-prefix-rule
+       $policy
+       $prefix_rule
+       (codex:decision-allow))
+     (let $evaluation
+       (codex:approval-evaluation
+         $amended_policy
+         $approval_policy
+         $file_system_sandbox_kind
+         $commands
+         $used_complex_parsing)
+       (== (codex:check-output-decision $evaluation) (codex:decision-allow)))))
+
+(= (codex:derive-requested-execpolicy-amendment-from-prefix-rule
+      $prefix_rule
+      $matched_rules
+      $policy
+      $approval_policy
+      $file_system_sandbox_kind
+      $commands
+      $used_complex_parsing)
+   (if (== $prefix_rule CodexAbsent)
+       CodexAbsent
+       (if (== $prefix_rule ())
+           CodexAbsent
+           (if (codex:banned-prefix-suggestion? $prefix_rule)
+               CodexAbsent
+               (if (codex:any-policy-rule-match? $matched_rules)
+                   CodexAbsent
+                   (if (codex:prefix-rule-would-approve-all-commands?
+                         $policy
+                         $prefix_rule
+                         $approval_policy
+                         $file_system_sandbox_kind
+                         $commands
+                         $used_complex_parsing)
+                       (CodexExecPolicyAmendment $prefix_rule)
+                       CodexAbsent))))))
 
 (= (codex:decision-for-command
       $policy
@@ -337,20 +700,33 @@
       $file_system_sandbox_kind
       $commands
       $used_complex_parsing)
-   (CodexExecPolicyCheckOutput
-     (codex:matches-for-commands $policy $commands)
-     (codex:decision-for-commands
-       $policy
+   (codex:check-policy-multiple-with-options-and-heuristics
+     $policy
+     $commands
+     (codex:approval-heuristics-fallback
        $approval_policy
        $file_system_sandbox_kind
-       $commands
-       $used_complex_parsing)))
+       $used_complex_parsing)
+     (codex:match-options True)))
 
 (= (codex:approval-for-command
       $approval_policy
       $file_system_sandbox_kind
       $policy
       $command)
+   (codex:approval-for-command-with-prefix-rule
+     $approval_policy
+     $file_system_sandbox_kind
+     $policy
+     $command
+     CodexAbsent))
+
+(= (codex:approval-for-command-with-prefix-rule
+      $approval_policy
+      $file_system_sandbox_kind
+      $policy
+      $command
+      $prefix_rule)
    (let $policy_commands (codex:commands-for-exec-policy $command)
      (let $commands (codex:exec-policy-command-list $policy_commands)
        (let $used_complex_parsing
@@ -362,12 +738,27 @@
              $file_system_sandbox_kind
              $commands
              $used_complex_parsing)
-           (codex:approval-from-evaluation
-             $approval_policy
-             $policy
-             $commands
-             $command
-             $evaluation))))))
+           (let $matched_rules
+             (once (eval (codex:check-output-matched-rules $evaluation)))
+             (let $requested_amendment
+               (once
+                 (eval
+                   (codex:derive-requested-execpolicy-amendment-from-prefix-rule
+                     $prefix_rule
+                     $matched_rules
+                     $policy
+                     $approval_policy
+                     $file_system_sandbox_kind
+                     $commands
+                     $used_complex_parsing)))
+               (codex:approval-from-evaluation
+                 $approval_policy
+                 $policy
+                 $commands
+                 $command
+                 $evaluation
+                 $used_complex_parsing
+                 $requested_amendment))))))))
 
 (= (codex:approval-from-evaluation
       $approval_policy
@@ -375,19 +766,50 @@
       $commands
       $command
       $evaluation)
-   (let $decision (codex:check-output-decision $evaluation)
-     (if (== $decision (codex:decision-forbidden))
-         (codex:approval-forbidden
-           (codex:derive-forbidden-reason
-             $command
-             (codex:check-output-matched-rules $evaluation)))
-         (if (== $decision (codex:decision-prompt))
-             (if (== $approval_policy (codex:ask-for-approval-never))
-                 (codex:approval-forbidden
-                   "approval required by policy, but AskForApproval is set to Never")
-                 (codex:approval-needs-approval
-                   (codex:derive-prompt-reason
-                     $command
-                     (codex:check-output-matched-rules $evaluation))))
-             (codex:approval-skip
-               (codex:all-commands-explicitly-allowed? $policy $commands))))))
+   (codex:approval-from-evaluation
+     $approval_policy
+     $policy
+     $commands
+     $command
+     $evaluation
+     False
+     CodexAbsent))
+
+(= (codex:approval-from-evaluation
+      $approval_policy
+      $policy
+      $commands
+      $command
+      $evaluation
+      $used_complex_parsing
+      $requested_amendment)
+   (let $decision (once (eval (codex:check-output-decision $evaluation)))
+     (let $matched_rules (once (eval (codex:check-output-matched-rules $evaluation)))
+       (let $auto_amendment
+         (once
+           (eval
+             (codex:approval-auto-amendment
+               $used_complex_parsing
+               $matched_rules
+               $decision)))
+         (let $amendment
+           (codex:prefer-requested-amendment
+             $requested_amendment
+             $auto_amendment)
+           (if (== $decision (codex:decision-forbidden))
+               (codex:approval-forbidden
+                 (codex:derive-forbidden-reason
+                   $command
+                   $matched_rules))
+               (if (== $decision (codex:decision-prompt))
+                   (if (== $approval_policy (codex:ask-for-approval-never))
+                       (codex:approval-forbidden
+                         "approval required by policy, but AskForApproval is set to Never")
+                       (codex:approval-needs-approval
+                         (codex:derive-prompt-reason
+                           $command
+                           $matched_rules)
+                         $amendment))
+                   (codex:approval-skip
+                     (codex:all-commands-explicitly-allowed? $policy $commands)
+                     $amendment))))))))

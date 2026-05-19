@@ -1092,10 +1092,12 @@
       $event
       (CodexRequestPermissionsResponseBehaviorReturn $response))
    (let $normalized-response
-     (codex:normalize-request-permissions-response
-       $requested-permissions
-       $response
-       $cwd)
+     (once
+       (eval
+         (codex:normalize-request-permissions-response
+           $requested-permissions
+           $response
+           $cwd)))
      (CodexRequestPermissionsHandlerOutput
        $event
        (json-stringify

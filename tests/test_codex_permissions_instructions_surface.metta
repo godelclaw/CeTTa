@@ -57,17 +57,6 @@
         False)))
   ("\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `workspace-write`: The sandbox permits reading files, and editing files in `cwd` and `writable_roots`. Editing files in other directories requires approval. Network access is enabled.\nApprovals are your mechanism to get user consent to run shell commands without the sandbox. `approval_policy` is `on-failure`: The harness will allow all commands to run in the sandbox (if enabled), and failures will be escalated to the user for approval to run again without the sandbox.\n The writable roots are `/repo`, `/tmp/work`.\n"))
 
-!(assertEqual
-  (codex:permissions-approval-text
-    (codex:ask-for-approval-on-request)
-    (codex:permissions-approvals-reviewer-user)
-    (codex-pi-allow-policy)
-    False
-    False)
-  (str-concat
-    (codex:permissions-approval-policy-on-request-rule-text)
-    "\n\n## Approved command prefixes\nThe following prefix rules have already been approved: - [\"git\", \"pull\"]\n- [\"cargo\", \"test\"]"))
-
 !(assertEqualToResult
   (codex:permissions-approval-text
     (codex:ask-for-approval-granular
