@@ -886,29 +886,31 @@
              $accepted-write)))))
 
 (= (codex:intersect-request-permission-profiles $requested $granted $cwd)
-   (if (or
-         (== $requested CodexAbsent)
-         (== $granted CodexAbsent))
-       CodexAbsent
-       (let $requested-network
-         (codex:request-permission-profile-network $requested)
-         (let $granted-network
-           (codex:request-permission-profile-network $granted)
-           (let $requested-file-system
-             (codex:request-permission-profile-file-system $requested)
-             (let $granted-file-system
-               (codex:request-permission-profile-file-system $granted)
-               (codex:request-permission-profile-or-absent
-                 (if (and
-                       (codex:is-request-permissions-network-enabled?
-                         $requested-network)
-                       (codex:is-request-permissions-network-enabled?
-                         $granted-network))
-                     (codex:request-permissions-network True)
-                     CodexAbsent)
-                 (codex:intersect-request-permissions-file-system
-                   $requested-file-system
-                   $granted-file-system))))))))
+   (let $resolved-requested (codex:request-permissions-materialize $requested)
+     (let $resolved-granted (codex:request-permissions-materialize $granted)
+       (if (or
+             (== $resolved-requested CodexAbsent)
+             (== $resolved-granted CodexAbsent))
+           CodexAbsent
+           (let $requested-network
+             (codex:request-permission-profile-network $resolved-requested)
+             (let $granted-network
+               (codex:request-permission-profile-network $resolved-granted)
+               (let $requested-file-system
+                 (codex:request-permission-profile-file-system $resolved-requested)
+                 (let $granted-file-system
+                   (codex:request-permission-profile-file-system $resolved-granted)
+                   (codex:request-permission-profile-or-absent
+                     (if (and
+                           (codex:is-request-permissions-network-enabled?
+                             $requested-network)
+                           (codex:is-request-permissions-network-enabled?
+                             $granted-network))
+                         (codex:request-permissions-network True)
+                         CodexAbsent)
+                     (codex:intersect-request-permissions-file-system
+                       $requested-file-system
+                       $granted-file-system))))))))))
 
 (= (codex:is-set-equal-string-lists $left $right)
    (if (== (list:len $left) (list:len $right))
@@ -1001,22 +1003,30 @@
              (codex:permission-grant-scope-turn)
              False)
            (let $normalized-permissions
-             (codex:normalize-request-permission-profile $cwd $permissions)
+             (once
+               (eval
+                 (codex:normalize-request-permission-profile
+                   $cwd
+                   $permissions)))
              (if (codex:is-request-permission-profile-empty?
                    $normalized-permissions)
                  (CodexRequestPermissionsResponse
                    CodexAbsent
                    $scope
                    $strict-auto-review)
-                 (CodexRequestPermissionsResponse
-                   (codex:intersect-request-permission-profiles
-                     (codex:normalize-request-permission-profile
-                       $cwd
-                       $requested-permissions)
-                     $normalized-permissions
-                     $cwd)
-                   $scope
-                   $strict-auto-review))))))))
+                 (let $normalized-requested-permissions
+                   (once
+                     (eval
+                       (codex:normalize-request-permission-profile
+                         $cwd
+                         $requested-permissions)))
+                   (CodexRequestPermissionsResponse
+                     (codex:intersect-request-permission-profiles
+                       $normalized-requested-permissions
+                       $normalized-permissions
+                       $cwd)
+                     $scope
+                     $strict-auto-review)))))))))
 
 (= (codex:record-granted-request-permissions-for-state $state $response)
    (case (codex:request-permissions-materialize $response)

@@ -5,12 +5,14 @@
 ; - Decision ordering
 ; - PatternToken matching, including alternative tokens
 ; - PrefixRuleMatch JSON shape
+; - optional host-executable resolution and resolvedProgram JSON
+; - HeuristicsRuleMatch fallback shape
 ; - strictest-decision aggregation across one or more commands
 ;
 ; This increment intentionally starts from already-parsed rule constructors
 ; rather than Starlark policy-file parsing. That parser and its validation
-; hooks (`match` / `not_match`, host_executable, file loading) land in later
-; exec-policy slices.
+; hooks (`match` / `not_match`, file loading) land in later exec-policy
+; slices.
 
 !(import! &self json)
 !(import! &self list)
@@ -45,8 +47,56 @@
 (= (codex:policy $rule_specs)
    (CodexExecPolicy (codex:expand-prefix-rule-specs $rule_specs)))
 
+(= (codex:policy-from-parts $rule_specs $network_rules $host_executables)
+   (CodexExecPolicyFull
+     (codex:expand-prefix-rule-specs $rule_specs)
+     $network_rules
+     $host_executables))
+
+(= (codex:policy-with-host-executables $rule_specs $host_executables)
+   (codex:policy-from-parts $rule_specs () $host_executables))
+
 (= (codex:policy-rules (CodexExecPolicy $rules))
    $rules)
+
+(= (codex:policy-rules
+      (CodexExecPolicyFull $rules $network_rules $host_executables))
+   $rules)
+
+(= (codex:policy-network-rules (CodexExecPolicy $rules))
+   ())
+
+(= (codex:policy-network-rules
+      (CodexExecPolicyFull $rules $network_rules $host_executables))
+   $network_rules)
+
+(= (codex:policy-host-executables (CodexExecPolicy $rules))
+   ())
+
+(= (codex:policy-host-executables
+      (CodexExecPolicyFull $rules $network_rules $host_executables))
+   $host_executables)
+
+(= (codex:match-options)
+   (CodexExecPolicyMatchOptions False))
+
+(= (codex:match-options $resolve_host_executables)
+   (CodexExecPolicyMatchOptions $resolve_host_executables))
+
+(= (codex:match-options-resolve-host-executables
+      (CodexExecPolicyMatchOptions $resolve_host_executables))
+   $resolve_host_executables)
+
+(= (codex:no-heuristics-fallback)
+   CodexAbsent)
+
+(= (codex:heuristics-fallback-decision $decision)
+   (CodexExecPolicyHeuristicsFallbackDecision $decision))
+
+(= (codex:heuristics-fallback-decision-for-command
+      (CodexExecPolicyHeuristicsFallbackDecision $decision)
+      $command)
+   $decision)
 
 (= (codex:decision-rank $decision)
    (if (== $decision "allow")
@@ -80,6 +130,18 @@
       (CodexExecPolicyPrefixRuleMatch $matched_prefix $decision $justification))
    $decision)
 
+(= (codex:rule-match-decision
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $matched_prefix
+        $decision
+        $resolved_program
+        $justification))
+   $decision)
+
+(= (codex:rule-match-decision
+      (CodexExecPolicyHeuristicsRuleMatch $command $decision))
+   $decision)
+
 (= (codex:optional-string-json $value)
    (if (== $value CodexAbsent)
        JsonNull
@@ -105,6 +167,35 @@
               ((JsonPair "matchedPrefix" (codex:string-list-json $matched_prefix))
                (JsonPair "decision" (JsonString $decision))
                (JsonPair "justification" (JsonString $justification)))))))))
+
+(= (codex:rule-match-json
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $matched_prefix
+        $decision
+        $resolved_program
+        $justification))
+   (if (== $justification CodexAbsent)
+       (JsonObject
+         ((JsonPair "prefixRuleMatch"
+            (JsonObject
+              ((JsonPair "matchedPrefix" (codex:string-list-json $matched_prefix))
+               (JsonPair "decision" (JsonString $decision))
+               (JsonPair "resolvedProgram" (JsonString $resolved_program)))))))
+       (JsonObject
+         ((JsonPair "prefixRuleMatch"
+            (JsonObject
+              ((JsonPair "matchedPrefix" (codex:string-list-json $matched_prefix))
+               (JsonPair "decision" (JsonString $decision))
+               (JsonPair "resolvedProgram" (JsonString $resolved_program))
+               (JsonPair "justification" (JsonString $justification)))))))))
+
+(= (codex:rule-match-json
+      (CodexExecPolicyHeuristicsRuleMatch $command $decision))
+   (JsonObject
+     ((JsonPair "heuristicsRuleMatch"
+        (JsonObject
+          ((JsonPair "command" (codex:string-list-json $command))
+           (JsonPair "decision" (JsonString $decision))))))))
 
 (= (codex:matched-rules-json $matched_rules)
    (JsonArray
@@ -136,6 +227,90 @@
        (if (== (list:first $values) $needle)
            True
            (codex:string-list-contains? (list:rest $values) $needle))))
+
+(= (codex:string-list-dedupe-acc $values $acc)
+   (if (== $values ())
+       $acc
+       (let $head (list:first $values)
+         (let $tail (list:rest $values)
+           (if (codex:string-list-contains? $acc $head)
+               (codex:string-list-dedupe-acc $tail $acc)
+               (codex:string-list-dedupe-acc
+                 $tail
+                 (list:push $acc $head)))))))
+
+(= (codex:string-list-dedupe $values)
+   (codex:string-list-dedupe-acc $values ()))
+
+; Rust executable_lookup_key is identity on non-Windows builds. CeTTa currently
+; runs this port in the Unix-like profile used by the test runner, so the same
+; behavior is exposed here; Windows suffix stripping belongs with a future
+; platform-profile slice.
+(= (codex:executable-lookup-key $raw)
+   $raw)
+
+(= (codex:executable-path-lookup-key $path)
+   (codex:executable-path-lookup-key-from-parts
+     (str-split "/" $path)
+     CodexAbsent))
+
+(= (codex:executable-path-lookup-key-from-parts $parts $last)
+   (if (== $parts ())
+       (if (== $last CodexAbsent)
+           CodexAbsent
+           (if (== $last ".")
+               CodexAbsent
+               (if (== $last "..")
+                   CodexAbsent
+                   (codex:executable-lookup-key $last))))
+       (let $head (list:first $parts)
+         (let $tail (list:rest $parts)
+           (codex:executable-path-lookup-key-from-parts
+             $tail
+             (if (== $head "")
+                 $last
+                 $head))))))
+
+(= (codex:exec-policy-is-unix-absolute-path $path)
+   (str-starts-with? $path "/"))
+
+(= (codex:host-executable $name $paths)
+   (CodexExecPolicyHostExecutable
+     (codex:executable-lookup-key $name)
+     (codex:string-list-dedupe $paths)))
+
+(= (codex:host-executable-name
+      (CodexExecPolicyHostExecutable $name $paths))
+   $name)
+
+(= (codex:host-executable-paths
+      (CodexExecPolicyHostExecutable $name $paths))
+   $paths)
+
+(= (codex:host-executable-paths-for-name $host_executables $name)
+   (codex:host-executable-paths-for-name-acc
+     $host_executables
+     $name
+     CodexAbsent))
+
+(= (codex:host-executable-paths-for-name-acc $host_executables $name $found)
+   (if (== $host_executables ())
+       $found
+       (let $head (list:first $host_executables)
+         (let $tail (list:rest $host_executables)
+           (let $next-found
+             (if (== (codex:host-executable-name $head) $name)
+                 (codex:host-executable-paths $head)
+                 $found)
+             (codex:host-executable-paths-for-name-acc
+               $tail
+               $name
+               $next-found))))))
+
+(= (codex:host-executable-allows-program? $paths $program)
+   (if (== $paths CodexAbsent)
+       True
+       (codex:string-list-contains? $paths $program)))
 
 (= (codex:expand-prefix-rule-specs $rule_specs)
    (if (== $rule_specs ())
@@ -246,8 +421,52 @@
       (CodexExecPolicyPrefixRule $first $rest $decision $justification))
    $justification)
 
-(= (codex:matches-for-command (CodexExecPolicy $rules) $command)
-   (codex:matches-for-command-rules $rules $command))
+(= (codex:matches-for-command $policy $command)
+   (codex:matches-for-command-with-options-and-heuristics
+     $policy
+     $command
+     (codex:no-heuristics-fallback)
+     (codex:match-options)))
+
+(= (codex:matches-for-command-with-options $policy $command $options)
+   (codex:matches-for-command-with-options-and-heuristics
+     $policy
+     $command
+     (codex:no-heuristics-fallback)
+     $options))
+
+(= (codex:matches-for-command-with-heuristics $policy $command $heuristics_fallback)
+   (codex:matches-for-command-with-options-and-heuristics
+     $policy
+     $command
+     $heuristics_fallback
+     (codex:match-options)))
+
+(= (codex:matches-for-command-with-options-and-heuristics
+      $policy
+      $command
+      $heuristics_fallback
+      $options)
+   (let $matched_rules
+     (codex:matches-for-command-rules (codex:policy-rules $policy) $command)
+     (if (== $matched_rules ())
+         (let $host_matches
+           (if (codex:match-options-resolve-host-executables $options)
+               (codex:match-host-executable-rules $policy $command)
+               ())
+           (if (== $host_matches ())
+               (codex:heuristics-match-or-empty $command $heuristics_fallback)
+               $host_matches))
+         $matched_rules)))
+
+(= (codex:heuristics-match-or-empty $command $heuristics_fallback)
+   (if (== $heuristics_fallback CodexAbsent)
+       ()
+       ((CodexExecPolicyHeuristicsRuleMatch
+          $command
+          (codex:heuristics-fallback-decision-for-command
+            $heuristics_fallback
+            $command)))))
 
 (= (codex:matches-for-command-rules $rules $command)
    (if (== $rules ())
@@ -260,8 +479,98 @@
                    $rest_matches
                    (cons-atom $match $rest_matches))))))))
 
+(= (codex:match-host-executable-rules $policy $command)
+   (if (== $command ())
+       ()
+       (let $program (list:first $command)
+         (if (codex:exec-policy-is-unix-absolute-path $program)
+             (let $basename (codex:executable-path-lookup-key $program)
+               (if (== $basename CodexAbsent)
+                   ()
+                   (let $host_paths
+                     (codex:host-executable-paths-for-name
+                       (codex:policy-host-executables $policy)
+                       $basename)
+                     (if (codex:host-executable-allows-program?
+                           $host_paths
+                           $program)
+                         (let $basename_command
+                           (cons-atom $basename (list:rest $command))
+                           (codex:with-resolved-programs
+                             (codex:matches-for-command-rules
+                               (codex:policy-rules $policy)
+                               $basename_command)
+                             $program))
+                         ()))))
+             ()))))
+
+(= (codex:with-resolved-programs $matches $resolved_program)
+   (if (== $matches ())
+       ()
+       (let $head (list:first $matches)
+         (let $tail (list:rest $matches)
+           (let $rest
+             (eval (codex:with-resolved-programs $tail $resolved_program))
+             (cons-atom
+               (codex:rule-match-with-resolved-program $head $resolved_program)
+               $rest))))))
+
+(= (codex:rule-match-with-resolved-program
+      (CodexExecPolicyPrefixRuleMatch $matched_prefix $decision $justification)
+      $resolved_program)
+   (CodexExecPolicyPrefixRuleMatchResolved
+     $matched_prefix
+     $decision
+     $resolved_program
+     $justification))
+
+(= (codex:rule-match-with-resolved-program
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $matched_prefix
+        $decision
+        $old_resolved_program
+        $justification)
+      $resolved_program)
+   (CodexExecPolicyPrefixRuleMatchResolved
+     $matched_prefix
+     $decision
+     $resolved_program
+     $justification))
+
 (= (codex:check-policy $policy $command)
    (let $matched_rules (codex:matches-for-command $policy $command)
+     (CodexExecPolicyCheckOutput
+       $matched_rules
+       (codex:decision-from-matched-rules $matched_rules))))
+
+(= (codex:check-policy-with-options $policy $command $options)
+   (let $matched_rules
+     (codex:matches-for-command-with-options $policy $command $options)
+     (CodexExecPolicyCheckOutput
+       $matched_rules
+       (codex:decision-from-matched-rules $matched_rules))))
+
+(= (codex:check-policy-with-heuristics $policy $command $heuristics_fallback)
+   (let $matched_rules
+     (codex:matches-for-command-with-heuristics
+       $policy
+       $command
+       $heuristics_fallback)
+     (CodexExecPolicyCheckOutput
+       $matched_rules
+       (codex:decision-from-matched-rules $matched_rules))))
+
+(= (codex:check-policy-with-options-and-heuristics
+      $policy
+      $command
+      $heuristics_fallback
+      $options)
+   (let $matched_rules
+     (codex:matches-for-command-with-options-and-heuristics
+       $policy
+       $command
+       $heuristics_fallback
+       $options)
      (CodexExecPolicyCheckOutput
        $matched_rules
        (codex:decision-from-matched-rules $matched_rules))))
@@ -274,6 +583,32 @@
            $all_matches
            (codex:decision-from-matched-rules $all_matches)))))
 
+(= (codex:check-policy-multiple-with-options $policy $commands $options)
+   (if (== $commands ())
+       (CodexExecPolicyCheckOutput () CodexAbsent)
+       (let $all_matches
+         (codex:matches-for-commands-with-options $policy $commands $options)
+         (CodexExecPolicyCheckOutput
+           $all_matches
+           (codex:decision-from-matched-rules $all_matches)))))
+
+(= (codex:check-policy-multiple-with-options-and-heuristics
+      $policy
+      $commands
+      $heuristics_fallback
+      $options)
+   (if (== $commands ())
+       (CodexExecPolicyCheckOutput () CodexAbsent)
+       (let $all_matches
+         (codex:matches-for-commands-with-options-and-heuristics
+           $policy
+           $commands
+           $heuristics_fallback
+           $options)
+         (CodexExecPolicyCheckOutput
+           $all_matches
+           (codex:decision-from-matched-rules $all_matches)))))
+
 (= (codex:matches-for-commands $policy $commands)
    (if (== $commands ())
        ()
@@ -281,4 +616,35 @@
          (let $tail (list:rest $commands)
            (let $head_matches (codex:matches-for-command $policy $head)
              (let $tail_matches (eval (codex:matches-for-commands $policy $tail))
+               (list:append $head_matches $tail_matches)))))))
+
+(= (codex:matches-for-commands-with-options $policy $commands $options)
+   (codex:matches-for-commands-with-options-and-heuristics
+     $policy
+     $commands
+     (codex:no-heuristics-fallback)
+     $options))
+
+(= (codex:matches-for-commands-with-options-and-heuristics
+      $policy
+      $commands
+      $heuristics_fallback
+      $options)
+   (if (== $commands ())
+       ()
+       (let $head (list:first $commands)
+         (let $tail (list:rest $commands)
+           (let $head_matches
+             (codex:matches-for-command-with-options-and-heuristics
+               $policy
+               $head
+               $heuristics_fallback
+               $options)
+             (let $tail_matches
+               (eval
+                 (codex:matches-for-commands-with-options-and-heuristics
+                   $policy
+                   $tail
+                   $heuristics_fallback
+                   $options))
                (list:append $head_matches $tail_matches)))))))
