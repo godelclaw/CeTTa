@@ -481,20 +481,33 @@ Approval policy is `granular`. Categories set to `false` are automatically rejec
                      (cons-atom $prefix $rest-prefixes))))
                  $rest-prefixes)))))))
 
+; Rust uses serde_json::to_string for each prefix token. The direct native
+; stringifier keeps this prompt helper independent of caller-visible imports.
 (= (codex:permissions-json-quoted-string $text)
-   (json-stringify (JsonString $text)))
+   (function
+     (case (__cetta_lib_json_stringify (JsonString $text))
+       (($result (return $result))))))
+
+; CeTTa evaluation accommodation: direct recursion preserves Rust's Vec
+; map/join result while avoiding imported-module map materialization collapse.
+(= (codex:permissions-render-command-prefix-items ())
+   "")
+
+(= (codex:permissions-render-command-prefix-items $prefix)
+   (let ($head $tail) (decons-atom $prefix)
+     (if (== $tail ())
+         (codex:permissions-json-quoted-string $head)
+         (str-concat
+           (codex:permissions-json-quoted-string $head)
+           (str-concat
+             ", "
+             (codex:permissions-render-command-prefix-items $tail))))))
 
 (= (codex:permissions-render-command-prefix $prefix)
    (str-concat
      "["
      (str-concat
-       (str-join
-         ", "
-         (eval
-           (map-atom
-             $prefix
-             $token
-             (codex:permissions-json-quoted-string $token))))
+       (codex:permissions-render-command-prefix-items $prefix)
        "]")))
 
 (= (codex:permissions-pad-natural-six-text $value)
@@ -515,7 +528,7 @@ Approval policy is `granular`. Categories set to `false` are automatically rejec
 
 (= (codex:permissions-prefix-sort-record $prefix)
    (str-concat
-     (codex:permissions-pad-natural-six-text (list:len $prefix))
+     (codex:permissions-pad-natural-six-text (size-atom $prefix))
      (str-concat
        "|"
        (str-concat
@@ -526,28 +539,36 @@ Approval policy is `granular`. Categories set to `false` are automatically rejec
            (codex:permissions-render-command-prefix $prefix))))))
 
 (= (codex:permissions-sort-prefix-records $prefixes)
-   (let $records
-     (eval
-       (map-atom
-         $prefixes
+   (let $materialized-prefixes (eval $prefixes)
+     (let $records
+       (map-atom-strict
+         $materialized-prefixes
          $prefix
-         (codex:permissions-prefix-sort-record $prefix)))
-     (sort-strings $records)))
+         (codex:permissions-prefix-sort-record $prefix))
+       (sort-strings $records))))
 
 (= (codex:permissions-dedup-sorted-strings $items)
    (if (== $items ())
        ()
-       (let $head (list:first $items)
-         (let $tail (list:rest $items)
+       (let ($head $tail) (decons-atom $items)
            (if (== $tail ())
                ($head)
                (let $dedup-tail (codex:permissions-dedup-sorted-strings $tail)
-                 (if (== $head (list:first $dedup-tail))
+                 (if (== $head (car-atom $dedup-tail))
                      $dedup-tail
-                     (cons-atom $head $dedup-tail))))))))
+                     (cons-atom $head $dedup-tail)))))))
 
 (= (codex:permissions-strip-prefix-sort-key $record)
    (str-slice $record 14 (str-length $record)))
+
+(= (codex:permissions-strip-prefix-sort-keys ())
+   ())
+
+(= (codex:permissions-strip-prefix-sort-keys $records)
+   (let ($head $tail) (decons-atom $records)
+     (let $value (eval (codex:permissions-strip-prefix-sort-key $head))
+       (let $rest (eval (codex:permissions-strip-prefix-sort-keys $tail))
+         (cons-atom $value $rest)))))
 
 (= (codex:permissions-sorted-rendered-prefixes $policy)
    (let $sorted-records
@@ -555,11 +576,7 @@ Approval policy is `granular`. Categories set to `false` are automatically rejec
        (codex:permissions-sort-prefix-records
          (codex:permissions-collect-allowed-prefixes-rules
            (codex:policy-rules $policy))))
-     (eval
-       (map-atom
-         $sorted-records
-         $record
-         (codex:permissions-strip-prefix-sort-key $record)))))
+     (eval (codex:permissions-strip-prefix-sort-keys $sorted-records))))
 
 (= (codex:permissions-take-first-n $items $count)
    (if (<= $count 0)
@@ -567,30 +584,29 @@ Approval policy is `granular`. Categories set to `false` are automatically rejec
        (if (== $items ())
            ()
            (cons-atom
-             (list:first $items)
+             (car-atom $items)
              (codex:permissions-take-first-n
-               (list:rest $items)
+               (cdr-atom $items)
                (- $count 1))))))
 
 (= (codex:permissions-render-bullet-lines $items)
    (if (== $items ())
        ""
-       (let $head (list:first $items)
-         (let $tail (list:rest $items)
+       (let ($head $tail) (decons-atom $items)
            (if (== $tail ())
                (str-concat "- " $head)
                (str-concat
                  (str-concat "- " $head)
                  (str-concat
                    "\n"
-                   (codex:permissions-render-bullet-lines $tail))))))))
+                   (codex:permissions-render-bullet-lines $tail)))))))
 
 (= (codex:permissions-format-allow-prefixes $prefixes)
    (case (codex:permissions-sorted-rendered-prefixes $prefixes)
      (($sorted-rendered
        (if (== $sorted-rendered ())
            CodexAbsent
-           (let $prefix-count (list:len $sorted-rendered)
+           (let $prefix-count (size-atom $sorted-rendered)
              (let $truncated-by-count (> $prefix-count (codex:permissions-max-rendered-prefixes))
                (let $limited-rendered
                  (codex:permissions-take-first-n

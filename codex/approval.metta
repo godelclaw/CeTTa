@@ -13,8 +13,6 @@
 ; Deliberate restart-slice limits:
 ; - the heredoc/single-prefix complex shell parser is conservative compared to
 ;   Rust's tree-sitter-backed parser and rejects ambiguous shell forms
-; - user-facing reason strings currently use simple token-joining instead of
-;   Rust's full shlex rendering
 ; - Rust has a Windows-only ReadOnly-sandbox no-protection branch in
 ;   `render_decision_for_unmatched_command`; this Unix CeTTa runtime slice does
 ;   not claim Windows command execution yet.
@@ -519,7 +517,7 @@
          $best_justification)))
 
 (= (codex:quoted-command-text $tokens)
-   (str-concat "`" (str-concat (codex:join-command $tokens) "`")))
+   (str-concat "`" (str-concat (shell-shlex-join $tokens) "`")))
 
 (= (codex:derive-prompt-reason $command $matched_rules)
    (case (codex:best-rule-for-decision $matched_rules (codex:decision-prompt))

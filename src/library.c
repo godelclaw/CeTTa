@@ -9335,6 +9335,113 @@ fail:
     return false;
 }
 
+static bool shell_shlex_unquoted_ok(unsigned char c) {
+    if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') ||
+        (c >= 'a' && c <= 'z')) {
+        return true;
+    }
+    switch (c) {
+    case '+':
+    case '-':
+    case '.':
+    case '/':
+    case ':':
+    case '@':
+    case ']':
+    case '_':
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool shell_shlex_single_quoted_ok(unsigned char c) {
+    return c != '\'' && c != '^' && c != '\\';
+}
+
+static bool shell_shlex_double_quoted_ok(unsigned char c) {
+    return c != '`' && c != '$' && c != '!' && c != '^';
+}
+
+static void shell_shlex_append_quoted_chunk(CettaStringBuf *out,
+                                            const char *chunk,
+                                            size_t len,
+                                            int strategy) {
+    if (strategy == 0) {
+        cetta_sb_append_n(out, chunk, len);
+        return;
+    }
+    if (strategy == 1) {
+        cetta_sb_append(out, "'");
+        cetta_sb_append_n(out, chunk, len);
+        cetta_sb_append(out, "'");
+        return;
+    }
+    cetta_sb_append(out, "\"");
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)chunk[i];
+        if (c == '$' || c == '`' || c == '"' || c == '\\') {
+            cetta_sb_append(out, "\\");
+        }
+        cetta_sb_append_n(out, chunk + i, 1);
+    }
+    cetta_sb_append(out, "\"");
+}
+
+static void shell_shlex_quote_word(CettaStringBuf *out, const char *word) {
+    const char *p = word;
+    size_t remaining = strlen(word);
+    bool out_empty = true;
+
+    if (remaining == 0) {
+        cetta_sb_append(out, "''");
+        return;
+    }
+
+    while (remaining > 0) {
+        const char *chunk_start = p;
+        unsigned int prev_ok = 1u | 2u | 4u;
+        size_t i = 0;
+        int strategy;
+
+        if ((unsigned char)p[0] == '^') {
+            prev_ok = 2u;
+            i = 1;
+        }
+
+        while (i < remaining) {
+            unsigned char c = (unsigned char)p[i];
+            unsigned int cur_ok = prev_ok;
+            if (c >= 0x80) {
+                cur_ok &= ~1u;
+            } else {
+                if (!shell_shlex_unquoted_ok(c)) cur_ok &= ~1u;
+                if (!shell_shlex_single_quoted_ok(c)) cur_ok &= ~2u;
+                if (!shell_shlex_double_quoted_ok(c)) cur_ok &= ~4u;
+            }
+            if (cur_ok == 0) break;
+            prev_ok = cur_ok;
+            i++;
+        }
+
+        if ((prev_ok & 1u) != 0) {
+            strategy = 0;
+        } else if ((prev_ok & 2u) != 0) {
+            strategy = 1;
+        } else {
+            strategy = 2;
+        }
+        if (i == remaining && strategy == 0 && out_empty) {
+            cetta_sb_append_n(out, p, remaining);
+            return;
+        }
+        shell_shlex_append_quoted_chunk(out, chunk_start, i, strategy);
+        out_empty = false;
+        p += i;
+        remaining -= i;
+    }
+}
+
 static Atom *shell_commands_atom(Arena *a, const ShellCommandVec *commands) {
     Atom **items = arena_alloc(a, sizeof(Atom *) * (commands->len ? commands->len : 1));
     for (uint32_t i = 0; i < commands->len; i++) {
@@ -9368,6 +9475,26 @@ static Atom *shell_plain_commands(Arena *a, Atom *head, Atom **args, uint32_t na
     result = shell_commands_atom(a, &commands);
     shell_command_vec_free(&commands);
     shell_text_vec_free(&argv);
+    return result;
+}
+
+static Atom *shell_shlex_join(Arena *a, Atom *head, Atom **args,
+                              uint32_t nargs) {
+    CettaStringBuf out;
+    Atom *result;
+
+    if (nargs != 1 || !library_expr_of_texts(args[0])) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected expression of text");
+    }
+
+    cetta_sb_init(&out);
+    for (uint32_t i = 0; i < args[0]->expr.len; i++) {
+        if (i > 0) cetta_sb_append(&out, " ");
+        shell_shlex_quote_word(&out, library_text_arg(args[0]->expr.elems[i]));
+    }
+    result = atom_string(a, out.buf ? out.buf : "");
+    cetta_sb_free(&out);
     return result;
 }
 
@@ -9406,6 +9533,9 @@ static Atom *cetta_library_dispatch_shell(Arena *a, Atom *head,
     }
     if (head_id == g_builtin_syms.lib_shell_single_command_prefix) {
         return shell_single_command_prefix(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_shell_shlex_join) {
+        return shell_shlex_join(a, head, args, nargs);
     }
     return NULL;
 }

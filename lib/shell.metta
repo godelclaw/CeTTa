@@ -10,3 +10,8 @@
    (function
      (case (__cetta_lib_shell_single_command_prefix $shell $flag $script)
        (($result (return $result))))))
+
+(= (shell-shlex-join $words)
+   (function
+     (case (__cetta_lib_shell_shlex_join $words)
+       (($result (return $result))))))
