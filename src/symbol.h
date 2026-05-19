@@ -227,6 +227,10 @@ typedef struct {
     X(lib_fs_read_text, "__cetta_lib_fs_read_text") \
     X(lib_fs_write_text, "__cetta_lib_fs_write_text") \
     X(lib_fs_append_text, "__cetta_lib_fs_append_text") \
+    X(lib_fs_create_dir_all, "__cetta_lib_fs_create_dir_all") \
+    X(lib_fs_rename, "__cetta_lib_fs_rename") \
+    X(lib_fs_remove_file, "__cetta_lib_fs_remove_file") \
+    X(lib_fs_modified_unix_secs, "__cetta_lib_fs_modified_unix_secs") \
     X(lib_fs_read_lines, "__cetta_lib_fs_read_lines") \
     X(lib_fs_read_dir_entries, "__cetta_lib_fs_read_dir_entries") \
     X(lib_fs_path_kind, "__cetta_lib_fs_path_kind") \
@@ -256,6 +260,7 @@ typedef struct {
     X(lib_process_create_shell_env, "__cetta_lib_process_create_shell_env") \
     X(lib_process_create_shell_env_no_thread, "__cetta_lib_process_create_shell_env_no_thread") \
     X(lib_process_default_shell, "__cetta_lib_process_default_shell") \
+    X(lib_process_shell_for_type, "__cetta_lib_process_shell_for_type") \
     X(lib_process_shell_from_model_provided_path, "__cetta_lib_process_shell_from_model_provided_path") \
     X(lib_process_shell_argv, "__cetta_lib_process_shell_argv") \
     X(lib_json_parse, "__cetta_lib_json_parse") \

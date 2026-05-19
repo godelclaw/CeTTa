@@ -4780,6 +4780,32 @@ static Atom *process_default_shell(Arena *a,
     return process_shell_atom(a, &shell);
 }
 
+static Atom *process_shell_for_type(Arena *a,
+                                    Atom *head,
+                                    Atom **args,
+                                    uint32_t nargs) {
+    const char *type_text;
+    ProcessShellType type;
+    ProcessShell shell;
+    char path[PATH_MAX];
+    char errbuf[160];
+
+    if (nargs != 1 ||
+        !(type_text = library_text_arg(args[0])) ||
+        !process_parse_shell_type(type_text, &type)) {
+        return library_signature_error(a, head, args, nargs, "expected shell type");
+    }
+
+    if (!process_shell_path_for_type(type, NULL, path, sizeof(path))) {
+        snprintf(errbuf, sizeof(errbuf), "No available shell for %s", type_text);
+        return atom_error(a, library_call_expr(a, head, args, nargs), atom_string(a, errbuf));
+    }
+
+    shell.type = type;
+    shell.path = path;
+    return process_shell_atom(a, &shell);
+}
+
 static Atom *process_shell_from_model_provided_path(Arena *a,
                                                     Atom *head,
                                                     Atom **args,
@@ -4877,6 +4903,9 @@ static Atom *cetta_library_dispatch_process(Arena *a, Atom *head,
     }
     if (head_id == g_builtin_syms.lib_process_default_shell) {
         return process_default_shell(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_shell_for_type) {
+        return process_shell_for_type(a, head, args, nargs);
     }
     if (head_id == g_builtin_syms.lib_process_shell_from_model_provided_path) {
         return process_shell_from_model_provided_path(a, head, args, nargs);
@@ -8204,6 +8233,65 @@ static Atom *fs_append_text(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     return fs_write_like(a, head, args, nargs, true);
 }
 
+static Atom *fs_create_dir_all(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *path;
+    int saved_errno;
+    char errbuf[160];
+    if (nargs != 1 || !(path = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected directory path");
+    }
+    errno = 0;
+    if (!ensure_directory_path(path)) {
+        saved_errno = errno;
+        snprintf(errbuf, sizeof(errbuf), "cannot create directory: %s",
+                 saved_errno ? strerror(saved_errno) : "path too long or not a directory");
+        return atom_error(a, library_call_expr(a, head, args, nargs), atom_string(a, errbuf));
+    }
+    return atom_unit(a);
+}
+
+static Atom *fs_rename(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *from;
+    const char *to;
+    char errbuf[160];
+    if (nargs != 2 || !(from = library_text_arg(args[0])) ||
+        !(to = library_text_arg(args[1]))) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected source and destination paths");
+    }
+    if (rename(from, to) != 0) {
+        snprintf(errbuf, sizeof(errbuf), "cannot rename file: %s", strerror(errno));
+        return atom_error(a, library_call_expr(a, head, args, nargs), atom_string(a, errbuf));
+    }
+    return atom_unit(a);
+}
+
+static Atom *fs_remove_file(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *path;
+    char errbuf[160];
+    if (nargs != 1 || !(path = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected filename");
+    }
+    if (unlink(path) != 0) {
+        snprintf(errbuf, sizeof(errbuf), "cannot remove file: %s", strerror(errno));
+        return atom_error(a, library_call_expr(a, head, args, nargs), atom_string(a, errbuf));
+    }
+    return atom_unit(a);
+}
+
+static Atom *fs_modified_unix_secs(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *path;
+    struct stat st;
+    if (nargs != 1 || !(path = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected filename");
+    }
+    if (stat(path, &st) != 0) {
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, strerror(errno)));
+    }
+    return atom_int(a, (int64_t)st.st_mtime);
+}
+
 typedef struct {
     char *name;
     const char *kind;
@@ -8447,6 +8535,18 @@ static Atom *cetta_library_dispatch_fs(Arena *a, Atom *head,
     }
     if (head_id == g_builtin_syms.lib_fs_append_text) {
         return fs_append_text(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_fs_create_dir_all) {
+        return fs_create_dir_all(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_fs_rename) {
+        return fs_rename(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_fs_remove_file) {
+        return fs_remove_file(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_fs_modified_unix_secs) {
+        return fs_modified_unix_secs(a, head, args, nargs);
     }
     if (head_id == g_builtin_syms.lib_fs_read_lines) {
         return fs_read_lines(a, head, args, nargs);

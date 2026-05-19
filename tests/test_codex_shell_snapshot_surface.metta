@@ -1,9 +1,23 @@
 !(register-module! ../codex)
+!(import! &self fs)
+!(import! &self process)
 !(import! &self str)
 !(import! &self codex:shell_snapshot)
 
 (= (test:shell-snapshot-session-id)
    "019cf82b-6a62-7700-bbbd-46909794ef89")
+
+(= (test:shell-snapshot-codex-home)
+   "/home/zarclaw/repos/CeTTa/runtime/codex-shell-snapshot")
+
+(= (test:shell-snapshot-cwd)
+   "/home/zarclaw/repos/CeTTa")
+
+(= (test:shell-snapshot-final-path)
+   "/home/zarclaw/repos/CeTTa/runtime/codex-shell-snapshot/shell_snapshots/019cf82b-6a62-7700-bbbd-46909794ef89.42.sh")
+
+(= (test:shell-snapshot-temp-path)
+   "/home/zarclaw/repos/CeTTa/runtime/codex-shell-snapshot/shell_snapshots/019cf82b-6a62-7700-bbbd-46909794ef89.tmp-42")
 
 !(assertEqualToResult
   (codex:shell-snapshot-dir)
@@ -12,6 +26,14 @@
 !(assertEqualToResult
   (codex:shell-snapshot-timeout-secs)
   (10))
+
+!(assertEqualToResult
+  (codex:shell-snapshot-timeout-ms)
+  (10000))
+
+!(assertEqualToResult
+  (codex:shell-snapshot-max-output-bytes)
+  (10485760))
 
 !(assertEqualToResult
   (codex:shell-snapshot-retention-secs)
@@ -36,6 +58,20 @@
 !(assertEqualToResult
   (codex:is-shell-snapshot-write-supported (codex:shell-type-powershell))
   (False))
+
+!(assertEqualToResult
+  (codex:shell-snapshot-path-plan
+    (test:shell-snapshot-codex-home)
+    (test:shell-snapshot-session-id)
+    42
+    (codex:shell-type-bash))
+  ((CodexShellSnapshotPaths
+     "/home/zarclaw/repos/CeTTa/runtime/codex-shell-snapshot/shell_snapshots/019cf82b-6a62-7700-bbbd-46909794ef89.42.sh"
+     "/home/zarclaw/repos/CeTTa/runtime/codex-shell-snapshot/shell_snapshots/019cf82b-6a62-7700-bbbd-46909794ef89.tmp-42")))
+
+!(assertEqualToResult
+  (codex:shell-snapshot-validation-script "/tmp/snapshot.sh")
+  ("set -e; . \"/tmp/snapshot.sh\""))
 
 !(assertEqualToResult
   (codex:shell-snapshot-result-value
@@ -121,3 +157,53 @@
 !(assertEqualToResult
   (codex:shell-snapshot-script (codex:shell-type-cmd))
   (CodexAbsent))
+
+!(assertEqualToResult
+  (codex:shell-snapshot-result-error
+    (codex:write-shell-snapshot
+      (codex:shell-type-powershell)
+      "/tmp/unused.ps1"
+      (test:shell-snapshot-cwd)))
+  ("Shell snapshot not supported yet for PowerShell"))
+
+!(assertEqualToResult
+  (process-result-exit-code
+    (process-run-shell
+      "rm -rf /home/zarclaw/repos/CeTTa/runtime/codex-shell-snapshot"))
+  (0))
+
+!(assertEqualToResult
+  (codex:shell-snapshot-result-value
+    (codex:try-new-shell-snapshot-with-nonce
+      (test:shell-snapshot-codex-home)
+      (test:shell-snapshot-session-id)
+      42
+      (test:shell-snapshot-cwd)
+      (codex:shell-type-bash)))
+  ((CodexShellSnapshot
+     "/home/zarclaw/repos/CeTTa/runtime/codex-shell-snapshot/shell_snapshots/019cf82b-6a62-7700-bbbd-46909794ef89.42.sh"
+     "/home/zarclaw/repos/CeTTa")))
+
+!(assertEqualToResult
+  (fs-exists? (test:shell-snapshot-final-path))
+  (True))
+
+!(assertEqualToResult
+  (fs-exists? (test:shell-snapshot-temp-path))
+  (False))
+
+!(assertEqualToResult
+  (codex:shell-snapshot-result-value
+    (codex:validate-shell-snapshot
+      (codex:shell-type-bash)
+      (test:shell-snapshot-final-path)
+      (test:shell-snapshot-cwd)))
+  (()))
+
+!(assertEqual
+  (case (str-find
+          (fs-read-text (test:shell-snapshot-final-path))
+          "# Snapshot file")
+    ((Empty False)
+     ($offset True)))
+  True)

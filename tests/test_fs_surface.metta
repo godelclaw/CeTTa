@@ -9,6 +9,36 @@
 !(assertEqual (fs-read-text "runtime/test_fs_surface_output.txt") "alpha\nbeta")
 !(assertEqual (fs-read-lines "runtime/test_fs_surface_output.txt") ("alpha" "beta"))
 
+!(assertEqual
+  (fs-create-dir-all "runtime/test-fs-native/sub")
+  ())
+
+!(assertEqual
+  (fs-write-text "runtime/test-fs-native/sub/source.txt" "native")
+  ())
+
+!(assertEqual
+  (fs-rename
+    "runtime/test-fs-native/sub/source.txt"
+    "runtime/test-fs-native/sub/renamed.txt")
+  ())
+
+!(assertEqual
+  (fs-read-text "runtime/test-fs-native/sub/renamed.txt")
+  "native")
+
+!(assertEqual
+  (> (fs-modified-unix-secs "runtime/test-fs-native/sub/renamed.txt") 0)
+  True)
+
+!(assertEqual
+  (fs-remove-file "runtime/test-fs-native/sub/renamed.txt")
+  ())
+
+!(assertEqual
+  (fs-exists? "runtime/test-fs-native/sub/renamed.txt")
+  False)
+
 !(assertEqualToResult
   (process-result-exit-code
     (process-run-shell

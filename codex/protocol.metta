@@ -2294,29 +2294,35 @@
 (= (codex:writable-root-blocks-path $path $read-only-subpaths)
    (codex:writable-root-blocks-path-loop
      $path
-     (eval $read-only-subpaths)
+     $read-only-subpaths
      False))
 
 (= (codex:writable-root-blocks-path-loop $path $read-only-subpaths $blocked)
-   (let $resolved-blocked (eval $blocked)
-     (if $resolved-blocked
-         True
-         (if (== $read-only-subpaths ())
-             False
-             (let $head (list:first $read-only-subpaths)
-               (let $tail (list:rest $read-only-subpaths)
-                 (codex:writable-root-blocks-path-loop
-                   $path
-                   $tail
-                   (codex:path-starts-with-path $path $head))))))))
+   (if $blocked
+       True
+       (if (== $read-only-subpaths ())
+           False
+           (let $head (list:first $read-only-subpaths)
+             (let $tail (list:rest $read-only-subpaths)
+               (codex:writable-root-blocks-path-loop
+                 $path
+                 $tail
+                 (codex:path-starts-with-path $path $head)))))))
+
+(= (codex:writable-root-is-path-writable
+      (codex:writable-root $root $read-only-subpaths)
+      $path)
+   (codex:writable-root-is-path-writable
+     (CodexWritableRoot $root $read-only-subpaths)
+     $path))
 
 (= (codex:writable-root-is-path-writable
       (CodexWritableRoot $root $read-only-subpaths)
       $path)
-   (let $within-root (eval (codex:path-starts-with-path $path $root))
+   (let $within-root (codex:path-starts-with-path $path $root)
      (if $within-root
          (let $blocked
-           (eval (codex:writable-root-blocks-path $path $read-only-subpaths))
+           (codex:writable-root-blocks-path $path $read-only-subpaths)
            (if $blocked
                False
                True))
@@ -4391,20 +4397,57 @@
      ((JsonPair "Err" (JsonString $message)))))
 
 (= (codex:mcp-auth-status-json
+      (codex:mcp-auth-status-unsupported))
+   (JsonString "unsupported"))
+
+(= (codex:mcp-auth-status-json
       (CodexMcpAuthStatusUnsupported))
    (JsonString "unsupported"))
+
+(= (codex:mcp-auth-status-json
+      (codex:mcp-auth-status-not-logged-in))
+   (JsonString "not_logged_in"))
 
 (= (codex:mcp-auth-status-json
       (CodexMcpAuthStatusNotLoggedIn))
    (JsonString "not_logged_in"))
 
 (= (codex:mcp-auth-status-json
+      (codex:mcp-auth-status-bearer-token))
+   (JsonString "bearer_token"))
+
+(= (codex:mcp-auth-status-json
       (CodexMcpAuthStatusBearerToken))
    (JsonString "bearer_token"))
 
 (= (codex:mcp-auth-status-json
+      (codex:mcp-auth-status-oauth))
+   (JsonString "oauth"))
+
+(= (codex:mcp-auth-status-json
       (CodexMcpAuthStatusOAuth))
    (JsonString "oauth"))
+
+(= (codex:mcp-tool-json
+      (codex:mcp-tool
+        $name
+        $title
+        $description
+        $input-schema
+        $output-schema
+        $annotations
+        $icons
+        $meta))
+   (codex:mcp-tool-json
+     (CodexMcpTool
+       $name
+       $title
+       $description
+       $input-schema
+       $output-schema
+       $annotations
+       $icons
+       $meta)))
 
 (= (codex:mcp-tool-json
       (CodexMcpTool
@@ -4416,44 +4459,155 @@
         $annotations
         $icons
         $meta))
-   (let $pairs-1
-     ((JsonPair "name" (JsonString $name)))
-     (let $pairs-2
-       (codex:append-optional-json-string-pair
-         $pairs-1
-         "title"
-         $title)
-       (let $pairs-3
-         (codex:append-optional-json-string-pair
-           $pairs-2
-           "description"
-           $description)
-         (let $pairs-4
-           (codex:protocol-append-json-pair
-             $pairs-3
-             "inputSchema"
-             $input-schema)
-           (let $pairs-5
-             (codex:append-optional-json-value-pair
-               $pairs-4
-               "outputSchema"
-               $output-schema)
-             (let $pairs-6
-               (codex:append-optional-json-value-pair
-                 $pairs-5
-                 "annotations"
-                 $annotations)
-               (let $pairs-7
-                 (codex:append-optional-json-value-pair
-                   $pairs-6
-                   "icons"
-                   $icons)
-                 (JsonObject
-                   (codex:materialize-json-pairs
-                     (codex:append-optional-json-value-pair
-                       $pairs-7
-                       "_meta"
-                       $meta)))))))))))
+   (case
+     (codex:mcp-tool-json-pairs
+       $name
+       $title
+       $description
+       $input-schema
+       $output-schema
+       $annotations
+       $icons
+       $meta)
+     (($pairs-final (JsonObject $pairs-final)))))
+
+(= (codex:mcp-tool-json-pairs
+      $name
+      $title
+      $description
+      $input-schema
+      $output-schema
+      $annotations
+      $icons
+      $meta)
+   (case
+     (codex:append-optional-json-string-pair
+       ((JsonPair "name" (JsonString $name)))
+       "title"
+       $title)
+     (($pairs-title
+       (codex:mcp-tool-json-pairs-after-title
+         $pairs-title
+         $description
+         $input-schema
+         $output-schema
+         $annotations
+         $icons
+         $meta)))))
+
+(= (codex:mcp-tool-json-pairs-after-title
+      $pairs
+      $description
+      $input-schema
+      $output-schema
+      $annotations
+      $icons
+      $meta)
+   (case
+     (codex:append-optional-json-string-pair
+       $pairs
+       "description"
+       $description)
+     (($pairs-description
+       (codex:mcp-tool-json-pairs-after-description
+         $pairs-description
+         $input-schema
+         $output-schema
+         $annotations
+         $icons
+         $meta)))))
+
+(= (codex:mcp-tool-json-pairs-after-description
+      $pairs
+      $input-schema
+      $output-schema
+      $annotations
+      $icons
+      $meta)
+   (case
+     (codex:protocol-append-json-pair
+       $pairs
+       "inputSchema"
+       $input-schema)
+     (($pairs-input-schema
+       (codex:mcp-tool-json-pairs-after-input-schema
+         $pairs-input-schema
+         $output-schema
+         $annotations
+         $icons
+         $meta)))))
+
+(= (codex:mcp-tool-json-pairs-after-input-schema
+      $pairs
+      $output-schema
+      $annotations
+      $icons
+      $meta)
+   (case
+     (codex:append-optional-json-value-pair
+       $pairs
+       "outputSchema"
+       $output-schema)
+     (($pairs-output-schema
+       (codex:mcp-tool-json-pairs-after-output-schema
+         $pairs-output-schema
+         $annotations
+         $icons
+         $meta)))))
+
+(= (codex:mcp-tool-json-pairs-after-output-schema
+      $pairs
+      $annotations
+      $icons
+      $meta)
+   (case
+     (codex:append-optional-json-value-pair
+       $pairs
+       "annotations"
+       $annotations)
+     (($pairs-annotations
+       (codex:mcp-tool-json-pairs-after-annotations
+         $pairs-annotations
+         $icons
+         $meta)))))
+
+(= (codex:mcp-tool-json-pairs-after-annotations
+      $pairs
+      $icons
+      $meta)
+   (case
+     (codex:append-optional-json-value-pair
+       $pairs
+       "icons"
+       $icons)
+     (($pairs-icons
+       (codex:append-optional-json-value-pair
+         $pairs-icons
+         "_meta"
+         $meta)))))
+
+(= (codex:mcp-resource-json
+      (codex:mcp-resource
+        $annotations
+        $description
+        $mime-type
+        $name
+        $size
+        $title
+        $uri
+        $icons
+        $meta))
+   (codex:mcp-resource-json
+     (CodexMcpResource
+       $annotations
+       $description
+       $mime-type
+       $name
+       $size
+       $title
+       $uri
+       $icons
+       $meta)))
 
 (= (codex:mcp-resource-json
       (CodexMcpResource
@@ -4466,56 +4620,205 @@
         $uri
         $icons
         $meta))
-   (let $pairs-1
-     ()
-     (let $pairs-2
+   (case
+     (codex:mcp-resource-json-pairs
+       $annotations
+       $description
+       $mime-type
+       $name
+       $size
+       $title
+       $uri
+       $icons
+       $meta)
+     (($pairs-final (JsonObject $pairs-final)))))
+
+(= (codex:mcp-resource-json-pairs
+      $annotations
+      $description
+      $mime-type
+      $name
+      $size
+      $title
+      $uri
+      $icons
+      $meta)
+   (case
+     (codex:append-optional-json-value-pair
+       ()
+       "annotations"
+       $annotations)
+     (($pairs-annotations
+       (codex:mcp-resource-json-pairs-after-annotations
+         $pairs-annotations
+         $description
+         $mime-type
+         $name
+         $size
+         $title
+         $uri
+         $icons
+         $meta)))))
+
+(= (codex:mcp-resource-json-pairs-after-annotations
+      $pairs
+      $description
+      $mime-type
+      $name
+      $size
+      $title
+      $uri
+      $icons
+      $meta)
+   (case
+     (codex:append-optional-json-string-pair
+       $pairs
+       "description"
+       $description)
+     (($pairs-description
+       (codex:mcp-resource-json-pairs-after-description
+         $pairs-description
+         $mime-type
+         $name
+         $size
+         $title
+         $uri
+         $icons
+         $meta)))))
+
+(= (codex:mcp-resource-json-pairs-after-description
+      $pairs
+      $mime-type
+      $name
+      $size
+      $title
+      $uri
+      $icons
+      $meta)
+   (case
+     (codex:append-optional-json-string-pair
+       $pairs
+       "mimeType"
+       $mime-type)
+     (($pairs-mime-type
+       (codex:mcp-resource-json-pairs-after-mime-type
+         $pairs-mime-type
+         $name
+         $size
+         $title
+         $uri
+         $icons
+         $meta)))))
+
+(= (codex:mcp-resource-json-pairs-after-mime-type
+      $pairs
+      $name
+      $size
+      $title
+      $uri
+      $icons
+      $meta)
+   (case
+     (codex:protocol-append-json-pair
+       $pairs
+       "name"
+       (JsonString $name))
+     (($pairs-name
+       (codex:mcp-resource-json-pairs-after-name
+         $pairs-name
+         $size
+         $title
+         $uri
+         $icons
+         $meta)))))
+
+(= (codex:mcp-resource-json-pairs-after-name
+      $pairs
+      $size
+      $title
+      $uri
+      $icons
+      $meta)
+   (case
+     (codex:append-optional-json-value-pair
+       $pairs
+       "size"
+       (if (== $size CodexAbsent)
+           CodexAbsent
+           (JsonNumber $size)))
+     (($pairs-size
+       (codex:mcp-resource-json-pairs-after-size
+         $pairs-size
+         $title
+         $uri
+         $icons
+         $meta)))))
+
+(= (codex:mcp-resource-json-pairs-after-size
+      $pairs
+      $title
+      $uri
+      $icons
+      $meta)
+   (case
+     (codex:append-optional-json-string-pair
+       $pairs
+       "title"
+       $title)
+     (($pairs-title
+       (codex:mcp-resource-json-pairs-after-title
+         $pairs-title
+         $uri
+         $icons
+         $meta)))))
+
+(= (codex:mcp-resource-json-pairs-after-title
+      $pairs
+      $uri
+      $icons
+      $meta)
+   (case
+     (codex:protocol-append-json-pair
+       $pairs
+       "uri"
+       (JsonString $uri))
+     (($pairs-uri
+       (codex:mcp-resource-json-pairs-after-uri
+         $pairs-uri
+         $icons
+         $meta)))))
+
+(= (codex:mcp-resource-json-pairs-after-uri
+      $pairs
+      $icons
+      $meta)
+   (case
+     (codex:append-optional-json-value-pair
+       $pairs
+       "icons"
+       $icons)
+     (($pairs-icons
        (codex:append-optional-json-value-pair
-         $pairs-1
-         "annotations"
-         $annotations)
-       (let $pairs-3
-         (codex:append-optional-json-string-pair
-           $pairs-2
-           "description"
-           $description)
-         (let $pairs-4
-           (codex:append-optional-json-string-pair
-             $pairs-3
-             "mimeType"
-             $mime-type)
-           (let $pairs-5
-             (codex:protocol-append-json-pair
-               $pairs-4
-               "name"
-               (JsonString $name))
-             (let $pairs-6
-               (codex:append-optional-json-value-pair
-                 $pairs-5
-                 "size"
-                 (if (== $size CodexAbsent)
-                     CodexAbsent
-                     (JsonNumber $size)))
-               (let $pairs-7
-                 (codex:append-optional-json-string-pair
-                   $pairs-6
-                   "title"
-                   $title)
-                 (let $pairs-8
-                   (codex:protocol-append-json-pair
-                     $pairs-7
-                     "uri"
-                     (JsonString $uri))
-                   (let $pairs-9
-                     (codex:append-optional-json-value-pair
-                       $pairs-8
-                       "icons"
-                       $icons)
-                     (JsonObject
-                       (codex:materialize-json-pairs
-                         (codex:append-optional-json-value-pair
-                           $pairs-9
-                           "_meta"
-                           $meta)))))))))))))
+         $pairs-icons
+         "_meta"
+         $meta)))))
+
+(= (codex:mcp-resource-template-json
+      (codex:mcp-resource-template
+        $annotations
+        $uri-template
+        $name
+        $title
+        $description
+        $mime-type))
+   (codex:mcp-resource-template-json
+     (CodexMcpResourceTemplate
+       $annotations
+       $uri-template
+       $name
+       $title
+       $description
+       $mime-type)))
 
 (= (codex:mcp-resource-template-json
       (CodexMcpResourceTemplate
@@ -4525,42 +4828,114 @@
         $title
         $description
         $mime-type))
-   (let $pairs-1
-     ()
-     (let $pairs-2
-       (codex:append-optional-json-value-pair
-         $pairs-1
-         "annotations"
-         $annotations)
-       (let $pairs-3
-         (codex:protocol-append-json-pair
-           $pairs-2
-           "uriTemplate"
-           (JsonString $uri-template))
-         (let $pairs-4
-           (codex:protocol-append-json-pair
-             $pairs-3
-             "name"
-             (JsonString $name))
-           (let $pairs-5
-             (codex:append-optional-json-string-pair
-               $pairs-4
-               "title"
-               $title)
-             (let $pairs-6
-               (codex:append-optional-json-string-pair
-                 $pairs-5
-                 "description"
-                 $description)
-               (JsonObject
-                 (codex:materialize-json-pairs
-                   (codex:append-optional-json-string-pair
-                     $pairs-6
-                     "mimeType"
-                     $mime-type))))))))))
+   (case
+     (codex:mcp-resource-template-json-pairs
+       $annotations
+       $uri-template
+       $name
+       $title
+       $description
+       $mime-type)
+     (($pairs-final (JsonObject $pairs-final)))))
+
+(= (codex:mcp-resource-template-json-pairs
+      $annotations
+      $uri-template
+      $name
+      $title
+      $description
+      $mime-type)
+   (case
+     (codex:append-optional-json-value-pair
+       ()
+       "annotations"
+       $annotations)
+     (($pairs-annotations
+       (codex:mcp-resource-template-json-pairs-after-annotations
+         $pairs-annotations
+         $uri-template
+         $name
+         $title
+         $description
+         $mime-type)))))
+
+(= (codex:mcp-resource-template-json-pairs-after-annotations
+      $pairs
+      $uri-template
+      $name
+      $title
+      $description
+      $mime-type)
+   (case
+     (codex:protocol-append-json-pair
+       $pairs
+       "uriTemplate"
+       (JsonString $uri-template))
+     (($pairs-uri-template
+       (codex:mcp-resource-template-json-pairs-after-uri-template
+         $pairs-uri-template
+         $name
+         $title
+         $description
+         $mime-type)))))
+
+(= (codex:mcp-resource-template-json-pairs-after-uri-template
+      $pairs
+      $name
+      $title
+      $description
+      $mime-type)
+   (case
+     (codex:protocol-append-json-pair
+       $pairs
+       "name"
+       (JsonString $name))
+     (($pairs-name
+       (codex:mcp-resource-template-json-pairs-after-name
+         $pairs-name
+         $title
+         $description
+         $mime-type)))))
+
+(= (codex:mcp-resource-template-json-pairs-after-name
+      $pairs
+      $title
+      $description
+      $mime-type)
+   (case
+     (codex:append-optional-json-string-pair
+       $pairs
+       "title"
+       $title)
+     (($pairs-title
+       (codex:mcp-resource-template-json-pairs-after-title
+         $pairs-title
+         $description
+         $mime-type)))))
+
+(= (codex:mcp-resource-template-json-pairs-after-title
+      $pairs
+      $description
+      $mime-type)
+   (case
+     (codex:append-optional-json-string-pair
+       $pairs
+       "description"
+       $description)
+     (($pairs-description
+       (codex:append-optional-json-string-pair
+         $pairs-description
+         "mimeType"
+         $mime-type)))))
+
+(= (codex:mcp-map-entry-key (codex:mcp-map-entry $key $value))
+   $key)
 
 (= (codex:mcp-map-entry-key (CodexMcpMapEntry $key $value))
    $key)
+
+(= (codex:mcp-map-entry-value (codex:mcp-map-entry $key $value))
+   $value)
 
 (= (codex:mcp-map-entry-value (CodexMcpMapEntry $key $value))
    $value)
@@ -5382,6 +5757,48 @@
       (CodexNetworkPolicyRuleActionDeny))
    (JsonString "deny"))
 
+(= (codex:normalize-network-policy-rule-action
+      (codex:network-policy-rule-action-allow))
+   (CodexNetworkPolicyRuleActionAllow))
+
+(= (codex:normalize-network-policy-rule-action
+      (CodexNetworkPolicyRuleActionAllow))
+   (CodexNetworkPolicyRuleActionAllow))
+
+(= (codex:normalize-network-policy-rule-action
+      (codex:network-policy-rule-action-deny))
+   (CodexNetworkPolicyRuleActionDeny))
+
+(= (codex:normalize-network-policy-rule-action
+      (CodexNetworkPolicyRuleActionDeny))
+   (CodexNetworkPolicyRuleActionDeny))
+
+(= (codex:normalize-network-policy-amendment
+      (codex:network-policy-amendment $action $host))
+   (CodexNetworkPolicyAmendment
+     (codex:normalize-network-policy-rule-action $action)
+     $host))
+
+(= (codex:normalize-network-policy-amendment
+      (CodexNetworkPolicyAmendment $action $host))
+   (CodexNetworkPolicyAmendment
+     (codex:normalize-network-policy-rule-action $action)
+     $host))
+
+(= (codex:network-policy-rule-action-json
+      (codex:network-policy-rule-action-allow))
+   (JsonString "allow"))
+
+(= (codex:network-policy-rule-action-json
+      (codex:network-policy-rule-action-deny))
+   (JsonString "deny"))
+
+(= (codex:network-policy-amendment-json
+      (codex:network-policy-amendment $action $host))
+   (codex:network-policy-amendment-json
+     (codex:normalize-network-policy-amendment
+       (codex:network-policy-amendment $action $host))))
+
 (= (codex:network-policy-amendment-json
       (CodexNetworkPolicyAmendment $action $host))
    (JsonObject
@@ -5408,7 +5825,19 @@
    True)
 
 (= (codex:network-policy-amendment-is-allow
+      (codex:network-policy-amendment
+        (codex:network-policy-rule-action-allow)
+        $host))
+   True)
+
+(= (codex:network-policy-amendment-is-allow
       (CodexNetworkPolicyAmendment (CodexNetworkPolicyRuleActionDeny) $host))
+   False)
+
+(= (codex:network-policy-amendment-is-allow
+      (codex:network-policy-amendment
+        (codex:network-policy-rule-action-deny)
+        $host))
    False)
 
 (= (codex:first-allow-network-policy-amendment $amendments)
@@ -5416,7 +5845,7 @@
        CodexAbsent
        (let $head (list:first $amendments)
          (if (codex:network-policy-amendment-is-allow $head)
-             $head
+             (codex:normalize-network-policy-amendment $head)
              (codex:first-allow-network-policy-amendment
                (list:rest $amendments))))))
 
@@ -5538,53 +5967,58 @@
    (JsonString "abort"))
 
 (= (codex:mcp-request-id-json
+      (codex:mcp-request-id-string $value))
+   (JsonString $value))
+
+(= (codex:mcp-request-id-json
       (CodexMcpRequestIdString $value))
    (JsonString $value))
+
+(= (codex:mcp-request-id-json
+      (codex:mcp-request-id-integer $value))
+   (JsonNumber $value))
 
 (= (codex:mcp-request-id-json
       (CodexMcpRequestIdInteger $value))
    (JsonNumber $value))
 
 (= (codex:elicitation-request-json
+      (codex:elicitation-request-form $meta $message $requested-schema))
+   (codex:elicitation-request-json
+     (CodexElicitationRequestForm $meta $message $requested-schema)))
+
+(= (codex:elicitation-request-json
       (CodexElicitationRequestForm $meta $message $requested-schema))
-   (let $pairs-1
-     ((JsonPair "mode" (JsonString "form")))
-     (let $pairs-2
-       (codex:append-optional-json-value-pair
-         $pairs-1
-         "_meta"
-         $meta)
+   (if (== $meta CodexAbsent)
        (JsonObject
-         (codex:materialize-json-pairs
-           (codex:protocol-append-json-pair
-             (codex:protocol-append-json-pair
-               $pairs-2
-               "message"
-               (JsonString $message))
-             "requested_schema"
-             $requested-schema))))))
+         ((JsonPair "mode" (JsonString "form"))
+          (JsonPair "message" (JsonString $message))
+          (JsonPair "requested_schema" $requested-schema)))
+       (JsonObject
+         ((JsonPair "mode" (JsonString "form"))
+          (JsonPair "_meta" $meta)
+          (JsonPair "message" (JsonString $message))
+          (JsonPair "requested_schema" $requested-schema)))))
+
+(= (codex:elicitation-request-json
+      (codex:elicitation-request-url $meta $message $url $elicitation-id))
+   (codex:elicitation-request-json
+     (CodexElicitationRequestUrl $meta $message $url $elicitation-id)))
 
 (= (codex:elicitation-request-json
       (CodexElicitationRequestUrl $meta $message $url $elicitation-id))
-   (let $pairs-1
-     ((JsonPair "mode" (JsonString "url")))
-     (let $pairs-2
-       (codex:append-optional-json-value-pair
-         $pairs-1
-         "_meta"
-         $meta)
+   (if (== $meta CodexAbsent)
        (JsonObject
-         (codex:materialize-json-pairs
-           (codex:protocol-append-json-pair
-             (codex:protocol-append-json-pair
-               (codex:protocol-append-json-pair
-                 $pairs-2
-                 "message"
-                 (JsonString $message))
-               "url"
-               (JsonString $url))
-             "elicitation_id"
-             (JsonString $elicitation-id)))))))
+         ((JsonPair "mode" (JsonString "url"))
+          (JsonPair "message" (JsonString $message))
+          (JsonPair "url" (JsonString $url))
+          (JsonPair "elicitation_id" (JsonString $elicitation-id))))
+       (JsonObject
+         ((JsonPair "mode" (JsonString "url"))
+          (JsonPair "_meta" $meta)
+          (JsonPair "message" (JsonString $message))
+          (JsonPair "url" (JsonString $url))
+          (JsonPair "elicitation_id" (JsonString $elicitation-id))))))
 
 (= (codex:elicitation-request-event-json
       (CodexEventElicitationRequest
@@ -5592,25 +6026,20 @@
         $server-name
         $id
         $request))
-   (let $pairs-1
-     ((JsonPair "type" (JsonString "elicitation_request")))
-     (let $pairs-2
-       (codex:append-optional-json-string-pair
-         $pairs-1
-         "turn_id"
-         $turn-id)
-       (JsonObject
-         (codex:materialize-json-pairs
-           (codex:protocol-append-json-pair
-             (codex:protocol-append-json-pair
-               (codex:protocol-append-json-pair
-                 $pairs-2
-                 "server_name"
-                 (JsonString $server-name))
-               "id"
-               (codex:mcp-request-id-json $id))
-             "request"
-             (once (codex:elicitation-request-json $request))))))))
+   (let $id-json (once (codex:mcp-request-id-json $id))
+     (let $request-json (once (codex:elicitation-request-json $request))
+       (if (== $turn-id CodexAbsent)
+           (JsonObject
+             ((JsonPair "type" (JsonString "elicitation_request"))
+              (JsonPair "server_name" (JsonString $server-name))
+              (JsonPair "id" $id-json)
+              (JsonPair "request" $request-json)))
+           (JsonObject
+             ((JsonPair "type" (JsonString "elicitation_request"))
+              (JsonPair "turn_id" (JsonString $turn-id))
+              (JsonPair "server_name" (JsonString $server-name))
+              (JsonPair "id" $id-json)
+              (JsonPair "request" $request-json)))))))
 
 (= (codex:elicitation-action-json
       (CodexElicitationActionAccept))
@@ -5825,16 +6254,29 @@
    "abort")
 
 (= (codex:file-change-json
+      (codex:file-change-add $content))
+   (codex:file-change-json (CodexFileChangeAdd $content)))
+
+(= (codex:file-change-json
       (CodexFileChangeAdd $content))
    (JsonObject
      ((JsonPair "type" (JsonString "add"))
       (JsonPair "content" (JsonString $content)))))
 
 (= (codex:file-change-json
+      (codex:file-change-delete $content))
+   (codex:file-change-json (CodexFileChangeDelete $content)))
+
+(= (codex:file-change-json
       (CodexFileChangeDelete $content))
    (JsonObject
      ((JsonPair "type" (JsonString "delete"))
       (JsonPair "content" (JsonString $content)))))
+
+(= (codex:file-change-json
+      (codex:file-change-update $unified-diff $move-path))
+   (codex:file-change-json
+     (CodexFileChangeUpdate $unified-diff $move-path)))
 
 (= (codex:file-change-json
       (CodexFileChangeUpdate $unified-diff $move-path))
@@ -5854,8 +6296,16 @@
      (map-atom-strict $changes $item (codex:file-change-json $item))))
 
 (= (codex:file-change-map-entry-path
+      (codex:file-change-map-entry $path $change))
+   $path)
+
+(= (codex:file-change-map-entry-path
       (CodexFileChangeMapEntry $path $change))
    $path)
+
+(= (codex:file-change-map-entry-change
+      (codex:file-change-map-entry $path $change))
+   $change)
 
 (= (codex:file-change-map-entry-change
       (CodexFileChangeMapEntry $path $change))
@@ -8169,6 +8619,19 @@
       (JsonPair "duration" (codex:duration-json $duration)))))
 
 (= (codex:item-json
+      (codex:elicitation-request-event
+        $turn-id
+        $server-name
+        $id
+        $request))
+   (codex:elicitation-request-event-json
+     (CodexEventElicitationRequest
+       $turn-id
+       $server-name
+       $id
+       $request)))
+
+(= (codex:item-json
       (CodexEventElicitationRequest
         $turn-id
         $server-name
@@ -8188,21 +8651,48 @@
         $changes
         $reason
         $grant-root))
-   (let $pairs-1
-     ((JsonPair "type" (JsonString "apply_patch_approval_request"))
-      (JsonPair "call_id" (JsonString $call-id))
-      (JsonPair "turn_id" (JsonString $turn-id))
-      (JsonPair "changes" (codex:file-change-map-json $changes)))
-     (let $pairs-2
-       (codex:append-optional-json-string-pair
-         $pairs-1
-         "reason"
-         $reason)
-       (JsonObject
-         (codex:append-optional-json-string-pair
-           $pairs-2
-           "grant_root"
-           $grant-root)))))
+   (if (== $reason CodexAbsent)
+       (if (== $grant-root CodexAbsent)
+           (JsonObject
+             ((JsonPair "type" (JsonString "apply_patch_approval_request"))
+              (JsonPair "call_id" (JsonString $call-id))
+              (JsonPair "turn_id" (JsonString $turn-id))
+              (JsonPair "changes" (codex:file-change-map-json $changes))))
+           (JsonObject
+             ((JsonPair "type" (JsonString "apply_patch_approval_request"))
+              (JsonPair "call_id" (JsonString $call-id))
+              (JsonPair "turn_id" (JsonString $turn-id))
+              (JsonPair "changes" (codex:file-change-map-json $changes))
+              (JsonPair "grant_root" (JsonString $grant-root)))))
+       (if (== $grant-root CodexAbsent)
+           (JsonObject
+             ((JsonPair "type" (JsonString "apply_patch_approval_request"))
+              (JsonPair "call_id" (JsonString $call-id))
+              (JsonPair "turn_id" (JsonString $turn-id))
+              (JsonPair "changes" (codex:file-change-map-json $changes))
+              (JsonPair "reason" (JsonString $reason))))
+           (JsonObject
+             ((JsonPair "type" (JsonString "apply_patch_approval_request"))
+              (JsonPair "call_id" (JsonString $call-id))
+              (JsonPair "turn_id" (JsonString $turn-id))
+              (JsonPair "changes" (codex:file-change-map-json $changes))
+              (JsonPair "reason" (JsonString $reason))
+              (JsonPair "grant_root" (JsonString $grant-root)))))))
+
+(= (codex:item-json
+      (codex:apply-patch-approval-request-event
+        $call-id
+        $turn-id
+        $changes
+        $reason
+        $grant-root))
+   (codex:apply-patch-approval-request-event-json
+     (CodexEventApplyPatchApprovalRequest
+       $call-id
+       $turn-id
+       $changes
+       $reason
+       $grant-root)))
 
 (= (codex:item-json
       (CodexEventApplyPatchApprovalRequest
@@ -8345,6 +8835,23 @@
              $pairs-3
              "result"
              (codex:mcp-tool-call-result-json $result)))))))
+
+(= (codex:item-json
+      (codex:mcp-list-tools-response-event
+        $tools
+        $resources
+        $resource-templates
+        $auth-statuses))
+   (JsonObject
+     ((JsonPair "type" (JsonString "mcp_list_tools_response"))
+      (JsonPair "tools" (codex:mcp-tool-map-json $tools))
+      (JsonPair "resources" (codex:mcp-resource-map-json $resources))
+      (JsonPair
+        "resource_templates"
+        (codex:mcp-resource-template-map-json $resource-templates))
+      (JsonPair
+        "auth_statuses"
+        (codex:mcp-auth-status-map-json $auth-statuses)))))
 
 (= (codex:item-json
       (CodexEventMcpListToolsResponse

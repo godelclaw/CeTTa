@@ -59,6 +59,10 @@
   (("/bin/zsh" "-c" "printf hi")))
 
 !(assertEqualToResult
+  (process-shell-type (process-shell-for-type "Bash"))
+  ("bash"))
+
+!(assertEqualToResult
   (process-shell-argv (process-shell "powershell" "pwsh") "Write-Output hi" False)
   (("pwsh" "-NoProfile" "-Command" "Write-Output hi")))
 

@@ -13,6 +13,26 @@
      (case (__cetta_lib_fs_append_text $path $text)
        (($result (return $result))))))
 
+(= (fs-create-dir-all $path)
+   (function
+     (case (__cetta_lib_fs_create_dir_all $path)
+       (($result (return $result))))))
+
+(= (fs-rename $from $to)
+   (function
+     (case (__cetta_lib_fs_rename $from $to)
+       (($result (return $result))))))
+
+(= (fs-remove-file $path)
+   (function
+     (case (__cetta_lib_fs_remove_file $path)
+       (($result (return $result))))))
+
+(= (fs-modified-unix-secs $path)
+   (function
+     (case (__cetta_lib_fs_modified_unix_secs $path)
+       (($result (return $result))))))
+
 (= (fs-exists? $path)
    (function
      (case (__cetta_lib_fs_exists $path)

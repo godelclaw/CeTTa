@@ -1,4 +1,4 @@
-; Rust-faithful shell-snapshot pure helper slice.
+; Rust-faithful shell-snapshot helper slice.
 ;
 ; This ports the pure helper surface from:
 ; - openai-codex/codex-rs/core/src/shell_snapshot.rs
@@ -8,15 +8,25 @@
 ; - shell snapshot script templates for zsh, bash, sh, and PowerShell
 ; - snapshot-output preamble stripping
 ; - snapshot filename session-id parsing, including legacy generation suffixes
+; - snapshot path construction, runtime capture/write/validate/finalize helpers
 ;
 ; Required slice-local deviations from Rust, documented for audit:
-; - Rust creates, validates, renames, cleans up, and drops snapshot files through
-;   async tokio filesystem/process APIs. This CeTTa slice ports only the pure
-;   functions so later runtime work can call the same script/parser logic.
+; - Rust creates snapshots from async tokio tasks, sends them through a watch
+;   channel, records telemetry, spawns stale-file cleanup, and deletes the
+;   finalized file from Drop. This CeTTa slice exposes explicit synchronous
+;   helpers for the same capture/write/validate/rename sequence; the async
+;   task/channel/telemetry/drop lifecycle still belongs to a later runtime
+;   session slice.
+; - Rust's process capture does not impose a byte cap. The current CeTTa
+;   process primitive requires a cap, so this slice uses a 10 MiB cap at the
+;   eval boundary while preserving timeout/status/preamble behavior.
 ; - Rust returns anyhow::Result/String Option values. This slice exposes the
 ;   same visible success/error/absence behavior through explicit result
 ;   constructors and CodexAbsent.
 
+!(import! &self fs)
+!(import! &self path)
+!(import! &self process)
 !(import! &self str)
 
 (= (codex:shell-type-zsh)
@@ -39,6 +49,12 @@
 
 (= (codex:shell-snapshot-timeout-secs)
    10)
+
+(= (codex:shell-snapshot-timeout-ms)
+   10000)
+
+(= (codex:shell-snapshot-max-output-bytes)
+   10485760)
 
 (= (codex:shell-snapshot-retention-secs)
    259200)
@@ -64,6 +80,26 @@
 (= (codex:shell-snapshot-result-error (CodexShellSnapshotErr $message))
    $message)
 
+(= (codex:shell-snapshot $path $cwd)
+   (CodexShellSnapshot $path $cwd))
+
+(= (codex:shell-snapshot-path (CodexShellSnapshot $path $cwd))
+   $path)
+
+(= (codex:shell-snapshot-cwd (CodexShellSnapshot $path $cwd))
+   $cwd)
+
+(= (codex:shell-snapshot-paths $path $temp-path)
+   (CodexShellSnapshotPaths $path $temp-path))
+
+(= (codex:shell-snapshot-paths-path
+      (CodexShellSnapshotPaths $path $temp-path))
+   $path)
+
+(= (codex:shell-snapshot-paths-temp-path
+      (CodexShellSnapshotPaths $path $temp-path))
+   $temp-path)
+
 (= (codex:shell-snapshot-extension $shell-type)
    (if (== $shell-type (codex:shell-type-powershell))
        "ps1"
@@ -75,6 +111,40 @@
        (if (== $shell-type (codex:shell-type-cmd))
            False
            True)))
+
+(= (codex:shell-snapshot-directory-path $codex-home)
+   (path-join $codex-home (codex:shell-snapshot-dir)))
+
+(= (codex:shell-snapshot-final-file-name
+      $session-id
+      $nonce
+      $shell-type)
+   (format-args
+     "{}.{}.{}"
+     ($session-id $nonce (codex:shell-snapshot-extension $shell-type))))
+
+(= (codex:shell-snapshot-temp-file-name $session-id $nonce)
+   (format-args "{}.tmp-{}" ($session-id $nonce)))
+
+(= (codex:shell-snapshot-path-plan
+      $codex-home
+      $session-id
+      $nonce
+      $shell-type)
+   (let $snapshot-dir (codex:shell-snapshot-directory-path $codex-home)
+     (codex:shell-snapshot-paths
+       (path-join
+         $snapshot-dir
+         (codex:shell-snapshot-final-file-name
+           $session-id
+           $nonce
+           $shell-type))
+       (path-join
+         $snapshot-dir
+         (codex:shell-snapshot-temp-file-name $session-id $nonce)))))
+
+(= (codex:shell-snapshot-validation-script $snapshot-path)
+   (str-concat "set -e; . \"" (str-concat $snapshot-path "\"")))
 
 (= (codex:strip-shell-snapshot-preamble $snapshot)
    (let $marker (codex:shell-snapshot-preamble-marker)
@@ -297,3 +367,222 @@ $envVars | ForEach-Object {
                (if (== $shell-type (codex:shell-type-powershell))
                    (codex:powershell-snapshot-script)
                    CodexAbsent)))))
+
+(= (codex:normalize-shell-type "zsh")
+   (codex:shell-type-zsh))
+
+(= (codex:normalize-shell-type "Zsh")
+   (codex:shell-type-zsh))
+
+(= (codex:normalize-shell-type "bash")
+   (codex:shell-type-bash))
+
+(= (codex:normalize-shell-type "Bash")
+   (codex:shell-type-bash))
+
+(= (codex:normalize-shell-type "sh")
+   (codex:shell-type-sh))
+
+(= (codex:normalize-shell-type "Sh")
+   (codex:shell-type-sh))
+
+(= (codex:normalize-shell-type "powershell")
+   (codex:shell-type-powershell))
+
+(= (codex:normalize-shell-type "pwsh")
+   (codex:shell-type-powershell))
+
+(= (codex:normalize-shell-type "PowerShell")
+   (codex:shell-type-powershell))
+
+(= (codex:normalize-shell-type "cmd")
+   (codex:shell-type-cmd))
+
+(= (codex:normalize-shell-type "Cmd")
+   (codex:shell-type-cmd))
+
+(= (codex:shell-type-name "Zsh")
+   "zsh")
+
+(= (codex:shell-type-name "Bash")
+   "bash")
+
+(= (codex:shell-type-name "Sh")
+   "sh")
+
+(= (codex:shell-type-name "PowerShell")
+   "powershell")
+
+(= (codex:shell-type-name "Cmd")
+   "cmd")
+
+(= (codex:process-shell-codex-shell-type $shell)
+   (codex:normalize-shell-type (process-shell-type $shell)))
+
+(= (codex:capture-shell-snapshot-with-shell $shell $cwd)
+   (let $shell-type (codex:process-shell-codex-shell-type $shell)
+     (if (== $shell-type (codex:shell-type-cmd))
+         (codex:shell-snapshot-err
+           "Shell snapshotting is not yet supported for Cmd")
+         (let $script (codex:shell-snapshot-script $shell-type)
+           (if (== $script CodexAbsent)
+               (codex:shell-snapshot-err
+                 (format-args
+                   "Shell snapshotting is not yet supported for {}"
+                   ($shell-type)))
+               (case
+                 (once (process-shell-argv $shell $script True))
+                 (((Error $source $message)
+                   (codex:shell-snapshot-err $message))
+                  ($argv
+                   (let $result
+                     (process-run-cmd-cwd-env-timeout-cap-bytes
+                       $argv
+                       $cwd
+                       ()
+                       (codex:shell-snapshot-timeout-ms)
+                       (codex:shell-snapshot-max-output-bytes))
+                     (if (process-result-timed-out? $result)
+                         (codex:shell-snapshot-err
+                           (format-args
+                             "Snapshot command timed out for {}"
+                             ((codex:shell-type-name $shell-type))))
+                         (if (== (process-result-exit-code $result) 0)
+                             (codex:strip-shell-snapshot-preamble
+                               (process-result-stdout $result))
+                             (codex:shell-snapshot-err
+                               (format-args
+                                 "Snapshot command exited with status {}: {}"
+                                 ((process-result-exit-code $result)
+                                  (process-result-stderr $result)))))))))))))))
+
+(= (codex:capture-shell-snapshot $shell-type $cwd)
+   (case (once (process-shell-for-type $shell-type))
+     (((Error $source $message)
+       (codex:shell-snapshot-err $message))
+      ($shell
+       (codex:capture-shell-snapshot-with-shell $shell $cwd)))))
+
+(= (codex:shell-snapshot-unsupported-write-message $shell-type)
+   (format-args
+     "Shell snapshot not supported yet for {}"
+     ($shell-type)))
+
+(= (codex:write-shell-snapshot $shell-type $output-path $cwd)
+   (if (not (codex:is-shell-snapshot-write-supported $shell-type))
+       (codex:shell-snapshot-err
+         (codex:shell-snapshot-unsupported-write-message $shell-type))
+       (case (once (process-shell-for-type $shell-type))
+         (((Error $source $message)
+           (codex:shell-snapshot-err $message))
+          ($shell
+           (case (codex:capture-shell-snapshot-with-shell $shell $cwd)
+             (((CodexShellSnapshotErr $message)
+               (codex:shell-snapshot-err $message))
+              ((CodexShellSnapshotOk $snapshot)
+               (let $parent (path-dirname $output-path)
+                 (case (fs-create-dir-all $parent)
+                   (((Error $source $message)
+                     (codex:shell-snapshot-err
+                       (format-args
+                         "Failed to create snapshot parent {}: {}"
+                         ($parent $message))))
+                    ($unit
+                     (case (fs-write-text $output-path $snapshot)
+                       (((Error $source $message)
+                         (codex:shell-snapshot-err
+                           (format-args
+                             "Failed to write snapshot to {}: {}"
+                             ($output-path $message))))
+                        ($write-unit
+                         (codex:shell-snapshot-ok ()))))))))))))))))
+
+(= (codex:validate-shell-snapshot-with-shell $shell $snapshot-path $cwd)
+   (let $shell-type (codex:process-shell-codex-shell-type $shell)
+     (case
+       (once
+         (process-shell-argv
+           $shell
+           (codex:shell-snapshot-validation-script $snapshot-path)
+           False))
+       (((Error $source $message)
+         (codex:shell-snapshot-err $message))
+        ($argv
+         (let $result
+           (process-run-cmd-cwd-env-timeout-cap-bytes
+             $argv
+             $cwd
+             ()
+             (codex:shell-snapshot-timeout-ms)
+             (codex:shell-snapshot-max-output-bytes))
+           (if (process-result-timed-out? $result)
+               (codex:shell-snapshot-err
+                 (format-args
+                   "Snapshot command timed out for {}"
+                   ((codex:shell-type-name $shell-type))))
+               (if (== (process-result-exit-code $result) 0)
+                   (codex:shell-snapshot-ok ())
+                   (codex:shell-snapshot-err
+                     (format-args
+                       "Snapshot command exited with status {}: {}"
+                       ((process-result-exit-code $result)
+                        (process-result-stderr $result))))))))))))
+
+(= (codex:validate-shell-snapshot $shell-type $snapshot-path $cwd)
+   (case (once (process-shell-for-type $shell-type))
+     (((Error $source $message)
+       (codex:shell-snapshot-err $message))
+      ($shell
+       (codex:validate-shell-snapshot-with-shell $shell $snapshot-path $cwd)))))
+
+(= (codex:shell-snapshot-ignore-remove-file $path $result)
+   (case (fs-remove-file $path)
+     (((Error $source $message)
+       $result)
+      ($unit $result))))
+
+(= (codex:shell-snapshot-finalize
+      $temp-path
+      $path
+      $cwd)
+   (case (fs-rename $temp-path $path)
+     (((Error $source $message)
+       (codex:shell-snapshot-ignore-remove-file
+         $temp-path
+         (codex:shell-snapshot-err "write_failed")))
+      ($unit
+       (codex:shell-snapshot-ok
+         (codex:shell-snapshot $path $cwd))))))
+
+(= (codex:try-new-shell-snapshot-with-nonce
+      $codex-home
+      $session-id
+      $nonce
+      $session-cwd
+      $shell-type)
+   (let $paths
+     (codex:shell-snapshot-path-plan
+       $codex-home
+       $session-id
+       $nonce
+       $shell-type)
+     (let $path (codex:shell-snapshot-paths-path $paths)
+       (let $temp-path (codex:shell-snapshot-paths-temp-path $paths)
+         (case (codex:write-shell-snapshot $shell-type $temp-path $session-cwd)
+           (((CodexShellSnapshotErr $message)
+             (codex:shell-snapshot-err "write_failed"))
+            ((CodexShellSnapshotOk $unit)
+             (case
+               (codex:validate-shell-snapshot
+                 $shell-type
+                 $temp-path
+                 $session-cwd)
+               (((CodexShellSnapshotErr $message)
+                 (codex:shell-snapshot-ignore-remove-file
+                   $temp-path
+                   (codex:shell-snapshot-err "validation_failed")))
+                ((CodexShellSnapshotOk $validate-unit)
+                 (codex:shell-snapshot-finalize
+                   $temp-path
+                   $path
+                   $session-cwd)))))))))))
