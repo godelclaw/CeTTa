@@ -8,6 +8,9 @@
      0
      ()))
 
+(= (stream-initial-state)
+   (codex:unified-exec-stream-loop-state-initial))
+
 !(assertEqual
   (codex:unified-exec-trailing-output-grace-ms)
   100)
@@ -243,6 +246,237 @@
     (codex:unified-exec-async-watcher-chunk-state-emitted-deltas
       $state))
   10000)
+
+!(assertEqual
+  (codex:unified-exec-stream-loop-state-is-running
+    (stream-initial-state))
+  True)
+
+!(assertEqual
+  (codex:unified-exec-stream-grace-sleep-kind
+    (codex:unified-exec-stream-loop-state-grace-sleep
+      (stream-initial-state)))
+  none)
+
+!(assertEqual
+  (codex:unified-exec-stream-loop-state-is-output-drained-notified
+    (stream-initial-state))
+  False)
+
+!(assertEqual
+  (let $state
+    (codex:unified-exec-start-streaming-output-step
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-exit-cancelled
+        500))
+    (codex:unified-exec-stream-grace-sleep-deadline-value-ms
+      (codex:unified-exec-stream-loop-state-grace-sleep
+        $state)))
+  600)
+
+!(assertEqual
+  (let $first
+    (codex:unified-exec-start-streaming-output-step
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-exit-cancelled
+        500))
+    (let $second
+      (codex:unified-exec-start-streaming-output-step
+        $first
+        "call-stream"
+        (codex:unified-exec-stream-observation-exit-cancelled
+          900))
+      (codex:unified-exec-stream-grace-sleep-deadline-value-ms
+        (codex:unified-exec-stream-loop-state-grace-sleep
+          $second))))
+  600)
+
+!(assertEqual
+  (let $state
+    (codex:unified-exec-start-streaming-output-step-with-limits
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-recv-ok
+        (97 98 99 100))
+      10
+      2)
+    (codex:unified-exec-async-watcher-chunk-state-transcript
+      (codex:unified-exec-stream-loop-state-chunk-state
+        $state)))
+  (97 98 99 100))
+
+!(assertEqual
+  (let $state
+    (codex:unified-exec-start-streaming-output-step-with-limits
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-recv-ok
+        (97 98 99 100))
+      10
+      2)
+    (list:len
+      (codex:unified-exec-async-watcher-chunk-state-events
+        (codex:unified-exec-stream-loop-state-chunk-state
+          $state))))
+  2)
+
+!(assertEqual
+  (let $after-cancel
+    (codex:unified-exec-start-streaming-output-step
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-exit-cancelled
+        500))
+    (let $after-chunk
+      (codex:unified-exec-start-streaming-output-step-with-limits
+        $after-cancel
+        "call-stream"
+        (codex:unified-exec-stream-observation-recv-ok
+          (120 121))
+        10
+        4)
+      (codex:unified-exec-stream-grace-sleep-deadline-value-ms
+        (codex:unified-exec-stream-loop-state-grace-sleep
+          $after-chunk))))
+  600)
+
+!(assertEqual
+  (let $after-cancel
+    (codex:unified-exec-start-streaming-output-step
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-exit-cancelled
+        500))
+    (let $after-chunk
+      (codex:unified-exec-start-streaming-output-step-with-limits
+        $after-cancel
+        "call-stream"
+        (codex:unified-exec-stream-observation-recv-ok
+          (120 121))
+        10
+        4)
+      (codex:unified-exec-async-watcher-chunk-state-transcript
+        (codex:unified-exec-stream-loop-state-chunk-state
+          $after-chunk))))
+  (120 121))
+
+!(assertEqual
+  (let $after-chunk
+    (codex:unified-exec-start-streaming-output-step-with-limits
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-recv-ok
+        (97 98))
+      10
+      4)
+    (let $after-lagged
+      (codex:unified-exec-start-streaming-output-step
+        $after-chunk
+        "call-stream"
+        (codex:unified-exec-stream-observation-recv-lagged
+          7))
+      (codex:unified-exec-stream-loop-state-chunk-state
+        $after-lagged)))
+  (let $after-chunk
+    (codex:unified-exec-start-streaming-output-step-with-limits
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-recv-ok
+        (97 98))
+      10
+      4)
+    (codex:unified-exec-stream-loop-state-chunk-state
+      $after-chunk)))
+
+!(assertEqual
+  (let $state
+    (codex:unified-exec-start-streaming-output-step
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-grace-elapsed))
+    (codex:unified-exec-stream-loop-state-is-running
+      $state))
+  True)
+
+!(assertEqual
+  (let $state
+    (codex:unified-exec-start-streaming-output-step
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-grace-elapsed))
+    (codex:unified-exec-stream-loop-state-is-output-drained-notified
+      $state))
+  False)
+
+!(assertEqual
+  (let $state
+    (codex:unified-exec-start-streaming-output-step
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-recv-closed))
+    (codex:unified-exec-stream-loop-state-is-output-drained-notified
+      $state))
+  True)
+
+!(assertEqual
+  (let $state
+    (codex:unified-exec-start-streaming-output-step
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-recv-closed))
+    (codex:unified-exec-stream-loop-state-is-running
+      $state))
+  False)
+
+!(assertEqual
+  (let $after-cancel
+    (codex:unified-exec-start-streaming-output-step
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-exit-cancelled
+        500))
+    (let $after-grace
+      (codex:unified-exec-start-streaming-output-step
+        $after-cancel
+        "call-stream"
+        (codex:unified-exec-stream-observation-grace-elapsed))
+      (codex:unified-exec-stream-loop-state-is-output-drained-notified
+        $after-grace)))
+  True)
+
+!(assertEqual
+  (let $after-cancel
+    (codex:unified-exec-start-streaming-output-step
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-exit-cancelled
+        500))
+    (let $after-grace
+      (codex:unified-exec-start-streaming-output-step
+        $after-cancel
+        "call-stream"
+        (codex:unified-exec-stream-observation-grace-elapsed))
+      (codex:unified-exec-stream-loop-state-is-running
+        $after-grace)))
+  False)
+
+!(assertEqual
+  (let $closed
+    (codex:unified-exec-start-streaming-output-step
+      (stream-initial-state)
+      "call-stream"
+      (codex:unified-exec-stream-observation-recv-closed))
+    (let $after-chunk
+      (codex:unified-exec-start-streaming-output-step
+        $closed
+        "call-stream"
+        (codex:unified-exec-stream-observation-recv-ok
+          (97)))
+      (codex:unified-exec-stream-loop-state-chunk-state
+        $after-chunk)))
+  (codex:unified-exec-async-watcher-chunk-state () () 0 ()))
 
 !(assertEqual
   (codex:unified-exec-resolve-aggregated-output

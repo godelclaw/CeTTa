@@ -15,6 +15,7 @@
 ;   emits one byte if no valid prefix is found
 ; - process_chunk's pending-buffer append, transcript append, stdout delta
 ;   emission cap, and continued transcript capture after the event cap
+; - start_streaming_output's cancellation/grace/receiver branch loop
 ; - resolve_aggregated_output
 ; - emit_exec_end_for_unified_exec
 ; - emit_failed_exec_end_for_unified_exec
@@ -28,6 +29,10 @@
 ; - Rust writes into `Arc<Mutex<HeadTailBuffer>>` and sends through `Session`.
 ;   This slice carries transcript bytes and emitted events in an immutable state
 ;   record so the same branch behavior is testable without async effects.
+; - Rust's `tokio::select!` observes cancellation, timer completion, and
+;   broadcast receiver outcomes asynchronously. This port receives one
+;   materialized observation per pure step and returns the corresponding loop
+;   state, preserving the select guards and branch side effects.
 ; - Rust decodes HeadTailBuffer bytes with `String::from_utf8_lossy()` and
 ;   computes `formatted_output` inside ToolEmitter from the turn truncation
 ;   policy. These pure end-event helpers receive the already-materialized lossy
@@ -429,6 +434,231 @@
                $call-id
                $max-deltas
                $max-delta-bytes))))))
+
+(= (codex:unified-exec-stream-grace-sleep-none)
+   CodexUnifiedExecStreamGraceSleepNone)
+
+(= (codex:unified-exec-stream-grace-sleep-deadline-ms
+      $deadline-ms)
+   (CodexUnifiedExecStreamGraceSleepDeadlineMs $deadline-ms))
+
+(= (codex:unified-exec-stream-grace-sleep-kind
+      CodexUnifiedExecStreamGraceSleepNone)
+   none)
+
+(= (codex:unified-exec-stream-grace-sleep-kind
+      (CodexUnifiedExecStreamGraceSleepDeadlineMs $deadline-ms))
+   active)
+
+(= (codex:unified-exec-stream-grace-sleep-deadline-value-ms
+      (CodexUnifiedExecStreamGraceSleepDeadlineMs $deadline-ms))
+   $deadline-ms)
+
+(= (codex:unified-exec-stream-loop-state
+      $chunk-state
+      $grace-sleep
+      $is-output-drained-notified
+      $is-running)
+   (CodexUnifiedExecStreamLoopState
+     $chunk-state
+     $grace-sleep
+     $is-output-drained-notified
+     $is-running))
+
+(= (codex:unified-exec-stream-loop-state-chunk-state
+      (CodexUnifiedExecStreamLoopState
+        $chunk-state
+        $grace-sleep
+        $is-output-drained-notified
+        $is-running))
+   $chunk-state)
+
+(= (codex:unified-exec-stream-loop-state-grace-sleep
+      (CodexUnifiedExecStreamLoopState
+        $chunk-state
+        $grace-sleep
+        $is-output-drained-notified
+        $is-running))
+   $grace-sleep)
+
+(= (codex:unified-exec-stream-loop-state-is-output-drained-notified
+      (CodexUnifiedExecStreamLoopState
+        $chunk-state
+        $grace-sleep
+        $is-output-drained-notified
+        $is-running))
+   $is-output-drained-notified)
+
+(= (codex:unified-exec-stream-loop-state-is-running
+      (CodexUnifiedExecStreamLoopState
+        $chunk-state
+        $grace-sleep
+        $is-output-drained-notified
+        $is-running))
+   $is-running)
+
+(= (codex:unified-exec-stream-loop-state-initial)
+   (codex:unified-exec-stream-loop-state
+     (codex:unified-exec-async-watcher-chunk-state () () 0 ())
+     (codex:unified-exec-stream-grace-sleep-none)
+     False
+     True))
+
+(= (codex:unified-exec-stream-observation-exit-cancelled
+      $now-ms)
+   (CodexUnifiedExecStreamObservationExitCancelled $now-ms))
+
+(= (codex:unified-exec-stream-observation-grace-elapsed)
+   CodexUnifiedExecStreamObservationGraceElapsed)
+
+(= (codex:unified-exec-stream-observation-recv-ok $chunk)
+   (CodexUnifiedExecStreamObservationRecvOk $chunk))
+
+(= (codex:unified-exec-stream-observation-recv-lagged
+      $skipped-count)
+   (CodexUnifiedExecStreamObservationRecvLagged $skipped-count))
+
+(= (codex:unified-exec-stream-observation-recv-closed)
+   CodexUnifiedExecStreamObservationRecvClosed)
+
+(= (codex:unified-exec-stream-observation-kind
+      (CodexUnifiedExecStreamObservationExitCancelled $now-ms))
+   exit_cancelled)
+
+(= (codex:unified-exec-stream-observation-kind
+      CodexUnifiedExecStreamObservationGraceElapsed)
+   grace_elapsed)
+
+(= (codex:unified-exec-stream-observation-kind
+      (CodexUnifiedExecStreamObservationRecvOk $chunk))
+   recv_ok)
+
+(= (codex:unified-exec-stream-observation-kind
+      (CodexUnifiedExecStreamObservationRecvLagged $skipped-count))
+   recv_lagged)
+
+(= (codex:unified-exec-stream-observation-kind
+      CodexUnifiedExecStreamObservationRecvClosed)
+   recv_closed)
+
+(= (codex:unified-exec-stream-observation-exit-cancelled-now-ms
+      (CodexUnifiedExecStreamObservationExitCancelled $now-ms))
+   $now-ms)
+
+(= (codex:unified-exec-stream-observation-recv-ok-chunk
+      (CodexUnifiedExecStreamObservationRecvOk $chunk))
+   $chunk)
+
+(= (codex:unified-exec-stream-loop-state-with-grace-sleep
+      (CodexUnifiedExecStreamLoopState
+        $chunk-state
+        $grace-sleep
+        $is-output-drained-notified
+        $is-running)
+      $new-grace-sleep)
+   (CodexUnifiedExecStreamLoopState
+     $chunk-state
+     $new-grace-sleep
+     $is-output-drained-notified
+     $is-running))
+
+(= (codex:unified-exec-stream-loop-state-with-chunk-state
+      (CodexUnifiedExecStreamLoopState
+        $chunk-state
+        $grace-sleep
+        $is-output-drained-notified
+        $is-running)
+      $new-chunk-state)
+   (CodexUnifiedExecStreamLoopState
+     $new-chunk-state
+     $grace-sleep
+     $is-output-drained-notified
+     $is-running))
+
+(= (codex:unified-exec-stream-loop-state-break
+      (CodexUnifiedExecStreamLoopState
+        $chunk-state
+        $grace-sleep
+        $is-output-drained-notified
+        $is-running))
+   (CodexUnifiedExecStreamLoopState
+     $chunk-state
+     $grace-sleep
+     True
+     False))
+
+(= (codex:unified-exec-start-streaming-output-step
+      $state
+      $call-id
+      $observation)
+   (codex:unified-exec-start-streaming-output-step-with-limits
+     $state
+     $call-id
+     $observation
+     (codex:max-exec-output-deltas-per-call)
+     (codex:unified-exec-output-delta-max-bytes)))
+
+(= (codex:unified-exec-start-streaming-output-step-with-limits
+      $state
+      $call-id
+      $observation
+      $max-deltas
+      $max-delta-bytes)
+   (if (not (codex:unified-exec-stream-loop-state-is-running
+              $state))
+       $state
+       (let $kind
+         (codex:unified-exec-stream-observation-kind $observation)
+         (if (== $kind exit_cancelled)
+             (codex:unified-exec-start-streaming-output-on-exit-cancelled
+               $state
+               (codex:unified-exec-stream-observation-exit-cancelled-now-ms
+                 $observation))
+             (if (== $kind grace_elapsed)
+                 (codex:unified-exec-start-streaming-output-on-grace-elapsed
+                   $state)
+                 (if (== $kind recv_ok)
+                     (codex:unified-exec-stream-loop-state-with-chunk-state
+                       $state
+                       (codex:unified-exec-process-chunk-with-limits
+                         (codex:unified-exec-stream-loop-state-chunk-state
+                           $state)
+                         $call-id
+                         (codex:unified-exec-stream-observation-recv-ok-chunk
+                           $observation)
+                         $max-deltas
+                         $max-delta-bytes))
+                     (if (== $kind recv_lagged)
+                         $state
+                         (codex:unified-exec-stream-loop-state-break
+                           $state))))))))
+
+(= (codex:unified-exec-start-streaming-output-on-exit-cancelled
+      $state
+      $now-ms)
+   (let $grace-sleep
+     (codex:unified-exec-stream-loop-state-grace-sleep
+       $state)
+     (if (== (codex:unified-exec-stream-grace-sleep-kind
+               $grace-sleep)
+             none)
+         (codex:unified-exec-stream-loop-state-with-grace-sleep
+           $state
+           (codex:unified-exec-stream-grace-sleep-deadline-ms
+             (+ $now-ms
+                (codex:unified-exec-trailing-output-grace-ms))))
+         $state)))
+
+(= (codex:unified-exec-start-streaming-output-on-grace-elapsed
+      $state)
+   (let $grace-sleep
+     (codex:unified-exec-stream-loop-state-grace-sleep
+       $state)
+     (if (== (codex:unified-exec-stream-grace-sleep-kind
+               $grace-sleep)
+             active)
+         (codex:unified-exec-stream-loop-state-break $state)
+         $state)))
 
 (= (codex:unified-exec-async-watcher-transcript
       $retained-bytes
