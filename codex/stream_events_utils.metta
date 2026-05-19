@@ -11,6 +11,7 @@
 ; - response_item_may_include_external_context
 ; - last_assistant_message_from_item
 ; - completed_item_defers_mailbox_delivery_to_next_turn
+; - response_input_to_response_item
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust also saves image bytes asynchronously after base64 decoding. This
@@ -25,8 +26,13 @@
 ;   `ResponseItem::ToolSearchCall`. This helper still recognizes the Rust
 ;   constructor shape locally so the external-context predicate keeps the same
 ;   algorithmic branch when that variant is passed through this boundary.
+; - Rust's `FunctionCallOutputPayload` carries success metadata. The current
+;   CeTTa protocol body constructors model the text/content-items body only,
+;   matching the existing protocol/context wire-body surface until payload
+;   metadata is ported.
 
 !(import! &self list)
+!(import! &self json)
 !(import! &self memory_citation)
 !(import! &self protocol)
 !(import! &self str)
@@ -333,3 +339,217 @@
          $result)
        True)
       ($other False))))
+
+(= (codex:response-input-message $role $content)
+   (CodexResponseInputItemMessage $role $content))
+
+(= (codex:response-input-function-call-output $call-id $output)
+   (CodexResponseInputItemFunctionCallOutput $call-id $output))
+
+(= (codex:response-input-mcp-tool-call-output $call-id $output)
+   (CodexResponseInputItemMcpToolCallOutput $call-id $output))
+
+(= (codex:response-input-custom-tool-call-output $call-id $name $output)
+   (CodexResponseInputItemCustomToolCallOutput $call-id $name $output))
+
+(= (codex:response-input-tool-search-output
+      $call-id
+      $status
+      $execution
+      $tools)
+   (CodexResponseInputItemToolSearchOutput
+     $call-id
+     $status
+     $execution
+     $tools))
+
+(= (codex:stream-events-mcp-image-detail-meta-key)
+   "codex/imageDetail")
+
+(= (codex:stream-events-json-object-optional-value $object $key)
+   (case (json-object-get $object $key)
+     ((Empty CodexAbsent)
+      (JsonNull CodexAbsent)
+      ($value $value))))
+
+(= (codex:stream-events-json-object-optional-string $object $key)
+   (case (codex:stream-events-json-object-optional-value $object $key)
+     ((CodexAbsent CodexAbsent)
+      ((JsonString $text) $text))))
+
+(= (codex:stream-events-json-object-optional-object $object $key)
+   (case (codex:stream-events-json-object-optional-value $object $key)
+     ((CodexAbsent CodexAbsent)
+      ((JsonObject $pairs) (JsonObject $pairs)))))
+
+(= (codex:stream-events-json-object-optional-array $object $key)
+   (case (codex:stream-events-json-object-optional-value $object $key)
+     ((CodexAbsent CodexAbsent)
+      ((JsonArray $items) $items))))
+
+(= (codex:stream-events-append-items () $rhs)
+   $rhs)
+
+(= (codex:stream-events-append-items $lhs $rhs)
+   (let ($head $tail) (decons-atom $lhs)
+     (case (codex:stream-events-append-items $tail $rhs)
+       (($rest
+          (cons-atom $head $rest))))))
+
+(= (codex:stream-events-append-item $items $item)
+   (codex:stream-events-append-items $items ($item)))
+
+(= (codex:stream-events-mcp-call-tool-result-json $output)
+   (case (once (eval $output))
+     (((CodexMcpCallToolResult $content $structured-content $is-error $meta)
+       (codex:mcp-call-tool-result-json
+         (CodexMcpCallToolResult
+           $content
+           $structured-content
+           $is-error
+           $meta)))
+      ($json $json))))
+
+(= (codex:stream-events-mcp-call-tool-result-as-function-call-output $result)
+   (case
+     (codex:stream-events-json-object-optional-value
+       $result
+       "structuredContent")
+     ((CodexAbsent
+       (codex:stream-events-mcp-call-tool-result-content-fallback-output
+         $result))
+      ($structured-content
+       (codex:function-call-output-text
+         (json-stringify $structured-content))))))
+
+(= (codex:stream-events-mcp-call-tool-result-content-fallback-output $result)
+   (case
+     (codex:stream-events-json-object-optional-array $result "content")
+     ((CodexAbsent
+       (codex:function-call-output-text (json-stringify (JsonArray ()))))
+      ($content
+       (case (codex:stream-events-convert-mcp-content-to-items $content)
+         ((CodexAbsent
+           (codex:function-call-output-text
+             (json-stringify (JsonArray $content))))
+          ($items
+           (codex:function-call-output-content-items $items))))))))
+
+(= (codex:stream-events-convert-mcp-content-to-items ())
+   CodexAbsent)
+
+(= (codex:stream-events-convert-mcp-content-to-items $content)
+   (codex:stream-events-convert-mcp-content-to-items-acc
+     $content
+     False
+     ()))
+
+(= (codex:stream-events-convert-mcp-content-to-items-acc () False $acc)
+   CodexAbsent)
+
+(= (codex:stream-events-convert-mcp-content-to-items-acc () True $acc)
+   $acc)
+
+(= (codex:stream-events-convert-mcp-content-to-items-acc
+      $content
+      $saw-image
+      $acc)
+   (let ($head $tail) (decons-atom $content)
+     (let $converted
+       (codex:stream-events-mcp-content-item-to-function-output-item $head)
+       (codex:stream-events-convert-mcp-content-to-items-acc
+         $tail
+         (if (codex:stream-events-is-mcp-content-item-image $head)
+             True
+             $saw-image)
+         (codex:stream-events-append-item $acc $converted)))))
+
+(= (codex:stream-events-is-mcp-content-item-image $content)
+   (case $content
+     (((JsonObject $pairs)
+       (== (codex:stream-events-json-object-optional-string
+             (JsonObject $pairs)
+             "type")
+           "image"))
+      ($_ False))))
+
+(= (codex:stream-events-mcp-content-item-to-function-output-item $content)
+   (case $content
+     (((JsonObject $pairs)
+       (let $object (JsonObject $pairs)
+         (case
+           (codex:stream-events-json-object-optional-string $object "type")
+           (("text"
+             (CodexInputText
+               (json-string-value (json-object-get $object "text"))))
+            ("image"
+             (CodexInputImage
+               (codex:stream-events-mcp-content-image-url $object)
+               (codex:stream-events-mcp-content-image-detail $object)))
+            ($_
+             (CodexInputText (json-stringify $object)))))))
+      ($other
+       (CodexInputText (json-stringify $other))))))
+
+(= (codex:stream-events-mcp-content-image-url $object)
+   (let $data (json-string-value (json-object-get $object "data"))
+     (if (str-starts-with? $data "data:")
+         $data
+         (let $mime-type
+           (case
+             (codex:stream-events-json-object-optional-string
+               $object
+               "mimeType")
+             ((CodexAbsent
+               (case
+                 (codex:stream-events-json-object-optional-string
+                   $object
+                   "mime_type")
+                 ((CodexAbsent "application/octet-stream")
+                  ($mime-type-alt $mime-type-alt))))
+              ($mime-type-main $mime-type-main)))
+           (str-concat
+             "data:"
+             (str-concat
+               $mime-type
+               (str-concat ";base64," $data)))))))
+
+(= (codex:stream-events-mcp-content-image-detail $object)
+   (let $detail
+     (case
+       (codex:stream-events-json-object-optional-object $object "_meta")
+       ((CodexAbsent CodexAbsent)
+        ($meta
+         (codex:stream-events-json-object-optional-string
+           $meta
+           (codex:stream-events-mcp-image-detail-meta-key)))))
+     (case $detail
+       (("auto" "auto")
+        ("low" "low")
+        ("high" "high")
+        ("original" "original")
+        ($_
+         (codex:default-image-detail))))))
+
+(= (codex:response-input-to-response-item $input)
+   (case (once (eval $input))
+     (((CodexResponseInputItemFunctionCallOutput $call-id $output)
+       (CodexResponseItemFunctionCallOutput $call-id $output))
+      ((CodexResponseInputItemCustomToolCallOutput $call-id $name $output)
+       (CodexResponseItemCustomToolCallOutput $call-id $name $output))
+      ((CodexResponseInputItemMcpToolCallOutput $call-id $output)
+       (CodexResponseItemFunctionCallOutput
+         $call-id
+         (codex:stream-events-mcp-call-tool-result-as-function-call-output
+           (codex:stream-events-mcp-call-tool-result-json $output))))
+      ((CodexResponseInputItemToolSearchOutput
+         $call-id
+         $status
+         $execution
+         $tools)
+       (CodexResponseItemToolSearchOutput
+         $call-id
+         $status
+         $execution
+         $tools))
+      ($other CodexAbsent))))

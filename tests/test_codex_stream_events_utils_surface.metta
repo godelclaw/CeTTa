@@ -1,6 +1,4 @@
 !(register-module! ../codex)
-!(import! &self codex:memory_citation)
-!(import! &self codex:protocol)
 !(import! &self codex:stream_events_utils)
 
 (= (stream-events-memory-citation-fixture)
@@ -31,12 +29,13 @@
   "hello world")
 
 !(assertEqual
-  (codex:thread-ids-from-memory-citation
-    (codex:stream-events-hidden-markup-result-memory-citation
-      (codex:strip-hidden-assistant-markup-and-parse-memory-citation
-        (stream-events-memory-citation-fixture)
-        False)))
-  ("019cc2ea-1dff-7902-8d40-c8f6e5d83cc4"))
+  (codex:stream-events-hidden-markup-result-memory-citation
+    (codex:strip-hidden-assistant-markup-and-parse-memory-citation
+      (stream-events-memory-citation-fixture)
+      False))
+  (CodexMemoryCitation
+    ((CodexMemoryCitationEntry "MEMORY.md" 1 2 "x"))
+    ("019cc2ea-1dff-7902-8d40-c8f6e5d83cc4")))
 
 !(assertEqual
   (codex:raw-assistant-output-text-from-item
@@ -128,3 +127,62 @@
   (codex:response-item-may-include-external-context
     (codex:tool-call "custom-1" "apply_patch" "*** Begin Patch\n*** End Patch\n"))
   False)
+
+!(assertEqual
+  (codex:response-input-to-response-item
+    (codex:response-input-function-call-output
+      "call-fn"
+      (codex:function-call-output-text "ok")))
+  (CodexResponseItemFunctionCallOutput
+    "call-fn"
+    (CodexFunctionCallOutputText "ok")))
+
+!(assertEqual
+  (codex:response-input-to-response-item
+    (codex:response-input-custom-tool-call-output
+      "call-custom"
+      CodexAbsent
+      (codex:function-call-output-content-items
+        ((CodexInputText "line 1")
+         (CodexInputImage "data:image/png;base64,AAA" "high")))))
+  (CodexResponseItemCustomToolCallOutput
+    "call-custom"
+    CodexAbsent
+    (CodexFunctionCallOutputContentItems
+      ((CodexInputText "line 1")
+       (CodexInputImage "data:image/png;base64,AAA" "high")))))
+
+!(assertEqual
+  (codex:response-input-to-response-item
+    (codex:response-input-mcp-tool-call-output
+      "call-mcp"
+      (codex:mcp-call-tool-result
+        ()
+        (JsonObject ((JsonPair "ok" (JsonBool True))))
+        False
+        CodexAbsent)))
+  (CodexResponseItemFunctionCallOutput
+    "call-mcp"
+    (CodexFunctionCallOutputText "{\"ok\":true}")))
+
+!(assertEqual
+  (codex:response-input-to-response-item
+    (codex:response-input-tool-search-output
+      "call-search"
+      "completed"
+      "client"
+      ((JsonObject ((JsonPair "type" (JsonString "function"))
+                    (JsonPair "name" (JsonString "create_event")))))))
+  (CodexResponseItemToolSearchOutput
+    "call-search"
+    "completed"
+    "client"
+    ((JsonObject ((JsonPair "type" (JsonString "function"))
+                  (JsonPair "name" (JsonString "create_event")))))))
+
+!(assertEqual
+  (codex:response-input-to-response-item
+    (codex:response-input-message
+      "user"
+      ((CodexInputText "message input is not persisted as a response item"))))
+  CodexAbsent)
