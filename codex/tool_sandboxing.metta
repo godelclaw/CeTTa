@@ -7,6 +7,7 @@
 ; - `ApprovalCtx` data carried into runtime approval planning
 ; - `PermissionRequestPayload::bash`
 ; - `ExecApprovalRequirement::proposed_execpolicy_amendment`
+; - default `Approvable` helper behavior
 ; - `SandboxOverride`
 ; - `sandbox_override_for_first_attempt`
 ;
@@ -102,6 +103,12 @@
 (= (codex:sandboxable-preference-auto)
    (CodexSandboxablePreferenceAuto))
 
+(= (codex:sandboxable-preference-require)
+   (CodexSandboxablePreferenceRequire))
+
+(= (codex:sandboxable-preference-forbid)
+   (CodexSandboxablePreferenceForbid))
+
 (= (codex:sandbox-override-no-override)
    (CodexSandboxOverrideNoOverride))
 
@@ -167,6 +174,104 @@
 (= (codex:exec-approval-requirement-proposed-execpolicy-amendment
       (CodexExecApprovalRequirementForbidden $reason))
    CodexAbsent)
+
+(= (codex:tool-sandboxing-file-system-policy-restricted
+      (CodexFileSystemSandboxPolicy
+        (CodexFileSystemSandboxKindRestricted)
+        $glob-scan-max-depth
+        $entries))
+   True)
+
+(= (codex:tool-sandboxing-file-system-policy-restricted
+      (CodexFileSystemSandboxPolicy
+        (CodexFileSystemSandboxKindUnrestricted)
+        $glob-scan-max-depth
+        $entries))
+   False)
+
+(= (codex:tool-sandboxing-file-system-policy-restricted
+      (CodexFileSystemSandboxPolicy
+        (CodexFileSystemSandboxKindExternalSandbox)
+        $glob-scan-max-depth
+        $entries))
+   False)
+
+(= (codex:tool-sandboxing-approval-policy-granular-sandbox-approval
+      $approval-policy)
+   (case $approval-policy
+     (((CodexAskForApprovalGranular $sandbox-approval)
+       $sandbox-approval)
+      ((CodexAskForApprovalGranularConfig
+         $sandbox-approval
+         $rules
+         $skill-approval
+         $request-permissions
+         $mcp-elicitations)
+       $sandbox-approval)
+      ($other CodexAbsent))))
+
+(= (codex:tool-sandboxing-needs-default-approval
+      $approval-policy
+      $file-system-sandbox-policy)
+   (if (== $approval-policy (codex:ask-for-approval-never))
+       False
+       (if (== $approval-policy (codex:ask-for-approval-on-failure))
+           False
+           (if (== $approval-policy (codex:ask-for-approval-on-request))
+               (codex:tool-sandboxing-file-system-policy-restricted
+                 $file-system-sandbox-policy)
+               (if (== $approval-policy
+                       (codex:ask-for-approval-unless-trusted))
+                   True
+                   (if (== (codex:tool-sandboxing-approval-policy-granular-sandbox-approval
+                             $approval-policy)
+                           CodexAbsent)
+                       False
+                       (codex:tool-sandboxing-file-system-policy-restricted
+                         $file-system-sandbox-policy)))))))
+
+(= (codex:default-exec-approval-requirement
+      $approval-policy
+      $file-system-sandbox-policy)
+   (let $needs-approval
+     (codex:tool-sandboxing-needs-default-approval
+       $approval-policy
+       $file-system-sandbox-policy)
+     (let $granular-sandbox-approval
+       (codex:tool-sandboxing-approval-policy-granular-sandbox-approval
+         $approval-policy)
+       (if (and
+             $needs-approval
+             (== $granular-sandbox-approval False))
+           (codex:approval-forbidden
+             "approval policy disallowed sandbox approval prompt")
+           (if $needs-approval
+               (codex:approval-needs-approval CodexAbsent)
+               (codex:approval-skip False))))))
+
+(= (codex:approvable-should-bypass-approval
+      $approval-policy
+      $already-approved)
+   (if $already-approved
+       True
+       (== $approval-policy (codex:ask-for-approval-never))))
+
+(= (codex:approvable-wants-no-sandbox-approval
+      $approval-policy)
+   (if (== $approval-policy (codex:ask-for-approval-on-failure))
+       True
+       (if (== $approval-policy (codex:ask-for-approval-unless-trusted))
+           True
+           (if (== $approval-policy (codex:ask-for-approval-never))
+               False
+               (if (== $approval-policy (codex:ask-for-approval-on-request))
+                   False
+                   (let $granular-sandbox-approval
+                     (codex:tool-sandboxing-approval-policy-granular-sandbox-approval
+                       $approval-policy)
+                     (if (== $granular-sandbox-approval CodexAbsent)
+                         False
+                         $granular-sandbox-approval)))))))
 
 (= (codex:is-tool-sandboxing-sandbox-permissions-require-escalated
       $sandbox-permissions)
