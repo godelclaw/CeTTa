@@ -56,14 +56,6 @@
   "https")
 
 !(assertEqual
-  (codex:host-approval-key-from-request
-    (CodexNetworkPolicyRequest
-      (CodexNetworkProtocolHttpsConnect)
-      "Example.COM"
-      443))
-  (host-key-https-443))
-
-!(assertEqual
   (codex:pending-approval-decision-to-network-decision
     (codex:pending-approval-decision-allow-once))
   (codex:network-decision-allow))

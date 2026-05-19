@@ -18,6 +18,7 @@
 ; - pure `handle_inline_policy_request` branch resolution for session host
 ;   caches, pending approvals, hook decisions, review decisions, and
 ;   session-scoped allow/deny caching
+; - blocked-request observer and network-policy decider wrapper behavior
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust registers/unregisters active network approvals asynchronously through
@@ -38,6 +39,9 @@
 ;   async session. This pure boundary models the same allow/deny control-flow
 ;   result and session host cache effects; persistence/event side effects remain
 ;   outside this deterministic data slice.
+; - Rust returns async closure trait objects for blocked-request observers and
+;   network-policy deciders. This pure slice models those closures as explicit
+;   data records plus `observe`/`decide` transition helpers.
 
 !(import! &self approval)
 !(import! &self list)
@@ -352,54 +356,36 @@
    $port)
 
 (= (codex:host-approval-key-from-request $request)
-   (let $approval-protocol
-     (codex:network-approval-protocol-from-network-protocol
-       (codex:network-policy-request-protocol $request))
-     (codex:host-approval-key
-       (codex:network-approval-ascii-lower-text
-         (codex:network-policy-request-host $request))
-       (codex:network-approval-protocol-key-label $approval-protocol)
-       (codex:network-policy-request-port $request))))
-
-(= (codex:host-approval-key-from-request
-      (codex:network-policy-request
-        (codex:network-protocol-http)
-        $host
-        $port))
-   (codex:host-approval-key
-     (codex:network-approval-ascii-lower-text $host)
-     "http"
-     $port))
-
-(= (codex:host-approval-key-from-request
-      (codex:network-policy-request
-        (codex:network-protocol-https-connect)
-        $host
-        $port))
-   (codex:host-approval-key
-     (codex:network-approval-ascii-lower-text $host)
-     "https"
-     $port))
-
-(= (codex:host-approval-key-from-request
-      (codex:network-policy-request
-        (codex:network-protocol-socks5-tcp)
-        $host
-        $port))
-   (codex:host-approval-key
-     (codex:network-approval-ascii-lower-text $host)
-     "socks5-tcp"
-     $port))
-
-(= (codex:host-approval-key-from-request
-      (codex:network-policy-request
-        (codex:network-protocol-socks5-udp)
-        $host
-        $port))
-   (codex:host-approval-key
-     (codex:network-approval-ascii-lower-text $host)
-     "socks5-udp"
-     $port))
+   (case (once (eval $request))
+     (((CodexNetworkPolicyRequest (CodexNetworkProtocolHttp) $host $port)
+       (codex:host-approval-key
+         (codex:network-approval-ascii-lower-text $host)
+         "http"
+         $port))
+      ((CodexNetworkPolicyRequest
+         (CodexNetworkProtocolHttpsConnect)
+         $host
+         $port)
+       (codex:host-approval-key
+         (codex:network-approval-ascii-lower-text $host)
+         "https"
+         $port))
+      ((CodexNetworkPolicyRequest
+         (CodexNetworkProtocolSocks5Tcp)
+         $host
+         $port)
+       (codex:host-approval-key
+         (codex:network-approval-ascii-lower-text $host)
+         "socks5-tcp"
+         $port))
+      ((CodexNetworkPolicyRequest
+         (CodexNetworkProtocolSocks5Udp)
+         $host
+         $port)
+       (codex:host-approval-key
+         (codex:network-approval-ascii-lower-text $host)
+         "socks5-udp"
+         $port)))))
 
 (= (codex:pending-approval-decision-allow-once)
    (CodexPendingApprovalDecisionAllowOnce))
@@ -1811,3 +1797,90 @@
                          $approval-protocol
                          $owner-call
                          $input)))))))))
+
+(= (codex:blocked-request-observer $service)
+   (CodexBlockedRequestObserver $service))
+
+(= (codex:build-blocked-request-observer $service)
+   (codex:blocked-request-observer $service))
+
+(= (codex:blocked-request-observer-service
+      (CodexBlockedRequestObserver $service))
+   $service)
+
+(= (codex:blocked-request-observer-observe
+      (CodexBlockedRequestObserver $service)
+      $blocked-request)
+   (codex:network-approval-record-blocked-request
+     $service
+     $blocked-request))
+
+(= (codex:network-policy-decider
+      $service
+      $session-input)
+   (CodexNetworkPolicyDecider $service $session-input))
+
+(= (codex:build-network-policy-decider
+      $service
+      $session-input)
+   (codex:network-policy-decider $service $session-input))
+
+(= (codex:network-policy-decider-service
+      (CodexNetworkPolicyDecider $service $session-input))
+   $service)
+
+(= (codex:network-policy-decider-session-input
+      (CodexNetworkPolicyDecider $service $session-input))
+   $session-input)
+
+(= (codex:network-policy-decider-result
+      $network-decision
+      $service
+      $inline-result)
+   (CodexNetworkPolicyDeciderResult
+     $network-decision
+     $service
+     $inline-result))
+
+(= (codex:network-policy-decider-result-decision
+      (CodexNetworkPolicyDeciderResult
+        $network-decision
+        $service
+        $inline-result))
+   $network-decision)
+
+(= (codex:network-policy-decider-result-service
+      (CodexNetworkPolicyDeciderResult
+        $network-decision
+        $service
+        $inline-result))
+   $service)
+
+(= (codex:network-policy-decider-result-inline-result
+      (CodexNetworkPolicyDeciderResult
+        $network-decision
+        $service
+        $inline-result))
+   $inline-result)
+
+(= (codex:network-policy-decider-decide
+      (CodexNetworkPolicyDecider $service $session-input)
+      $request)
+   (case $session-input
+     ((CodexAbsent
+       (codex:network-policy-decider-result
+         (codex:network-decision-ask "not_allowed")
+         $service
+         CodexAbsent))
+      ($other
+       (let $inline-result
+         (codex:network-approval-handle-inline-policy-request
+           $service
+           $other
+           $request)
+         (codex:network-policy-decider-result
+           (codex:network-approval-inline-policy-result-decision
+             $inline-result)
+           (codex:network-approval-inline-policy-result-service
+             $inline-result)
+           $inline-result))))))

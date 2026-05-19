@@ -383,3 +383,70 @@
     "registration-1")
   (codex:network-approval-outcome-denied-by-policy
     "guardian timed out"))
+
+(= (blocked-request)
+   (codex:blocked-request
+     "example.com"
+     "not_allowed"
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     "http"
+     "deny"
+     "decider"
+     80
+     "ts"))
+
+(= (observer-after-blocked)
+   (codex:blocked-request-observer-observe
+     (codex:build-blocked-request-observer
+       (service-with-one-call))
+     (blocked-request)))
+
+!(assertEqual
+  (codex:network-approval-call-outcomes-get
+    (codex:network-approval-service-call-outcomes
+      (observer-after-blocked))
+    "registration-1")
+  (codex:network-approval-outcome-denied-by-policy
+    "Network access to \"example.com\" was blocked: domain is not on the allowlist for the current sandbox mode."))
+
+(= (decider-no-session)
+   (codex:network-policy-decider-decide
+     (codex:build-network-policy-decider
+       (service-with-one-call)
+       CodexAbsent)
+     (inline-request)))
+
+!(assertEqual
+  (codex:network-policy-decider-result-decision
+    (decider-no-session))
+  (codex:network-decision-ask "not_allowed"))
+
+!(assertEqual
+  (codex:network-policy-decider-result-service
+    (decider-no-session))
+  (service-with-one-call))
+
+!(assertEqual
+  (codex:network-policy-decider-result-inline-result
+    (decider-no-session))
+  CodexAbsent)
+
+(= (decider-approved-for-session)
+   (codex:network-policy-decider-decide
+     (codex:build-network-policy-decider
+       (service-with-one-call)
+       (inline-default-input (CodexReviewDecisionApprovedForSession)))
+     (inline-request)))
+
+!(assertEqual
+  (codex:network-policy-decider-result-decision
+    (decider-approved-for-session))
+  (codex:network-decision-allow))
+
+!(assertEqual
+  (codex:network-approval-service-session-approved-hosts
+    (codex:network-policy-decider-result-service
+      (decider-approved-for-session)))
+  ((CodexHostApprovalKey "example.com" "https" 443)))
