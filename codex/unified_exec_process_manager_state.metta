@@ -39,6 +39,23 @@
         $last-used))
    $exit-code)
 
+(= (codex:unified-exec-process-entry-exit-code
+      (CodexUnifiedExecProcessEntry
+        (CodexUnifiedExecProcessWithOutputHandles
+          (CodexUnifiedExecProcessState
+            $has-exited
+            $exit-code
+            $failure-message)
+          $output-handles)
+        $call-id
+        $process-id
+        $hook-command
+        $tty
+        $network-approval-id
+        $session
+        $last-used))
+   $exit-code)
+
 (= (codex:unified-exec-process-status-alive
       $exit-code
       $call-id

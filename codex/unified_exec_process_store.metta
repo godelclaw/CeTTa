@@ -31,9 +31,11 @@
 ;   those two inputs explicitly; the later runtime manager can own the mutable
 ;   flag and feed the same decision helper.
 ; - Rust `ProcessEntry.process` is `Arc<UnifiedExecProcess>` and pruning reads
-;   `entry.process.has_exited()`. The current pure boundary stores the ported
-;   `CodexUnifiedExecProcessState` atom in the process slot because `has_exited`
-;   is the only process property used by this store/pruning slice.
+;   `entry.process.has_exited()`. Early pure slices stored the ported
+;   `CodexUnifiedExecProcessState` atom directly in the process slot because
+;   `has_exited` was the only process property used there. Later runtime-shape
+;   slices may wrap that state with side-effect handles; the store still reads
+;   only the same state bit Rust reads.
 ; - Rust `release_process_id` unregisters any deferred network approval after
 ;   removal. This pure helper returns the removed entry so the later side-effect
 ;   runtime slice can perform that unregister step without changing store
@@ -157,12 +159,50 @@
         $last-used))
    $last-used)
 
+(= (codex:unified-exec-process-entry-with-last-used
+      (CodexUnifiedExecProcessEntry
+        $process
+        $call-id
+        $process-id
+        $hook-command
+        $tty
+        $network-approval-id
+        $session
+        $last-used)
+      $new-last-used)
+   (CodexUnifiedExecProcessEntry
+     $process
+     $call-id
+     $process-id
+     $hook-command
+     $tty
+     $network-approval-id
+     $session
+     $new-last-used))
+
 (= (codex:unified-exec-process-entry-has-exited
       (CodexUnifiedExecProcessEntry
         (CodexUnifiedExecProcessState
           $has-exited
           $exit-code
           $failure-message)
+        $call-id
+        $process-id
+        $hook-command
+        $tty
+        $network-approval-id
+        $session
+        $last-used))
+   $has-exited)
+
+(= (codex:unified-exec-process-entry-has-exited
+      (CodexUnifiedExecProcessEntry
+        (CodexUnifiedExecProcessWithOutputHandles
+          (CodexUnifiedExecProcessState
+            $has-exited
+            $exit-code
+            $failure-message)
+          $output-handles)
         $call-id
         $process-id
         $hook-command
