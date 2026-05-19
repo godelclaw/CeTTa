@@ -27,6 +27,7 @@
 ;   the Rust default helper behavior already ported in `tool_sandboxing`.
 
 !(import! &self network_policy_decision)
+!(import! &self network_approval)
 !(import! &self sandbox_manager)
 !(import! &self str)
 !(import! &self tool_sandboxing)
@@ -445,6 +446,109 @@
 
 (= (codex:tool-orchestrator-run-err $tool-error)
    (CodexToolOrchestratorRunErr $tool-error))
+
+(= (codex:tool-orchestrator-run-attempt-finalize-result
+      $attempt-result
+      $network-approval-service)
+   (CodexToolOrchestratorRunAttemptFinalizeResult
+     $attempt-result
+     $network-approval-service))
+
+(= (codex:tool-orchestrator-run-attempt-finalize-result-attempt
+      (CodexToolOrchestratorRunAttemptFinalizeResult
+        $attempt-result
+        $network-approval-service))
+   $attempt-result)
+
+(= (codex:tool-orchestrator-run-attempt-finalize-result-service
+      (CodexToolOrchestratorRunAttemptFinalizeResult
+        $attempt-result
+        $network-approval-service))
+   $network-approval-service)
+
+(= (codex:tool-orchestrator-run-attempt-with-deferred
+      (CodexToolOrchestratorAttemptOk $output $ignored-deferred)
+      $deferred-network-approval)
+   (codex:tool-orchestrator-attempt-ok
+     $output
+     $deferred-network-approval))
+
+(= (codex:tool-orchestrator-run-attempt-with-deferred
+      (CodexToolOrchestratorAttemptErr $tool-error)
+      $deferred-network-approval)
+   (codex:tool-orchestrator-attempt-err $tool-error))
+
+(= (codex:tool-orchestrator-run-attempt-finalize-immediate
+      $network-approval-service
+      $run-result
+      $active-network-approval)
+   (let $finish-result
+     (codex:finish-immediate-network-approval
+       $network-approval-service
+       $active-network-approval)
+     (case
+       (codex:network-approval-finish-immediate-result-outcome
+         $finish-result)
+       (((CodexNetworkApprovalFinishImmediateOk)
+         (codex:tool-orchestrator-run-attempt-finalize-result
+           (codex:tool-orchestrator-run-attempt-with-deferred
+             $run-result
+             CodexAbsent)
+           (codex:network-approval-finish-immediate-result-service
+             $finish-result)))
+        ((CodexNetworkApprovalFinishImmediateErr $tool-error)
+         (codex:tool-orchestrator-run-attempt-finalize-result
+           (codex:tool-orchestrator-attempt-err $tool-error)
+           (codex:network-approval-finish-immediate-result-service
+             $finish-result)))))))
+
+(= (codex:tool-orchestrator-run-attempt-finalize-deferred
+      $network-approval-service
+      (CodexToolOrchestratorAttemptOk $output $ignored-deferred)
+      $active-network-approval)
+   (codex:tool-orchestrator-run-attempt-finalize-result
+     (codex:tool-orchestrator-attempt-ok
+       $output
+       (codex:active-network-approval-into-deferred
+         $active-network-approval))
+     $network-approval-service))
+
+(= (codex:tool-orchestrator-run-attempt-finalize-deferred
+      $network-approval-service
+      (CodexToolOrchestratorAttemptErr $tool-error)
+      $active-network-approval)
+   (codex:tool-orchestrator-run-attempt-finalize-result
+     (codex:tool-orchestrator-attempt-err $tool-error)
+     (codex:finish-deferred-network-approval
+       $network-approval-service
+       (codex:active-network-approval-into-deferred
+         $active-network-approval))))
+
+(= (codex:tool-orchestrator-run-attempt-finalize
+      $network-approval-service
+      $run-result
+      CodexAbsent)
+   (codex:tool-orchestrator-run-attempt-finalize-result
+     (codex:tool-orchestrator-run-attempt-with-deferred
+       $run-result
+       CodexAbsent)
+     $network-approval-service))
+
+(= (codex:tool-orchestrator-run-attempt-finalize
+      $network-approval-service
+      $run-result
+      (CodexActiveNetworkApproval $registration-id $mode))
+   (case $mode
+     (((CodexNetworkApprovalModeImmediate)
+       (codex:tool-orchestrator-run-attempt-finalize-immediate
+         $network-approval-service
+         $run-result
+         (CodexActiveNetworkApproval $registration-id $mode)))
+      ((CodexNetworkApprovalModeDeferred)
+       (codex:tool-orchestrator-run-attempt-finalize-deferred
+         $network-approval-service
+         $run-result
+         (CodexActiveNetworkApproval $registration-id $mode))))))
 
 (= (codex:permission-request-hook-decision-none)
    (CodexPermissionRequestHookDecisionNone))

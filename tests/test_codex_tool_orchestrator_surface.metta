@@ -1,4 +1,5 @@
 !(register-module! ../codex)
+!(import! &self codex:network_approval)
 !(import! &self codex:network_policy_decision)
 !(import! &self codex:permissions)
 !(import! &self codex:sandbox_tags)
@@ -45,6 +46,25 @@
      CodexAbsent
      (codex:permission-request-hook-decision-none)
      $decision))
+
+(= (network-trigger)
+   (codex:guardian-network-access-trigger
+     "call-1"
+     "shell"
+     ("curl" "https://example.com")
+     "/tmp/work"
+     "use_default"
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent))
+
+(= (network-service-with-call)
+   (codex:network-approval-register-call
+     (codex:network-approval-service-default)
+     "registration-1"
+     "turn-1"
+     (network-trigger)
+     "curl https://example.com"))
 
 (= (inputs $initial-approval $retry-approval $first-attempt $retry-attempt)
    (codex:tool-orchestrator-run-inputs
@@ -184,6 +204,78 @@
       (orchestrator)
       (default-turn)))
   CodexAbsent)
+
+!(assertEqual
+  (codex:tool-orchestrator-run-attempt-finalize
+    (codex:network-approval-service-default)
+    (codex:tool-orchestrator-attempt-ok "out-1" DeferredIgnored)
+    CodexAbsent)
+  (codex:tool-orchestrator-run-attempt-finalize-result
+    (codex:tool-orchestrator-attempt-ok "out-1" CodexAbsent)
+    (codex:network-approval-service-default)))
+
+(= (attempt-immediate-denied)
+   (codex:tool-orchestrator-run-attempt-finalize
+     (codex:network-approval-record-call-outcome
+       (network-service-with-call)
+       "registration-1"
+       (codex:network-approval-outcome-denied-by-policy
+         "network blocked"))
+     (codex:tool-orchestrator-attempt-ok "out-1" CodexAbsent)
+     (codex:active-network-approval
+       "registration-1"
+       (codex:network-approval-mode-immediate))))
+
+!(assertEqual
+  (codex:tool-orchestrator-run-attempt-finalize-result-attempt
+    (attempt-immediate-denied))
+  (codex:tool-orchestrator-attempt-err
+    (CodexToolErrorRejected "network blocked")))
+
+!(assertEqual
+  (codex:network-approval-service-active-calls
+    (codex:tool-orchestrator-run-attempt-finalize-result-service
+      (attempt-immediate-denied)))
+  ())
+
+!(assertEqual
+  (codex:tool-orchestrator-run-attempt-finalize
+    (network-service-with-call)
+    (codex:tool-orchestrator-attempt-err
+      (codex:tool-error-other "runtime failed"))
+    (codex:active-network-approval
+      "registration-1"
+      (codex:network-approval-mode-immediate)))
+  (codex:tool-orchestrator-run-attempt-finalize-result
+    (codex:tool-orchestrator-attempt-err
+      (codex:tool-error-other "runtime failed"))
+    (codex:network-approval-service-default)))
+
+!(assertEqual
+  (codex:tool-orchestrator-run-attempt-finalize
+    (network-service-with-call)
+    (codex:tool-orchestrator-attempt-ok "out-1" CodexAbsent)
+    (codex:active-network-approval
+      "registration-1"
+      (codex:network-approval-mode-deferred)))
+  (codex:tool-orchestrator-run-attempt-finalize-result
+    (codex:tool-orchestrator-attempt-ok
+      "out-1"
+      (codex:deferred-network-approval "registration-1"))
+    (network-service-with-call)))
+
+!(assertEqual
+  (codex:tool-orchestrator-run-attempt-finalize
+    (network-service-with-call)
+    (codex:tool-orchestrator-attempt-err
+      (codex:tool-error-other "runtime failed"))
+    (codex:active-network-approval
+      "registration-1"
+      (codex:network-approval-mode-deferred)))
+  (codex:tool-orchestrator-run-attempt-finalize-result
+    (codex:tool-orchestrator-attempt-err
+      (codex:tool-error-other "runtime failed"))
+    (codex:network-approval-service-default)))
 
 !(assertEqual
   (codex:tool-orchestrator-run
