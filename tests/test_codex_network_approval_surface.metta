@@ -57,8 +57,8 @@
 
 !(assertEqual
   (codex:host-approval-key-from-request
-    (codex:network-policy-request
-      (codex:network-protocol-https-connect)
+    (CodexNetworkPolicyRequest
+      (CodexNetworkProtocolHttpsConnect)
       "Example.COM"
       443))
   (host-key-https-443))
