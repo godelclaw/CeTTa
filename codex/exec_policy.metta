@@ -7,6 +7,7 @@
 ; - PrefixRuleMatch JSON shape
 ; - optional host-executable resolution and resolvedProgram JSON
 ; - HeuristicsRuleMatch fallback shape
+; - network-rule protocol parsing, host normalization, and compiled domains
 ; - strictest-decision aggregation across one or more commands
 ;
 ; This increment intentionally starts from already-parsed rule constructors
@@ -55,6 +56,9 @@
 
 (= (codex:policy-with-host-executables $rule_specs $host_executables)
    (codex:policy-from-parts $rule_specs () $host_executables))
+
+(= (codex:policy-with-network-rules $rule_specs $network_rules)
+   (codex:policy-from-parts $rule_specs $network_rules ()))
 
 (= (codex:policy-rules (CodexExecPolicy $rules))
    $rules)
@@ -241,6 +245,350 @@
 
 (= (codex:string-list-dedupe $values)
    (codex:string-list-dedupe-acc $values ()))
+
+(= (codex:exec-policy-string-list-remove $values $needle)
+   (if (== $values ())
+       ()
+       (let $head (list:first $values)
+         (let $tail (list:rest $values)
+           (let $rest (eval
+             (codex:exec-policy-string-list-remove $tail $needle))
+             (if (== $head $needle)
+                 $rest
+                 (cons-atom $head $rest)))))))
+
+(= (codex:exec-policy-upsert-domain $entries $host)
+   (list:push
+     (codex:exec-policy-string-list-remove $entries $host)
+     $host))
+
+(= (codex:exec-policy-ascii-lower-char $char)
+   (case $char
+     (("A" "a")
+      ("B" "b")
+      ("C" "c")
+      ("D" "d")
+      ("E" "e")
+      ("F" "f")
+      ("G" "g")
+      ("H" "h")
+      ("I" "i")
+      ("J" "j")
+      ("K" "k")
+      ("L" "l")
+      ("M" "m")
+      ("N" "n")
+      ("O" "o")
+      ("P" "p")
+      ("Q" "q")
+      ("R" "r")
+      ("S" "s")
+      ("T" "t")
+      ("U" "u")
+      ("V" "v")
+      ("W" "w")
+      ("X" "x")
+      ("Y" "y")
+      ("Z" "z")
+      ($other $other))))
+
+(= (codex:exec-policy-ascii-lower-text $text)
+   (if (== (str-length $text) 0)
+       ""
+       (str-concat
+         (codex:exec-policy-ascii-lower-char
+           (str-slice $text 0 1))
+         (codex:exec-policy-ascii-lower-text
+           (str-slice $text 1 (str-length $text))))))
+
+(= (codex:exec-policy-text-contains? $text $needle)
+   (case (str-find $text $needle)
+     ((Empty False)
+      ($index True))))
+
+(= (codex:exec-policy-has-network-rule-path-syntax? $host)
+   (if (codex:exec-policy-text-contains? $host "://")
+       True
+       (if (codex:exec-policy-text-contains? $host "/")
+           True
+           (if (codex:exec-policy-text-contains? $host "?")
+               True
+               (codex:exec-policy-text-contains? $host "#")))))
+
+(= (codex:exec-policy-is-ascii-digit-char? $char)
+   (if (== $char "0")
+       True
+       (if (== $char "1")
+           True
+           (if (== $char "2")
+               True
+               (if (== $char "3")
+                   True
+                   (if (== $char "4")
+                       True
+                       (if (== $char "5")
+                           True
+                           (if (== $char "6")
+                               True
+                               (if (== $char "7")
+                                   True
+                                   (if (== $char "8")
+                                       True
+                                       (== $char "9")))))))))))
+
+(= (codex:exec-policy-is-nonempty-ascii-digits? $text)
+   (if (== $text "")
+       False
+       (codex:exec-policy-is-ascii-digits-from? $text 0)))
+
+(= (codex:exec-policy-is-ascii-digits-from? $text $index)
+   (if (== $index (str-length $text))
+       True
+       (if (codex:exec-policy-is-ascii-digit-char?
+             (str-slice $text $index (+ $index 1)))
+           (codex:exec-policy-is-ascii-digits-from?
+             $text
+             (+ $index 1))
+           False)))
+
+(= (codex:exec-policy-count-char-from $text $char $index $acc)
+   (if (== $index (str-length $text))
+       $acc
+       (codex:exec-policy-count-char-from
+         $text
+         $char
+         (+ $index 1)
+         (if (== (str-slice $text $index (+ $index 1)) $char)
+             (+ $acc 1)
+             $acc))))
+
+(= (codex:exec-policy-count-char $text $char)
+   (codex:exec-policy-count-char-from $text $char 0 0))
+
+; Rust checks char::is_whitespace. The current CeTTa profile has no Unicode
+; whitespace predicate, so this mirrors the ASCII whitespace that can be
+; written portably in policy fixtures; a wider string primitive should replace
+; it when the parser slice needs Unicode-equivalent validation.
+(= (codex:exec-policy-has-ascii-whitespace-from? $text $index)
+   (if (== $index (str-length $text))
+       False
+       (let $char (str-slice $text $index (+ $index 1))
+         (if (== $char " ")
+             True
+             (if (== $char "\t")
+                 True
+                 (if (== $char "\n")
+                     True
+                     (if (== $char "\r")
+                         True
+                         (codex:exec-policy-has-ascii-whitespace-from?
+                           $text
+                           (+ $index 1)))))))))
+
+(= (codex:exec-policy-has-ascii-whitespace? $text)
+   (codex:exec-policy-has-ascii-whitespace-from? $text 0))
+
+(= (codex:exec-policy-trim-end-dots $text)
+   (if (== $text "")
+       ""
+       (if (str-ends-with? $text ".")
+           (codex:exec-policy-trim-end-dots
+             (str-slice $text 0 (- (str-length $text) 1)))
+           $text)))
+
+(= (codex:network-rule-protocol-http)
+   (CodexExecPolicyNetworkRuleProtocolHttp))
+
+(= (codex:network-rule-protocol-https)
+   (CodexExecPolicyNetworkRuleProtocolHttps))
+
+(= (codex:network-rule-protocol-socks5-tcp)
+   (CodexExecPolicyNetworkRuleProtocolSocks5Tcp))
+
+(= (codex:network-rule-protocol-socks5-udp)
+   (CodexExecPolicyNetworkRuleProtocolSocks5Udp))
+
+(= (codex:parse-network-rule-protocol $raw)
+   (if (== $raw "http")
+       (CodexExecPolicyNetworkRuleProtocolOk
+         (codex:network-rule-protocol-http))
+       (if (== $raw "https")
+           (CodexExecPolicyNetworkRuleProtocolOk
+             (codex:network-rule-protocol-https))
+           (if (== $raw "https_connect")
+               (CodexExecPolicyNetworkRuleProtocolOk
+                 (codex:network-rule-protocol-https))
+               (if (== $raw "http-connect")
+                   (CodexExecPolicyNetworkRuleProtocolOk
+                     (codex:network-rule-protocol-https))
+                   (if (== $raw "socks5_tcp")
+                       (CodexExecPolicyNetworkRuleProtocolOk
+                         (codex:network-rule-protocol-socks5-tcp))
+                       (if (== $raw "socks5_udp")
+                           (CodexExecPolicyNetworkRuleProtocolOk
+                             (codex:network-rule-protocol-socks5-udp))
+                           (CodexExecPolicyNetworkRuleProtocolError
+                             (str-concat
+                               "network_rule protocol must be one of http, https, socks5_tcp, socks5_udp (got "
+                               (str-concat $raw ")"))))))))))
+
+(= (codex:network-rule-protocol-policy-string
+      (CodexExecPolicyNetworkRuleProtocolHttp))
+   "http")
+
+(= (codex:network-rule-protocol-policy-string
+      (CodexExecPolicyNetworkRuleProtocolHttps))
+   "https")
+
+(= (codex:network-rule-protocol-policy-string
+      (CodexExecPolicyNetworkRuleProtocolSocks5Tcp))
+   "socks5_tcp")
+
+(= (codex:network-rule-protocol-policy-string
+      (CodexExecPolicyNetworkRuleProtocolSocks5Udp))
+   "socks5_udp")
+
+(= (codex:parse-network-rule-decision $raw)
+   (if (== $raw "deny")
+       (codex:decision-forbidden)
+       $raw))
+
+(= (codex:normalize-network-rule-host $raw)
+   (let $host (str-trim $raw)
+     (if (== $host "")
+         (CodexExecPolicyNetworkRuleHostError
+           "network_rule host cannot be empty")
+         (if (codex:exec-policy-has-network-rule-path-syntax? $host)
+             (CodexExecPolicyNetworkRuleHostError
+               "network_rule host must be a hostname or IP literal (without scheme or path)")
+             (if (str-starts-with? $host "[")
+                 (codex:normalize-network-rule-bracketed-host $raw $host)
+                 (codex:normalize-network-rule-unbracketed-host $host))))))
+
+(= (codex:normalize-network-rule-bracketed-host $raw $host)
+   (let $stripped (str-slice $host 1 (str-length $host))
+     (let $close-index (str-find $stripped "]")
+       (if (== $close-index Empty)
+           (CodexExecPolicyNetworkRuleHostError
+             "network_rule host has an invalid bracketed IPv6 literal")
+           (let $inside (str-slice $stripped 0 $close-index)
+             (let $rest
+               (str-slice $stripped (+ $close-index 1) (str-length $stripped))
+               (if (== $rest "")
+                   (codex:normalize-network-rule-finish-host $inside)
+                   (if (str-starts-with? $rest ":")
+                       (let $port (str-slice $rest 1 (str-length $rest))
+                         (if (codex:exec-policy-is-nonempty-ascii-digits? $port)
+                             (codex:normalize-network-rule-finish-host $inside)
+                             (CodexExecPolicyNetworkRuleHostError
+                               (str-concat
+                                 "network_rule host contains an unsupported suffix: "
+                                 $raw))))
+                       (CodexExecPolicyNetworkRuleHostError
+                         (str-concat
+                           "network_rule host contains an unsupported suffix: "
+                           $raw))))))))))
+
+(= (codex:normalize-network-rule-unbracketed-host $host)
+   (if (== (codex:exec-policy-count-char $host ":") 1)
+       (let $parts (str-split ":" $host)
+         (let $candidate (list:first $parts)
+           (let $port (list:first (list:rest $parts))
+             (if (and
+                   (not (== $candidate ""))
+                   (and
+                     (not (== $port ""))
+                     (codex:exec-policy-is-nonempty-ascii-digits? $port)))
+                 (codex:normalize-network-rule-finish-host $candidate)
+                 (codex:normalize-network-rule-finish-host $host)))))
+       (codex:normalize-network-rule-finish-host $host)))
+
+(= (codex:normalize-network-rule-finish-host $host)
+   (let $normalized
+     (codex:exec-policy-ascii-lower-text
+       (str-trim (codex:exec-policy-trim-end-dots $host)))
+     (if (== $normalized "")
+         (CodexExecPolicyNetworkRuleHostError
+           "network_rule host cannot be empty")
+         (if (codex:exec-policy-text-contains? $normalized "*")
+             (CodexExecPolicyNetworkRuleHostError
+               "network_rule host must be a specific host; wildcards are not allowed")
+             (if (codex:exec-policy-has-ascii-whitespace? $normalized)
+                 (CodexExecPolicyNetworkRuleHostError
+                   "network_rule host cannot contain whitespace")
+                 (CodexExecPolicyNetworkRuleHostOk $normalized))))))
+
+(= (codex:network-rule $host $protocol $decision)
+   (codex:network-rule $host $protocol $decision CodexAbsent))
+
+(= (codex:network-rule $host $protocol $decision $justification)
+   (case (codex:normalize-network-rule-host $host)
+     (((CodexExecPolicyNetworkRuleHostOk $normalized-host)
+       (CodexExecPolicyNetworkRule
+         $normalized-host
+         $protocol
+         $decision
+         $justification))
+      ((CodexExecPolicyNetworkRuleHostError $message)
+       (CodexExecPolicyNetworkRuleError $message)))))
+
+(= (codex:network-rule-host
+      (CodexExecPolicyNetworkRule $host $protocol $decision $justification))
+   $host)
+
+(= (codex:network-rule-protocol
+      (CodexExecPolicyNetworkRule $host $protocol $decision $justification))
+   $protocol)
+
+(= (codex:network-rule-decision
+      (CodexExecPolicyNetworkRule $host $protocol $decision $justification))
+   $decision)
+
+(= (codex:network-rule-justification
+      (CodexExecPolicyNetworkRule $host $protocol $decision $justification))
+   $justification)
+
+(= (codex:compiled-network-domains $policy)
+   (codex:compiled-network-domains-from-rules
+     (codex:policy-network-rules $policy)
+     ()
+     ()))
+
+(= (codex:compiled-network-domains-from-rules $rules $allowed $denied)
+   (if (== $rules ())
+       (CodexExecPolicyCompiledNetworkDomains $allowed $denied)
+       (let $rule (list:first $rules)
+         (let $tail (list:rest $rules)
+           (let $host (codex:network-rule-host $rule)
+             (let $decision (codex:network-rule-decision $rule)
+               (if (== $decision (codex:decision-allow))
+                   (codex:compiled-network-domains-from-rules
+                     $tail
+                     (codex:exec-policy-upsert-domain $allowed $host)
+                     (codex:exec-policy-string-list-remove $denied $host))
+                   (if (== $decision (codex:decision-forbidden))
+                       (codex:compiled-network-domains-from-rules
+                         $tail
+                         (codex:exec-policy-string-list-remove $allowed $host)
+                         (codex:exec-policy-upsert-domain $denied $host))
+                       (codex:compiled-network-domains-from-rules
+                         $tail
+                         $allowed
+                         $denied)))))))))
+
+(= (codex:compiled-network-domains-allowed
+      (CodexExecPolicyCompiledNetworkDomains $allowed $denied))
+   $allowed)
+
+(= (codex:compiled-network-domains-denied
+      (CodexExecPolicyCompiledNetworkDomains $allowed $denied))
+   $denied)
+
+(= (codex:compiled-network-domains-json
+      (CodexExecPolicyCompiledNetworkDomains $allowed $denied))
+   (JsonObject
+     ((JsonPair "allowed" (codex:string-list-json $allowed))
+      (JsonPair "denied" (codex:string-list-json $denied)))))
 
 ; Rust executable_lookup_key is identity on non-Windows builds. CeTTa currently
 ; runs this port in the Unix-like profile used by the test runner, so the same

@@ -127,7 +127,7 @@
          False)))
 
 (= (codex:is-known-safe-command? $tokens)
-   (let $parsed (codex:parse-command $tokens)
+   (let $parsed (once (eval (codex:parse-command $tokens)))
      (if (== $parsed ())
          False
          (codex:all-safe-parsed-commands? $parsed))))

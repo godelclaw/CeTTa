@@ -158,3 +158,80 @@
         ("unknown" "--flag")
         (codex:heuristics-fallback-decision (codex:decision-prompt)))))
   ("{\"matchedRules\":[{\"heuristicsRuleMatch\":{\"command\":[\"unknown\",\"--flag\"],\"decision\":\"prompt\"}}],\"decision\":\"prompt\"}"))
+
+!(assertEqualToResult
+  (codex:parse-network-rule-protocol "https_connect")
+  ((CodexExecPolicyNetworkRuleProtocolOk
+     (CodexExecPolicyNetworkRuleProtocolHttps))))
+
+!(assertEqualToResult
+  (codex:network-rule-protocol-policy-string
+    (codex:network-rule-protocol-socks5-udp))
+  ("socks5_udp"))
+
+!(assertEqualToResult
+  (codex:parse-network-rule-decision "deny")
+  ("forbidden"))
+
+!(assertEqualToResult
+  (codex:normalize-network-rule-host " Api.GitHub.com.:443 ")
+  ((CodexExecPolicyNetworkRuleHostOk "api.github.com")))
+
+!(assertEqualToResult
+  (codex:normalize-network-rule-host "[2001:DB8::1]:443")
+  ((CodexExecPolicyNetworkRuleHostOk "2001:db8::1")))
+
+!(assertEqualToResult
+  (codex:normalize-network-rule-host "https://api.github.com")
+  ((CodexExecPolicyNetworkRuleHostError
+     "network_rule host must be a hostname or IP literal (without scheme or path)")))
+
+!(assertEqualToResult
+  (codex:normalize-network-rule-host "*.example.com")
+  ((CodexExecPolicyNetworkRuleHostError
+     "network_rule host must be a specific host; wildcards are not allowed")))
+
+!(assertEqualToResult
+  (codex:normalize-network-rule-host "[::1]suffix")
+  ((CodexExecPolicyNetworkRuleHostError
+     "network_rule host contains an unsupported suffix: [::1]suffix")))
+
+!(assertEqualToResult
+  (codex:network-rule
+    "Api.GitHub.com"
+    (codex:network-rule-protocol-https)
+    (codex:decision-allow)
+    "Allow API")
+  ((CodexExecPolicyNetworkRule
+     "api.github.com"
+     (CodexExecPolicyNetworkRuleProtocolHttps)
+     "allow"
+     "Allow API")))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:compiled-network-domains-json
+      (codex:compiled-network-domains
+        (codex:policy-with-network-rules
+          ()
+          ((codex:network-rule
+             "api.github.com"
+             (codex:network-rule-protocol-https)
+             (codex:decision-allow))
+           (codex:network-rule
+             "bad.example"
+             (codex:network-rule-protocol-http)
+             (codex:decision-forbidden))
+           (codex:network-rule
+             "prompt.example"
+             (codex:network-rule-protocol-http)
+             (codex:decision-prompt))
+           (codex:network-rule
+             "api.github.com"
+             (codex:network-rule-protocol-https)
+             (codex:decision-forbidden))
+           (codex:network-rule
+             "bad.example"
+             (codex:network-rule-protocol-http)
+             (codex:decision-allow)))))))
+  ("{\"allowed\":[\"bad.example\"],\"denied\":[\"api.github.com\"]}"))
