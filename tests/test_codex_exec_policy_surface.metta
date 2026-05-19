@@ -235,3 +235,150 @@
              (codex:network-rule-protocol-http)
              (codex:decision-allow)))))))
   ("{\"allowed\":[\"bad.example\"],\"denied\":[\"api.github.com\"]}"))
+
+!(assertEqualToResult
+  (codex:policy-allowed-prefixes
+    (codex:policy
+      ((codex:prefix-rule
+         ((codex:pattern-token "z")))
+       (codex:prefix-rule
+         ((codex:pattern-token "a")))
+       (codex:prefix-rule
+         ((codex:pattern-token "a")))
+       (codex:prefix-rule
+         ((codex:pattern-any-of ("sh" "bash"))
+          (codex:pattern-any-of ("-c" "-lc"))))
+       (codex:prefix-rule
+         ((codex:pattern-token "git"))
+         (codex:decision-prompt)))))
+  ((("a") ("bash" "[-c|-lc]") ("sh" "[-c|-lc]") ("z"))))
+
+!(assertEqualToResult
+  (codex:policy-add-prefix-rule
+    (codex:policy ())
+    ()
+    (codex:decision-forbidden))
+  ((CodexExecPolicyRuleError "prefix cannot be empty")))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:check-output-json
+      (codex:check-policy
+        (codex:policy-add-prefix-rule
+          (codex:policy ())
+          ("rm")
+          (codex:decision-forbidden))
+        ("rm" "-rf" "/tmp/demo"))))
+  ("{\"matchedRules\":[{\"prefixRuleMatch\":{\"matchedPrefix\":[\"rm\"],\"decision\":\"forbidden\"}}],\"decision\":\"forbidden\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:check-output-json
+      (codex:check-policy-with-options
+        (codex:set-host-executable-paths
+          (codex:set-host-executable-paths
+            (codex:policy
+              ((codex:prefix-rule
+                 ((codex:pattern-token "rg"))
+                 (codex:decision-prompt))))
+            "rg"
+            ("/usr/local/bin/rg"))
+          "rg"
+          ("/usr/bin/rg"))
+        ("/usr/local/bin/rg" "--files")
+        (codex:match-options True))))
+  ("{\"matchedRules\":[]}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:check-output-json
+      (codex:check-policy-with-options
+        (codex:set-host-executable-paths
+          (codex:set-host-executable-paths
+            (codex:policy
+              ((codex:prefix-rule
+                 ((codex:pattern-token "rg"))
+                 (codex:decision-prompt))))
+            "rg"
+            ("/usr/local/bin/rg"))
+          "rg"
+          ("/usr/bin/rg"))
+        ("/usr/bin/rg" "--files")
+        (codex:match-options True))))
+  ("{\"matchedRules\":[{\"prefixRuleMatch\":{\"matchedPrefix\":[\"rg\"],\"decision\":\"prompt\",\"resolvedProgram\":\"/usr/bin/rg\"}}],\"decision\":\"prompt\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:check-output-json
+      (codex:check-policy
+        (codex:policy-merge-overlay
+          (codex:policy
+            ((codex:prefix-rule
+               ((codex:pattern-token "git"))
+               (codex:decision-allow))))
+          (codex:policy
+            ((codex:prefix-rule
+               ((codex:pattern-token "git")
+                (codex:pattern-token "commit"))
+               (codex:decision-forbidden)))))
+        ("git" "commit" "-m" "hi"))))
+  ("{\"matchedRules\":[{\"prefixRuleMatch\":{\"matchedPrefix\":[\"git\"],\"decision\":\"allow\"}},{\"prefixRuleMatch\":{\"matchedPrefix\":[\"git\",\"commit\"],\"decision\":\"forbidden\"}}],\"decision\":\"forbidden\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:check-output-json
+      (codex:check-policy-with-options
+        (codex:policy-merge-overlay
+          (codex:policy-with-host-executables
+            ((codex:prefix-rule
+               ((codex:pattern-token "git"))
+               (codex:decision-allow)))
+            ((codex:host-executable "git" ("/usr/bin/git"))))
+          (codex:policy-with-host-executables
+            ((codex:prefix-rule
+               ((codex:pattern-token "git")
+                (codex:pattern-token "commit"))
+               (codex:decision-forbidden)))
+            ((codex:host-executable "git" ("/opt/git")))))
+        ("/usr/bin/git" "commit")
+        (codex:match-options True))))
+  ("{\"matchedRules\":[]}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:check-output-json
+      (codex:check-policy-with-options
+        (codex:policy-merge-overlay
+          (codex:policy-with-host-executables
+            ((codex:prefix-rule
+               ((codex:pattern-token "git"))
+               (codex:decision-allow)))
+            ((codex:host-executable "git" ("/usr/bin/git"))))
+          (codex:policy-with-host-executables
+            ((codex:prefix-rule
+               ((codex:pattern-token "git")
+                (codex:pattern-token "commit"))
+               (codex:decision-forbidden)))
+            ((codex:host-executable "git" ("/opt/git")))))
+        ("/opt/git" "commit")
+        (codex:match-options True))))
+  ("{\"matchedRules\":[{\"prefixRuleMatch\":{\"matchedPrefix\":[\"git\"],\"decision\":\"allow\",\"resolvedProgram\":\"/opt/git\"}},{\"prefixRuleMatch\":{\"matchedPrefix\":[\"git\",\"commit\"],\"decision\":\"forbidden\",\"resolvedProgram\":\"/opt/git\"}}],\"decision\":\"forbidden\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:compiled-network-domains-json
+      (codex:compiled-network-domains
+        (codex:policy-merge-overlay
+          (codex:policy-with-network-rules
+            ()
+            ((codex:network-rule
+               "api.github.com"
+               (codex:network-rule-protocol-https)
+               (codex:decision-allow))))
+          (codex:policy-with-network-rules
+            ()
+            ((codex:network-rule
+               "api.github.com"
+               (codex:network-rule-protocol-https)
+               (codex:decision-forbidden))))))))
+  ("{\"allowed\":[],\"denied\":[\"api.github.com\"]}"))

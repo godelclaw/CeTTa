@@ -473,13 +473,13 @@ Approval policy is `granular`. Categories set to `false` are automatically rejec
    (if (== $rules ())
        ()
        (let ($head $tail) (decons-atom $rules)
-         (let $rest-prefixes (codex:permissions-collect-allowed-prefixes-rules $tail)
-           (case $head
-             (((CodexExecPolicyPrefixRule $first $rest "allow" $justification)
-               (cons-atom
-                 (codex:permissions-rule-prefix $head)
-                 $rest-prefixes))
-              ($other $rest-prefixes)))))))
+         (case (codex:permissions-collect-allowed-prefixes-rules $tail)
+           (($rest-prefixes
+             (if (== (codex:prefix-rule-decision $head) "allow")
+                 (case (codex:permissions-rule-prefix $head)
+                   (($prefix
+                     (cons-atom $prefix $rest-prefixes))))
+                 $rest-prefixes)))))))
 
 (= (codex:permissions-json-quoted-string $text)
    (json-stringify (JsonString $text)))
@@ -586,30 +586,31 @@ Approval policy is `granular`. Categories set to `false` are automatically rejec
                    (codex:permissions-render-bullet-lines $tail))))))))
 
 (= (codex:permissions-format-allow-prefixes $prefixes)
-   (let $sorted-rendered (codex:permissions-sorted-rendered-prefixes $prefixes)
-     (if (== $sorted-rendered ())
-         CodexAbsent
-         (let $prefix-count (list:len $sorted-rendered)
-           (let $truncated-by-count (> $prefix-count (codex:permissions-max-rendered-prefixes))
-             (let $limited-rendered
-               (codex:permissions-take-first-n
-                 $sorted-rendered
-                 (codex:permissions-max-rendered-prefixes))
-               (let $full-text
-                 (codex:permissions-render-bullet-lines $limited-rendered)
-                 (let $truncated-text
-                   (str-take-bytes-at-char-boundary
-                     $full-text
-                     (codex:permissions-max-allow-prefix-text-bytes))
-                   (let $truncated-by-bytes
-                     (< (str-length $truncated-text) (str-length $full-text))
-                     (if (codex:permissions-bool-or
-                           $truncated-by-count
-                           $truncated-by-bytes)
-                         (str-concat
-                           $truncated-text
-                           (codex:permissions-truncated-marker))
-                         $full-text))))))))))
+   (case (codex:permissions-sorted-rendered-prefixes $prefixes)
+     (($sorted-rendered
+       (if (== $sorted-rendered ())
+           CodexAbsent
+           (let $prefix-count (list:len $sorted-rendered)
+             (let $truncated-by-count (> $prefix-count (codex:permissions-max-rendered-prefixes))
+               (let $limited-rendered
+                 (codex:permissions-take-first-n
+                   $sorted-rendered
+                   (codex:permissions-max-rendered-prefixes))
+                 (let $full-text
+                   (codex:permissions-render-bullet-lines $limited-rendered)
+                   (let $truncated-text
+                     (str-take-bytes-at-char-boundary
+                       $full-text
+                       (codex:permissions-max-allow-prefix-text-bytes))
+                     (let $truncated-by-bytes
+                       (< (str-length $truncated-text) (str-length $full-text))
+                       (if (codex:permissions-bool-or
+                             $truncated-by-count
+                             $truncated-by-bytes)
+                           (str-concat
+                             $truncated-text
+                             (codex:permissions-truncated-marker))
+                           $full-text))))))))))))
 
 (= (codex:permissions-approved-command-prefixes-text $exec-policy)
    (codex:permissions-format-allow-prefixes $exec-policy))

@@ -46,13 +46,37 @@
    (CodexExecPolicyPrefixRuleSpec $pattern $decision $justification))
 
 (= (codex:policy $rule_specs)
-   (CodexExecPolicy (codex:expand-prefix-rule-specs $rule_specs)))
+   (CodexExecPolicy
+     (codex:exec-policy-materialize-list
+       (codex:expand-prefix-rule-specs $rule_specs))))
+
+; Rust Policy fields are concrete collections. Force list-producing CeTTa
+; constructors at policy boundaries so callers do not observe producer terms.
+(= (codex:exec-policy-materialize-list $values)
+   (case (once (eval $values))
+     (($materialized-values
+       (codex:exec-policy-materialize-list-inner $materialized-values)))))
+
+(= (codex:exec-policy-materialize-list-inner $values)
+   (if (== $values ())
+       ()
+       (let $head (list:first $values)
+         (let $tail (list:rest $values)
+           (case (once (eval $head))
+             (($materialized-head
+               (case
+                 (codex:exec-policy-materialize-list-inner $tail)
+                 (($materialized-tail
+                   (cons-atom
+                     $materialized-head
+                     $materialized-tail)))))))))))
 
 (= (codex:policy-from-parts $rule_specs $network_rules $host_executables)
    (CodexExecPolicyFull
-     (codex:expand-prefix-rule-specs $rule_specs)
-     $network_rules
-     $host_executables))
+     (codex:exec-policy-materialize-list
+       (codex:expand-prefix-rule-specs $rule_specs))
+     (codex:exec-policy-materialize-list $network_rules)
+     (codex:exec-policy-materialize-list $host_executables)))
 
 (= (codex:policy-with-host-executables $rule_specs $host_executables)
    (codex:policy-from-parts $rule_specs () $host_executables))
@@ -80,6 +104,12 @@
 (= (codex:policy-host-executables
       (CodexExecPolicyFull $rules $network_rules $host_executables))
    $host_executables)
+
+(= (codex:policy-rebuild-like $policy $rules $network_rules $host_executables)
+   (CodexExecPolicyFull
+     (codex:exec-policy-materialize-list $rules)
+     (codex:exec-policy-materialize-list $network_rules)
+     (codex:exec-policy-materialize-list $host_executables)))
 
 (= (codex:match-options)
    (CodexExecPolicyMatchOptions False))
@@ -245,6 +275,19 @@
 
 (= (codex:string-list-dedupe $values)
    (codex:string-list-dedupe-acc $values ()))
+
+(= (codex:exec-policy-dedup-sorted-strings $items)
+   (if (== $items ())
+       ()
+       (let $head (list:first $items)
+         (let $tail (list:rest $items)
+           (if (== $tail ())
+               ($head)
+               (let $dedup-tail
+                 (codex:exec-policy-dedup-sorted-strings $tail)
+                 (if (== $head (list:first $dedup-tail))
+                     $dedup-tail
+                     (cons-atom $head $dedup-tail))))))))
 
 (= (codex:exec-policy-string-list-remove $values $needle)
    (if (== $values ())
@@ -635,6 +678,29 @@
       (CodexExecPolicyHostExecutable $name $paths))
    $paths)
 
+(= (codex:remove-host-executable-by-name $host_executables $name)
+   (if (== $host_executables ())
+       ()
+       (let $head (list:first $host_executables)
+         (let $tail (list:rest $host_executables)
+           (let $rest
+             (eval (codex:remove-host-executable-by-name $tail $name))
+             (if (== (codex:host-executable-name $head) $name)
+                 $rest
+                 (cons-atom $head $rest)))))))
+
+(= (codex:set-host-executable-paths $policy $name $paths)
+   (let $normalized-name (codex:executable-lookup-key $name)
+     (codex:policy-rebuild-like
+       $policy
+       (codex:policy-rules $policy)
+       (codex:policy-network-rules $policy)
+       (list:push
+         (codex:remove-host-executable-by-name
+           (codex:policy-host-executables $policy)
+           $normalized-name)
+         (codex:host-executable $normalized-name $paths)))))
+
 (= (codex:host-executable-paths-for-name $host_executables $name)
    (codex:host-executable-paths-for-name-acc
      $host_executables
@@ -659,6 +725,147 @@
    (if (== $paths CodexAbsent)
        True
        (codex:string-list-contains? $paths $program)))
+
+(= (codex:prefix-rule-from-raw-prefix $prefix $decision)
+   (if (== $prefix ())
+       (CodexExecPolicyPrefixRuleError
+         "prefix cannot be empty")
+       (let $first (list:first $prefix)
+         (let $rest (eval (list:rest $prefix))
+           (CodexExecPolicyPrefixRule
+             $first
+             (eval
+               (map-atom
+                 $rest
+                 $token
+                 (codex:pattern-token $token)))
+             $decision
+             CodexAbsent)))))
+
+(= (codex:policy-add-prefix-rule $policy $prefix $decision)
+   (if (== $prefix ())
+       (CodexExecPolicyRuleError "prefix cannot be empty")
+       (codex:policy-rebuild-like
+         $policy
+         (list:push
+           (codex:policy-rules $policy)
+           (codex:prefix-rule-from-raw-prefix $prefix $decision))
+         (codex:policy-network-rules $policy)
+         (codex:policy-host-executables $policy))))
+
+(= (codex:merge-host-executables $base $overlay)
+   (if (== $overlay ())
+       $base
+       (let $head (list:first $overlay)
+         (let $tail (list:rest $overlay)
+           (codex:merge-host-executables
+             (list:push
+               (codex:remove-host-executable-by-name
+                 $base
+                 (codex:host-executable-name $head))
+               $head)
+             $tail)))))
+
+(= (codex:policy-merge-overlay $base $overlay)
+   (codex:policy-rebuild-like
+     $base
+     (list:append
+       (codex:policy-rules $base)
+       (codex:policy-rules $overlay))
+     (list:append
+       (codex:policy-network-rules $base)
+       (codex:policy-network-rules $overlay))
+     (codex:merge-host-executables
+       (codex:policy-host-executables $base)
+       (codex:policy-host-executables $overlay))))
+
+(= (codex:render-pattern-token
+      (CodexExecPolicyPatternTokenSingle $value))
+   $value)
+
+(= (codex:render-pattern-token
+      (CodexExecPolicyPatternTokenAlts $alternatives))
+   (str-concat
+     "["
+     (str-concat (str-join "|" $alternatives) "]")))
+
+(= (codex:render-pattern-token-list $tokens)
+   (if (== $tokens ())
+       ()
+       (let $head (list:first $tokens)
+         (let $tail (list:rest $tokens)
+           (case (codex:render-pattern-token $head)
+             (($rendered-head
+               (case (codex:render-pattern-token-list $tail)
+                 (($rendered-tail
+                   (cons-atom $rendered-head $rendered-tail)))))))))))
+
+(= (codex:rule-allowed-prefix
+      (CodexExecPolicyPrefixRule $first $rest "allow" $justification))
+   (case (codex:render-pattern-token-list $rest)
+     (($rendered-rest
+       (cons-atom $first $rendered-rest)))))
+
+(= (codex:rule-allowed-prefix
+      (CodexExecPolicyPrefixRule $first $rest "prompt" $justification))
+   CodexAbsent)
+
+(= (codex:rule-allowed-prefix
+      (CodexExecPolicyPrefixRule $first $rest "forbidden" $justification))
+   CodexAbsent)
+
+(= (codex:policy-allowed-prefix-record $prefix)
+   (json-stringify (codex:string-list-json $prefix)))
+
+(= (codex:policy-allowed-prefixes-from-rules $rules)
+   (if (== $rules ())
+       ()
+       (let $head (list:first $rules)
+         (let $tail (list:rest $rules)
+           (let $rest (codex:policy-allowed-prefixes-from-rules $tail)
+             (let $prefix (codex:rule-allowed-prefix $head)
+               (if (== $prefix CodexAbsent)
+                   $rest
+                   (cons-atom $prefix $rest))))))))
+
+(= (codex:policy-allowed-prefix-records $prefixes)
+   (eval
+     (map-atom
+       $prefixes
+       $prefix
+       (codex:policy-allowed-prefix-record $prefix))))
+
+(= (codex:policy-allowed-prefix-for-record $prefixes $record)
+   (let $head (list:first $prefixes)
+     (let $tail (list:rest $prefixes)
+       (if (== (codex:policy-allowed-prefix-record $head) $record)
+           $head
+           (codex:policy-allowed-prefix-for-record $tail $record)))))
+
+(= (codex:policy-allowed-prefixes-from-records $prefixes $records)
+   (if (== $records ())
+       ()
+       (let $head (list:first $records)
+         (let $tail (list:rest $records)
+           (case (codex:policy-allowed-prefix-for-record $prefixes $head)
+             (($prefix
+               (case
+                 (codex:policy-allowed-prefixes-from-records
+                   $prefixes
+                   $tail)
+                 (($rest
+                   (cons-atom $prefix $rest)))))))))))
+
+(= (codex:policy-allowed-prefixes $policy)
+   (let $prefixes
+     (codex:policy-allowed-prefixes-from-rules
+       (codex:policy-rules $policy))
+     (case (codex:policy-allowed-prefix-records $prefixes)
+       (($records
+         (codex:policy-allowed-prefixes-from-records
+           $prefixes
+           (codex:exec-policy-dedup-sorted-strings
+             (sort-strings $records))))))))
 
 (= (codex:expand-prefix-rule-specs $rule_specs)
    (if (== $rule_specs ())

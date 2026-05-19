@@ -345,11 +345,18 @@
          (let $rest (eval (codex:drop-small-formatting-commands $tail))
            (cons-atom $head $rest)))))
 
+; Same map over command groups as the Rust parser; explicit recursion keeps the
+; result concrete when callers force parsing inside approval checks.
+(= (codex:parse-token-groups ())
+   ())
+
 (= (codex:parse-token-groups $commands)
-   (function
-     (let $parsed
-       (eval (map-atom $commands $tokens (codex:summarize-main-tokens $tokens)))
-       (return $parsed))))
+   (let ($head $tail) (decons-atom $commands)
+     (case (codex:parse-token-groups $tail)
+       (($parsed-tail
+         (cons-atom
+           (codex:summarize-main-tokens $head)
+           $parsed-tail))))))
 
 (= (codex:parse-command-token-groups $commands)
    (let $filtered (codex:drop-small-formatting-commands $commands)
