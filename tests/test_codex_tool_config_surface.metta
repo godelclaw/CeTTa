@@ -116,6 +116,71 @@
   ("ZshFork"))
 
 !(assertEqualToResult
+  (codex:unified-exec-shell-mode-for-session
+    True
+    (codex:shell-command-backend-config-zsh-fork)
+    (codex:tool-user-shell-type-zsh)
+    "/opt/codex/zsh"
+    "/opt/codex/codex-execve-wrapper")
+  ((CodexUnifiedExecShellModeZshFork
+     "/opt/codex/zsh"
+     "/opt/codex/codex-execve-wrapper")))
+
+!(assertEqualToResult
+  (codex:unified-exec-shell-mode-for-session
+    False
+    (codex:shell-command-backend-config-zsh-fork)
+    (codex:tool-user-shell-type-zsh)
+    "/opt/codex/zsh"
+    "/opt/codex/codex-execve-wrapper")
+  ("Direct"))
+
+!(assertEqualToResult
+  (codex:unified-exec-shell-mode-for-session
+    True
+    (codex:shell-command-backend-config-classic)
+    (codex:tool-user-shell-type-zsh)
+    "/opt/codex/zsh"
+    "/opt/codex/codex-execve-wrapper")
+  ("Direct"))
+
+!(assertEqualToResult
+  (codex:unified-exec-shell-mode-for-session
+    True
+    (codex:shell-command-backend-config-zsh-fork)
+    (codex:tool-user-shell-type-bash)
+    "/opt/codex/zsh"
+    "/opt/codex/codex-execve-wrapper")
+  ("Direct"))
+
+!(assertEqualToResult
+  (codex:unified-exec-shell-mode-for-session
+    True
+    (codex:shell-command-backend-config-zsh-fork)
+    (codex:tool-user-shell-type-zsh)
+    "relative-zsh"
+    "/opt/codex/codex-execve-wrapper")
+  ("Direct"))
+
+!(assertEqualToResult
+  (codex:tools-config-unified-exec-shell-mode
+    (codex:tools-config-with-unified-exec-shell-mode-for-session
+      (codex:tools-config-new
+        (codex:tools-config-new-params
+          (codex-tool-config-default-model)
+          (codex-tool-config-zsh-fork-features)
+          False
+          (codex:tool-config-sandbox-policy-danger-full-access)
+          (codex:windows-sandbox-level-disabled)))
+      True
+      (codex:tool-user-shell-type-zsh)
+      "/opt/codex/zsh"
+      "/opt/codex/codex-execve-wrapper"))
+  ((CodexUnifiedExecShellModeZshFork
+     "/opt/codex/zsh"
+     "/opt/codex/codex-execve-wrapper")))
+
+!(assertEqualToResult
   (codex:tools-config-apply-patch-tool-type
     (codex:tools-config-new
       (codex:tools-config-new-params

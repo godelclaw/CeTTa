@@ -10,6 +10,7 @@
 ; - apply_patch tool type selection
 ; - request_permissions / request_user_input feature gating fields
 ; - view_image original-detail capability wiring
+; - UnifiedExecShellMode::for_session branch selection
 ; - builder-style `with_*` helpers used by Rust tests and callers
 ;
 ; Required slice-local deviations from Rust, documented for later audit:
@@ -22,12 +23,12 @@
 ;   equivalent host probe, so the constructor follows the Rust branch structure
 ;   but assumes the non-ConPTY fallback question is out of scope for this
 ;   restart subset.
-; - Rust threads `UnifiedExecShellMode::for_session()` through absolute-path
-;   wrappers and user-shell inspection. The current registry slice only needs
-;   the default `Direct` mode, so this module stores the field but does not yet
-;   port the per-session mode-selection helper.
+; - Rust gates `UnifiedExecShellMode::for_session()` with `cfg!(unix)`. This
+;   pure CeTTa helper accepts that platform branch as an explicit boolean so
+;   tests can cover both sides without changing the branch condition.
 
 !(import! &self image_detail)
+!(import! &self path)
 
 (= (codex:config-shell-tool-type-default)
    "Default")
@@ -58,6 +59,28 @@
 
 (= (codex:unified-exec-shell-mode-direct)
    "Direct")
+
+(= (codex:unified-exec-shell-mode-zsh-fork
+      $shell-zsh-path
+      $main-execve-wrapper-exe)
+   (CodexUnifiedExecShellModeZshFork
+     $shell-zsh-path
+     $main-execve-wrapper-exe))
+
+(= (codex:tool-user-shell-type-zsh)
+   (CodexToolUserShellTypeZsh))
+
+(= (codex:tool-user-shell-type-bash)
+   (CodexToolUserShellTypeBash))
+
+(= (codex:tool-user-shell-type-powershell)
+   (CodexToolUserShellTypePowerShell))
+
+(= (codex:tool-user-shell-type-sh)
+   (CodexToolUserShellTypeSh))
+
+(= (codex:tool-user-shell-type-cmd)
+   (CodexToolUserShellTypeCmd))
 
 (= (codex:tool-config-sandbox-policy-danger-full-access)
    "DangerFullAccess")
@@ -530,6 +553,74 @@
      $default-mode-request-user-input
      $experimental-supported-tools
      $can-request-original-image-detail))
+
+(= (codex:unified-exec-shell-mode-for-session
+      $is-unix
+      $shell-command-backend
+      $user-shell-type
+      $shell-zsh-path
+      $main-execve-wrapper-exe)
+   (if (and
+         $is-unix
+         (and
+           (==
+             $shell-command-backend
+             (codex:shell-command-backend-config-zsh-fork))
+           (and
+             (== $user-shell-type (codex:tool-user-shell-type-zsh))
+             (and
+               (not (== $shell-zsh-path CodexAbsent))
+               (and
+                 (not (== $main-execve-wrapper-exe CodexAbsent))
+                 (and
+                   (path-is-absolute? $shell-zsh-path)
+                   (path-is-absolute? $main-execve-wrapper-exe)))))))
+       (codex:unified-exec-shell-mode-zsh-fork
+         (path-normalize $shell-zsh-path)
+         (path-normalize $main-execve-wrapper-exe))
+       (codex:unified-exec-shell-mode-direct)))
+
+(= (codex:tools-config-with-unified-exec-shell-mode
+      (CodexToolsConfig
+        $shell-type
+        $shell-command-backend
+        $unified-exec-shell-mode
+        $has-environment
+        $allow-login-shell
+        $apply-patch-tool-type
+        $exec-permission-approvals-enabled
+        $request-permissions-tool-enabled
+        $default-mode-request-user-input
+        $experimental-supported-tools
+        $can-request-original-image-detail)
+      $next-unified-exec-shell-mode)
+   (codex:tools-config
+     $shell-type
+     $shell-command-backend
+     $next-unified-exec-shell-mode
+     $has-environment
+     $allow-login-shell
+     $apply-patch-tool-type
+     $exec-permission-approvals-enabled
+     $request-permissions-tool-enabled
+     $default-mode-request-user-input
+     $experimental-supported-tools
+     $can-request-original-image-detail))
+
+(= (codex:tools-config-with-unified-exec-shell-mode-for-session
+      $config
+      $is-unix
+      $user-shell-type
+      $shell-zsh-path
+      $main-execve-wrapper-exe)
+   (codex:tools-config-with-unified-exec-shell-mode
+     $config
+     (codex:unified-exec-shell-mode-for-session
+       $is-unix
+       (codex:tools-config-shell-command-backend $config)
+       $user-shell-type
+       $shell-zsh-path
+       $main-execve-wrapper-exe)))
 
 (= (codex:is-unrestricted-tool-config-sandbox-policy $policy)
    (if (== $policy (codex:tool-config-sandbox-policy-danger-full-access))
