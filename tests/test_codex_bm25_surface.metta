@@ -6,6 +6,27 @@
   (("bacon" "sandwich")))
 
 !(assertEqualToResult
+  (codex:bm25-tokenize "space,station")
+  (("space" "station")))
+
+!(assertEqualToResult
+  (codex:bm25-tokenize "space, station!")
+  (("space" "station")))
+
+!(assertEqualToResult
+  (codex:bm25-tokenize ".,;!?")
+  (()))
+
+!(assertEqualToResult
+  (codex:bm25-tokenize "42 1337 3.14")
+  (("42" "1337" "3.14")))
+
+!(assertEqualToResult
+  (codex:bm25-tokenize
+    "i me my myself we our ours ourselves you you're you've you'll you'd your yours yourself yourselves")
+  (()))
+
+!(assertEqualToResult
   (codex:bm25-average-document-length
     ((CodexBm25DocumentTokens
        (CodexBm25Document 0 "a b")

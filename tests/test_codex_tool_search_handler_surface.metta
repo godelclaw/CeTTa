@@ -141,6 +141,20 @@
        CodexAbsent)
      "menu")))
 
+!(assertEqual
+  (codex:tool-search-search-result-entries
+    ((test:entry
+       "bacon sandwich"
+       (test:mcp-output "menu" "mcp__menu__" "short")
+       "menu"))
+    "bacon, sandwich"
+    8
+    False)
+  ((test:entry
+     "bacon sandwich"
+     (test:mcp-output "menu" "mcp__menu__" "short")
+     "menu")))
+
 !(assertEqualToResult
   (codex:tool-search-mcp-namespace-description
     "mcp__calendar__"
