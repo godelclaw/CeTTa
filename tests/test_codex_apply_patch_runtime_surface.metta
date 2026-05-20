@@ -3,6 +3,7 @@
 !(import! &self codex:apply_patch)
 !(import! &self codex:apply_patch_runtime)
 !(import! &self codex:approval)
+!(import! &self codex:permissions)
 !(import! &self codex:protocol)
 !(import! &self codex:request_permissions)
 !(import! &self codex:tool_sandboxing)
@@ -43,6 +44,66 @@
      (codex:approval-needs-approval CodexAbsent)
      CodexAbsent
      True))
+
+(= (runtime-request-with-additional-permissions)
+   (codex:apply-patch-runtime-request
+     (patch-action)
+     (patch-text)
+     ("/repo/a.txt")
+     ((codex:file-change-map-entry
+        "a.txt"
+        (codex:file-change-add "hello\n")))
+     False
+     (codex:approval-needs-approval CodexAbsent)
+     (codex:request-permission-profile
+       (codex:request-permissions-network True)
+       (codex:request-permissions-file-system () ("/repo/extra")))
+     False))
+
+(= (runtime-base-file-system-policy)
+   (codex:file-system-sandbox-policy-restricted
+     ((codex:file-system-sandbox-entry
+        (codex:file-system-path-path "/repo")
+        (codex:file-system-access-read)))))
+
+(= (runtime-merged-file-system-policy)
+   (codex:file-system-sandbox-policy-restricted
+     ((codex:file-system-sandbox-entry
+        (codex:file-system-path-path "/repo")
+        (codex:file-system-access-read))
+      (codex:file-system-sandbox-entry
+        (codex:file-system-path-path "/repo/extra")
+        (codex:file-system-access-write)))))
+
+(= (runtime-sandbox-attempt)
+   (CodexSandboxAttempt
+     "MacosSeatbelt"
+     (codex:session-sandbox-policy-read-only
+       (codex:session-read-only-access-full)
+       (codex:session-network-access-restricted))
+     (runtime-base-file-system-policy)
+     (codex:network-sandbox-policy-restricted)
+     False
+     SandboxManager
+     "/repo"
+     CodexAbsent
+     True
+     (codex:windows-sandbox-level-restricted-token)
+     True))
+
+(= (runtime-no-sandbox-attempt)
+   (CodexSandboxAttempt
+     "None"
+     (codex:session-sandbox-policy-danger-full-access)
+     (codex:file-system-sandbox-policy-unrestricted)
+     (codex:network-sandbox-policy-enabled)
+     False
+     SandboxManager
+     "/repo"
+     CodexAbsent
+     False
+     (codex:windows-sandbox-level-disabled)
+     False))
 
 (= (approval-ctx $guardian-review-id $retry-reason)
    (codex:approval-ctx
@@ -253,3 +314,43 @@
     "/repo"
     ("/repo/a.txt")
     (patch-text)))
+
+!(assertEqual
+  (codex:apply-patch-runtime-effective-file-system-sandbox-policy
+    (runtime-base-file-system-policy)
+    (codex:request-permission-profile
+      CodexAbsent
+      (codex:request-permissions-file-system () ("/repo/extra"))))
+  (runtime-merged-file-system-policy))
+
+!(assertEqual
+  (codex:apply-patch-runtime-effective-network-sandbox-policy
+    (codex:network-sandbox-policy-restricted)
+    (codex:request-permission-profile
+      (codex:request-permissions-network True)
+      CodexAbsent))
+  (codex:network-sandbox-policy-enabled))
+
+!(assertEqual
+  (codex:apply-patch-runtime-file-system-sandbox-context-for-attempt
+    (runtime)
+    (runtime-request-with-additional-permissions)
+    (runtime-sandbox-attempt))
+  (codex:apply-patch-runtime-file-system-sandbox-context
+    (codex:apply-patch-runtime-permission-profile-managed
+      (codex:apply-patch-runtime-managed-file-system-permissions-restricted
+        (codex:file-system-sandbox-policy-entries
+          (runtime-merged-file-system-policy))
+        CodexAbsent)
+      (codex:network-sandbox-policy-enabled))
+    "/repo"
+    (codex:windows-sandbox-level-restricted-token)
+    True
+    True))
+
+!(assertEqual
+  (codex:apply-patch-runtime-file-system-sandbox-context-for-attempt
+    (runtime)
+    (runtime-request)
+    (runtime-no-sandbox-attempt))
+  CodexAbsent)
