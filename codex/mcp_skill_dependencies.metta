@@ -15,6 +15,7 @@
 ; - `filter_prompted_mcp_dependencies`
 ; - `maybe_install_mcp_dependencies` pre-persist planning and install merge
 ; - `maybe_install_mcp_dependencies` post-persist OAuth login planning
+; - `maybe_install_mcp_dependencies` refresh overlay planning
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust stores installed/missing MCP servers in `HashMap<String,
@@ -45,6 +46,10 @@
 ;   values, then returns the same notify/login/warn operations for the runtime
 ;   layer to execute in Rust loop order. The actual network/browser OAuth flow
 ;   is intentionally not performed in this pure planner.
+; - Rust refreshes a `HashMap` returned by `effective_servers`, then overlays
+;   updated global servers with `entry(...).or_insert_with(...)`. This helper
+;   represents both maps as entry lists, preserves the effective-server entry
+;   for name collisions, and appends missing updated globals in input order.
 
 !(import! &self list)
 !(import! &self mcp)
@@ -343,6 +348,17 @@
 
 (= (codex:mcp-dependency-oauth-login-err $error)
    (CodexMcpDependencyOAuthLoginErr $error))
+
+(= (codex:mcp-dependency-refresh-servers-op $servers $store-mode)
+   (CodexMcpDependencyRefreshServersOp $servers $store-mode))
+
+(= (codex:mcp-dependency-refresh-servers-op-servers
+      (CodexMcpDependencyRefreshServersOp $servers $store-mode))
+   $servers)
+
+(= (codex:mcp-dependency-refresh-servers-op-store-mode
+      (CodexMcpDependencyRefreshServersOp $servers $store-mode))
+   $store-mode)
 
 (= (codex:mcp-dependency-collect-state-seen
       (CodexMcpDependencyCollectState $seen-canonical-keys $missing))
@@ -984,6 +1000,36 @@
               (codex:mcp-dependency-oauth-failed-login-message
                 $name
                 $error))))))))
+
+(= (codex:mcp-dependency-refresh-overlay-servers
+      $effective-servers
+      ())
+   $effective-servers)
+
+(= (codex:mcp-dependency-refresh-overlay-servers
+      $effective-servers
+      $updated-global-servers)
+   (let $entry (list:first $updated-global-servers)
+     (let $tail (list:rest $updated-global-servers)
+       (if (codex:mcp-server-entry-list-contains-name
+             $effective-servers
+             (codex:mcp-server-entry-name $entry))
+           (codex:mcp-dependency-refresh-overlay-servers
+             $effective-servers
+             $tail)
+           (codex:mcp-dependency-refresh-overlay-servers
+             (list:append $effective-servers ($entry))
+             $tail)))))
+
+(= (codex:mcp-dependency-refresh-servers-plan
+      $effective-servers
+      $updated-global-servers
+      $store-mode)
+   (codex:mcp-dependency-refresh-servers-op
+     (codex:mcp-dependency-refresh-overlay-servers
+       $effective-servers
+       $updated-global-servers)
+     $store-mode))
 
 (= (codex:mcp-server-entries-by-sorted-names () $entries)
    ())

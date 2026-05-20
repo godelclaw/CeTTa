@@ -892,3 +892,81 @@
         "retry rejected")))
   (((CodexMcpDependencyOAuthWarnOp
       "failed to login to MCP dependency memory: OAuth error: retry rejected"))))
+
+!(assertEqualToResult
+  (codex:mcp-server-entry-names
+    (codex:mcp-dependency-refresh-servers-op-servers
+      (codex:mcp-dependency-refresh-servers-plan
+        ((codex:mcp-server-entry
+           "repo"
+           (codex:mcp-dependency-default-http-config "https://repo.test/mcp"))
+         (codex:mcp-server-entry
+           "memory"
+           (codex:mcp-dependency-default-http-config "https://repo-memory.test/mcp")))
+        ((codex:mcp-server-entry
+           "memory"
+           (codex:mcp-dependency-default-http-config "https://global-memory.test/mcp"))
+         (codex:mcp-server-entry
+           "docs"
+           (codex:mcp-dependency-default-stdio-config "docs-server")))
+        "keyring")))
+  (("repo" "memory" "docs")))
+
+!(assertEqualToResult
+  (codex:mcp-server-transport-streamable-http-url
+    (codex:mcp-server-config-transport
+      (codex:mcp-server-entry-config
+        (codex:mcp-server-entry-by-name
+          (codex:mcp-dependency-refresh-servers-op-servers
+            (codex:mcp-dependency-refresh-servers-plan
+              ((codex:mcp-server-entry
+                 "memory"
+                 (codex:mcp-dependency-default-http-config
+                   "https://repo-memory.test/mcp")))
+              ((codex:mcp-server-entry
+                 "memory"
+                 (codex:mcp-dependency-default-http-config
+                   "https://global-memory.test/mcp")))
+              "file"))
+          "memory"))))
+  ("https://repo-memory.test/mcp"))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-refresh-servers-op-store-mode
+    (codex:mcp-dependency-refresh-servers-plan
+      ()
+      ((codex:mcp-server-entry
+         "docs"
+         (codex:mcp-dependency-default-stdio-config "docs-server")))
+      "file"))
+  ("file"))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-refresh-servers-op-servers
+    (codex:mcp-dependency-refresh-servers-plan
+      ((codex:mcp-server-entry
+         "repo"
+         (codex:mcp-dependency-default-http-config "https://repo.test/mcp")))
+      ()
+      "file"))
+  (((CodexMcpServerEntry
+      "repo"
+      (CodexMcpServerConfig
+        (CodexMcpServerTransportStreamableHttp
+          "https://repo.test/mcp"
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent)
+        CodexAbsent
+        True
+        False
+        False
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        ())))))
