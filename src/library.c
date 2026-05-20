@@ -5625,6 +5625,11 @@ typedef struct {
     uint32_t cap;
 } PatchVirtualFileVec;
 
+typedef enum {
+    PATCH_PARSE_STRICT,
+    PATCH_PARSE_STREAMING
+} PatchParseMode;
+
 static void patch_set_error(PatchDoc *doc, const char *fmt, ...) {
     va_list ap;
     if (!doc || doc->error[0] != '\0') return;
@@ -5869,13 +5874,25 @@ static bool patch_parse_chunk(char **lines,
     return true;
 }
 
-static bool patch_parse_text(const char *patch_text, PatchDoc *doc) {
+static bool patch_parse_text_mode(const char *patch_text,
+                                  PatchDoc *doc,
+                                  PatchParseMode mode) {
     char *copy = patch_trimmed_copy(patch_text);
     char **lines = NULL;
     uint32_t count = 0;
     patch_split_patch_lines(copy, &lines, &count);
-    if (count < 2 || !patch_trim_eq(lines[0], "*** Begin Patch") ||
-        !patch_trim_eq(lines[count - 1], "*** End Patch")) {
+
+    bool streaming = mode == PATCH_PARSE_STREAMING;
+    uint32_t body_end = 0;
+    if (streaming && count > 0 && patch_trim_eq(lines[0], "*** Begin Patch")) {
+        body_end = count;
+        if (count > 1 && patch_trim_eq(lines[count - 1], "*** End Patch")) {
+            body_end = count - 1;
+        }
+    } else if (count >= 2 && patch_trim_eq(lines[0], "*** Begin Patch") &&
+               patch_trim_eq(lines[count - 1], "*** End Patch")) {
+        body_end = count - 1;
+    } else {
         patch_set_error(doc, "Invalid patch boundaries");
         free(lines);
         free(copy);
@@ -5883,7 +5900,7 @@ static bool patch_parse_text(const char *patch_text, PatchDoc *doc) {
     }
 
     uint32_t i = 1;
-    while (i + 1 < count) {
+    while (i < body_end) {
         char *path = NULL;
         if (patch_trim_prefix(lines[i], "*** Add File: ", &path)) {
             PatchHunk hunk;
@@ -5893,13 +5910,13 @@ static bool patch_parse_text(const char *patch_text, PatchDoc *doc) {
             cetta_sb_init(&contents);
             i++;
             uint32_t added = 0;
-            while (i + 1 < count && lines[i][0] == '+') {
+            while (i < body_end && lines[i][0] == '+') {
                 cetta_sb_append(&contents, lines[i] + 1);
                 cetta_sb_append(&contents, "\n");
                 added++;
                 i++;
             }
-            if (added == 0) {
+            if (!streaming && added == 0) {
                 patch_set_error(doc, "Add file hunk is empty");
                 cetta_sb_free(&contents);
                 patch_hunk_free(&hunk);
@@ -5923,20 +5940,25 @@ static bool patch_parse_text(const char *patch_text, PatchDoc *doc) {
             patch_hunk_init(&hunk, PATCH_HUNK_UPDATE, path);
             free(path);
             i++;
-            if (i + 1 < count && patch_trim_prefix(lines[i], "*** Move to: ", &path)) {
+            if (i < body_end && patch_trim_prefix(lines[i], "*** Move to: ", &path)) {
                 hunk.move_path = path;
                 i++;
             }
-            while (i + 1 < count) {
+            while (i < body_end) {
                 if (patch_trim_view(lines[i], NULL)[0] == '\0') {
                     i++;
                     continue;
                 }
                 if (patch_line_starts_hunk_marker(lines[i])) break;
+                if (streaming && strcmp(lines[i], "@") == 0) break;
                 PatchChunk chunk;
                 uint32_t consumed = 0;
-                if (!patch_parse_chunk(lines, count - 1, i, hunk.chunk_len == 0,
+                if (!patch_parse_chunk(lines, body_end, i, hunk.chunk_len == 0,
                                        &chunk, &consumed, doc)) {
+                    if (streaming && hunk.chunk_len > 0) {
+                        doc->error[0] = '\0';
+                        break;
+                    }
                     patch_hunk_free(&hunk);
                     goto done;
                 }
@@ -5958,7 +5980,15 @@ static bool patch_parse_text(const char *patch_text, PatchDoc *doc) {
 done:
     free(lines);
     free(copy);
-    return doc->error[0] == '\0' && doc->len > 0;
+    return doc->error[0] == '\0' && (streaming || doc->len > 0);
+}
+
+static bool patch_parse_text(const char *patch_text, PatchDoc *doc) {
+    return patch_parse_text_mode(patch_text, doc, PATCH_PARSE_STRICT);
+}
+
+static bool patch_parse_text_streaming(const char *patch_text, PatchDoc *doc) {
+    return patch_parse_text_mode(patch_text, doc, PATCH_PARSE_STREAMING);
 }
 
 static bool patch_path_safe_relative(const char *path) {
@@ -6609,6 +6639,49 @@ static Atom *patch_action_atom(Arena *a,
     return action;
 }
 
+static Atom *patch_streaming_action_atom(Arena *a,
+                                         const char *cwd,
+                                         PatchDoc *doc) {
+    Atom **changes = doc->len
+        ? arena_alloc(a, sizeof(Atom *) * doc->len)
+        : NULL;
+    for (uint32_t i = 0; i < doc->len; i++) {
+        PatchHunk *hunk = &doc->hunks[i];
+        if (hunk->kind == PATCH_HUNK_ADD) {
+            changes[i] = atom_expr(a, (Atom *[]){
+                atom_symbol(a, "PatchActionAdd"),
+                atom_string(a, hunk->path ? hunk->path : ""),
+                atom_string(a, hunk->contents ? hunk->contents : ""),
+            }, 3);
+            continue;
+        }
+        if (hunk->kind == PATCH_HUNK_DELETE) {
+            changes[i] = atom_expr(a, (Atom *[]){
+                atom_symbol(a, "PatchActionDelete"),
+                atom_string(a, hunk->path ? hunk->path : ""),
+                atom_string(a, ""),
+            }, 3);
+            continue;
+        }
+        char *unified_diff = patch_format_update_hunk(hunk);
+        changes[i] = atom_expr(a, (Atom *[]){
+            atom_symbol(a, "PatchActionUpdate"),
+            atom_string(a, hunk->path ? hunk->path : ""),
+            atom_string(a, unified_diff ? unified_diff : ""),
+            hunk->move_path
+                ? atom_string(a, hunk->move_path)
+                : atom_symbol(a, "PatchNoMove"),
+            atom_string(a, ""),
+        }, 5);
+        free(unified_diff);
+    }
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "PatchAction"),
+        atom_string(a, cwd ? cwd : ""),
+        atom_expr(a, changes, doc->len),
+    }, 3);
+}
+
 static Atom *patch_inspect_result_atom(Arena *a,
                                        bool ok,
                                        const char *error_text,
@@ -6652,6 +6725,35 @@ static Atom *patch_inspect(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
 
 cleanup:
     patch_verified_change_vec_free(&verified);
+    patch_doc_free(&doc);
+    return result;
+}
+
+static Atom *patch_inspect_streaming(Arena *a,
+                                     Atom *head,
+                                     Atom **args,
+                                     uint32_t nargs) {
+    const char *patch_text;
+    PatchDoc doc;
+    char errbuf[512] = {0};
+    Atom *result;
+
+    if (nargs != 1 || !(patch_text = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected patch text");
+    }
+
+    patch_doc_init(&doc);
+    if (!patch_parse_text_streaming(patch_text, &doc)) {
+        snprintf(errbuf, sizeof(errbuf), "%s",
+                 doc.error[0] ? doc.error : "Invalid patch");
+        result = patch_inspect_result_atom(a, false, errbuf, NULL);
+        goto cleanup;
+    }
+    result = patch_inspect_result_atom(
+        a, true, "", patch_streaming_action_atom(a, "", &doc));
+
+cleanup:
     patch_doc_free(&doc);
     return result;
 }
@@ -7115,6 +7217,9 @@ static Atom *cetta_library_dispatch_patch(Arena *a, Atom *head,
     SymbolId head_id = head->sym_id;
     if (head_id == g_builtin_syms.lib_patch_inspect) {
         return patch_inspect(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_patch_inspect_streaming) {
+        return patch_inspect_streaming(a, head, args, nargs);
     }
     if (head_id == g_builtin_syms.lib_patch_inspect_shell_command) {
         return patch_inspect_shell_command(a, head, args, nargs);

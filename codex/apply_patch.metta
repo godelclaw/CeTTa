@@ -11,6 +11,7 @@
 ; - Rust-shaped `InternalApplyPatchInvocation` / runtime-invocation split
 ; - direct apply_patch execution for the current local-session assumptions
 ; - exec_command heredoc interception preparation for the tools slice
+; - apply_patch argument diff consumer streaming progress state
 ;
 ; Required slice-local deviations from Rust, documented for later audit:
 ; - Rust's runtime executes a parsed `ApplyPatchAction`. CeTTa's current patch
@@ -25,6 +26,10 @@
 ;   orchestration. Generic `NeedsApproval` invocations stay structured, while
 ;   the local runner only executes the auto-approved branch under the current
 ;   CLI assumptions.
+; - Rust uses `Instant::now()` inside the apply_patch argument diff consumer.
+;   This pure CeTTa slice receives an explicit millisecond timestamp so the same
+;   500 ms buffering algorithm is deterministic and testable without a clock
+;   side effect in the evaluator.
 
 !(import! &self approval)
 !(import! &self json)
@@ -231,6 +236,246 @@
    (let $materialized-action (eval $action)
      (codex:convert-apply-patch-to-protocol-materialized
        $materialized-action)))
+
+(= (codex:apply-patch-progress-change-to-protocol
+      (CodexApplyPatchFileChangeAdd $path $content))
+   (codex:patch-apply-file-change-add $path $content))
+
+(= (codex:apply-patch-progress-change-to-protocol
+      (CodexApplyPatchFileChangeDelete $path $content))
+   (codex:patch-apply-file-change-delete $path $content))
+
+(= (codex:apply-patch-progress-change-to-protocol
+      (CodexApplyPatchFileChangeUpdate $path $unified-diff $move-path $new-content))
+   (codex:patch-apply-file-change-update
+     $path
+     $unified-diff
+     $move-path))
+
+(= (codex:apply-patch-progress-changes-to-protocol ())
+   ())
+
+(= (codex:apply-patch-progress-changes-to-protocol $changes)
+   (let ($head $tail) (decons-atom $changes)
+     (let $converted-head
+       (codex:apply-patch-progress-change-to-protocol $head)
+       (let $converted-tail
+         (codex:apply-patch-progress-changes-to-protocol $tail)
+         (cons-atom $converted-head $converted-tail)))))
+
+(= (codex:apply-patch-streaming-action-progress-changes
+      (CodexApplyPatchAction $cwd $changes))
+   (codex:apply-patch-progress-changes-to-protocol $changes))
+
+(= (codex:apply-patch-argument-diff-buffer-interval-ms)
+   500)
+
+(= (codex:apply-patch-argument-diff-consumer-new)
+   (CodexApplyPatchArgumentDiffConsumer
+     ""
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent))
+
+(= (codex:apply-patch-argument-diff-consumer-result
+      $consumer
+      $event)
+   (CodexApplyPatchArgumentDiffConsumerResult $consumer $event))
+
+(= (codex:apply-patch-argument-diff-consumer-result-consumer
+      (CodexApplyPatchArgumentDiffConsumerResult $consumer $event))
+   $consumer)
+
+(= (codex:apply-patch-argument-diff-consumer-result-event
+      (CodexApplyPatchArgumentDiffConsumerResult $consumer $event))
+   $event)
+
+(= (codex:apply-patch-argument-diff-consumer-state-input
+      (CodexApplyPatchArgumentDiffConsumer
+        $input
+        $last-progress
+        $last-sent-at-ms
+        $pending))
+   $input)
+
+(= (codex:apply-patch-argument-diff-consumer-state-last-progress
+      (CodexApplyPatchArgumentDiffConsumer
+        $input
+        $last-progress
+        $last-sent-at-ms
+        $pending))
+   $last-progress)
+
+(= (codex:apply-patch-argument-diff-consumer-state-last-sent-at-ms
+      (CodexApplyPatchArgumentDiffConsumer
+        $input
+        $last-progress
+        $last-sent-at-ms
+        $pending))
+   $last-sent-at-ms)
+
+(= (codex:apply-patch-argument-diff-consumer-state-pending
+      (CodexApplyPatchArgumentDiffConsumer
+        $input
+        $last-progress
+        $last-sent-at-ms
+        $pending))
+   $pending)
+
+(= (codex:apply-patch-argument-diff-consumer-state-with-input
+      (CodexApplyPatchArgumentDiffConsumer
+        $input
+        $last-progress
+        $last-sent-at-ms
+        $pending)
+      $new-input)
+   (CodexApplyPatchArgumentDiffConsumer
+     $new-input
+     $last-progress
+     $last-sent-at-ms
+     $pending))
+
+(= (codex:apply-patch-argument-diff-consumer-no-event
+      $consumer)
+   (codex:apply-patch-argument-diff-consumer-result
+     $consumer
+     CodexAbsent))
+
+(= (codex:apply-patch-argument-diff-consumer-send-progress
+      $input
+      $action
+      $now-ms
+      $event)
+   (codex:apply-patch-argument-diff-consumer-result
+     (CodexApplyPatchArgumentDiffConsumer
+       $input
+       $action
+       $now-ms
+       CodexAbsent)
+     $event))
+
+(= (codex:apply-patch-argument-diff-consumer-buffer-progress
+      $input
+      $action
+      $last-sent-at-ms
+      $event)
+   (codex:apply-patch-argument-diff-consumer-result
+     (CodexApplyPatchArgumentDiffConsumer
+       $input
+       $action
+       $last-sent-at-ms
+       $event)
+     CodexAbsent))
+
+(= (codex:apply-patch-argument-diff-consumer-progress-result
+      $input
+      $last-sent-at-ms
+      $action
+      $event
+      $now-ms)
+   (if (== $last-sent-at-ms CodexAbsent)
+       (codex:apply-patch-argument-diff-consumer-send-progress
+         $input
+         $action
+         $now-ms
+         $event)
+       (if (< (- $now-ms $last-sent-at-ms)
+              (codex:apply-patch-argument-diff-buffer-interval-ms))
+           (codex:apply-patch-argument-diff-consumer-buffer-progress
+             $input
+             $action
+             $last-sent-at-ms
+             $event)
+           (codex:apply-patch-argument-diff-consumer-send-progress
+             $input
+             $action
+             $now-ms
+             $event))))
+
+(= (codex:apply-patch-argument-diff-consumer-push-delta-at
+      (CodexApplyPatchArgumentDiffConsumer
+        $input
+        $last-progress
+        $last-sent-at-ms
+        $pending)
+      $call-id
+      $delta
+      $now-ms)
+   (let $new-input (str-concat $input $delta)
+     (let $inspection (patch-inspect-streaming $new-input)
+       (if (not (patch-inspect-ok? $inspection))
+           (codex:apply-patch-argument-diff-consumer-no-event
+             (CodexApplyPatchArgumentDiffConsumer
+               $new-input
+               $last-progress
+               $last-sent-at-ms
+               $pending))
+           (let $action
+             (codex:patch-action-to-codex-action
+               (patch-inspect-action $inspection))
+             (if (codex:is-apply-patch-action-empty? $action)
+                 (codex:apply-patch-argument-diff-consumer-no-event
+                   (CodexApplyPatchArgumentDiffConsumer
+                     $new-input
+                     $last-progress
+                     $last-sent-at-ms
+                     $pending))
+                 (if (== $last-progress $action)
+                     (codex:apply-patch-argument-diff-consumer-no-event
+                       (CodexApplyPatchArgumentDiffConsumer
+                         $new-input
+                         $last-progress
+                         $last-sent-at-ms
+                         $pending))
+                     (let $event
+                       (codex:patch-apply-updated-event
+                         $call-id
+                         (codex:apply-patch-streaming-action-progress-changes
+                           $action))
+                       (codex:apply-patch-argument-diff-consumer-progress-result
+                         $new-input
+                         $last-sent-at-ms
+                         $action
+                         $event
+                         $now-ms)))))))))
+
+(= (codex:apply-patch-argument-diff-consumer-consume-diff-at
+      $feature-enabled
+      $consumer
+      $call-id
+      $diff
+      $now-ms)
+   (if $feature-enabled
+       (codex:apply-patch-argument-diff-consumer-push-delta-at
+         $consumer
+         $call-id
+         $diff
+         $now-ms)
+       (codex:apply-patch-argument-diff-consumer-no-event $consumer)))
+
+(= (codex:apply-patch-argument-diff-consumer-flush-on-complete-at
+      (CodexApplyPatchArgumentDiffConsumer
+        $input
+        $last-progress
+        $last-sent-at-ms
+        $pending)
+      $now-ms)
+   (case $pending
+     ((CodexAbsent
+       (codex:apply-patch-argument-diff-consumer-no-event
+         (CodexApplyPatchArgumentDiffConsumer
+           $input
+           $last-progress
+           $last-sent-at-ms
+           CodexAbsent)))
+      ($event
+       (codex:apply-patch-argument-diff-consumer-result
+         (CodexApplyPatchArgumentDiffConsumer
+           $input
+           $last-progress
+           $now-ms
+           CodexAbsent)
+         $event)))))
 
 (= (codex:maybe-apply-patch-result-type
       (CodexMaybeApplyPatchBody $patch-text $action))

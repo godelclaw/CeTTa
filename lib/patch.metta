@@ -3,6 +3,11 @@
      (case (__cetta_lib_patch_inspect $cwd $patch)
        (($result (return $result))))))
 
+(= (patch-inspect-streaming $patch)
+   (function
+     (case (__cetta_lib_patch_inspect_streaming $patch)
+       (($result (return $result))))))
+
 (= (patch-inspect-shell-command $cwd $command)
    (function
      (case (__cetta_lib_patch_inspect_shell_command $cwd $command)
