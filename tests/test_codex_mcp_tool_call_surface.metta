@@ -25,6 +25,23 @@
      "create_event"
      "Create a calendar event"))
 
+(= (test:mcp-full-metadata)
+   (codex:mcp-tool-approval-metadata-full
+     (codex:mcp-tool-annotations False True CodexAbsent)
+     "calendar"
+     "Calendar"
+     "Calendar connector"
+     "create_event"
+     "Create a calendar event"
+     CodexAbsent
+     (JsonObject
+       ((JsonPair
+          "resource_uri"
+          (JsonString "connector://calendar/tools/calendar_create_event"))
+        (JsonPair "contains_mcp_source" (JsonBool True))
+        (JsonPair "connector_id" (JsonString "calendar"))))
+     CodexAbsent))
+
 !(assertEqualToResult
   (codex:is-mcp-tool-approval-question-id "mcp_tool_call_approval_call-1")
   (True))
@@ -115,6 +132,14 @@
   (True))
 
 !(assertEqualToResult
+  (codex:mcp-tool-approval-prompt-options-allow-session-remember
+    (codex:mcp-tool-approval-prompt-options-from-keys
+      CodexAbsent
+      CodexAbsent
+      True))
+  (False))
+
+!(assertEqualToResult
   (codex:mcp-tool-approval-question-text
     "Allow the tool?"
     "  policy needs review  ")
@@ -182,6 +207,101 @@
 
 !(assertEqualToResult
   (json-stringify
+    (codex:build-mcp-tool-call-request-meta-from-current-meta
+      (JsonObject
+        ((JsonPair "session_id" (JsonString "session-a"))
+         (JsonPair "turn_id" (JsonString "turn-a"))))
+      "custom_server"
+      CodexAbsent))
+  ("{\"x-codex-turn-metadata\":{\"session_id\":\"session-a\",\"turn_id\":\"turn-a\"}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:build-mcp-tool-call-request-meta-from-current-meta
+      (JsonObject
+        ((JsonPair "session_id" (JsonString "session-a"))
+         (JsonPair "turn_id" (JsonString "turn-a"))))
+      "codex_apps"
+      (test:mcp-full-metadata)))
+  ("{\"x-codex-turn-metadata\":{\"session_id\":\"session-a\",\"turn_id\":\"turn-a\"},\"_codex_apps\":{\"resource_uri\":\"connector://calendar/tools/calendar_create_event\",\"contains_mcp_source\":true,\"connector_id\":\"calendar\"}}"))
+
+!(assertEqualToResult
+  (codex:build-mcp-tool-call-request-meta-from-current-meta
+    CodexAbsent
+    "custom_server"
+    CodexAbsent)
+  (Empty))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:with-mcp-tool-call-thread-id-meta
+      (JsonObject
+        ((JsonPair "source" (JsonString "test-client"))
+         (JsonPair "threadId" (JsonString "stale-thread"))))
+      "thread-live"))
+  ("{\"source\":\"test-client\",\"threadId\":\"thread-live\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:with-mcp-tool-call-thread-id-meta
+      CodexAbsent
+      "thread-live"))
+  ("{\"threadId\":\"thread-live\"}"))
+
+!(assertEqualToResult
+  (codex:with-mcp-tool-call-thread-id-meta
+    (JsonString "invalid-meta")
+    "thread-live")
+  ((JsonString "invalid-meta")))
+
+!(assertEqualToResult
+  (case
+    (codex:build-guardian-mcp-tool-review-request
+      "call-1"
+      (codex:mcp-invocation
+        "mcp_server"
+        "browser_navigate"
+        (JsonObject
+          ((JsonPair "url" (JsonString "https://example.com")))))
+      (codex:mcp-tool-approval-metadata-full
+        (codex:mcp-tool-annotations False True CodexAbsent)
+        CodexAbsent
+        "Playwright"
+        CodexAbsent
+        "Navigate"
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent))
+    (($request
+      (case
+        (codex:guardian-approval-request-mcp-tool-call-json $request)
+        (($json (json-stringify $json)))))))
+  ("{\"tool\":\"mcp_tool_call\",\"server\":\"mcp_server\",\"tool_name\":\"browser_navigate\",\"arguments\":{\"url\":\"https://example.com\"},\"connector_name\":\"Playwright\",\"tool_title\":\"Navigate\",\"annotations\":{\"destructive_hint\":true,\"read_only_hint\":false}}"))
+
+!(assertEqualToResult
+  (case
+    (codex:prepare-arc-request-action
+      (codex:mcp-invocation
+        "codex_apps"
+        "browser_navigate"
+        (JsonObject
+          ((JsonPair "url" (JsonString "https://example.com")))))
+      (codex:mcp-tool-approval-metadata-full
+        CodexAbsent
+        CodexAbsent
+        "Playwright"
+        CodexAbsent
+        "Navigate"
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent))
+    (($json (json-stringify $json))))
+  ("{\"tool\":\"mcp_tool_call\",\"server\":\"codex_apps\",\"tool_name\":\"browser_navigate\",\"arguments\":{\"url\":\"https://example.com\"},\"connector_name\":\"Playwright\",\"tool_title\":\"Navigate\"}"))
+
+!(assertEqualToResult
+  (json-stringify
     (codex:build-mcp-tool-approval-elicitation-meta
       "custom_server"
       CodexAbsent
@@ -241,3 +361,38 @@
   (codex:requires-mcp-tool-approval
     (codex:mcp-tool-annotations CodexAbsent False False))
   (False))
+
+!(assertEqualToResult
+  (codex:mcp-tool-approval-decision-from-guardian
+    (codex:review-decision-approved)
+    "guardian rejected"
+    "guardian timed out")
+  ((CodexMcpToolApprovalDecisionAccept)))
+
+!(assertEqualToResult
+  (codex:mcp-tool-approval-decision-from-guardian
+    (codex:review-decision-approved-for-session)
+    "guardian rejected"
+    "guardian timed out")
+  ((CodexMcpToolApprovalDecisionAcceptForSession)))
+
+!(assertEqualToResult
+  (codex:mcp-tool-approval-decision-from-guardian
+    (codex:review-decision-denied)
+    "guardian rejected"
+    "guardian timed out")
+  ((CodexMcpToolApprovalDecisionDecline "guardian rejected")))
+
+!(assertEqualToResult
+  (codex:mcp-tool-approval-decision-from-guardian
+    (codex:review-decision-timed-out)
+    "guardian rejected"
+    "guardian timed out")
+  ((CodexMcpToolApprovalDecisionDecline "guardian timed out")))
+
+!(assertEqualToResult
+  (codex:mcp-tool-approval-decision-from-guardian
+    (codex:review-decision-abort)
+    "guardian rejected"
+    "guardian timed out")
+  ((CodexMcpToolApprovalDecisionDecline CodexAbsent)))

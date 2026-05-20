@@ -5,9 +5,12 @@
 ;
 ; Covered in this increment:
 ; - approval question ids, labels, fallback text, and prompt options
+; - MCP tool-call request metadata and thread-id metadata merging
+; - guardian/ARC MCP tool-call review request JSON shape
 ; - session/persistent approval key eligibility
 ; - elicitation metadata rendering for MCP approval requests
 ; - request_user_input and MCP elicitation response parsing
+; - guardian review-decision mapping
 ; - read-only/destructive/open-world approval requirement logic
 ;
 ; Required slice-local deviations from Rust, documented for audit:
@@ -21,6 +24,9 @@
 ; - Rust's serde_json object map is represented by JsonObject pair lists. For
 ;   cloned parameter objects we preserve the local pair order; display params
 ;   are sorted by name to match Rust's Vec sort_by branch.
+; - Rust obtains guardian rejection messages from async session state. The pure
+;   mapping helper receives the already-rendered rejection and timeout messages
+;   explicitly.
 
 !(import! &self json)
 !(import! &self list)
@@ -28,6 +34,7 @@
 !(import! &self request_user_input)
 !(import! &self mcp_tool_approval_templates)
 !(import! &self str)
+!(import! &self turn_metadata)
 
 (= (codex:codex-apps-mcp-server-name)
    "codex_apps")
@@ -92,6 +99,15 @@
 (= (codex:mcp-tool-approval-tool-params-display-key)
    "tool_params_display")
 
+(= (codex:mcp-tool-codex-apps-meta-key)
+   "_codex_apps")
+
+(= (codex:mcp-tool-thread-id-meta-key)
+   "threadId")
+
+(= (codex:codex-turn-metadata-header-key)
+   "x-codex-turn-metadata")
+
 (= (codex:mcp-tool-call-arc-monitor-callsite-default)
    "mcp_tool_call__default")
 
@@ -154,6 +170,55 @@
      $tool-title
      $tool-description))
 
+(= (codex:mcp-tool-approval-metadata-full
+      $annotations
+      $connector-id
+      $connector-name
+      $connector-description
+      $tool-title
+      $tool-description
+      $mcp-app-resource-uri
+      $codex-apps-meta
+      $openai-file-input-params)
+   (CodexMcpToolApprovalMetadataFull
+     $annotations
+     $connector-id
+     $connector-name
+     $connector-description
+     $tool-title
+     $tool-description
+     $mcp-app-resource-uri
+     $codex-apps-meta
+     $openai-file-input-params))
+
+(= (codex:mcp-tool-approval-metadata-annotations
+      (CodexMcpToolApprovalMetadata
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description))
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-annotations
+      (CodexMcpToolApprovalMetadataFull
+        $annotations
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description
+        $mcp-app-resource-uri
+        $codex-apps-meta
+        $openai-file-input-params))
+   $annotations)
+
+(= (codex:mcp-tool-approval-metadata-annotations CodexAbsent)
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-annotations Empty)
+   CodexAbsent)
+
 (= (codex:mcp-tool-approval-metadata-connector-id
       (CodexMcpToolApprovalMetadata
         $connector-id
@@ -162,6 +227,25 @@
         $tool-title
         $tool-description))
    $connector-id)
+
+(= (codex:mcp-tool-approval-metadata-connector-id
+      (CodexMcpToolApprovalMetadataFull
+        $annotations
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description
+        $mcp-app-resource-uri
+        $codex-apps-meta
+        $openai-file-input-params))
+   $connector-id)
+
+(= (codex:mcp-tool-approval-metadata-connector-id CodexAbsent)
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-connector-id Empty)
+   CodexAbsent)
 
 (= (codex:mcp-tool-approval-metadata-connector-name
       (CodexMcpToolApprovalMetadata
@@ -172,6 +256,25 @@
         $tool-description))
    $connector-name)
 
+(= (codex:mcp-tool-approval-metadata-connector-name
+      (CodexMcpToolApprovalMetadataFull
+        $annotations
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description
+        $mcp-app-resource-uri
+        $codex-apps-meta
+        $openai-file-input-params))
+   $connector-name)
+
+(= (codex:mcp-tool-approval-metadata-connector-name CodexAbsent)
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-connector-name Empty)
+   CodexAbsent)
+
 (= (codex:mcp-tool-approval-metadata-connector-description
       (CodexMcpToolApprovalMetadata
         $connector-id
@@ -180,6 +283,25 @@
         $tool-title
         $tool-description))
    $connector-description)
+
+(= (codex:mcp-tool-approval-metadata-connector-description
+      (CodexMcpToolApprovalMetadataFull
+        $annotations
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description
+        $mcp-app-resource-uri
+        $codex-apps-meta
+        $openai-file-input-params))
+   $connector-description)
+
+(= (codex:mcp-tool-approval-metadata-connector-description CodexAbsent)
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-connector-description Empty)
+   CodexAbsent)
 
 (= (codex:mcp-tool-approval-metadata-tool-title
       (CodexMcpToolApprovalMetadata
@@ -190,6 +312,25 @@
         $tool-description))
    $tool-title)
 
+(= (codex:mcp-tool-approval-metadata-tool-title
+      (CodexMcpToolApprovalMetadataFull
+        $annotations
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description
+        $mcp-app-resource-uri
+        $codex-apps-meta
+        $openai-file-input-params))
+   $tool-title)
+
+(= (codex:mcp-tool-approval-metadata-tool-title CodexAbsent)
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-tool-title Empty)
+   CodexAbsent)
+
 (= (codex:mcp-tool-approval-metadata-tool-description
       (CodexMcpToolApprovalMetadata
         $connector-id
@@ -199,6 +340,53 @@
         $tool-description))
    $tool-description)
 
+(= (codex:mcp-tool-approval-metadata-tool-description
+      (CodexMcpToolApprovalMetadataFull
+        $annotations
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description
+        $mcp-app-resource-uri
+        $codex-apps-meta
+        $openai-file-input-params))
+   $tool-description)
+
+(= (codex:mcp-tool-approval-metadata-tool-description CodexAbsent)
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-tool-description Empty)
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-codex-apps-meta
+      (CodexMcpToolApprovalMetadata
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description))
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-codex-apps-meta
+      (CodexMcpToolApprovalMetadataFull
+        $annotations
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description
+        $mcp-app-resource-uri
+        $codex-apps-meta
+        $openai-file-input-params))
+   $codex-apps-meta)
+
+(= (codex:mcp-tool-approval-metadata-codex-apps-meta CodexAbsent)
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-codex-apps-meta Empty)
+   CodexAbsent)
+
 (= (codex:mcp-tool-annotations
       $read-only-hint
       $destructive-hint
@@ -207,6 +395,27 @@
      $read-only-hint
      $destructive-hint
      $open-world-hint))
+
+(= (codex:mcp-tool-annotations-read-only-hint
+      (CodexMcpToolAnnotations
+        $read-only-hint
+        $destructive-hint
+        $open-world-hint))
+   $read-only-hint)
+
+(= (codex:mcp-tool-annotations-destructive-hint
+      (CodexMcpToolAnnotations
+        $read-only-hint
+        $destructive-hint
+        $open-world-hint))
+   $destructive-hint)
+
+(= (codex:mcp-tool-annotations-open-world-hint
+      (CodexMcpToolAnnotations
+        $read-only-hint
+        $destructive-hint
+        $open-world-hint))
+   $open-world-hint)
 
 (= (codex:mcp-tool-approval-decision-accept)
    (CodexMcpToolApprovalDecisionAccept))
@@ -230,7 +439,7 @@
    (CodexMcpToolApprovalElicitationResponse $action $content $meta))
 
 (= (codex:mcp-tool-call-present $value)
-   (not (== $value CodexAbsent)))
+   (if (== $value CodexAbsent) False True))
 
 (= (codex:mcp-tool-call-list-contains $items $item)
    (if (== $items ())
@@ -486,7 +695,7 @@
    (codex:protocol-append-json-pair $pairs $key $value))
 
 (= (codex:mcp-tool-call-append-optional-json-string-pair $pairs $key $value)
-   (if (== $value CodexAbsent)
+   (if (not (codex:mcp-tool-call-present $value))
        (codex:mcp-tool-call-pairs $pairs)
        (codex:mcp-tool-call-append-json-pair
          $pairs
@@ -494,9 +703,113 @@
          (JsonString $value))))
 
 (= (codex:mcp-tool-call-append-optional-json-value-pair $pairs $key $value)
-   (if (== $value CodexAbsent)
+   (if (not (codex:mcp-tool-call-present $value))
        (codex:mcp-tool-call-pairs $pairs)
        (codex:mcp-tool-call-append-json-pair $pairs $key $value)))
+
+(= (codex:mcp-tool-call-append-optional-json-bool-pair $pairs $key $value)
+   (if (not (codex:mcp-tool-call-present $value))
+       (codex:mcp-tool-call-pairs $pairs)
+       (codex:mcp-tool-call-append-json-pair
+         $pairs
+         $key
+         (JsonBool $value))))
+
+(= (codex:mcp-tool-call-set-json-pair $pairs $key $value)
+   (if (== $pairs ())
+       ((JsonPair $key $value))
+       (let $head (list:first $pairs)
+         (let $tail (list:rest $pairs)
+           (case $head
+             (((JsonPair $pair-key $pair-value)
+               (if (== $pair-key $key)
+                   (cons-atom (JsonPair $key $value) $tail)
+                   (case
+                     (codex:mcp-tool-call-set-json-pair
+                       $tail
+                       $key
+                       $value)
+                     (($updated-tail
+                       (cons-atom $head $updated-tail))))))))))))
+
+(= (codex:with-mcp-tool-call-thread-id-meta CodexAbsent $thread-id)
+   (JsonObject
+     ((JsonPair
+        (codex:mcp-tool-thread-id-meta-key)
+        (JsonString $thread-id)))))
+
+(= (codex:with-mcp-tool-call-thread-id-meta Empty $thread-id)
+   (codex:with-mcp-tool-call-thread-id-meta CodexAbsent $thread-id))
+
+(= (codex:with-mcp-tool-call-thread-id-meta (JsonObject $pairs) $thread-id)
+   (JsonObject
+     (codex:mcp-tool-call-set-json-pair
+       $pairs
+       (codex:mcp-tool-thread-id-meta-key)
+       (JsonString $thread-id))))
+
+(= (codex:with-mcp-tool-call-thread-id-meta (JsonString $value) $thread-id)
+   (JsonString $value))
+
+(= (codex:with-mcp-tool-call-thread-id-meta (JsonArray $items) $thread-id)
+   (JsonArray $items))
+
+(= (codex:with-mcp-tool-call-thread-id-meta (JsonNumber $value) $thread-id)
+   (JsonNumber $value))
+
+(= (codex:with-mcp-tool-call-thread-id-meta (JsonBool $value) $thread-id)
+   (JsonBool $value))
+
+(= (codex:with-mcp-tool-call-thread-id-meta JsonNull $thread-id)
+   JsonNull)
+
+(= (codex:mcp-tool-call-request-meta-initial-pairs $turn-metadata)
+   (if (== $turn-metadata CodexAbsent)
+       ()
+       ((JsonPair
+          (codex:codex-turn-metadata-header-key)
+          $turn-metadata))))
+
+(= (codex:mcp-tool-call-request-meta-append-codex-apps-meta
+      $pairs
+      $server
+      $metadata)
+   (let $codex-apps-meta
+     (codex:mcp-tool-approval-metadata-codex-apps-meta $metadata)
+     (if (and
+           (== $server (codex:codex-apps-mcp-server-name))
+           (codex:mcp-tool-call-present $codex-apps-meta))
+         (codex:mcp-tool-call-append-json-pair
+           $pairs
+           (codex:mcp-tool-codex-apps-meta-key)
+           $codex-apps-meta)
+         (codex:mcp-tool-call-pairs $pairs))))
+
+(= (codex:mcp-tool-call-request-meta-from-pairs $pairs)
+   (if (== $pairs ()) Empty (JsonObject $pairs)))
+
+(= (codex:build-mcp-tool-call-request-meta-from-current-meta
+      $current-meta
+      $server
+      $metadata)
+   (let $pairs-turn
+     (codex:mcp-tool-call-request-meta-initial-pairs $current-meta)
+     (case
+       (codex:mcp-tool-call-request-meta-append-codex-apps-meta
+         $pairs-turn
+         $server
+         $metadata)
+       (($pairs-final
+         (codex:mcp-tool-call-request-meta-from-pairs $pairs-final))))))
+
+(= (codex:build-mcp-tool-call-request-meta
+      $turn-metadata-state
+      $server
+      $metadata)
+   (codex:build-mcp-tool-call-request-meta-from-current-meta
+     (codex:turn-metadata-state-current-meta-value $turn-metadata-state)
+     $server
+     $metadata))
 
 (= (codex:mcp-tool-call-append-persist
       $pairs
@@ -655,6 +968,146 @@
                          $display-json)
                        (($pairs-display
                          (JsonObject $pairs-display))))))))))))))))))
+
+(= (codex:guardian-approval-request-mcp-tool-call
+      $id
+      $server
+      $tool-name
+      $arguments
+      $connector-id
+      $connector-name
+      $connector-description
+      $tool-title
+      $tool-description
+      $annotations)
+   (CodexGuardianApprovalRequestMcpToolCall
+     $id
+     $server
+     $tool-name
+     $arguments
+     $connector-id
+     $connector-name
+     $connector-description
+     $tool-title
+     $tool-description
+     $annotations))
+
+(= (codex:guardian-mcp-annotations-json
+      (CodexMcpToolAnnotations
+        $read-only-hint
+        $destructive-hint
+        $open-world-hint))
+   (let $pairs-destructive
+     (codex:mcp-tool-call-append-optional-json-bool-pair
+       ()
+       "destructive_hint"
+       $destructive-hint)
+     (let $pairs-open-world
+       (codex:mcp-tool-call-append-optional-json-bool-pair
+         $pairs-destructive
+         "open_world_hint"
+         $open-world-hint)
+       (JsonObject
+         (codex:mcp-tool-call-append-optional-json-bool-pair
+           $pairs-open-world
+           "read_only_hint"
+           $read-only-hint)))))
+
+(= (codex:mcp-tool-call-annotations-json-value CodexAbsent)
+   CodexAbsent)
+
+(= (codex:mcp-tool-call-annotations-json-value Empty)
+   CodexAbsent)
+
+(= (codex:mcp-tool-call-annotations-json-value
+      (CodexMcpToolAnnotations
+        $read-only-hint
+        $destructive-hint
+        $open-world-hint))
+   (codex:guardian-mcp-annotations-json
+     (CodexMcpToolAnnotations
+       $read-only-hint
+       $destructive-hint
+       $open-world-hint)))
+
+(= (codex:guardian-approval-request-mcp-tool-call-json $request)
+   (case (eval $request)
+     (((CodexGuardianApprovalRequestMcpToolCall
+         $id
+         $server
+         $tool-name
+         $arguments
+         $connector-id
+         $connector-name
+         $connector-description
+         $tool-title
+         $tool-description
+         $annotations)
+       (let $pairs-base
+         ((JsonPair "tool" (JsonString "mcp_tool_call"))
+          (JsonPair "server" (JsonString $server))
+          (JsonPair "tool_name" (JsonString $tool-name)))
+         (let $pairs-arguments
+           (codex:mcp-tool-call-append-optional-json-value-pair
+             $pairs-base
+             "arguments"
+             $arguments)
+           (let $pairs-connector-id
+             (codex:mcp-tool-call-append-optional-json-string-pair
+               $pairs-arguments
+               "connector_id"
+               $connector-id)
+             (let $pairs-connector-name
+               (codex:mcp-tool-call-append-optional-json-string-pair
+                 $pairs-connector-id
+                 "connector_name"
+                 $connector-name)
+               (let $pairs-connector-description
+                 (codex:mcp-tool-call-append-optional-json-string-pair
+                   $pairs-connector-name
+                   "connector_description"
+                   $connector-description)
+                 (let $pairs-tool-title
+                   (codex:mcp-tool-call-append-optional-json-string-pair
+                     $pairs-connector-description
+                     "tool_title"
+                     $tool-title)
+                   (let $pairs-tool-description
+                     (codex:mcp-tool-call-append-optional-json-string-pair
+                       $pairs-tool-title
+                       "tool_description"
+                       $tool-description)
+                     (JsonObject
+                       (codex:mcp-tool-call-append-optional-json-value-pair
+                         $pairs-tool-description
+                         "annotations"
+                         (codex:mcp-tool-call-annotations-json-value
+                           $annotations))))))))))))))
+
+(= (codex:build-guardian-mcp-tool-review-request
+      $call-id
+      $invocation
+      $metadata)
+   (case (eval $invocation)
+     (((CodexMcpInvocation $server $tool-name $arguments)
+       (codex:guardian-approval-request-mcp-tool-call
+         $call-id
+         $server
+         $tool-name
+         $arguments
+         (codex:mcp-tool-approval-metadata-connector-id $metadata)
+         (codex:mcp-tool-approval-metadata-connector-name $metadata)
+         (codex:mcp-tool-approval-metadata-connector-description $metadata)
+         (codex:mcp-tool-approval-metadata-tool-title $metadata)
+         (codex:mcp-tool-approval-metadata-tool-description $metadata)
+         (codex:mcp-tool-approval-metadata-annotations $metadata))))))
+
+(= (codex:prepare-arc-request-action $invocation $metadata)
+   (codex:guardian-approval-request-mcp-tool-call-json
+     (codex:build-guardian-mcp-tool-review-request
+       "arc-monitor"
+       $invocation
+       $metadata)))
 
 (= (codex:mcp-tool-call-response-answer-values () $question-id)
    Empty)
@@ -842,6 +1295,48 @@
                            (codex:mcp-tool-approval-decision-cancel))
                        (codex:mcp-tool-approval-decision-accept)
                        $decision)))))))))
+
+(= (codex:mcp-tool-approval-decision-from-guardian
+      (CodexReviewDecisionApproved)
+      $guardian-rejection-message
+      $guardian-timeout-message)
+   (codex:mcp-tool-approval-decision-accept))
+
+(= (codex:mcp-tool-approval-decision-from-guardian
+      (CodexReviewDecisionApprovedExecpolicyAmendment $amendment)
+      $guardian-rejection-message
+      $guardian-timeout-message)
+   (codex:mcp-tool-approval-decision-accept))
+
+(= (codex:mcp-tool-approval-decision-from-guardian
+      (CodexReviewDecisionNetworkPolicyAmendment $amendment)
+      $guardian-rejection-message
+      $guardian-timeout-message)
+   (codex:mcp-tool-approval-decision-accept))
+
+(= (codex:mcp-tool-approval-decision-from-guardian
+      (CodexReviewDecisionApprovedForSession)
+      $guardian-rejection-message
+      $guardian-timeout-message)
+   (codex:mcp-tool-approval-decision-accept-for-session))
+
+(= (codex:mcp-tool-approval-decision-from-guardian
+      (CodexReviewDecisionDenied)
+      $guardian-rejection-message
+      $guardian-timeout-message)
+   (codex:mcp-tool-approval-decision-decline $guardian-rejection-message))
+
+(= (codex:mcp-tool-approval-decision-from-guardian
+      (CodexReviewDecisionTimedOut)
+      $guardian-rejection-message
+      $guardian-timeout-message)
+   (codex:mcp-tool-approval-decision-decline $guardian-timeout-message))
+
+(= (codex:mcp-tool-approval-decision-from-guardian
+      (CodexReviewDecisionAbort)
+      $guardian-rejection-message
+      $guardian-timeout-message)
+   (codex:mcp-tool-approval-decision-decline CodexAbsent))
 
 (= (codex:normalize-mcp-tool-approval-decision-for-mode
       $decision
