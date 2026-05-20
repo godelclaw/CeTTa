@@ -6,6 +6,7 @@
 ;
 ; Covered in this increment:
 ; - FilesystemPermissionsToml / FilesystemPermissionToml data shape
+; - resolve_permission_profile / compile_permission_profile
 ; - network_proxy_config_from_profile_network
 ; - get_readable_roots_required_for_codex_runtime
 ; - compile_network_sandbox_policy
@@ -43,6 +44,36 @@
 (= (codex:config-permissions-result-error-message
       (CodexConfigPermissionsError $message))
    $message)
+
+(= (codex:config-permissions-compiled-profile
+      $file-system-policy
+      $network-policy
+      $startup-warnings)
+   (CodexConfigPermissionsCompiledProfile
+     $file-system-policy
+     $network-policy
+     $startup-warnings))
+
+(= (codex:config-permissions-compiled-profile-file-system-policy
+      (CodexConfigPermissionsCompiledProfile
+        $file-system-policy
+        $network-policy
+        $startup-warnings))
+   $file-system-policy)
+
+(= (codex:config-permissions-compiled-profile-network-policy
+      (CodexConfigPermissionsCompiledProfile
+        $file-system-policy
+        $network-policy
+        $startup-warnings))
+   $network-policy)
+
+(= (codex:config-permissions-compiled-profile-startup-warnings
+      (CodexConfigPermissionsCompiledProfile
+        $file-system-policy
+        $network-policy
+        $startup-warnings))
+   $startup-warnings)
 
 (= (codex:filesystem-permissions-toml $glob-scan-max-depth $entries)
    (CodexFilesystemPermissionsToml $glob-scan-max-depth $entries))
@@ -185,6 +216,35 @@
        (if (== (codex:network-toml-enabled $network) True)
            (codex:network-sandbox-policy-enabled)
            (codex:network-sandbox-policy-restricted))))
+
+(= (codex:config-permissions-undefined-profile-error $profile-name)
+   (str-concat
+     "default_permissions refers to undefined profile `"
+     (str-concat $profile-name "`")))
+
+(= (codex:config-permissions-resolve-permission-profile-entries
+      ()
+      $profile-name)
+   (codex:config-permissions-result-error
+     (codex:config-permissions-undefined-profile-error $profile-name)))
+
+(= (codex:config-permissions-resolve-permission-profile-entries
+      $entries
+      $profile-name)
+   (let ($head $tail) (decons-atom $entries)
+     (if (== (codex:permissions-toml-entry-name $head) $profile-name)
+         (codex:config-permissions-result-ok
+           (codex:permissions-toml-entry-profile $head))
+         (codex:config-permissions-resolve-permission-profile-entries
+           $tail
+           $profile-name))))
+
+(= (codex:config-permissions-resolve-permission-profile
+      (CodexPermissionsToml $entries)
+      $profile-name)
+   (codex:config-permissions-resolve-permission-profile-entries
+     $entries
+     $profile-name))
 
 (= (codex:config-permissions-runtime-absolute-path-list $path)
    (case $path
@@ -971,3 +1031,284 @@
      (str-concat
        $profile-name
        "` does not define any recognized filesystem entries for this version of Codex. Filesystem access will remain restricted. Upgrade Codex if this profile expects filesystem permissions.")))
+
+(= (codex:config-permissions-unsupported-read-write-glob-warning
+      $pattern)
+   (str-concat
+     "Filesystem glob `"
+     (str-concat
+       $pattern
+       "` uses `read` or `write` access, which is not fully supported by this platform's sandboxing. Use an exact path or trailing `/**` subtree rule instead. `none` deny-read globs are supported.")))
+
+(= (codex:config-permissions-unbounded-unreadable-globstar-warning
+      $pattern)
+   (str-concat
+     "Filesystem deny-read glob `"
+     (str-concat
+       $pattern
+       "` uses `**`. Non-macOS sandboxing does not support unbounded `**` natively; set `glob_scan_max_depth` in this filesystem profile to cap Linux glob expansion and silence this warning, or enumerate explicit depths such as `*.env`, `*/*.env`, and `*/*/*.env`.")))
+
+(= (codex:config-permissions-unknown-special-path-warning
+      (CodexFileSystemSpecialPathUnknown $path $subpath))
+   (if (== $subpath CodexAbsent)
+       (str-concat
+         "Configured filesystem path `"
+         (str-concat
+           $path
+           "` is not recognized by this version of Codex and will be ignored. Upgrade Codex if this path is required."))
+       (str-concat
+         "Configured filesystem path `"
+         (str-concat
+           $path
+           (str-concat
+             "` with nested entry `"
+             (str-concat
+               $subpath
+               "` is not recognized by this version of Codex and will be ignored. Upgrade Codex if this path is required."))))))
+
+(= (codex:config-permissions-maybe-unknown-special-path-warning-list
+      $special)
+   (case $special
+     (((CodexFileSystemSpecialPathUnknown $path $subpath)
+       ((codex:config-permissions-unknown-special-path-warning
+          (CodexFileSystemSpecialPathUnknown $path $subpath))))
+      ($other ()))))
+
+(= (codex:config-permissions-warning-list-from-unsupported-paths
+      ())
+   ())
+
+(= (codex:config-permissions-warning-list-from-unsupported-paths
+      $paths)
+   (let ($head $tail) (decons-atom $paths)
+     (let $warning
+       (codex:config-permissions-unsupported-read-write-glob-warning
+         $head)
+       (let $tail-warnings
+         (codex:config-permissions-warning-list-from-unsupported-paths
+           $tail)
+         (cons-atom $warning $tail-warnings)))))
+
+(= (codex:config-permissions-warning-list-from-unbounded-paths
+      ())
+   ())
+
+(= (codex:config-permissions-warning-list-from-unbounded-paths
+      $paths)
+   (let ($head $tail) (decons-atom $paths)
+     (let $warning
+       (codex:config-permissions-unbounded-unreadable-globstar-warning
+         $head)
+       (let $tail-warnings
+         (codex:config-permissions-warning-list-from-unbounded-paths
+           $tail)
+         (cons-atom $warning $tail-warnings)))))
+
+(= (codex:config-permissions-compiled-filesystem-path-warnings
+      $path)
+   (let $special (codex:config-permissions-parse-special-path $path)
+     (if (== $special CodexAbsent)
+         ()
+         (codex:config-permissions-maybe-unknown-special-path-warning-list
+           $special))))
+
+(= (codex:config-permissions-access-entry-unknown-special-warnings
+      $path
+      $access)
+   (if (not (codex:config-permissions-has-glob-chars $path))
+       (codex:config-permissions-compiled-filesystem-path-warnings
+         $path)
+       (if (== $access (CodexFileSystemAccessModeNone))
+           ()
+           (case
+             (codex:config-permissions-compile-read-write-glob-path
+               $path
+               $access)
+             (((CodexConfigPermissionsOk $compiled-path)
+               (codex:config-permissions-compiled-filesystem-path-warnings
+                 $compiled-path))
+              ((CodexConfigPermissionsError $message)
+               ()))))))
+
+(= (codex:config-permissions-scoped-entry-unknown-special-warnings
+      $path
+      $subpath
+      $access)
+   (let $special (codex:config-permissions-parse-special-path $path)
+     (let $has-glob
+       (codex:config-permissions-has-glob-chars $subpath)
+       (let $can-compile-as-pattern
+         (if (== $special CodexAbsent)
+             True
+             (codex:config-permissions-special-path-supports-scoped-pattern
+               $special))
+         (if (and
+               $has-glob
+               (and
+                 (== $access (CodexFileSystemAccessModeNone))
+                 $can-compile-as-pattern))
+             ()
+             (case
+               (codex:config-permissions-compile-read-write-glob-path
+                 $subpath
+                 $access)
+               (((CodexConfigPermissionsOk $compiled-subpath)
+                 (if (== $compiled-subpath ".")
+                     (codex:config-permissions-compiled-filesystem-path-warnings
+                       $path)
+                     (case $special
+                       (((CodexFileSystemSpecialPathUnknown
+                           $unknown-path
+                           $old-subpath)
+                         (case
+                           (codex:config-permissions-parse-relative-subpath
+                             $compiled-subpath)
+                           (((CodexConfigPermissionsOk $relative-subpath)
+                             ((codex:config-permissions-unknown-special-path-warning
+                                (CodexFileSystemSpecialPathUnknown
+                                  $unknown-path
+                                  $relative-subpath))))
+                            ((CodexConfigPermissionsError $message)
+                             ())))
+                        ($other ())))))
+                ((CodexConfigPermissionsError $message)
+                 ())))))))))
+
+(= (codex:config-permissions-scoped-unknown-special-warnings
+      $path
+      ())
+   ())
+
+(= (codex:config-permissions-scoped-unknown-special-warnings
+      $path
+      $scoped-entries)
+   (let ($raw-head $tail) (decons-atom $scoped-entries)
+     (let $head
+       (codex:config-permissions-normalize-scoped-entry
+         $raw-head)
+       (let $subpath
+         (codex:filesystem-permission-toml-scoped-entry-subpath $head)
+         (let $access
+           (eval
+             (codex:filesystem-permission-toml-scoped-entry-access $head))
+           (list:append
+             (codex:config-permissions-scoped-entry-unknown-special-warnings
+               $path
+               $subpath
+               $access)
+             (codex:config-permissions-scoped-unknown-special-warnings
+               $path
+               $tail)))))))
+
+(= (codex:config-permissions-filesystem-unknown-special-warnings
+      ())
+   ())
+
+(= (codex:config-permissions-filesystem-unknown-special-warnings
+      $entries)
+   (let ($raw-head $tail) (decons-atom $entries)
+     (let $head
+       (codex:config-permissions-normalize-filesystem-entry
+         $raw-head)
+       (let $path (codex:filesystem-permission-toml-entry-path $head)
+         (let $permission
+           (eval
+             (codex:filesystem-permission-toml-entry-permission $head))
+           (list:append
+             (case $permission
+               (((CodexFilesystemPermissionTomlAccess $access)
+                 (codex:config-permissions-access-entry-unknown-special-warnings
+                   $path
+                   $access))
+                ((CodexFilesystemPermissionTomlScoped $scoped-entries)
+                 (codex:config-permissions-scoped-unknown-special-warnings
+                   $path
+                   $scoped-entries))))
+             (codex:config-permissions-filesystem-unknown-special-warnings
+               $tail)))))))
+
+(= (codex:config-permissions-filesystem-startup-warnings
+      $profile-name
+      CodexAbsent)
+   ((codex:config-permissions-missing-filesystem-entries-warning
+      $profile-name)))
+
+(= (codex:config-permissions-filesystem-startup-warnings
+      $profile-name
+      $filesystem)
+   (let $normalized-filesystem
+     (codex:config-permissions-normalize-filesystem $filesystem)
+     (let $entries
+       (codex:filesystem-permissions-toml-entries
+         $normalized-filesystem)
+       (if (== $entries ())
+           ((codex:config-permissions-missing-filesystem-entries-warning
+              $profile-name))
+           (list:append
+             (codex:config-permissions-warning-list-from-unsupported-paths
+               (codex:config-permissions-unsupported-read-write-glob-paths
+                 $normalized-filesystem))
+             (list:append
+               (codex:config-permissions-warning-list-from-unbounded-paths
+                 (codex:config-permissions-unbounded-unreadable-globstar-paths
+                   $normalized-filesystem))
+               (codex:config-permissions-filesystem-unknown-special-warnings
+                 $entries)))))))
+
+(= (codex:config-permissions-permission-profile-startup-warnings
+      $profile-name
+      $profile)
+   (codex:config-permissions-filesystem-startup-warnings
+     $profile-name
+     (codex:permission-profile-toml-filesystem $profile)))
+
+(= (codex:config-permissions-profile-filesystem-or-empty
+      CodexAbsent)
+   (CodexFilesystemPermissionsToml CodexAbsent ()))
+
+(= (codex:config-permissions-profile-filesystem-or-empty
+      $filesystem)
+   (codex:config-permissions-normalize-filesystem $filesystem))
+
+(= (codex:config-permissions-compile-permission-profile-resolved
+      $profile-name
+      $profile
+      $policy-cwd)
+   (let $startup-warnings
+     (eval
+       (codex:config-permissions-permission-profile-startup-warnings
+         $profile-name
+         $profile))
+     (let $filesystem
+       (eval
+         (codex:config-permissions-profile-filesystem-or-empty
+           (codex:permission-profile-toml-filesystem $profile)))
+       (case
+         (codex:config-permissions-compile-filesystem-permissions
+           $filesystem
+           $policy-cwd)
+         (((CodexConfigPermissionsOk $file-system-policy)
+           (codex:config-permissions-result-ok
+             (codex:config-permissions-compiled-profile
+               $file-system-policy
+               (codex:config-permissions-compile-network-sandbox-policy
+                 (codex:permission-profile-toml-network $profile))
+               $startup-warnings)))
+          ((CodexConfigPermissionsError $message)
+           (codex:config-permissions-result-error $message)))))))
+
+(= (codex:config-permissions-compile-permission-profile
+      $permissions
+      $profile-name
+      $policy-cwd)
+   (case
+     (codex:config-permissions-resolve-permission-profile
+       $permissions
+       $profile-name)
+     (((CodexConfigPermissionsOk $profile)
+       (codex:config-permissions-compile-permission-profile-resolved
+         $profile-name
+         $profile
+         $policy-cwd))
+      ((CodexConfigPermissionsError $message)
+       (codex:config-permissions-result-error $message)))))

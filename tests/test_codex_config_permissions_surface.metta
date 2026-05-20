@@ -3,6 +3,7 @@
 !(import! &self codex:network_proxy_loader)
 !(import! &self codex:network_proxy_spec)
 !(import! &self codex:permissions)
+!(import! &self path)
 
 (= (network-with-enabled $enabled)
    (codex:network-toml
@@ -18,14 +19,6 @@
      CodexAbsent
      CodexAbsent
      CodexAbsent))
-
-(= (config-permissions-result-value $result)
-   (case $result
-     (((CodexConfigPermissionsOk $value) $value))))
-
-(= (config-permissions-result-error-message $result)
-   (case $result
-     (((CodexConfigPermissionsError $message) $message))))
 
 !(assertEqual
   (codex:network-proxy-config-enabled
@@ -54,28 +47,6 @@
   (codex:network-sandbox-policy-restricted))
 
 !(assertEqual
-  (codex:config-permissions-readable-roots-required-for-codex-runtime
-    "/home/user/.codex"
-    "/usr/bin/zsh"
-    "/home/user/.codex/tmp/arg0/session/codex-execve-wrapper")
-  ("/usr/bin/zsh"
-   "/home/user/.codex/tmp/arg0/session"))
-
-!(assertEqual
-  (codex:config-permissions-readable-roots-required-for-codex-runtime
-    "/home/user/.codex"
-    CodexAbsent
-    "/opt/codex-execve-wrapper")
-  ("/opt/codex-execve-wrapper"))
-
-!(assertEqual
-  (codex:config-permissions-readable-roots-required-for-codex-runtime
-    "relative-codex-home"
-    "relative-zsh"
-    "relative-wrapper")
-  ())
-
-!(assertEqual
   (codex:config-permissions-has-glob-chars "src/**/*.rs")
   True)
 
@@ -87,39 +58,36 @@
   (codex:config-permissions-remove-trailing-glob-suffix "docs/**")
   "docs")
 
-!(assertEqual
-  (config-permissions-result-value
-    (codex:config-permissions-compile-read-write-glob-path
-      "docs/**"
-      (codex:file-system-access-read)))
-  "docs")
+!(assertEqualToResult
+  (codex:config-permissions-compile-read-write-glob-path
+    "docs/**"
+    (codex:file-system-access-read))
+  ((CodexConfigPermissionsOk "docs")))
 
-!(assertEqual
-  (config-permissions-result-error-message
-    (codex:config-permissions-compile-read-write-glob-path
-      "src/**/*.rs"
-      (codex:file-system-access-read)))
-  "filesystem glob path `src/**/*.rs` only supports `none` access; use an exact path or trailing `/**` for `read` subtree access")
+!(assertEqualToResult
+  (codex:config-permissions-compile-read-write-glob-path
+    "src/**/*.rs"
+    (codex:file-system-access-read))
+  ((CodexConfigPermissionsError
+     "filesystem glob path `src/**/*.rs` only supports `none` access; use an exact path or trailing `/**` for `read` subtree access")))
 
-!(assertEqual
-  (config-permissions-result-error-message
-    (codex:config-permissions-validate-glob-scan-max-depth 0))
-  "glob_scan_max_depth must be at least 1")
+!(assertEqualToResult
+  (codex:config-permissions-validate-glob-scan-max-depth 0)
+  ((CodexConfigPermissionsError
+     "glob_scan_max_depth must be at least 1")))
 
-!(assertEqual
-  (config-permissions-result-value
-    (codex:config-permissions-validate-glob-scan-max-depth 2))
-  2)
+!(assertEqualToResult
+  (codex:config-permissions-validate-glob-scan-max-depth 2)
+  ((CodexConfigPermissionsOk 2)))
 
-!(assertEqual
-  (config-permissions-result-value
-    (codex:config-permissions-parse-relative-subpath "docs/**"))
-  "docs/**")
+!(assertEqualToResult
+  (codex:config-permissions-parse-relative-subpath "docs/**")
+  ((CodexConfigPermissionsOk "docs/**")))
 
-!(assertEqual
-  (config-permissions-result-error-message
-    (codex:config-permissions-parse-relative-subpath "../secrets"))
-  "filesystem subpath `../secrets` must be a descendant path without `.` or `..` components")
+!(assertEqualToResult
+  (codex:config-permissions-parse-relative-subpath "../secrets")
+  ((CodexConfigPermissionsError
+     "filesystem subpath `../secrets` must be a descendant path without `.` or `..` components")))
 
 !(assertEqual
   (codex:config-permissions-normalize-absolute-path-for-platform
@@ -133,19 +101,18 @@
     True)
   "\\\\server\\share")
 
-!(assertEqual
-  (config-permissions-result-value
-    (codex:config-permissions-parse-absolute-path-for-platform
-      "\\\\?\\D:\\c\\x"
-      True))
-  "D:\\c\\x")
+!(assertEqualToResult
+  (codex:config-permissions-parse-absolute-path-for-platform
+    "\\\\?\\D:\\c\\x"
+    True)
+  ((CodexConfigPermissionsOk "D:\\c\\x")))
 
-!(assertEqual
-  (config-permissions-result-error-message
-    (codex:config-permissions-parse-absolute-path-for-platform
-      "relative\\path"
-      True))
-  "filesystem path `relative\\path` must be absolute, use `~/...`, or start with `:`")
+!(assertEqualToResult
+  (codex:config-permissions-parse-absolute-path-for-platform
+    "relative\\path"
+    True)
+  ((CodexConfigPermissionsError
+     "filesystem path `relative\\path` must be absolute, use `~/...`, or start with `:`")))
 
 !(assertEqual
   (codex:config-permissions-parse-special-path ":project_roots")
@@ -161,13 +128,13 @@
   (codex:config-permissions-parse-special-path "/repo")
   CodexAbsent)
 
-!(assertEqual
-  (config-permissions-result-value
-    (codex:config-permissions-compile-scoped-filesystem-path
-      ":project_roots"
-      "."))
-  (codex:file-system-path-special
-    (codex:file-system-special-path-project-roots CodexAbsent)))
+!(assertEqualToResult
+  (codex:config-permissions-compile-scoped-filesystem-path
+    ":project_roots"
+    ".")
+  ((CodexConfigPermissionsOk
+     (CodexFileSystemPathSpecial
+       (CodexFileSystemSpecialPathProjectRoots CodexAbsent)))))
 
 !(assertEqualToResult
   (codex:config-permissions-compile-filesystem-permissions
@@ -239,3 +206,101 @@
 !(assertEqual
   (codex:config-permissions-missing-filesystem-entries-warning "workspace")
   "Permissions profile `workspace` does not define any recognized filesystem entries for this version of Codex. Filesystem access will remain restricted. Upgrade Codex if this profile expects filesystem permissions.")
+
+!(assertEqualToResult
+  (codex:config-permissions-resolve-permission-profile
+    (CodexPermissionsToml ())
+    "workspace")
+  ((CodexConfigPermissionsError
+     "default_permissions refers to undefined profile `workspace`")))
+
+!(assertEqualToResult
+  (codex:config-permissions-compile-permission-profile
+    (CodexPermissionsToml
+      ((CodexPermissionsTomlEntry
+         "workspace"
+         (CodexPermissionProfileToml
+           (CodexFilesystemPermissionsToml
+             CodexAbsent
+             ((CodexFilesystemPermissionTomlEntry
+                "/workspace/docs"
+                (CodexFilesystemPermissionTomlAccess
+                  (CodexFileSystemAccessModeRead)))))
+           CodexAbsent))))
+    "workspace"
+    "/workspace")
+  ((CodexConfigPermissionsOk
+     (CodexConfigPermissionsCompiledProfile
+       (CodexFileSystemSandboxPolicy
+         (CodexFileSystemSandboxKindRestricted)
+         CodexAbsent
+         ((CodexFileSystemSandboxEntry
+            (CodexFileSystemPathPath "/workspace/docs")
+            (CodexFileSystemAccessModeRead))))
+       (CodexNetworkSandboxPolicyRestricted)
+       ()))))
+
+!(assertEqualToResult
+  (codex:config-permissions-compile-permission-profile
+    (CodexPermissionsToml
+      ((CodexPermissionsTomlEntry
+         "workspace"
+         (CodexPermissionProfileToml
+           (CodexFilesystemPermissionsToml CodexAbsent ())
+           (network-with-enabled True)))))
+    "workspace"
+    "/workspace")
+  ((CodexConfigPermissionsOk
+     (CodexConfigPermissionsCompiledProfile
+       (CodexFileSystemSandboxPolicy
+         (CodexFileSystemSandboxKindRestricted)
+         CodexAbsent
+         ())
+       (CodexNetworkSandboxPolicyEnabled)
+       ("Permissions profile `workspace` does not define any recognized filesystem entries for this version of Codex. Filesystem access will remain restricted. Upgrade Codex if this profile expects filesystem permissions.")))))
+
+!(assertEqualToResult
+  (codex:config-permissions-compile-permission-profile
+    (CodexPermissionsToml
+      ((CodexPermissionsTomlEntry
+         "workspace"
+         (CodexPermissionProfileToml CodexAbsent CodexAbsent))))
+    "workspace"
+    "/workspace")
+  ((CodexConfigPermissionsOk
+     (CodexConfigPermissionsCompiledProfile
+       (CodexFileSystemSandboxPolicy
+         (CodexFileSystemSandboxKindRestricted)
+         CodexAbsent
+         ())
+       (CodexNetworkSandboxPolicyRestricted)
+       ("Permissions profile `workspace` does not define any recognized filesystem entries for this version of Codex. Filesystem access will remain restricted. Upgrade Codex if this profile expects filesystem permissions.")))))
+
+!(assertEqualToResult
+  (codex:config-permissions-compile-permission-profile
+    (CodexPermissionsToml
+      ((CodexPermissionsTomlEntry
+         "workspace"
+         (CodexPermissionProfileToml
+           (CodexFilesystemPermissionsToml
+             CodexAbsent
+             ((CodexFilesystemPermissionTomlEntry
+                ":future_special_path"
+                (CodexFilesystemPermissionTomlAccess
+                  (CodexFileSystemAccessModeRead)))))
+           CodexAbsent))))
+    "workspace"
+    "/workspace")
+  ((CodexConfigPermissionsOk
+     (CodexConfigPermissionsCompiledProfile
+       (CodexFileSystemSandboxPolicy
+         (CodexFileSystemSandboxKindRestricted)
+         CodexAbsent
+         ((CodexFileSystemSandboxEntry
+            (CodexFileSystemPathSpecial
+              (CodexFileSystemSpecialPathUnknown
+                ":future_special_path"
+                CodexAbsent))
+            (CodexFileSystemAccessModeRead))))
+       (CodexNetworkSandboxPolicyRestricted)
+       ("Configured filesystem path `:future_special_path` is not recognized by this version of Codex and will be ignored. Upgrade Codex if this path is required.")))))
