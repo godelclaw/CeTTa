@@ -30,6 +30,7 @@
 !(import! &self json)
 !(import! &self patch)
 !(import! &self path)
+!(import! &self protocol)
 !(import! &self str)
 !(import! &self system)
 
@@ -195,6 +196,41 @@
    (if (== $move-path CodexAbsent)
        False
        True))
+
+(= (codex:apply-patch-change-to-protocol
+      (CodexApplyPatchFileChangeAdd $path $content))
+   (codex:file-change-map-entry
+     $path
+     (codex:file-change-add $content)))
+
+(= (codex:apply-patch-change-to-protocol
+      (CodexApplyPatchFileChangeDelete $path $content))
+   (codex:file-change-map-entry
+     $path
+     (codex:file-change-delete $content)))
+
+(= (codex:apply-patch-change-to-protocol
+      (CodexApplyPatchFileChangeUpdate $path $unified-diff $move-path $new-content))
+   (codex:file-change-map-entry
+     $path
+     (codex:file-change-update $unified-diff $move-path)))
+
+(= (codex:apply-patch-changes-to-protocol $changes)
+   (map-atom-strict
+     $changes
+     $change
+     (codex:apply-patch-change-to-protocol $change)))
+
+(= (codex:convert-apply-patch-to-protocol-materialized
+      (CodexApplyPatchAction $cwd $changes))
+   (codex:apply-patch-changes-to-protocol $changes))
+
+(= (codex:convert-apply-patch-to-protocol $action)
+   ; Materialize producer expressions before pattern matching so file-mode
+   ; callers can pass public action helpers without leaving suspended terms.
+   (let $materialized-action (eval $action)
+     (codex:convert-apply-patch-to-protocol-materialized
+       $materialized-action)))
 
 (= (codex:maybe-apply-patch-result-type
       (CodexMaybeApplyPatchBody $patch-text $action))
