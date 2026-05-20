@@ -4,7 +4,7 @@
 ; - openai-codex/codex-rs/core/src/shell_snapshot.rs
 ;
 ; Covered in this increment:
-; - snapshot constants and shell-type discriminants
+; - snapshot constants and imported session shell-type discriminants
 ; - shell snapshot script templates for zsh, bash, sh, and PowerShell
 ; - snapshot-output preamble stripping
 ; - snapshot filename session-id parsing, including legacy generation suffixes
@@ -27,22 +27,8 @@
 !(import! &self fs)
 !(import! &self path)
 !(import! &self process)
+!(import! &self session_shell)
 !(import! &self str)
-
-(= (codex:shell-type-zsh)
-   "Zsh")
-
-(= (codex:shell-type-bash)
-   "Bash")
-
-(= (codex:shell-type-sh)
-   "Sh")
-
-(= (codex:shell-type-powershell)
-   "PowerShell")
-
-(= (codex:shell-type-cmd)
-   "Cmd")
 
 (= (codex:shell-snapshot-dir)
    "shell_snapshots")
@@ -367,54 +353,6 @@ $envVars | ForEach-Object {
                (if (== $shell-type (codex:shell-type-powershell))
                    (codex:powershell-snapshot-script)
                    CodexAbsent)))))
-
-(= (codex:normalize-shell-type "zsh")
-   (codex:shell-type-zsh))
-
-(= (codex:normalize-shell-type "Zsh")
-   (codex:shell-type-zsh))
-
-(= (codex:normalize-shell-type "bash")
-   (codex:shell-type-bash))
-
-(= (codex:normalize-shell-type "Bash")
-   (codex:shell-type-bash))
-
-(= (codex:normalize-shell-type "sh")
-   (codex:shell-type-sh))
-
-(= (codex:normalize-shell-type "Sh")
-   (codex:shell-type-sh))
-
-(= (codex:normalize-shell-type "powershell")
-   (codex:shell-type-powershell))
-
-(= (codex:normalize-shell-type "pwsh")
-   (codex:shell-type-powershell))
-
-(= (codex:normalize-shell-type "PowerShell")
-   (codex:shell-type-powershell))
-
-(= (codex:normalize-shell-type "cmd")
-   (codex:shell-type-cmd))
-
-(= (codex:normalize-shell-type "Cmd")
-   (codex:shell-type-cmd))
-
-(= (codex:shell-type-name "Zsh")
-   "zsh")
-
-(= (codex:shell-type-name "Bash")
-   "bash")
-
-(= (codex:shell-type-name "Sh")
-   "sh")
-
-(= (codex:shell-type-name "PowerShell")
-   "powershell")
-
-(= (codex:shell-type-name "Cmd")
-   "cmd")
 
 (= (codex:process-shell-codex-shell-type $shell)
    (codex:normalize-shell-type (process-shell-type $shell)))

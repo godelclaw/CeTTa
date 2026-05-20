@@ -11,6 +11,7 @@
 ; - request_permissions / request_user_input feature gating fields
 ; - view_image original-detail capability wiring
 ; - UnifiedExecShellMode::for_session branch selection
+; - core/src/tools/spec.rs::tool_user_shell_type shell mapping
 ; - builder-style `with_*` helpers used by Rust tests and callers
 ;
 ; Required slice-local deviations from Rust, documented for later audit:
@@ -29,6 +30,7 @@
 
 !(import! &self image_detail)
 !(import! &self path)
+!(import! &self session_shell)
 
 (= (codex:config-shell-tool-type-default)
    "Default")
@@ -81,6 +83,23 @@
 
 (= (codex:tool-user-shell-type-cmd)
    (CodexToolUserShellTypeCmd))
+
+(= (codex:tool-user-shell-type-for-shell-type $shell-type)
+   (if (== $shell-type (codex:shell-type-zsh))
+       (codex:tool-user-shell-type-zsh)
+       (if (== $shell-type (codex:shell-type-bash))
+           (codex:tool-user-shell-type-bash)
+           (if (== $shell-type (codex:shell-type-powershell))
+               (codex:tool-user-shell-type-powershell)
+               (if (== $shell-type (codex:shell-type-sh))
+                   (codex:tool-user-shell-type-sh)
+                   (if (== $shell-type (codex:shell-type-cmd))
+                       (codex:tool-user-shell-type-cmd)
+                       CodexAbsent))))))
+
+(= (codex:tool-user-shell-type
+      (CodexShell $shell-type $shell-path $shell-snapshot))
+   (codex:tool-user-shell-type-for-shell-type $shell-type))
 
 (= (codex:tool-config-sandbox-policy-danger-full-access)
    "DangerFullAccess")
