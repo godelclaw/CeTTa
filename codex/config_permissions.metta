@@ -541,39 +541,41 @@
 (= (codex:config-permissions-compile-scoped-filesystem-path
       $path
       $subpath)
-   (let $special (codex:config-permissions-parse-special-path $path)
-     (if (== $special CodexAbsent)
-         (case (codex:config-permissions-parse-relative-subpath $subpath)
-           (((CodexConfigPermissionsOk $relative-subpath)
-             (case (codex:config-permissions-parse-absolute-path $path)
-               (((CodexConfigPermissionsOk $base)
-                 (codex:config-permissions-result-ok
-                   (codex:file-system-path-path
-                     (path-join $base $relative-subpath))))
-                ((CodexConfigPermissionsError $message)
-                 (codex:config-permissions-result-error $message)))))
-            ((CodexConfigPermissionsError $message)
-             (codex:config-permissions-result-error $message))))
-         (if (codex:config-permissions-special-path-supports-nested-entry
-               $special)
+   (if (== $subpath ".")
+       (codex:config-permissions-compile-filesystem-path $path)
+       (let $special (codex:config-permissions-parse-special-path $path)
+         (if (== $special CodexAbsent)
              (case (codex:config-permissions-parse-relative-subpath $subpath)
                (((CodexConfigPermissionsOk $relative-subpath)
-                 (case $special
-                   (((CodexFileSystemSpecialPathProjectRoots $old-subpath)
+                 (case (codex:config-permissions-parse-absolute-path $path)
+                   (((CodexConfigPermissionsOk $base)
                      (codex:config-permissions-result-ok
-                       (codex:file-system-path-special
-                         (codex:file-system-special-path-project-roots
-                           $relative-subpath))))
-                    ((CodexFileSystemSpecialPathUnknown $unknown-path $old-subpath)
-                     (codex:config-permissions-result-ok
-                       (codex:file-system-path-special
-                         (codex:file-system-special-path-unknown
-                           $unknown-path
-                           $relative-subpath)))))))
+                       (codex:file-system-path-path
+                         (path-join $base $relative-subpath))))
+                    ((CodexConfigPermissionsError $message)
+                     (codex:config-permissions-result-error $message)))))
                 ((CodexConfigPermissionsError $message)
                  (codex:config-permissions-result-error $message))))
-             (codex:config-permissions-result-error
-               (codex:config-permissions-nested-path-error $path))))))
+             (if (codex:config-permissions-special-path-supports-nested-entry
+                   $special)
+                 (case (codex:config-permissions-parse-relative-subpath $subpath)
+                   (((CodexConfigPermissionsOk $relative-subpath)
+                     (case $special
+                       (((CodexFileSystemSpecialPathProjectRoots $old-subpath)
+                         (codex:config-permissions-result-ok
+                           (codex:file-system-path-special
+                             (codex:file-system-special-path-project-roots
+                               $relative-subpath))))
+                        ((CodexFileSystemSpecialPathUnknown $unknown-path $old-subpath)
+                         (codex:config-permissions-result-ok
+                           (codex:file-system-path-special
+                             (codex:file-system-special-path-unknown
+                               $unknown-path
+                               $relative-subpath)))))))
+                    ((CodexConfigPermissionsError $message)
+                     (codex:config-permissions-result-error $message))))
+                 (codex:config-permissions-result-error
+                   (codex:config-permissions-nested-path-error $path)))))))
 
 (= (codex:config-permissions-compile-scoped-filesystem-pattern
       $path
@@ -750,16 +752,16 @@
       $entries
       $policy-cwd)
    (case
-     (codex:config-permissions-validate-glob-scan-max-depth
-       $glob-scan-max-depth)
+     (codex:config-permissions-compile-filesystem-permission-entries
+       $entries
+       $policy-cwd)
      (((CodexConfigPermissionsError $message)
        (codex:config-permissions-result-error $message))
-      ((CodexConfigPermissionsOk $valid-depth)
+      ((CodexConfigPermissionsOk $compiled-entries)
        (case
-         (codex:config-permissions-compile-filesystem-permission-entries
-           $entries
-           $policy-cwd)
-         (((CodexConfigPermissionsOk $compiled-entries)
+         (codex:config-permissions-validate-glob-scan-max-depth
+           $glob-scan-max-depth)
+         (((CodexConfigPermissionsOk $valid-depth)
            (codex:config-permissions-result-ok
              (codex:file-system-sandbox-policy
                (codex:file-system-sandbox-kind-restricted)

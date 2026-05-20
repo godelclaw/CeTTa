@@ -113,6 +113,14 @@
   (codex:config-permissions-parse-special-path "/repo")
   CodexAbsent)
 
+!(assertEqual
+  (config-permissions-result-value
+    (codex:config-permissions-compile-scoped-filesystem-path
+      ":project_roots"
+      "."))
+  (codex:file-system-path-special
+    (codex:file-system-special-path-project-roots CodexAbsent)))
+
 !(assertEqualToResult
   (codex:config-permissions-compile-filesystem-permissions
     (CodexFilesystemPermissionsToml
@@ -156,6 +164,20 @@
   (codex:config-permissions-compile-filesystem-permissions
     (CodexFilesystemPermissionsToml
       CodexAbsent
+      ((CodexFilesystemPermissionTomlEntry
+         ":project_roots"
+         (CodexFilesystemPermissionTomlScoped
+           ((CodexFilesystemPermissionTomlScopedEntry
+              "src/**/*.rs"
+              (CodexFileSystemAccessModeRead)))))))
+    "/workspace")
+  ((CodexConfigPermissionsError
+     "filesystem glob path `src/**/*.rs` only supports `none` access; use an exact path or trailing `/**` for `read` subtree access")))
+
+!(assertEqualToResult
+  (codex:config-permissions-compile-filesystem-permissions
+    (CodexFilesystemPermissionsToml
+      0
       ((CodexFilesystemPermissionTomlEntry
          ":project_roots"
          (CodexFilesystemPermissionTomlScoped
