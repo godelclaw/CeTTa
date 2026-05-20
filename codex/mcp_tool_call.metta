@@ -18,6 +18,7 @@
 ; - read-only/destructive/open-world approval requirement logic
 ; - MCP tool-call skip event plan construction
 ; - MCP call metric tag sanitization and emission planning
+; - MCP tool-call tracing span field planning
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust's full MCP tool-call path is async and crosses session, hooks,
@@ -46,6 +47,13 @@
 ; - Rust emits MCP metrics through TurnContext.session_telemetry and reuses
 ;   codex_otel::sanitize_metric_tag_value. This slice ports the sanitizer
 ;   locally and returns the metric operations that the runtime should emit.
+; - Rust creates a tracing Span and records parsed URL host/port fields through
+;   url::Url. This pure slice returns the final span field plan; the scoped
+;   origin parser below covers ordinary absolute MCP origins, explicit ports,
+;   and known default ports. Full url::Url edge-case normalization remains a
+;   runtime integration concern.
+;   CeTTa's Empty cannot be nested as a constructor value, so Rust tracing
+;   Empty field values are represented as CodexMcpSpanEmpty.
 
 !(import! &self json)
 !(import! &self list)
@@ -203,6 +211,30 @@
 
 (= (codex:mcp-call-duration-metric-op $metric-name $duration $tags)
    (CodexMcpCallDurationMetricOp $metric-name $duration $tags))
+
+(= (codex:mcp-tool-call-span-fields
+      $server-name
+      $tool-name
+      $call-id
+      $server-origin
+      $connector-id
+      $connector-name)
+   (CodexMcpToolCallSpanFields
+     $server-name
+     $tool-name
+     $call-id
+     $server-origin
+     $connector-id
+     $connector-name))
+
+(= (codex:mcp-tool-call-span-field $key $value)
+   (CodexMcpToolCallSpanField $key $value))
+
+(= (codex:mcp-tool-call-span-plan $name $fields)
+   (CodexMcpToolCallSpanPlan $name $fields))
+
+(= (codex:mcp-span-empty-field-value)
+   CodexMcpSpanEmpty)
 
 (= (codex:mcp-tool-approval-prompt-options-allow-session-remember
       (CodexMcpToolApprovalPromptOptions
@@ -820,6 +852,391 @@
            $connector-name)
      (($tags
        (codex:emit-mcp-call-metrics-plan-from-tags $tags $duration)))))
+
+(= (codex:mcp-span-ascii-lower-char $char)
+   (case $char
+     (("A" "a")
+      ("B" "b")
+      ("C" "c")
+      ("D" "d")
+      ("E" "e")
+      ("F" "f")
+      ("G" "g")
+      ("H" "h")
+      ("I" "i")
+      ("J" "j")
+      ("K" "k")
+      ("L" "l")
+      ("M" "m")
+      ("N" "n")
+      ("O" "o")
+      ("P" "p")
+      ("Q" "q")
+      ("R" "r")
+      ("S" "s")
+      ("T" "t")
+      ("U" "u")
+      ("V" "v")
+      ("W" "w")
+      ("X" "x")
+      ("Y" "y")
+      ("Z" "z")
+      ($other $char))))
+
+(= (codex:mcp-span-ascii-lower-text $text)
+   (if (== $text "")
+       ""
+       (str-concat
+         (codex:mcp-span-ascii-lower-char (str-slice $text 0 1))
+         (codex:mcp-span-ascii-lower-text
+           (str-slice $text 1 (str-length $text))))))
+
+(= (codex:mcp-tool-call-span-optional-text $value)
+   (if (== $value CodexAbsent)
+       ""
+       $value))
+
+(= (codex:mcp-tool-call-span-transport $server-origin)
+   (if (== $server-origin CodexAbsent)
+       ""
+       (if (== $server-origin "stdio")
+           "stdio"
+           "streamable_http")))
+
+(= (codex:mcp-span-known-default-port $scheme)
+   (case (codex:mcp-span-ascii-lower-text $scheme)
+     (("http" 80)
+      ("https" 443)
+      ("ws" 80)
+      ("wss" 443)
+      ("ftp" 21)
+      ($other CodexAbsent))))
+
+(= (codex:mcp-span-decimal-digit-value $digit)
+   (case $digit
+     (("0" 0)
+      ("1" 1)
+      ("2" 2)
+      ("3" 3)
+      ("4" 4)
+      ("5" 5)
+      ("6" 6)
+      ("7" 7)
+      ("8" 8)
+      ("9" 9))))
+
+(= (codex:mcp-span-decimal-digit-value-or-absent $digit)
+   (case $digit
+     (("0" 0)
+      ("1" 1)
+      ("2" 2)
+      ("3" 3)
+      ("4" 4)
+      ("5" 5)
+      ("6" 6)
+      ("7" 7)
+      ("8" 8)
+      ("9" 9)
+      ($other CodexAbsent))))
+
+(= (codex:mcp-span-is-decimal-digit $digit)
+   (let $found (str-find "0123456789" $digit)
+     (if (== $found Empty) False True)))
+
+(= (codex:mcp-span-is-decimal-digits-from $text $index)
+   (if (== $index (str-length $text))
+       True
+       (if (codex:mcp-span-is-decimal-digit
+             (str-slice $text $index (+ $index 1)))
+           (codex:mcp-span-is-decimal-digits-from $text (+ $index 1))
+           False)))
+
+(= (codex:mcp-span-is-decimal-digits $text)
+   (if (== $text "")
+       False
+       (codex:mcp-span-is-decimal-digits-from $text 0)))
+
+(= (codex:mcp-span-decimal-string-to-number-from $text $index $acc)
+   (if (== $index (str-length $text))
+       $acc
+       (let $digit
+         (codex:mcp-span-decimal-digit-value
+           (str-slice $text $index (+ $index 1)))
+         (codex:mcp-span-decimal-string-to-number-from
+           $text
+           (+ $index 1)
+           (+ (* $acc 10) $digit)))))
+
+(= (codex:mcp-span-decimal-string-to-number $text)
+   (codex:mcp-span-decimal-string-to-number-from $text 0 0))
+
+(= (codex:mcp-span-parse-explicit-port $text)
+   (if (codex:mcp-span-is-decimal-digits $text)
+       (let $port (codex:mcp-span-decimal-string-to-number $text)
+         (if (<= $port 65535) $port CodexAbsent))
+       CodexAbsent))
+
+(= (codex:mcp-span-explicit-port-fields-from
+      $host
+      $text
+      $index
+      $acc)
+   (if (== $index (str-length $text))
+       (if (<= $acc 65535)
+           (CodexMcpSpanParsedServerFields $host $acc)
+           CodexAbsent)
+       (let $digit
+         (codex:mcp-span-decimal-digit-value-or-absent
+           (str-slice $text $index (+ $index 1)))
+         (if (== $digit CodexAbsent)
+             CodexAbsent
+             (codex:mcp-span-explicit-port-fields-from
+               $host
+               $text
+               (+ $index 1)
+               (+ (* $acc 10) $digit))))))
+
+(= (codex:mcp-span-explicit-port-fields $host $text)
+   (if (== $text "")
+       CodexAbsent
+       (codex:mcp-span-explicit-port-fields-from $host $text 0 0)))
+
+(= (codex:mcp-span-min-index $left $right)
+   (if (<= $left $right) $left $right))
+
+(= (codex:mcp-span-url-authority-end $text)
+   (let $len (str-length $text)
+     (let $slash
+       (case (str-find $text "/")
+         ((Empty $len)
+          ($index $index)))
+       (let $query
+         (case (str-find $text "?")
+           ((Empty $len)
+            ($index $index)))
+         (let $fragment
+           (case (str-find $text "#")
+             ((Empty $len)
+              ($index $index)))
+           (codex:mcp-span-min-index
+             $slash
+             (codex:mcp-span-min-index $query $fragment)))))))
+
+(= (codex:mcp-span-url-authority-end-from $text $index)
+   (if (== $index 0)
+       (codex:mcp-span-url-authority-end $text)
+       (+ $index
+          (codex:mcp-span-url-authority-end
+            (str-slice $text $index (str-length $text))))))
+
+(= (codex:mcp-span-origin-parts-from-scheme-end
+      $server-origin
+      $scheme-end)
+   (let $after-scheme
+     (str-slice
+       $server-origin
+       (+ $scheme-end 3)
+       (str-length $server-origin))
+     (let $authority-end
+       (codex:mcp-span-url-authority-end-from $after-scheme 0)
+       (let $authority
+         (str-slice $after-scheme 0 $authority-end)
+         (if (== $authority "")
+             CodexAbsent
+             (CodexMcpSpanOriginParts
+               (str-slice $server-origin 0 $scheme-end)
+               $authority))))))
+
+(= (codex:mcp-span-origin-parts $server-origin)
+   (case (str-find $server-origin "://")
+     ((Empty CodexAbsent)
+      ($scheme-end
+       (codex:mcp-span-origin-parts-from-scheme-end
+         $server-origin
+         $scheme-end)))))
+
+(= (codex:mcp-span-server-fields-from-scheme-end
+      $server-origin
+      $scheme-end)
+   (let $after-scheme
+     (str-slice
+       $server-origin
+       (+ $scheme-end 3)
+       (str-length $server-origin))
+     (let $authority-end
+       (codex:mcp-span-url-authority-end-from $after-scheme 0)
+       (let $authority
+         (str-slice $after-scheme 0 $authority-end)
+         (if (== $authority "")
+             CodexAbsent
+             (codex:mcp-span-host-port-from-authority
+               (str-slice $server-origin 0 $scheme-end)
+               $authority))))))
+
+(= (codex:mcp-span-authority-without-userinfo $authority)
+   (case (str-find $authority "@")
+     ((Empty $authority)
+      ($at-index
+       (str-slice
+         $authority
+         (+ $at-index 1)
+         (str-length $authority))))))
+
+(= (codex:mcp-span-host-port-from-bracketed $scheme $host-part)
+   (case (str-find $host-part "]")
+     ((Empty CodexAbsent)
+      ($close-index
+       (let $host (str-slice $host-part 1 $close-index)
+         (if (== $host "")
+             CodexAbsent
+             (let $rest
+               (str-slice
+                 $host-part
+                 (+ $close-index 1)
+                 (str-length $host-part))
+                   (if (== $rest "")
+                       (if (== $scheme "http")
+                           (CodexMcpSpanParsedServerFields $host 80)
+                           (if (== $scheme "https")
+                               (CodexMcpSpanParsedServerFields $host 443)
+                               (if (== $scheme "ws")
+                                   (CodexMcpSpanParsedServerFields $host 80)
+                                   (if (== $scheme "wss")
+                                       (CodexMcpSpanParsedServerFields
+                                         $host
+                                         443)
+                                       (if (== $scheme "ftp")
+                                           (CodexMcpSpanParsedServerFields
+                                             $host
+                                             21)
+                                           (CodexMcpSpanParsedServerFields
+                                             $host
+                                             CodexAbsent))))))
+                       (if (str-starts-with? $rest ":")
+                       (codex:mcp-span-explicit-port-fields
+                         $host
+                         (str-slice $rest 1 (str-length $rest)))
+                       CodexAbsent)))))))))
+
+(= (codex:mcp-span-host-port-from-reg-name $scheme $host-part)
+   (let $parts (str-split ":" $host-part)
+         (if (== (list:len $parts) 1)
+             (if (== $host-part "")
+                 CodexAbsent
+             (if (== $scheme "http")
+                 (CodexMcpSpanParsedServerFields $host-part 80)
+                 (if (== $scheme "https")
+                     (CodexMcpSpanParsedServerFields $host-part 443)
+                     (if (== $scheme "ws")
+                         (CodexMcpSpanParsedServerFields $host-part 80)
+                         (if (== $scheme "wss")
+                             (CodexMcpSpanParsedServerFields
+                               $host-part
+                               443)
+                             (if (== $scheme "ftp")
+                                 (CodexMcpSpanParsedServerFields
+                                   $host-part
+                                   21)
+                                 (CodexMcpSpanParsedServerFields
+                                   $host-part
+                                   CodexAbsent)))))))
+         (if (== (list:len $parts) 2)
+             (let $host (list:first $parts)
+                 (let $port-text (list:first (list:rest $parts))
+                   (if (== $host "")
+                       CodexAbsent
+                     (codex:mcp-span-explicit-port-fields
+                       $host
+                       $port-text))))
+             CodexAbsent))))
+
+(= (codex:mcp-span-host-port-from-authority $scheme $authority)
+   (let $host-part
+     (codex:mcp-span-authority-without-userinfo $authority)
+     (if (str-starts-with? $host-part "[")
+         (codex:mcp-span-host-port-from-bracketed $scheme $host-part)
+         (codex:mcp-span-host-port-from-reg-name $scheme $host-part))))
+
+(= (codex:mcp-span-server-fields-from-origin $server-origin)
+   (case (str-find $server-origin "://")
+     ((Empty CodexAbsent)
+      ($scheme-end
+       (codex:mcp-span-server-fields-from-scheme-end
+         $server-origin
+         $scheme-end)))))
+
+(= (codex:mcp-span-port-field-value $port)
+   (if (== $port CodexAbsent)
+       (codex:mcp-span-empty-field-value)
+       $port))
+
+(= (codex:mcp-tool-call-span-plan-from-server-fields
+      $conversation-id
+      $turn-id
+      $fields
+      $server-address
+      $server-port)
+   (case $fields
+     (((CodexMcpToolCallSpanFields
+         $server-name
+         $tool-name
+         $call-id
+         $server-origin
+         $connector-id
+         $connector-name)
+       (CodexMcpToolCallSpanPlan
+         "mcp.tools.call"
+         ((CodexMcpToolCallSpanField "otel.kind" "client")
+          (CodexMcpToolCallSpanField "rpc.system" "jsonrpc")
+          (CodexMcpToolCallSpanField "rpc.method" "tools/call")
+          (CodexMcpToolCallSpanField "mcp.server.name" $server-name)
+          (CodexMcpToolCallSpanField
+            "mcp.server.origin"
+            (codex:mcp-tool-call-span-optional-text $server-origin))
+          (CodexMcpToolCallSpanField
+            "mcp.transport"
+            (codex:mcp-tool-call-span-transport $server-origin))
+          (CodexMcpToolCallSpanField
+            "mcp.connector.id"
+            (codex:mcp-tool-call-span-optional-text $connector-id))
+          (CodexMcpToolCallSpanField
+            "mcp.connector.name"
+            (codex:mcp-tool-call-span-optional-text $connector-name))
+          (CodexMcpToolCallSpanField "tool.name" $tool-name)
+          (CodexMcpToolCallSpanField "tool.call_id" $call-id)
+          (CodexMcpToolCallSpanField "conversation.id" $conversation-id)
+          (CodexMcpToolCallSpanField "session.id" $conversation-id)
+          (CodexMcpToolCallSpanField "turn.id" $turn-id)
+          (CodexMcpToolCallSpanField "server.address" $server-address)
+          (CodexMcpToolCallSpanField "server.port" $server-port)))))))
+
+(= (codex:mcp-tool-call-span-plan
+      $conversation-id
+      $turn-id
+      $fields)
+   (case $fields
+     (((CodexMcpToolCallSpanFields
+         $server-name
+         $tool-name
+         $call-id
+         $server-origin
+         $connector-id
+         $connector-name)
+       (case (codex:mcp-span-server-fields-from-origin $server-origin)
+         ((CodexAbsent
+           (codex:mcp-tool-call-span-plan-from-server-fields
+             $conversation-id
+             $turn-id
+             $fields
+             (codex:mcp-span-empty-field-value)
+             (codex:mcp-span-empty-field-value)))
+          ((CodexMcpSpanParsedServerFields $host $port)
+           (codex:mcp-tool-call-span-plan-from-server-fields
+             $conversation-id
+             $turn-id
+             $fields
+             $host
+             (codex:mcp-span-port-field-value $port)))))))))
 
 (= (codex:mcp-tool-call-approval-mode-or-default CodexAbsent)
    (codex:app-tool-approval-auto))

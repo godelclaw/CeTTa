@@ -390,6 +390,88 @@
        (CodexMcpCallMetricTag "connector_id" "connector"))))))
 
 !(assertEqualToResult
+  ((codex:mcp-tool-call-span-transport CodexAbsent)
+   (codex:mcp-tool-call-span-transport "stdio")
+   (codex:mcp-tool-call-span-transport "https://api.example.test/mcp"))
+  (("" "stdio" "streamable_http")))
+
+!(assertEqualToResult
+  (codex:mcp-span-server-fields-from-origin
+    "https://api.example.test/mcp")
+  ((CodexMcpSpanParsedServerFields "api.example.test" 443)))
+
+!(assertEqualToResult
+  (codex:mcp-span-server-fields-from-origin
+    "http://user:pass@example.com:8080/path")
+  ((CodexMcpSpanParsedServerFields "example.com" 8080)))
+
+!(assertEqualToResult
+  (codex:mcp-span-server-fields-from-origin "stdio")
+  (CodexAbsent))
+
+!(assertEqualToResult
+  (codex:mcp-tool-call-span-plan
+    "thread-1"
+    "turn-1"
+    (codex:mcp-tool-call-span-fields
+      "calendar"
+      "create_event"
+      "call-1"
+      "https://api.example.test/mcp"
+      "connector"
+      "Calendar"))
+  ((CodexMcpToolCallSpanPlan
+     "mcp.tools.call"
+     ((CodexMcpToolCallSpanField "otel.kind" "client")
+      (CodexMcpToolCallSpanField "rpc.system" "jsonrpc")
+      (CodexMcpToolCallSpanField "rpc.method" "tools/call")
+      (CodexMcpToolCallSpanField "mcp.server.name" "calendar")
+      (CodexMcpToolCallSpanField
+        "mcp.server.origin"
+        "https://api.example.test/mcp")
+      (CodexMcpToolCallSpanField
+        "mcp.transport"
+        "streamable_http")
+      (CodexMcpToolCallSpanField "mcp.connector.id" "connector")
+      (CodexMcpToolCallSpanField "mcp.connector.name" "Calendar")
+      (CodexMcpToolCallSpanField "tool.name" "create_event")
+      (CodexMcpToolCallSpanField "tool.call_id" "call-1")
+      (CodexMcpToolCallSpanField "conversation.id" "thread-1")
+      (CodexMcpToolCallSpanField "session.id" "thread-1")
+      (CodexMcpToolCallSpanField "turn.id" "turn-1")
+      (CodexMcpToolCallSpanField "server.address" "api.example.test")
+      (CodexMcpToolCallSpanField "server.port" 443)))))
+
+!(assertEqualToResult
+  (codex:mcp-tool-call-span-plan
+    "thread-1"
+    "turn-1"
+    (codex:mcp-tool-call-span-fields
+      "memory"
+      "read_graph"
+      "call-stdio"
+      "stdio"
+      CodexAbsent
+      CodexAbsent))
+  ((CodexMcpToolCallSpanPlan
+     "mcp.tools.call"
+     ((CodexMcpToolCallSpanField "otel.kind" "client")
+      (CodexMcpToolCallSpanField "rpc.system" "jsonrpc")
+      (CodexMcpToolCallSpanField "rpc.method" "tools/call")
+      (CodexMcpToolCallSpanField "mcp.server.name" "memory")
+      (CodexMcpToolCallSpanField "mcp.server.origin" "stdio")
+      (CodexMcpToolCallSpanField "mcp.transport" "stdio")
+      (CodexMcpToolCallSpanField "mcp.connector.id" "")
+      (CodexMcpToolCallSpanField "mcp.connector.name" "")
+      (CodexMcpToolCallSpanField "tool.name" "read_graph")
+      (CodexMcpToolCallSpanField "tool.call_id" "call-stdio")
+      (CodexMcpToolCallSpanField "conversation.id" "thread-1")
+      (CodexMcpToolCallSpanField "session.id" "thread-1")
+      (CodexMcpToolCallSpanField "turn.id" "turn-1")
+      (CodexMcpToolCallSpanField "server.address" CodexMcpSpanEmpty)
+      (CodexMcpToolCallSpanField "server.port" CodexMcpSpanEmpty)))))
+
+!(assertEqualToResult
   (codex:is-mcp-tool-approval-question-id "mcp_tool_call_approval")
   (False))
 
