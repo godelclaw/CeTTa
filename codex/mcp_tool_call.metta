@@ -5,6 +5,7 @@
 ;
 ; Covered in this increment:
 ; - approval question ids, labels, fallback text, and prompt options
+; - MCP tool result sanitization for models without image input
 ; - MCP tool-call request metadata and thread-id metadata merging
 ; - guardian/ARC MCP tool-call review request JSON shape
 ; - session/persistent approval key eligibility
@@ -452,6 +453,74 @@
 
 (= (codex:mcp-tool-call-bool-or-default $value $default)
    (if (== $value CodexAbsent) $default $value))
+
+(= (codex:mcp-tool-call-image-content-omitted-text)
+   "<image content omitted because you do not support image input>")
+
+(= (codex:mcp-tool-call-omitted-image-content-block)
+   (JsonObject
+     ((JsonPair "type" (JsonString "text"))
+      (JsonPair
+        "text"
+        (JsonString
+          (codex:mcp-tool-call-image-content-omitted-text))))))
+
+(= (codex:sanitize-mcp-tool-result-content-block (JsonObject $pairs))
+   (if (== (json-object-get (JsonObject $pairs) "type")
+           (JsonString "image"))
+       (codex:mcp-tool-call-omitted-image-content-block)
+       (JsonObject $pairs)))
+
+(= (codex:sanitize-mcp-tool-result-content-block (JsonString $value))
+   (JsonString $value))
+
+(= (codex:sanitize-mcp-tool-result-content-block (JsonArray $items))
+   (JsonArray $items))
+
+(= (codex:sanitize-mcp-tool-result-content-block (JsonNumber $value))
+   (JsonNumber $value))
+
+(= (codex:sanitize-mcp-tool-result-content-block (JsonBool $value))
+   (JsonBool $value))
+
+(= (codex:sanitize-mcp-tool-result-content-block JsonNull)
+   JsonNull)
+
+(= (codex:sanitize-mcp-tool-result-content-blocks $content)
+   (if (== $content ())
+       ()
+       (let ($head $tail) (decons-atom $content)
+         (case (codex:sanitize-mcp-tool-result-content-block $head)
+           (($sanitized-head
+             (case
+               (codex:sanitize-mcp-tool-result-content-blocks $tail)
+               (($sanitized-tail
+                 (cons-atom $sanitized-head $sanitized-tail))))))))))
+
+(= (codex:sanitize-mcp-tool-result-for-model True $result)
+   (case (eval $result)
+     (($evaluated $evaluated))))
+
+(= (codex:sanitize-mcp-tool-result-for-model False $result)
+   (case (eval $result)
+     (((CodexMcpToolCallResultErr $message)
+       (CodexMcpToolCallResultErr $message))
+      ((CodexMcpToolCallResultOk $call-tool-result)
+       (case (eval $call-tool-result)
+         (((CodexMcpCallToolResult
+             $content
+             $structured-content
+             $is-error
+             $meta)
+           (case
+             (codex:sanitize-mcp-tool-result-content-blocks $content)
+             (($sanitized-content
+               (CodexMcpToolCallResultOk
+                 (CodexMcpCallToolResult
+                   $sanitized-content
+                   $structured-content
+                   $is-error
+                   $meta))))))))))))
 
 (= (codex:mcp-tool-call-trim-end-question-marks $text)
    (if (== $text "")

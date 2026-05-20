@@ -42,9 +42,60 @@
         (JsonPair "connector_id" (JsonString "calendar"))))
      CodexAbsent))
 
+(= (test:mcp-image-call-tool-result)
+   (codex:mcp-call-tool-result
+     ((JsonObject
+        ((JsonPair "type" (JsonString "image"))
+         (JsonPair "data" (JsonString "Zm9v"))
+         (JsonPair "mimeType" (JsonString "image/png"))))
+      (JsonObject
+        ((JsonPair "type" (JsonString "text"))
+         (JsonPair "text" (JsonString "hello")))))
+     CodexAbsent
+     False
+     CodexAbsent))
+
+(= (test:mcp-image-full-call-tool-result)
+   (codex:mcp-call-tool-result
+     ((JsonObject
+        ((JsonPair "type" (JsonString "image"))
+         (JsonPair "data" (JsonString "Zm9v"))
+         (JsonPair "mimeType" (JsonString "image/png")))))
+     (JsonObject ((JsonPair "x" (JsonNumber 1))))
+     False
+     (JsonObject ((JsonPair "k" (JsonString "v"))))))
+
 !(assertEqualToResult
   (codex:is-mcp-tool-approval-question-id "mcp_tool_call_approval_call-1")
   (True))
+
+!(assertEqualToResult
+  (case
+    (codex:sanitize-mcp-tool-result-for-model
+      False
+      (codex:mcp-tool-call-result-ok (test:mcp-image-call-tool-result)))
+    (((CodexMcpToolCallResultOk $result)
+      (case
+        (codex:mcp-call-tool-result-json $result)
+        (($json (json-stringify $json)))))))
+  ("{\"content\":[{\"type\":\"text\",\"text\":\"<image content omitted because you do not support image input>\"},{\"type\":\"text\",\"text\":\"hello\"}],\"isError\":false}"))
+
+!(assertEqualToResult
+  (case
+    (codex:sanitize-mcp-tool-result-for-model
+      True
+      (codex:mcp-tool-call-result-ok (test:mcp-image-full-call-tool-result)))
+    (((CodexMcpToolCallResultOk $result)
+      (case
+        (codex:mcp-call-tool-result-json $result)
+        (($json (json-stringify $json)))))))
+  ("{\"content\":[{\"type\":\"image\",\"data\":\"Zm9v\",\"mimeType\":\"image/png\"}],\"structuredContent\":{\"x\":1},\"isError\":false,\"_meta\":{\"k\":\"v\"}}"))
+
+!(assertEqualToResult
+  (codex:sanitize-mcp-tool-result-for-model
+    False
+    (codex:mcp-tool-call-result-err "tool call failed"))
+  ((CodexMcpToolCallResultErr "tool call failed")))
 
 !(assertEqualToResult
   (codex:is-mcp-tool-approval-question-id "mcp_tool_call_approval")
