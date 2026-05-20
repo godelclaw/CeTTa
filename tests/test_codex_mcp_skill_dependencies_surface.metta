@@ -304,6 +304,88 @@
   ("alpha, zeta"))
 
 !(assertEqualToResult
+  (codex:filter-prompted-mcp-dependencies
+    ((codex:mcp-server-entry
+       "memory"
+       (codex:mcp-dependency-default-http-config "https://memory.test/mcp"))
+     (codex:mcp-server-entry
+       "docs"
+       (codex:mcp-dependency-default-stdio-config "docs-server"))
+     (codex:mcp-server-entry
+       "empty-command"
+       (codex:mcp-dependency-default-stdio-config "   ")))
+    ("mcp__streamable_http__https://memory.test/mcp"
+     "empty-command"))
+  (((CodexMcpServerEntry
+      "docs"
+      (CodexMcpServerConfig
+        (CodexMcpServerTransportStdio
+          "docs-server"
+          ()
+          CodexAbsent
+          ()
+          CodexAbsent)
+        CodexAbsent
+        True
+        False
+        False
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        ())))))
+
+!(assertEqualToResult
+  (codex:filter-prompted-mcp-dependencies
+    ((CodexMcpServerEntry
+       "memory"
+       (CodexMcpServerConfig
+         (CodexMcpServerTransportStreamableHttp
+           "https://memory.test/mcp"
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent)
+         CodexAbsent
+         True
+         False
+         False
+         CodexAbsent
+         CodexAbsent
+         CodexAbsent
+         CodexAbsent
+         CodexAbsent
+         CodexAbsent
+         CodexAbsent
+         CodexAbsent
+         ())))
+    ())
+  (((CodexMcpServerEntry
+      "memory"
+      (CodexMcpServerConfig
+        (CodexMcpServerTransportStreamableHttp
+          "https://memory.test/mcp"
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent)
+        CodexAbsent
+        True
+        False
+        False
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        ())))))
+
+!(assertEqualToResult
   (codex:mcp-dependency-install-question
     ((codex:mcp-server-entry
        "zeta"

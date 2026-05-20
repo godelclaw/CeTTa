@@ -12,6 +12,7 @@
 ; - `mcp_dependency_to_server_config`
 ; - `collect_missing_mcp_dependencies`
 ; - `should_install_mcp_dependencies` prompt/answer side-effect planning
+; - `filter_prompted_mcp_dependencies`
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust stores installed/missing MCP servers in `HashMap<String,
@@ -30,6 +31,9 @@
 ;   event, and prompted canonical keys for the runtime layer to execute.
 ;   CeTTa's Empty cannot be nested as a constructor field, so the no-prompt
 ;   auto-approved branch uses CodexAbsent for the prompt event.
+; - Rust `filter_prompted_mcp_dependencies` reads a session HashSet of prompted
+;   canonical keys. This pure helper receives that set as a list and preserves
+;   the same canonical-key exclusion predicate.
 
 !(import! &self list)
 !(import! &self mcp)
@@ -520,6 +524,29 @@
             (codex:mcp-server-entry-name $head)
             (codex:mcp-server-entry-config $head)))
          (codex:mcp-dependency-prompted-canonical-keys $tail)))))
+
+(= (codex:filter-prompted-mcp-dependencies $missing $prompted-canonical-keys)
+   (if (== $missing ())
+       ()
+       (if (== $prompted-canonical-keys ())
+           $missing
+           (let $head (list:first $missing)
+             (let $tail (list:rest $missing)
+               (let $key
+                 (codex:canonical-mcp-server-key
+                   (codex:mcp-server-entry-name $head)
+                   (codex:mcp-server-entry-config $head))
+                 (if (codex:mcp-skill-dependencies-list-contains
+                       $prompted-canonical-keys
+                       $key)
+                     (codex:filter-prompted-mcp-dependencies
+                       $tail
+                       $prompted-canonical-keys)
+                     (list:append
+                       ($head)
+                       (codex:filter-prompted-mcp-dependencies
+                         $tail
+                         $prompted-canonical-keys)))))))))
 
 (= (codex:mcp-dependency-response-answer-values () $question-id)
    Empty)
