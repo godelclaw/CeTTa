@@ -378,6 +378,72 @@
   ("mcp_tool_call__always_allow"))
 
 !(assertEqualToResult
+  (codex:custom-mcp-tool-approval-mode
+    ((codex:mcp-tool-approval-server-entry
+       "docs"
+       (codex:mcp-tool-approval-server-config
+         (codex:app-tool-approval-approve)
+         ((codex:mcp-tool-approval-tool-entry
+            "search"
+            (codex:mcp-tool-approval-tool-config
+              (codex:app-tool-approval-prompt)))))))
+    "docs"
+    "read")
+  ((CodexAppToolApprovalApprove)))
+
+!(assertEqualToResult
+  (codex:custom-mcp-tool-approval-mode
+    ((codex:mcp-tool-approval-server-entry
+       "docs"
+       (codex:mcp-tool-approval-server-config
+         (codex:app-tool-approval-approve)
+         ((codex:mcp-tool-approval-tool-entry
+            "search"
+            (codex:mcp-tool-approval-tool-config
+              (codex:app-tool-approval-prompt)))))))
+    "docs"
+    "search")
+  ((CodexAppToolApprovalPrompt)))
+
+!(assertEqualToResult
+  (codex:custom-mcp-tool-approval-mode
+    ((codex:mcp-tool-approval-server-entry
+       "docs"
+       (codex:mcp-tool-approval-server-config
+         (codex:app-tool-approval-prompt)
+         ((codex:mcp-tool-approval-tool-entry
+            "search"
+            (codex:mcp-tool-approval-tool-config CodexAbsent))))))
+    "docs"
+    "search")
+  ((CodexAppToolApprovalPrompt)))
+
+!(assertEqualToResult
+  (codex:custom-mcp-tool-approval-mode
+    ((codex:mcp-tool-approval-server-entry
+       "docs"
+       (codex:mcp-tool-approval-server-config
+         CodexAbsent
+         ((codex:mcp-tool-approval-tool-entry
+            "search"
+            (codex:mcp-tool-approval-tool-config
+              (codex:app-tool-approval-approve)))))))
+    "docs"
+    "search")
+  ((CodexAppToolApprovalApprove)))
+
+!(assertEqualToResult
+  (codex:custom-mcp-tool-approval-mode
+    ((codex:mcp-tool-approval-server-entry
+       "docs"
+       (codex:mcp-tool-approval-server-config
+         (codex:app-tool-approval-approve)
+         ())))
+    "unknown"
+    "search")
+  ((CodexAppToolApprovalAuto)))
+
+!(assertEqualToResult
   (codex:session-mcp-tool-approval-key
     (codex:mcp-invocation "custom_server" "run_action" CodexAbsent)
     CodexAbsent

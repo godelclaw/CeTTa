@@ -11,6 +11,7 @@
 ; - MCP tool-call request metadata and thread-id metadata merging
 ; - guardian/ARC MCP tool-call review request JSON shape
 ; - session/persistent approval key eligibility
+; - custom MCP tool approval-mode resolution
 ; - elicitation metadata rendering for MCP approval requests
 ; - request_user_input and MCP elicitation response parsing
 ; - guardian review-decision mapping
@@ -27,6 +28,10 @@
 ; - Rust's MCP approval elicitation request builder reads thread_id and turn_id
 ;   from Session and TurnContext. This pure CeTTa helper receives those ids
 ;   explicitly while preserving the produced request shape.
+; - Rust's custom MCP approval-mode helper reads the already-effective TOML
+;   config layer and deserializes `mcp_servers` into a HashMap. This pure helper
+;   receives list-backed server/tool config entries after parsing; per-tool
+;   override, server-default, and default-Auto precedence are preserved.
 ; - Rust's serde_json object map is represented by JsonObject pair lists. For
 ;   cloned parameter objects we preserve the local pair order; display params
 ;   are sorted by name to match Rust's Vec sort_by branch.
@@ -159,6 +164,22 @@
    (CodexMcpToolApprovalPromptOptions
      $allow-session-remember
      $allow-persistent-approval))
+
+(= (codex:mcp-tool-approval-tool-config $approval-mode)
+   (CodexMcpToolApprovalToolConfig $approval-mode))
+
+(= (codex:mcp-tool-approval-tool-entry $tool-name $config)
+   (CodexMcpToolApprovalToolEntry $tool-name $config))
+
+(= (codex:mcp-tool-approval-server-config
+      $default-tools-approval-mode
+      $tools)
+   (CodexMcpToolApprovalServerConfig
+     $default-tools-approval-mode
+     $tools))
+
+(= (codex:mcp-tool-approval-server-entry $server-name $config)
+   (CodexMcpToolApprovalServerEntry $server-name $config))
 
 (= (codex:mcp-tool-approval-prompt-options-allow-session-remember
       (CodexMcpToolApprovalPromptOptions
@@ -561,6 +582,24 @@
 (= (codex:mcp-tool-call-bool-or-default $value $default)
    (if (== $value CodexAbsent) $default $value))
 
+(= (codex:mcp-tool-call-approval-mode-or-default CodexAbsent)
+   (codex:app-tool-approval-auto))
+
+(= (codex:mcp-tool-call-approval-mode-or-default Empty)
+   (codex:app-tool-approval-auto))
+
+(= (codex:mcp-tool-call-approval-mode-or-default
+      (CodexAppToolApprovalAuto))
+   (codex:app-tool-approval-auto))
+
+(= (codex:mcp-tool-call-approval-mode-or-default
+      (CodexAppToolApprovalPrompt))
+   (codex:app-tool-approval-prompt))
+
+(= (codex:mcp-tool-call-approval-mode-or-default
+      (CodexAppToolApprovalApprove))
+   (codex:app-tool-approval-approve))
+
 (= (codex:mcp-tool-call-json-value-or-null $value)
    (if (== $value CodexAbsent)
        JsonNull
@@ -808,6 +847,130 @@
        Empty
        (let $trimmed (str-trim $value)
          (if (== $trimmed "") Empty $trimmed))))
+
+(= (codex:mcp-tool-approval-server-config-default-mode $config)
+   (case (eval $config)
+     (((CodexMcpToolApprovalServerConfig $default-tools-approval-mode $tools)
+       $default-tools-approval-mode)
+      ((CodexMcpServerConfig
+         $transport
+         $experimental-environment
+         $enabled
+         $required
+         $supports-parallel-tool-calls
+         $disabled-reason
+         $startup-timeout-sec
+         $tool-timeout-sec
+         $default-tools-approval-mode
+         $enabled-tools
+         $disabled-tools
+         $scopes
+         $oauth-resource
+         $tools)
+       $default-tools-approval-mode)
+      ($other CodexAbsent))))
+
+(= (codex:mcp-tool-approval-server-config-tools $config)
+   (case (eval $config)
+     (((CodexMcpToolApprovalServerConfig $default-tools-approval-mode $tools)
+       $tools)
+      ((CodexMcpServerConfig
+         $transport
+         $experimental-environment
+         $enabled
+         $required
+         $supports-parallel-tool-calls
+         $disabled-reason
+         $startup-timeout-sec
+         $tool-timeout-sec
+         $default-tools-approval-mode
+         $enabled-tools
+         $disabled-tools
+         $scopes
+         $oauth-resource
+         $tools)
+       $tools)
+      ($other ()))))
+
+(= (codex:mcp-tool-approval-tool-config-mode $config)
+   (case (eval $config)
+     (((CodexMcpToolApprovalToolConfig $approval-mode)
+       $approval-mode)
+      ((CodexMcpServerToolConfig $approval-mode)
+       $approval-mode)
+      ($other CodexAbsent))))
+
+(= (codex:mcp-tool-approval-server-config-by-name $servers $server)
+   (if (== $servers ())
+       Empty
+       (let $head (list:first $servers)
+         (let $tail (list:rest $servers)
+           (case (eval $head)
+             (((CodexMcpToolApprovalServerEntry $name $config)
+               (if (== $name $server)
+                   $config
+                   (codex:mcp-tool-approval-server-config-by-name
+                     $tail
+                     $server)))
+              ((CodexMcpServerEntry $name $config)
+               (if (== $name $server)
+                   $config
+                   (codex:mcp-tool-approval-server-config-by-name
+                     $tail
+                     $server)))
+              ($other
+               (codex:mcp-tool-approval-server-config-by-name
+                 $tail
+                 $server))))))))
+
+(= (codex:mcp-tool-approval-tool-config-by-name $tools $tool-name)
+   (if (== $tools ())
+       Empty
+       (let $head (list:first $tools)
+         (let $tail (list:rest $tools)
+           (case (eval $head)
+             (((CodexMcpToolApprovalToolEntry $name $config)
+               (if (== $name $tool-name)
+                   $config
+                   (codex:mcp-tool-approval-tool-config-by-name
+                     $tail
+                     $tool-name)))
+              ((CodexMcpServerToolEntry $name $config)
+               (if (== $name $tool-name)
+                   $config
+                   (codex:mcp-tool-approval-tool-config-by-name
+                     $tail
+                     $tool-name)))
+              ($other
+               (codex:mcp-tool-approval-tool-config-by-name
+                 $tail
+                 $tool-name))))))))
+
+(= (codex:custom-mcp-tool-approval-mode-from-server-config
+      $server-config
+      $tool-name)
+   (let $default-mode
+     (codex:mcp-tool-approval-server-config-default-mode $server-config)
+     (case
+       (codex:mcp-tool-approval-tool-config-by-name
+         (codex:mcp-tool-approval-server-config-tools $server-config)
+         $tool-name)
+       ((Empty
+          (codex:mcp-tool-call-approval-mode-or-default $default-mode))
+        ($tool-config
+         (case (codex:mcp-tool-approval-tool-config-mode $tool-config)
+           ((CodexAbsent
+              (codex:mcp-tool-call-approval-mode-or-default $default-mode))
+            ($tool-mode
+             (codex:mcp-tool-call-approval-mode-or-default $tool-mode)))))))))
+
+(= (codex:custom-mcp-tool-approval-mode $servers $server $tool-name)
+   (case (codex:mcp-tool-approval-server-config-by-name $servers $server)
+     ((Empty (codex:app-tool-approval-auto))
+      ($server-config
+       (codex:custom-mcp-tool-approval-mode-from-server-config
+         $server-config
+         $tool-name)))))
 
 (= (codex:is-mcp-tool-approval-question-id $question-id)
    (let $prefix (codex:mcp-tool-approval-question-id-prefix)
