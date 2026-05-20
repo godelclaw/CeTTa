@@ -1,4 +1,5 @@
 !(register-module! ../codex)
+!(import! &self codex:dynamic_tools)
 !(import! &self codex:tool_search_entry)
 
 (= (test:ticket-schema)

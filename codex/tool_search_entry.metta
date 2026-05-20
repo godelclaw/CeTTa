@@ -22,6 +22,7 @@
 ;   JSON runtime boundary.
 
 !(import! &self json)
+!(import! &self dynamic_tools)
 !(import! &self list)
 !(import! &self str)
 
@@ -187,64 +188,6 @@
         $connector-description
         $plugin-display-names))
    $plugin-display-names)
-
-(= (codex:dynamic-tool-spec
-      $namespace
-      $name
-      $description
-      $input-schema
-      $defer-loading)
-   (CodexDynamicToolSpec
-     $namespace
-     $name
-     $description
-     $input-schema
-     $defer-loading))
-
-(= (codex:dynamic-tool-spec-namespace
-      (CodexDynamicToolSpec
-        $namespace
-        $name
-        $description
-        $input-schema
-        $defer-loading))
-   $namespace)
-
-(= (codex:dynamic-tool-spec-name
-      (CodexDynamicToolSpec
-        $namespace
-        $name
-        $description
-        $input-schema
-        $defer-loading))
-   $name)
-
-(= (codex:dynamic-tool-spec-description
-      (CodexDynamicToolSpec
-        $namespace
-        $name
-        $description
-        $input-schema
-        $defer-loading))
-   $description)
-
-(= (codex:dynamic-tool-spec-input-schema
-      (CodexDynamicToolSpec
-        $namespace
-        $name
-        $description
-        $input-schema
-        $defer-loading))
-   $input-schema)
-
-(= (codex:dynamic-tool-spec-defer-loading
-      (CodexDynamicToolSpec
-        $namespace
-        $name
-        $description
-        $input-schema
-        $defer-loading))
-   $defer-loading)
 
 (= (codex:tool-search-optional-original-part $value)
    (case $value
