@@ -17,10 +17,12 @@
 ;   local coverage. The default visible tool-call surface remains unrestricted.
 ; - Rust collects structured entries, then sorts them by relative path with a
 ;   comparator over the full record. The current CeTTa evaluator does not yet
-;   expose a comparable structured-sort helper, so this slice walks each
-;   directory's entries in lexicographic order depth-first. That yields the
-;   same visible relative-path order as Rust for unique relative paths, which
-;   is the ordinary case exercised by the current port/tests.
+;   expose a comparable structured-sort helper, so this slice sorts the
+;   materialized string keys and maps them back to entries. This preserves
+;   Rust-visible ordering for unique normalized relative paths; if separate
+;   long paths truncate to the same 500-byte key, Rust's `sort_unstable_by`
+;   leaves their relative order unspecified while this slice keeps collection
+;   order for that tie.
 ; - The current CeTTa `json-object-get` surface does not preserve Rust's
 ;   missing-vs-null distinction for these optional numeric fields. Omitted
 ;   `offset` / `limit` / `depth` therefore follow the shared absent/null
@@ -90,18 +92,29 @@
    $depth)
 
 (= (codex:list-dir-entry $display-name $depth $kind)
-   (CodexListDirEntry $display-name $depth $kind))
+   (codex:list-dir-entry-with-sort-key
+     $display-name
+     $display-name
+     $depth
+     $kind))
+
+(= (codex:list-dir-entry-with-sort-key $sort-key $display-name $depth $kind)
+   (CodexListDirEntry $sort-key $display-name $depth $kind))
+
+(= (codex:list-dir-entry-sort-key
+      (CodexListDirEntry $sort-key $display-name $depth $kind))
+   $sort-key)
 
 (= (codex:list-dir-entry-display-name
-      (CodexListDirEntry $display-name $depth $kind))
+      (CodexListDirEntry $sort-key $display-name $depth $kind))
    $display-name)
 
 (= (codex:list-dir-entry-depth
-      (CodexListDirEntry $display-name $depth $kind))
+      (CodexListDirEntry $sort-key $display-name $depth $kind))
    $depth)
 
 (= (codex:list-dir-entry-kind
-      (CodexListDirEntry $display-name $depth $kind))
+      (CodexListDirEntry $sort-key $display-name $depth $kind))
    $kind)
 
 (= (codex:list-dir-function-payload $arguments)
@@ -370,6 +383,10 @@
          (codex:list-dir-maximum-entry-length))
        $name))
 
+(= (codex:list-dir-normalize-entry-path $name)
+   (codex:list-dir-normalize-entry-component
+     (str-join "/" (str-split "\\" $name))))
+
 (= (codex:list-dir-indent $depth)
    (if (== $depth 0)
        ""
@@ -389,7 +406,7 @@
                ""))))
 
 (= (codex:list-dir-format-entry-line
-      (CodexListDirEntry $display-name $depth $kind))
+      (CodexListDirEntry $sort-key $display-name $depth $kind))
    (str-concat
      (codex:list-dir-indent $depth)
      (str-concat $display-name (codex:list-dir-kind-suffix $kind))))
@@ -452,12 +469,17 @@
 (= (codex:is-list-dir-read-denied-path-roots $path ())
    False)
 
+; CeTTa evaluation accommodation: force each root comparison before recursing.
+; This preserves Rust ReadDenyMatcher's first-match semantics; the direct
+; recursive false branch can otherwise collapse for multi-root lists.
 (= (codex:is-list-dir-read-denied-path-roots $path $roots)
    (let $head (list:first $roots)
      (let $tail (list:rest $roots)
-       (if (codex:list-dir-is-path-within-root $path $head)
-           True
-           (codex:is-list-dir-read-denied-path-roots $path $tail)))))
+       (case (codex:list-dir-is-path-within-root $path $head)
+         ((True True)
+          (False
+           (case (codex:is-list-dir-read-denied-path-roots $path $tail)
+             (($is-denied $is-denied)))))))))
 
 (= (codex:list-dir-read-directory-result $current-dir)
    (fs-read-dir-entries $current-dir))
@@ -507,7 +529,11 @@
                          $acc))
                       (False
                        (let $entry
-                         (codex:list-dir-entry
+                         (codex:list-dir-entry-with-sort-key
+                           (codex:list-dir-normalize-entry-path
+                             (codex:list-dir-relative-child-prefix
+                               $relative-prefix
+                               $name))
                            (codex:list-dir-normalize-entry-component $name)
                            (codex:list-dir-entry-depth-from-prefix $relative-prefix)
                            $kind)
@@ -572,6 +598,63 @@
                    (($taken-tail
                       (cons-atom $head $taken-tail))))))))))
 
+(= (codex:list-dir-entry-sort-keys ())
+   ())
+
+(= (codex:list-dir-entry-sort-keys $entries)
+   (let $head (list:first $entries)
+     (let $tail (list:rest $entries)
+       (case (codex:list-dir-entry-sort-key $head)
+         (($sort-key
+           (case (codex:list-dir-entry-sort-keys $tail)
+             (($tail-keys
+               (cons-atom $sort-key $tail-keys))))))))))
+
+(= (codex:list-dir-take-entry-by-sort-key $sort-key ())
+   (CodexListDirTakeEntryMissing $sort-key))
+
+(= (codex:list-dir-take-entry-by-sort-key $sort-key $entries)
+   (let $head (list:first $entries)
+     (let $tail (list:rest $entries)
+       (case (codex:list-dir-entry-sort-key $head)
+         (($head-sort-key
+           (if (== $sort-key $head-sort-key)
+               (CodexListDirTakeEntryFound $head $tail)
+               (case (codex:list-dir-take-entry-by-sort-key $sort-key $tail)
+                 (((CodexListDirTakeEntryFound $entry $remaining)
+                   (CodexListDirTakeEntryFound
+                     $entry
+                     (cons-atom $head $remaining)))
+                  ((CodexListDirTakeEntryMissing $missing-sort-key)
+                   (CodexListDirTakeEntryMissing $missing-sort-key)))))))))))
+
+(= (codex:list-dir-entries-from-sorted-keys $entries ())
+   ())
+
+(= (codex:list-dir-entries-from-sorted-keys $entries $keys)
+   (let $key (list:first $keys)
+     (let $tail-keys (list:rest $keys)
+       (case (codex:list-dir-take-entry-by-sort-key $key $entries)
+         (((CodexListDirTakeEntryFound $entry $remaining-entries)
+           (case (codex:list-dir-entries-from-sorted-keys
+                   $remaining-entries
+                   $tail-keys)
+             (($tail-entries
+               (cons-atom $entry $tail-entries)))))
+          ((CodexListDirTakeEntryMissing $missing-sort-key)
+           ()))))))
+
+(= (codex:list-dir-sort-entries-by-sort-key $entries)
+   (if (list:empty? $entries)
+       ()
+       (case (eval (codex:list-dir-entry-sort-keys $entries))
+         (($sort-keys
+           (case (sort-strings $sort-keys)
+             (($sorted-keys
+               (codex:list-dir-entries-from-sorted-keys
+                 $entries
+                 $sorted-keys)))))))))
+
 (= (codex:list-dir-selected-lines-from-formatted
       $remaining-entries
       $capped-limit
@@ -634,12 +717,14 @@
    (if (list:empty? $entries)
        (codex:list-dir-handler-result-success
          (codex:list-dir-output-text $dir-path ()))
-       (case (codex:list-dir-selected-lines $entries $offset $limit)
-         (((CodexListDirCollectOk $lines)
-           (codex:list-dir-handler-result-success
-             (codex:list-dir-output-text $dir-path $lines)))
-          ((CodexListDirCollectError $message)
-           (codex:list-dir-handler-result-error $message))))))
+       (case (codex:list-dir-sort-entries-by-sort-key $entries)
+         (($sorted-entries
+           (case (codex:list-dir-selected-lines $sorted-entries $offset $limit)
+             (((CodexListDirCollectOk $lines)
+               (codex:list-dir-handler-result-success
+                 (codex:list-dir-output-text $dir-path $lines)))
+              ((CodexListDirCollectError $message)
+               (codex:list-dir-handler-result-error $message)))))))))
 
 (= (codex:handle-list-dir-args $context $args)
    (let $dir-path (codex:list-dir-args-dir-path $args)

@@ -11,10 +11,13 @@
 (= (codex-list-dir-deny-root)
    "/home/zarclaw/repos/CeTTa/runtime/codex-list-dir-deny-fixture")
 
+(= (codex-list-dir-sort-root)
+   "/home/zarclaw/repos/CeTTa/runtime/codex-list-dir-sort-fixture")
+
 !(assertEqualToResult
   (process-result-exit-code
     (process-run-shell
-      "rm -rf /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-fixture /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-deny-fixture && mkdir -p /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-fixture/nested/deeper /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-deny-fixture/visible /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-deny-fixture/private"))
+      "rm -rf /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-fixture /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-deny-fixture /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-sort-fixture && mkdir -p /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-fixture/nested/deeper /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-deny-fixture/visible /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-deny-fixture/private /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-sort-fixture/a"))
   (0))
 
 !(fs-write-text "/home/zarclaw/repos/CeTTa/runtime/codex-list-dir-fixture/entry.txt" "content")
@@ -24,6 +27,9 @@
 !(fs-write-text "/home/zarclaw/repos/CeTTa/runtime/codex-list-dir-deny-fixture/visible/ok.txt" "ok")
 !(fs-write-text "/home/zarclaw/repos/CeTTa/runtime/codex-list-dir-deny-fixture/private/secret.txt" "secret")
 !(fs-write-text "/home/zarclaw/repos/CeTTa/runtime/codex-list-dir-deny-fixture/top_secret.txt" "secret")
+
+!(fs-write-text "/home/zarclaw/repos/CeTTa/runtime/codex-list-dir-sort-fixture/a/child.txt" "child")
+!(fs-write-text "/home/zarclaw/repos/CeTTa/runtime/codex-list-dir-sort-fixture/a.txt" "sibling")
 
 !(assertEqualToResult
   (str-starts-with?
@@ -42,6 +48,14 @@
         "call-list-dir-offset"
         "{\"dir_path\":\"/home/zarclaw/repos/CeTTa/runtime/codex-list-dir-fixture\",\"offset\":10,\"limit\":1,\"depth\":2}")))
   ("offset exceeds directory entry count"))
+
+!(assertEqualToResult
+  (codex:tool-result-output-text
+    (once
+      (codex:run-list-dir-tool-call
+        "call-list-dir-global-sort"
+        "{\"dir_path\":\"/home/zarclaw/repos/CeTTa/runtime/codex-list-dir-sort-fixture\",\"offset\":1,\"limit\":20,\"depth\":2}")))
+  ("Absolute path: /home/zarclaw/repos/CeTTa/runtime/codex-list-dir-sort-fixture\na/\na.txt\n  child.txt"))
 
 !(assertEqualToResult
   (str-starts-with?
