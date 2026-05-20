@@ -91,6 +91,103 @@
   (eval (test:bucket-run-entries "other-server" 4 "computer-use" 8)))
 
 !(assertEqualToResult
+  (codex:tool-search-mcp-namespace-description
+    "mcp__calendar__"
+    CodexAbsent
+    CodexAbsent)
+  ("Tools in the mcp__calendar__ namespace."))
+
+!(assertEqualToResult
+  (codex:tool-search-mcp-namespace-description
+    "mcp__calendar__"
+    "  Google Calendar  "
+    CodexAbsent)
+  ("Tools for working with Google Calendar."))
+
+!(assertEqualToResult
+  (codex:tool-search-mcp-namespace-description
+    "mcp__calendar__"
+    "Google Calendar"
+    "  Manage calendar events.  ")
+  ("Manage calendar events."))
+
+!(assertEqual
+  (codex:tool-search-search-output-tools
+    ((CodexToolSearchEntry
+       "create calendar event"
+       (CodexToolSearchOutputMcp
+         "calendar"
+         "mcp__calendar__"
+         "create_event"
+         CodexAbsent
+         CodexAbsent)
+       "calendar")
+     (CodexToolSearchEntry
+       "codex app automation"
+       (CodexToolSearchOutputDynamic "codex_app" "automation_update")
+       CodexAbsent)
+     (CodexToolSearchEntry
+       "list calendar events"
+       (CodexToolSearchOutputMcp
+         "calendar"
+         "mcp__calendar__"
+         "list_events"
+         CodexAbsent
+         CodexAbsent)
+       "calendar")))
+  ((CodexToolSearchOutputNamespace
+     "mcp__calendar__"
+     "Tools in the mcp__calendar__ namespace."
+     ((CodexToolSearchOutputMcp
+        "calendar"
+        "mcp__calendar__"
+        "create_event"
+        CodexAbsent
+        CodexAbsent)
+      (CodexToolSearchOutputMcp
+        "calendar"
+        "mcp__calendar__"
+        "list_events"
+        CodexAbsent
+        CodexAbsent)))
+   (CodexToolSearchOutputNamespace
+     "codex_app"
+     "Tools in the codex_app namespace."
+     ((CodexToolSearchOutputDynamic "codex_app" "automation_update")))))
+
+!(assertEqual
+  (codex:tool-search-coalesce-loadable-tool-specs
+    ((CodexToolSearchOutputMcp
+       "calendar"
+       "mcp__calendar__"
+       "create_event"
+       "Google Calendar"
+       "  Manage calendar events.  ")
+     (CodexToolSearchOutputDynamic CodexAbsent "local_tool")
+     (CodexToolSearchOutputMcp
+       "calendar"
+       "mcp__calendar__"
+       "list_events"
+       "Google Calendar"
+       "  Manage calendar events.  ")))
+  ((CodexToolSearchOutputNamespace
+     "mcp__calendar__"
+     "Manage calendar events."
+     ((CodexToolSearchOutputMcp
+        "calendar"
+        "mcp__calendar__"
+        "create_event"
+        "Google Calendar"
+        "  Manage calendar events.  ")
+      (CodexToolSearchOutputMcp
+        "calendar"
+        "mcp__calendar__"
+        "list_events"
+        "Google Calendar"
+        "  Manage calendar events.  ")))
+   (CodexToolSearchOutputDynamic CodexAbsent "local_tool")))
+
+!(assertEqualToResult
   (codex:tool-search-handler-kind)
   ("function"))
 

@@ -382,7 +382,7 @@
 
 (= (codex:tool-search-coalesce-namespace $coalesced $name $description $tools)
    (if (== $coalesced ())
-       ((codex:tool-search-output-namespace $name $description $tools))
+       ((CodexToolSearchOutputNamespace $name $description $tools))
        (let $head (list:first $coalesced)
          (let $tail (list:rest $coalesced)
            (case $head
@@ -397,21 +397,21 @@
                        $head-description
                        (list:append $head-tools $tools))
                      $tail)
-                   (cons-atom
-                     $head
-                     (codex:tool-search-coalesce-namespace
-                       $tail
-                       $name
-                       $description
-                       $tools))))
+                   (let $coalesced-tail
+                     (eval (codex:tool-search-coalesce-namespace
+                             $tail
+                             $name
+                             $description
+                             $tools))
+                     (cons-atom $head $coalesced-tail))))
               ($other
-               (cons-atom
-                 $head
-                 (codex:tool-search-coalesce-namespace
-                   $tail
-                   $name
-                   $description
-                   $tools)))))))))
+               (let $coalesced-tail
+                 (eval (codex:tool-search-coalesce-namespace
+                         $tail
+                         $name
+                         $description
+                         $tools))
+                 (cons-atom $head $coalesced-tail)))))))))
 
 (= (codex:tool-search-coalesce-one $coalesced $spec)
    (case $spec
@@ -434,21 +434,20 @@
    (let $head (list:first $outputs)
      (let $tail (list:rest $outputs)
        (let $spec (codex:tool-search-output-as-loadable-spec $head)
-         (codex:tool-search-coalesce-loadable-tool-specs-acc
-           $tail
-           (codex:tool-search-coalesce-one $coalesced $spec))))))
+         (let $next-coalesced
+           (eval (codex:tool-search-coalesce-one $coalesced $spec))
+           (codex:tool-search-coalesce-loadable-tool-specs-acc
+             $tail
+             $next-coalesced))))))
 
 (= (codex:tool-search-entry-outputs $entries)
-   (if (== $entries ())
-       ()
-       (let $head (list:first $entries)
-         (let $tail (list:rest $entries)
-           (let $output (codex:tool-search-entry-output $head)
-             (let $rest (eval (codex:tool-search-entry-outputs $tail))
-               (cons-atom $output $rest)))))))
+   (map-atom-strict
+     $entries
+     $entry
+     (codex:tool-search-entry-output $entry)))
 
 (= (codex:tool-search-search-output-tools $results)
-   (let $outputs (codex:tool-search-entry-outputs $results)
+   (let $outputs (eval (codex:tool-search-entry-outputs $results))
      (codex:tool-search-coalesce-loadable-tool-specs $outputs)))
 
 (= (codex:tool-search-search $entries $query $limit $use-default-limit)
