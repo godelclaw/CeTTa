@@ -690,6 +690,45 @@
   ((CodexMcpToolApprovalKey "codex_apps" "calendar" "create_event")))
 
 !(assertEqualToResult
+  (codex:mcp-tool-approval-is-remembered
+    ((codex:mcp-tool-approval-store-entry
+       (codex:mcp-tool-approval-key
+         "custom_server"
+         CodexAbsent
+         "run_action")
+       (codex:review-decision-approved-for-session)))
+    (codex:mcp-tool-approval-key "custom_server" CodexAbsent "run_action"))
+  (True))
+
+!(assertEqualToResult
+  (codex:mcp-tool-approval-is-remembered
+    ((codex:mcp-tool-approval-store-entry
+       (codex:mcp-tool-approval-key
+         "custom_server"
+         CodexAbsent
+         "run_action")
+       (codex:review-decision-approved)))
+    (codex:mcp-tool-approval-key "custom_server" CodexAbsent "run_action"))
+  (False))
+
+!(assertEqualToResult
+  (codex:mcp-tool-approval-is-remembered
+    ((codex:mcp-tool-approval-store-entry
+       (codex:mcp-tool-approval-key
+         "custom_server"
+         CodexAbsent
+         "other_action")
+       (codex:review-decision-approved-for-session)))
+    (codex:mcp-tool-approval-key "custom_server" CodexAbsent "run_action"))
+  (False))
+
+!(assertEqualToResult
+  (codex:mcp-tool-approval-is-remembered
+    ()
+    (codex:mcp-tool-approval-key "custom_server" CodexAbsent "run_action"))
+  (False))
+
+!(assertEqualToResult
   (codex:persist-codex-app-tool-approval-plan
     "/home/user/.codex"
     "calendar"

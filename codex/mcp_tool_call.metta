@@ -15,6 +15,7 @@
 ; - elicitation metadata rendering for MCP approval requests
 ; - request_user_input and MCP elicitation response parsing
 ; - guardian review-decision mapping
+; - session approval store remembered-decision lookup
 ; - approval-decision application side-effect planning
 ; - approval persistence config-edit target planning
 ; - read-only/destructive/open-world approval requirement logic
@@ -78,6 +79,9 @@
 ;   load global MCP servers from disk. This pure helper receives the already
 ;   visible config roots/layers/server lists and returns the exact SetPath edit
 ;   target or Rust-equivalent missing-server error for the runtime to execute.
+; - Rust mcp_tool_approval_is_remembered locks a session-owned approval store
+;   and reads one key. This pure helper receives the materialized store entries
+;   and preserves the exact ApprovedForSession predicate.
 
 !(import! &self json)
 !(import! &self list)
@@ -206,6 +210,9 @@
 (= (codex:mcp-tool-approval-key-tool-name
       (CodexMcpToolApprovalKey $server $connector-id $tool-name))
    $tool-name)
+
+(= (codex:mcp-tool-approval-store-entry $key $decision)
+   (CodexMcpToolApprovalStoreEntry $key $decision))
 
 (= (codex:mcp-tool-approval-config-layer-source-project)
    (CodexMcpToolApprovalConfigLayerSourceProject))
@@ -1942,6 +1949,20 @@
      $invocation
      $metadata
      $approval-mode))
+
+(= (codex:mcp-tool-approval-is-remembered () $key)
+   False)
+
+(= (codex:mcp-tool-approval-is-remembered $store $key)
+   (let $head (list:first $store)
+     (let $tail (list:rest $store)
+       (case $head
+         (((CodexMcpToolApprovalStoreEntry $entry-key $decision)
+           (if (== $entry-key $key)
+               (== $decision (codex:review-decision-approved-for-session))
+               (codex:mcp-tool-approval-is-remembered $tail $key)))
+          ($other
+           (codex:mcp-tool-approval-is-remembered $tail $key)))))))
 
 (= (codex:persist-codex-app-tool-approval-plan
       $codex-home
