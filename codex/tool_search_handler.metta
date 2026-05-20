@@ -23,10 +23,6 @@
 ;   tool_search_entry slice represents those specs as source-preserving marker
 ;   atoms, so this module coalesces marker atoms into explicit namespace marker
 ;   atoms while preserving Rust's first-namespace-wins order and append logic.
-; - Rust's `limit_results_by_bucket` scans mixed buckets in one pass. This
-;   slice preserves the same limit values for homogeneous bucket result lists
-;   and unbucketed result lists; mixed-bucket scan state needs a follow-up once
-;   CeTTa recursion over imported generated entry lists is stable.
 
 !(import! &self context)
 !(import! &self function_tool)
@@ -256,26 +252,8 @@
 (= (codex:is-tool-search-entry-in-bucket $entry $bucket)
    (tool-search-is-entry-in-bucket-local $entry $bucket))
 
-(= (tool-search-any-limit-bucket-local $entries $bucket)
-   (if (== $entries ())
-       False
-       (let ($head $tail) (decons-atom $entries)
-           (if (tool-search-is-entry-in-bucket-local $head $bucket)
-               True
-               (tool-search-any-limit-bucket-local $tail $bucket)))))
-
 (= (codex:tool-search-any-limit-bucket $entries $bucket)
-   (eval (tool-search-any-limit-bucket-local $entries $bucket)))
-
-(= (tool-search-count-results-for-bucket-local $results $bucket)
-   (if (== $results ())
-       0
-       (let ($head $tail) (decons-atom $results)
-           (let $tail-count
-             (eval (tool-search-count-results-for-bucket-local $tail $bucket))
-             (if (tool-search-is-entry-in-bucket-local $head $bucket)
-                 (+ 1 $tail-count)
-                 $tail-count)))))
+   (> (codex:tool-search-count-results-for-bucket $entries $bucket) 0))
 
 (= (codex:tool-search-count-results-for-bucket $results $bucket)
    (let $matching
@@ -285,38 +263,32 @@
        (tool-search-is-entry-in-bucket-local $entry $bucket))
      (size-atom $matching)))
 
+; Rust uses `Iterator::scan` with a mutable `HashMap<&str, usize>`. The pure
+; CeTTa form below is an equivalent index scan: for each result, count preceding
+; same-bucket entries and keep the result iff that count is still below the
+; Rust default limit for the bucket.
+(= (tool-search-result-index-accepted-by-bucket-local $results $index)
+   (let $entry (index-atom $results $index)
+     (case (tool-search-entry-limit-bucket-local $entry)
+       ((CodexAbsent True)
+        ($bucket
+         (let $prior-results (codex:tool-search-take $results $index)
+           (< (codex:tool-search-count-results-for-bucket
+                $prior-results
+                $bucket)
+              (codex:tool-search-default-limit-for-bucket $bucket))))))))
+
 (= (codex:tool-search-limit-results-by-bucket $results)
-   (if (== $results ())
-       ()
-       (let $first-entry (index-atom $results 0)
-         (case (tool-search-entry-limit-bucket-local $first-entry)
-           ((CodexAbsent $results)
-            ($bucket
-             (codex:tool-search-take
-               $results
-               (codex:tool-search-default-limit-for-bucket $bucket))))))))
-
-(= (tool-search-limit-results-by-bucket-acc-local () $accepted-rev)
-   (list:reverse $accepted-rev))
-
-(= (tool-search-limit-results-by-bucket-acc-local $results $accepted-rev)
-   (let ($head $tail) (decons-atom $results)
-       (case (tool-search-entry-limit-bucket-local $head)
-         ((CodexAbsent
-           (tool-search-limit-results-by-bucket-acc-local
-             $tail
-             (cons-atom $head $accepted-rev)))
-          ($bucket
-           (let $current-count
-             (tool-search-count-results-for-bucket-local $accepted-rev $bucket)
-             (if (>= $current-count
-                     (codex:tool-search-default-limit-for-bucket $bucket))
-                 (tool-search-limit-results-by-bucket-acc-local
-                   $tail
-                   $accepted-rev)
-                 (tool-search-limit-results-by-bucket-acc-local
-                   $tail
-                   (cons-atom $head $accepted-rev)))))))))
+   (let $indexes (range-atom (size-atom $results))
+     (let $accepted-indexes
+       (filter-atom
+         $indexes
+         $index
+         (tool-search-result-index-accepted-by-bucket-local $results $index))
+       (map-atom-strict
+         $accepted-indexes
+         $index
+         (index-atom $results $index)))))
 
 (= (codex:tool-search-search-result-entries
       $entries
@@ -330,16 +302,15 @@
        (if $use-default-limit
            (if (== $results ())
                ()
-               (let $first-result (index-atom $results 0)
-                 (if (tool-search-is-entry-in-bucket-local
-                       $first-result
-                       (codex:tool-search-computer-use-mcp-server-name))
-                     (let $expanded
-                       (codex:tool-search-take
-                         $ranked
-                         (codex:tool-search-computer-use-tool-search-limit))
-                       (codex:tool-search-limit-results-by-bucket $expanded))
-                     (codex:tool-search-limit-results-by-bucket $results))))
+               (if (codex:tool-search-any-limit-bucket
+                     $results
+                     (codex:tool-search-computer-use-mcp-server-name))
+                   (let $expanded
+                     (codex:tool-search-take
+                       $ranked
+                       (codex:tool-search-computer-use-tool-search-limit))
+                     (codex:tool-search-limit-results-by-bucket $expanded))
+                   (codex:tool-search-limit-results-by-bucket $results)))
            $results))))
 
 (= (codex:tool-search-default-namespace-description $namespace)

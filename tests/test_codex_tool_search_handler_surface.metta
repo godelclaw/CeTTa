@@ -39,6 +39,23 @@
      $count
      (test:numbered-entry $server-name $description-prefix 1)))
 
+(= (test:bucket-run-entry $first-server $first-count $second-server $index)
+   (if (< $index $first-count)
+       (test:numbered-entry $first-server "computer use" 1)
+       (test:numbered-entry $second-server "computer use" 1)))
+
+(= (test:bucket-run-entries $first-server $first-count $second-server $second-count)
+   (let $total-count (+ $first-count $second-count)
+     (let $range (range-atom $total-count)
+       (map-atom-strict
+         $range
+         $index
+         (test:bucket-run-entry
+           $first-server
+           $first-count
+           $second-server
+           $index)))))
+
 (= (test:handler-error-display $result)
    (case $result
      (((CodexToolSearchHandlerErr $error)
@@ -51,6 +68,27 @@
     ((size-atom $limited)
      (codex:tool-search-count-results-for-bucket $limited "other-server")))
   ((8 8)))
+
+!(assertEqual
+  (codex:tool-search-limit-results-by-bucket
+    (eval (test:bucket-run-entries "other-server" 12 "calendar" 12)))
+  (eval (test:bucket-run-entries "other-server" 8 "calendar" 8)))
+
+!(assertEqual
+  (codex:tool-search-search-result-entries
+    (eval (test:bucket-run-entries "other-server" 4 "computer-use" 30))
+    "computer use"
+    (codex:tool-search-default-limit)
+    True)
+  (eval (test:bucket-run-entries "other-server" 4 "computer-use" 16)))
+
+!(assertEqual
+  (codex:tool-search-search-result-entries
+    (eval (test:bucket-run-entries "other-server" 4 "computer-use" 30))
+    "computer use"
+    12
+    False)
+  (eval (test:bucket-run-entries "other-server" 4 "computer-use" 8)))
 
 !(assertEqualToResult
   (codex:tool-search-handler-kind)
