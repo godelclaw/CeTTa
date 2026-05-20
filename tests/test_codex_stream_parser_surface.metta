@@ -130,6 +130,64 @@
   (()))
 
 !(assertEqual
+  (codex:proposed-plan-parser-output-visible-text
+    (codex:proposed-plan-parser-collect-chunks
+      ("Intro text\n<prop"
+       "osed_plan>\n- step 1\n"
+       "</proposed_plan>\nOutro")))
+  "Intro text\nOutro")
+
+!(assertEqualToResult
+  (codex:proposed-plan-parser-output-segments
+    (codex:proposed-plan-parser-collect-chunks
+      ("Intro text\n<prop"
+       "osed_plan>\n- step 1\n"
+       "</proposed_plan>\nOutro")))
+  (((CodexProposedPlanSegmentNormal "Intro text\n")
+    CodexProposedPlanSegmentStart
+    (CodexProposedPlanSegmentDelta "- step 1\n")
+    CodexProposedPlanSegmentEnd
+    (CodexProposedPlanSegmentNormal "Outro"))))
+
+!(assertEqual
+  (codex:proposed-plan-parser-output-visible-text
+    (codex:proposed-plan-parser-collect-chunks
+      ("  <proposed_plan> extra\n")))
+  "  <proposed_plan> extra\n")
+
+!(assertEqualToResult
+  (codex:proposed-plan-parser-output-segments
+    (codex:proposed-plan-parser-collect-chunks
+      ("  <proposed_plan> extra\n")))
+  (((CodexProposedPlanSegmentNormal "  <proposed_plan> extra\n"))))
+
+!(assertEqual
+  (codex:proposed-plan-parser-output-visible-text
+    (codex:proposed-plan-parser-collect-chunks
+      ("<proposed_plan>\n- step 1\n")))
+  "")
+
+!(assertEqualToResult
+  (codex:proposed-plan-parser-output-segments
+    (codex:proposed-plan-parser-collect-chunks
+      ("<proposed_plan>\n- step 1\n")))
+  ((CodexProposedPlanSegmentStart
+    (CodexProposedPlanSegmentDelta "- step 1\n")
+    CodexProposedPlanSegmentEnd)))
+
+!(assertEqual
+  (codex:proposed-plan-parser-output-visible-text
+    (codex:proposed-plan-parser-collect-chunks
+      ("hello <prop")))
+  "hello <prop")
+
+!(assertEqualToResult
+  (codex:proposed-plan-parser-output-segments
+    (codex:proposed-plan-parser-collect-chunks
+      ("hello <prop")))
+  (((CodexProposedPlanSegmentNormal "hello <prop"))))
+
+!(assertEqual
   (codex:strip-proposed-plan-blocks
     "before\n<proposed_plan>\n- step\n</proposed_plan>\nafter")
   "before\nafter")

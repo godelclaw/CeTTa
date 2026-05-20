@@ -7,6 +7,7 @@
 ;
 ; Covered in this increment:
 ; - CitationStreamParser push_str / finish semantics for the citation tag
+; - ProposedPlanParser push_str / finish semantics for the proposed_plan tag
 ; - strip_citations
 ; - strip_proposed_plan_blocks
 ; - extract_proposed_plan_text
@@ -26,9 +27,9 @@
 ;   breaks same-offset opener ties by longest delimiter and then spec order.
 ;   This increment ports the exact one-spec specialization used by
 ;   `CitationStreamParser`; the generic multi-spec parser remains future work.
-; - Proposed-plan helpers remain complete-string line parsers in this slice.
-;   Rust also has a stateful proposed-plan streaming parser that should be
-;   ported in a later stream-parser increment.
+; - Rust's `TaggedLineParser<T>` is generic over tag specs. CeTTa ports the
+;   exact one-spec specialization used by `ProposedPlanParser`; a future generic
+;   multi-tag parser should preserve the same line-buffer state machine.
 
 !(import! &self list)
 !(import! &self str)
@@ -303,94 +304,436 @@
 (= (codex:stream-parser-plan-slug $part)
    (str-trim $part))
 
-(= (codex:stream-parser-strip-plan-parts () $drop-final-empty $in-plan)
-   "")
+(= (codex:proposed-plan-parser-inactive)
+   CodexProposedPlanParserInactive)
 
-(= (codex:stream-parser-strip-plan-parts $parts $drop-final-empty $in-plan)
+(= (codex:proposed-plan-parser-active)
+   CodexProposedPlanParserActive)
+
+(= (codex:proposed-plan-parser-state $active $detect-tag $line-buffer)
+   (CodexProposedPlanParser $active $detect-tag $line-buffer))
+
+(= (codex:proposed-plan-parser-new)
+   (codex:proposed-plan-parser-state
+     (codex:proposed-plan-parser-inactive)
+     True
+     ""))
+
+(= (codex:proposed-plan-segment-normal $text)
+   (CodexProposedPlanSegmentNormal $text))
+
+(= (codex:proposed-plan-segment-start)
+   CodexProposedPlanSegmentStart)
+
+(= (codex:proposed-plan-segment-delta $text)
+   (CodexProposedPlanSegmentDelta $text))
+
+(= (codex:proposed-plan-segment-end)
+   CodexProposedPlanSegmentEnd)
+
+(= (codex:proposed-plan-parser-output $parser $visible-text $segments)
+   (CodexProposedPlanParserOutput
+     $parser
+     $visible-text
+     $segments))
+
+(= (codex:proposed-plan-parser-output-parser
+      (CodexProposedPlanParserOutput $parser $visible-text $segments))
+   $parser)
+
+(= (codex:proposed-plan-parser-output-visible-text
+      (CodexProposedPlanParserOutput $parser $visible-text $segments))
+   $visible-text)
+
+(= (codex:proposed-plan-parser-output-segments
+      (CodexProposedPlanParserOutput $parser $visible-text $segments))
+   $segments)
+
+(= (codex:proposed-plan-parser-push-nonempty-normal () $text)
+   ((codex:proposed-plan-segment-normal $text)))
+
+(= (codex:proposed-plan-parser-push-nonempty-normal $segments $text)
+   (let ($head $tail) (decons-atom $segments)
+     (if (== $tail ())
+         (case $head
+           (((CodexProposedPlanSegmentNormal $existing)
+             ((codex:proposed-plan-segment-normal
+                (str-concat $existing $text))))
+            ($other
+             (cons-atom
+               $other
+               ((codex:proposed-plan-segment-normal $text))))))
+         (cons-atom
+           $head
+           (codex:proposed-plan-parser-push-nonempty-normal
+             $tail
+             $text)))))
+
+(= (codex:proposed-plan-parser-push-normal $segments $text)
+   (if (== $text "")
+       $segments
+       (codex:proposed-plan-parser-push-nonempty-normal $segments $text)))
+
+(= (codex:proposed-plan-parser-push-nonempty-delta () $text)
+   ((codex:proposed-plan-segment-delta $text)))
+
+(= (codex:proposed-plan-parser-push-nonempty-delta $segments $text)
+   (let ($head $tail) (decons-atom $segments)
+     (if (== $tail ())
+         (case $head
+           (((CodexProposedPlanSegmentDelta $existing)
+             ((codex:proposed-plan-segment-delta
+                (str-concat $existing $text))))
+            ($other
+             (cons-atom
+               $other
+               ((codex:proposed-plan-segment-delta $text))))))
+         (cons-atom
+           $head
+           (codex:proposed-plan-parser-push-nonempty-delta
+             $tail
+             $text)))))
+
+(= (codex:proposed-plan-parser-push-delta $segments $text)
+   (if (== $text "")
+       $segments
+       (codex:proposed-plan-parser-push-nonempty-delta $segments $text)))
+
+(= (codex:proposed-plan-parser-push-start $segments)
+   (codex:stream-parser-list-append
+     $segments
+     ((codex:proposed-plan-segment-start))))
+
+(= (codex:proposed-plan-parser-push-end $segments)
+   (codex:stream-parser-list-append
+     $segments
+     ((codex:proposed-plan-segment-end))))
+
+(= (codex:proposed-plan-parser-push-text
+      CodexProposedPlanParserInactive
+      $visible-text
+      $segments
+      $text)
+   (codex:proposed-plan-parser-output
+     (codex:proposed-plan-parser-new)
+     (str-concat $visible-text $text)
+     (codex:proposed-plan-parser-push-normal $segments $text)))
+
+(= (codex:proposed-plan-parser-push-text
+      CodexProposedPlanParserActive
+      $visible-text
+      $segments
+      $text)
+   (codex:proposed-plan-parser-output
+     (codex:proposed-plan-parser-new)
+     $visible-text
+     (codex:proposed-plan-parser-push-delta $segments $text)))
+
+(= (codex:proposed-plan-parser-is-tag-prefix $slug)
+   (let $trimmed (str-trim $slug)
+     (or (str-starts-with? (codex:stream-parser-plan-open-tag) $trimmed)
+         (str-starts-with? (codex:stream-parser-plan-close-tag) $trimmed))))
+
+(= (codex:proposed-plan-parser-finish-line
+      (CodexProposedPlanParser CodexProposedPlanParserInactive $detect-tag $line-buffer)
+      $line-without-newline
+      $visible-text
+      $segments)
+   (let $line-text (str-concat $line-without-newline "\n")
+     (let $slug (codex:stream-parser-plan-slug $line-without-newline)
+       (if (== $slug (codex:stream-parser-plan-open-tag))
+           (codex:proposed-plan-parser-output
+             (CodexProposedPlanParser
+               CodexProposedPlanParserActive
+               True
+               "")
+             $visible-text
+             (codex:proposed-plan-parser-push-start $segments))
+           (case
+             (codex:proposed-plan-parser-push-text
+               CodexProposedPlanParserInactive
+               $visible-text
+               $segments
+               $line-text)
+             (((CodexProposedPlanParserOutput $ignored-parser $next-visible $next-segments)
+               (codex:proposed-plan-parser-output
+                 (CodexProposedPlanParser
+                   CodexProposedPlanParserInactive
+                   True
+                   "")
+                 $next-visible
+                 $next-segments))))))))
+
+(= (codex:proposed-plan-parser-finish-line
+      (CodexProposedPlanParser CodexProposedPlanParserActive $detect-tag $line-buffer)
+      $line-without-newline
+      $visible-text
+      $segments)
+   (let $line-text (str-concat $line-without-newline "\n")
+     (let $slug (codex:stream-parser-plan-slug $line-without-newline)
+       (if (== $slug (codex:stream-parser-plan-close-tag))
+           (codex:proposed-plan-parser-output
+             (CodexProposedPlanParser
+               CodexProposedPlanParserInactive
+               True
+               "")
+             $visible-text
+             (codex:proposed-plan-parser-push-end $segments))
+           (case
+             (codex:proposed-plan-parser-push-text
+               CodexProposedPlanParserActive
+               $visible-text
+               $segments
+               $line-text)
+             (((CodexProposedPlanParserOutput $ignored-parser $next-visible $next-segments)
+               (codex:proposed-plan-parser-output
+                 (CodexProposedPlanParser
+                   CodexProposedPlanParserActive
+                   True
+                   "")
+                 $next-visible
+                 $next-segments))))))))
+
+(= (codex:proposed-plan-parser-process-part
+      (CodexProposedPlanParser $active True $line-buffer)
+      $part
+      True
+      $visible-text
+      $segments)
+   (codex:proposed-plan-parser-finish-line
+     (CodexProposedPlanParser
+       $active
+       True
+       "")
+     (str-concat $line-buffer $part)
+     $visible-text
+     $segments))
+
+(= (codex:proposed-plan-parser-process-part
+      (CodexProposedPlanParser $active True $line-buffer)
+      $part
+      False
+      $visible-text
+      $segments)
+   (let $next-buffer (str-concat $line-buffer $part)
+     (let $slug (codex:stream-parser-plan-slug $next-buffer)
+       (if (or (== $slug "")
+               (codex:proposed-plan-parser-is-tag-prefix $slug))
+           (codex:proposed-plan-parser-output
+             (CodexProposedPlanParser
+               $active
+               True
+               $next-buffer)
+             $visible-text
+             $segments)
+           (case
+             (codex:proposed-plan-parser-push-text
+               $active
+               $visible-text
+               $segments
+               $next-buffer)
+             (((CodexProposedPlanParserOutput $ignored-parser $next-visible $next-segments)
+               (codex:proposed-plan-parser-output
+                 (CodexProposedPlanParser
+                   $active
+                   False
+                   "")
+                 $next-visible
+                 $next-segments))))))))
+
+(= (codex:proposed-plan-parser-process-part
+      (CodexProposedPlanParser $active False $line-buffer)
+      $part
+      True
+      $visible-text
+      $segments)
+   (case
+     (codex:proposed-plan-parser-push-text
+       $active
+       $visible-text
+       $segments
+       (str-concat $part "\n"))
+     (((CodexProposedPlanParserOutput $ignored-parser $next-visible $next-segments)
+       (codex:proposed-plan-parser-output
+         (CodexProposedPlanParser
+           $active
+           True
+           "")
+         $next-visible
+         $next-segments)))))
+
+(= (codex:proposed-plan-parser-process-part
+      (CodexProposedPlanParser $active False $line-buffer)
+      $part
+      False
+      $visible-text
+      $segments)
+   (case
+     (codex:proposed-plan-parser-push-text
+       $active
+       $visible-text
+       $segments
+       $part)
+     (((CodexProposedPlanParserOutput $ignored-parser $next-visible $next-segments)
+       (codex:proposed-plan-parser-output
+         (CodexProposedPlanParser
+           $active
+           False
+           "")
+         $next-visible
+         $next-segments)))))
+
+(= (codex:proposed-plan-parser-process-parts $parser () $visible-text $segments)
+   (codex:proposed-plan-parser-output $parser $visible-text $segments))
+
+(= (codex:proposed-plan-parser-process-parts $parser $parts $visible-text $segments)
    (let ($head $tail) (decons-atom $parts)
-     (if (and (== $tail ()) (and $drop-final-empty (== $head "")))
-         ""
-         (let $slug (codex:stream-parser-plan-slug $head)
-           (let $has-newline (not (== $tail ()))
-             (let $line-text
-               (codex:stream-parser-line-text $head $has-newline)
-               (if (and (not $in-plan)
-                        (== $slug (codex:stream-parser-plan-open-tag)))
-                   (codex:stream-parser-strip-plan-parts $tail $drop-final-empty True)
-                   (if (and $in-plan
-                            (== $slug (codex:stream-parser-plan-close-tag)))
-                       (codex:stream-parser-strip-plan-parts $tail $drop-final-empty False)
-                       (if $in-plan
-                           (codex:stream-parser-strip-plan-parts
-                             $tail
-                             $drop-final-empty
-                             True)
-                           (str-concat
-                             $line-text
-                             (codex:stream-parser-strip-plan-parts
-                               $tail
-                               $drop-final-empty
-                               False)))))))))))
+     (case
+       (codex:proposed-plan-parser-process-part
+         $parser
+         $head
+         (not (== $tail ()))
+         $visible-text
+         $segments)
+       (((CodexProposedPlanParserOutput $next-parser $next-visible $next-segments)
+         (codex:proposed-plan-parser-process-parts
+           $next-parser
+           $tail
+           $next-visible
+           $next-segments))))))
 
-(= (codex:strip-proposed-plan-blocks $text)
-   (codex:stream-parser-strip-plan-parts
-     (str-split "\n" $text)
-     (str-ends-with? $text "\n")
-     False))
+(= (codex:proposed-plan-parser-push-str
+      (CodexProposedPlanParser $active $detect-tag $line-buffer)
+      $chunk)
+   (codex:proposed-plan-parser-process-parts
+     (CodexProposedPlanParser $active $detect-tag $line-buffer)
+     (str-split "\n" $chunk)
+     ""
+     ()))
 
-(= (codex:stream-parser-plan-extract-result $saw-plan $in-plan $plan-text)
-   (CodexStreamParserPlanExtractResult $saw-plan $in-plan $plan-text))
-
-(= (codex:stream-parser-extract-plan-parts () $drop-final-empty $saw-plan $in-plan $plan-text)
-   (codex:stream-parser-plan-extract-result $saw-plan $in-plan $plan-text))
-
-(= (codex:stream-parser-extract-plan-parts $parts $drop-final-empty $saw-plan $in-plan $plan-text)
-   (let ($head $tail) (decons-atom $parts)
-     (if (and (== $tail ()) (and $drop-final-empty (== $head "")))
-         (codex:stream-parser-plan-extract-result $saw-plan $in-plan $plan-text)
-         (let $slug (codex:stream-parser-plan-slug $head)
-           (let $has-newline (not (== $tail ()))
-             (let $line-text
-               (codex:stream-parser-line-text $head $has-newline)
-               (if (and (not $in-plan)
-                        (== $slug (codex:stream-parser-plan-open-tag)))
-                   (codex:stream-parser-extract-plan-parts
-                     $tail
-                     $drop-final-empty
-                     True
+(= (codex:proposed-plan-parser-finish-line-buffer
+      (CodexProposedPlanParser $active $detect-tag $line-buffer)
+      $visible-text
+      $segments)
+   (if (== $line-buffer "")
+       (codex:proposed-plan-parser-output
+         (CodexProposedPlanParser $active True "")
+         $visible-text
+         $segments)
+       (let $slug (codex:stream-parser-plan-slug $line-buffer)
+         (if (and (== $active CodexProposedPlanParserInactive)
+                  (== $slug (codex:stream-parser-plan-open-tag)))
+             (codex:proposed-plan-parser-output
+               (CodexProposedPlanParser
+                 CodexProposedPlanParserActive
+                 True
+                 "")
+               $visible-text
+               (codex:proposed-plan-parser-push-start $segments))
+             (if (and (== $active CodexProposedPlanParserActive)
+                      (== $slug (codex:stream-parser-plan-close-tag)))
+                 (codex:proposed-plan-parser-output
+                   (CodexProposedPlanParser
+                     CodexProposedPlanParserInactive
                      True
                      "")
-                   (if (and $in-plan
-                            (== $slug (codex:stream-parser-plan-close-tag)))
-                       (codex:stream-parser-extract-plan-parts
-                         $tail
-                         $drop-final-empty
-                         $saw-plan
-                         False
-                         $plan-text)
-                       (if $in-plan
-                           (codex:stream-parser-extract-plan-parts
-                             $tail
-                             $drop-final-empty
-                             $saw-plan
-                             True
-                             (str-concat $plan-text $line-text))
-                           (codex:stream-parser-extract-plan-parts
-                             $tail
-                             $drop-final-empty
-                             $saw-plan
-                             False
-                             $plan-text))))))))))
+                   $visible-text
+                   (codex:proposed-plan-parser-push-end $segments))
+                 (case
+                   (codex:proposed-plan-parser-push-text
+                     $active
+                     $visible-text
+                     $segments
+                     $line-buffer)
+                   (((CodexProposedPlanParserOutput $ignored-parser $next-visible $next-segments)
+                     (codex:proposed-plan-parser-output
+                       (CodexProposedPlanParser
+                         $active
+                         True
+                         "")
+                       $next-visible
+                       $next-segments)))))))))
+
+(= (codex:proposed-plan-parser-finish $parser)
+   (case
+     (codex:proposed-plan-parser-finish-line-buffer $parser "" ())
+     (((CodexProposedPlanParserOutput
+         (CodexProposedPlanParser CodexProposedPlanParserInactive $detect-tag $line-buffer)
+         $visible-text
+         $segments)
+       (codex:proposed-plan-parser-output
+         (codex:proposed-plan-parser-new)
+         $visible-text
+         $segments))
+      ((CodexProposedPlanParserOutput
+         (CodexProposedPlanParser CodexProposedPlanParserActive $detect-tag $line-buffer)
+         $visible-text
+         $segments)
+       (codex:proposed-plan-parser-output
+         (codex:proposed-plan-parser-new)
+         $visible-text
+         (codex:proposed-plan-parser-push-end $segments))))))
+
+(= (codex:proposed-plan-parser-collect-chunks $chunks)
+   (codex:proposed-plan-parser-collect-chunks-loop
+     (codex:proposed-plan-parser-new)
+     $chunks
+     ""
+     ()))
+
+(= (codex:proposed-plan-parser-collect-chunks-loop $parser () $visible-text $segments)
+   (case (codex:proposed-plan-parser-finish $parser)
+     (((CodexProposedPlanParserOutput $next-parser $tail-visible $tail-segments)
+       (codex:proposed-plan-parser-output
+         $next-parser
+         (str-concat $visible-text $tail-visible)
+         (codex:stream-parser-list-append
+           $segments
+           $tail-segments))))))
+
+(= (codex:proposed-plan-parser-collect-chunks-loop $parser $chunks $visible-text $segments)
+   (let ($head $tail) (decons-atom $chunks)
+     (case (codex:proposed-plan-parser-push-str $parser $head)
+       (((CodexProposedPlanParserOutput $next-parser $next-visible $next-segments)
+         (codex:proposed-plan-parser-collect-chunks-loop
+           $next-parser
+           $tail
+           (str-concat $visible-text $next-visible)
+           (codex:stream-parser-list-append
+             $segments
+             $next-segments)))))))
+
+(= (codex:strip-proposed-plan-blocks $text)
+   (codex:proposed-plan-parser-output-visible-text
+     (codex:proposed-plan-parser-collect-chunks ($text))))
+
+(= (codex:stream-parser-extract-plan-segments () $saw-plan $plan-text)
+   (if $saw-plan $plan-text CodexAbsent))
+
+(= (codex:stream-parser-extract-plan-segments $segments $saw-plan $plan-text)
+   (let ($head $tail) (decons-atom $segments)
+     (case $head
+       ((CodexProposedPlanSegmentStart
+         (codex:stream-parser-extract-plan-segments $tail True ""))
+        ((CodexProposedPlanSegmentDelta $delta)
+         (codex:stream-parser-extract-plan-segments
+           $tail
+           $saw-plan
+           (str-concat $plan-text $delta)))
+        (CodexProposedPlanSegmentEnd
+         (codex:stream-parser-extract-plan-segments
+           $tail
+           $saw-plan
+           $plan-text))
+        ((CodexProposedPlanSegmentNormal $normal)
+         (codex:stream-parser-extract-plan-segments
+           $tail
+           $saw-plan
+           $plan-text))))))
 
 (= (codex:extract-proposed-plan-text $text)
-   (case
-     (codex:stream-parser-extract-plan-parts
-       (str-split "\n" $text)
-       (str-ends-with? $text "\n")
-       False
-       False
-       "")
-     (((CodexStreamParserPlanExtractResult True $in-plan $plan-text)
-       $plan-text)
-      ((CodexStreamParserPlanExtractResult False $in-plan $plan-text)
-       CodexAbsent))))
+   (codex:stream-parser-extract-plan-segments
+     (codex:proposed-plan-parser-output-segments
+       (codex:proposed-plan-parser-collect-chunks ($text)))
+     False
+     ""))
