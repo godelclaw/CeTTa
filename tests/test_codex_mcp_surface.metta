@@ -48,6 +48,48 @@
     (codex:mcp-oauth-scopes-source-explicit)))
 
 !(assertEqual
+  (codex:mcp-oauth-login-support-supported-config
+    (codex:mcp-oauth-login-support-supported
+      (codex:mcp-oauth-login-config
+        "https://memory.test/mcp"
+        (("Authorization" "Bearer token"))
+        (("X-Token" "TOKEN_ENV"))
+        ("scope-a" "scope-b"))))
+  (codex:mcp-oauth-login-config
+    "https://memory.test/mcp"
+    (("Authorization" "Bearer token"))
+    (("X-Token" "TOKEN_ENV"))
+    ("scope-a" "scope-b")))
+
+!(assertEqual
+  (codex:mcp-oauth-provider-error-display
+    (codex:mcp-oauth-provider-error
+      "invalid_scope"
+      "scope rejected"))
+  "OAuth provider returned `invalid_scope`: scope rejected")
+
+!(assertEqual
+  (codex:mcp-oauth-provider-error-display
+    (codex:mcp-oauth-provider-error
+      "invalid_scope"
+      CodexAbsent))
+  "OAuth provider returned `invalid_scope`")
+
+!(assertEqual
+  (codex:mcp-oauth-provider-error-display
+    (codex:mcp-oauth-provider-error
+      CodexAbsent
+      "scope rejected"))
+  "OAuth error: scope rejected")
+
+!(assertEqual
+  (codex:mcp-oauth-provider-error-display
+    (codex:mcp-oauth-provider-error
+      CodexAbsent
+      CodexAbsent))
+  "OAuth provider returned an error")
+
+!(assertEqual
   (codex:resolve-mcp-oauth-scopes
     CodexAbsent
     ("configured")

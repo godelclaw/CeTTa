@@ -14,6 +14,7 @@
 ; - `should_install_mcp_dependencies` prompt/answer side-effect planning
 ; - `filter_prompted_mcp_dependencies`
 ; - `maybe_install_mcp_dependencies` pre-persist planning and install merge
+; - `maybe_install_mcp_dependencies` post-persist OAuth login planning
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust stores installed/missing MCP servers in `HashMap<String,
@@ -39,6 +40,11 @@
 ;   servers, and global config from async services before applying config edits.
 ;   This helper receives those materialized values and returns the pre-persist
 ;   plan that the runtime layer must execute with ConfigEditsBuilder.
+; - Rust performs OAuth discovery/login as async side effects after persistence.
+;   This slice receives materialized `McpOAuthLoginSupport` and login-result
+;   values, then returns the same notify/login/warn operations for the runtime
+;   layer to execute in Rust loop order. The actual network/browser OAuth flow
+;   is intentionally not performed in this pure planner.
 
 !(import! &self list)
 !(import! &self mcp)
@@ -143,6 +149,42 @@
         $oauth-resource
         $tools))
    $transport)
+
+(= (codex:mcp-server-config-scopes
+      (CodexMcpServerConfig
+        $transport
+        $experimental-environment
+        $enabled
+        $required
+        $supports-parallel-tool-calls
+        $disabled-reason
+        $startup-timeout-sec
+        $tool-timeout-sec
+        $default-tools-approval-mode
+        $enabled-tools
+        $disabled-tools
+        $scopes
+        $oauth-resource
+        $tools))
+   $scopes)
+
+(= (codex:mcp-server-config-oauth-resource
+      (CodexMcpServerConfig
+        $transport
+        $experimental-environment
+        $enabled
+        $required
+        $supports-parallel-tool-calls
+        $disabled-reason
+        $startup-timeout-sec
+        $tool-timeout-sec
+        $default-tools-approval-mode
+        $enabled-tools
+        $disabled-tools
+        $scopes
+        $oauth-resource
+        $tools))
+   $oauth-resource)
 
 (= (codex:mcp-server-entry $name $config)
    (CodexMcpServerEntry $name $config))
@@ -257,6 +299,50 @@
 (= (codex:mcp-dependency-install-merge-state-added
       (CodexMcpDependencyInstallMergeState $updated $servers $added))
    $added)
+
+(= (codex:mcp-dependency-oauth-support-entry $name $support)
+   (CodexMcpDependencyOAuthSupportEntry $name $support))
+
+(= (codex:mcp-dependency-oauth-support-entry-name
+      (CodexMcpDependencyOAuthSupportEntry $name $support))
+   $name)
+
+(= (codex:mcp-dependency-oauth-support-entry-support
+      (CodexMcpDependencyOAuthSupportEntry $name $support))
+   $support)
+
+(= (codex:mcp-dependency-oauth-notify-op $message)
+   (CodexMcpDependencyOAuthNotifyOp $message))
+
+(= (codex:mcp-dependency-oauth-warn-op $message)
+   (CodexMcpDependencyOAuthWarnOp $message))
+
+(= (codex:mcp-dependency-oauth-login-attempt-op
+      $name
+      $url
+      $store-mode
+      $http-headers
+      $env-http-headers
+      $scopes
+      $oauth-resource
+      $callback-port
+      $callback-url)
+   (CodexMcpDependencyOAuthLoginAttemptOp
+     $name
+     $url
+     $store-mode
+     $http-headers
+     $env-http-headers
+     $scopes
+     $oauth-resource
+     $callback-port
+     $callback-url))
+
+(= (codex:mcp-dependency-oauth-login-ok)
+   (CodexMcpDependencyOAuthLoginOk))
+
+(= (codex:mcp-dependency-oauth-login-err $error)
+   (CodexMcpDependencyOAuthLoginErr $error))
 
 (= (codex:mcp-dependency-collect-state-seen
       (CodexMcpDependencyCollectState $seen-canonical-keys $missing))
@@ -725,6 +811,179 @@
        (if (== (codex:mcp-server-entry-name $head) $name)
            $head
            (codex:mcp-server-entry-by-name $tail $name)))))
+
+(= (codex:mcp-dependency-oauth-support-entry-by-name () $name)
+   CodexAbsent)
+
+(= (codex:mcp-dependency-oauth-support-entry-by-name $entries $name)
+   (let $head (list:first $entries)
+     (let $tail (list:rest $entries)
+       (if (== (codex:mcp-dependency-oauth-support-entry-name $head) $name)
+           $head
+           (codex:mcp-dependency-oauth-support-entry-by-name
+             $tail
+             $name)))))
+
+(= (codex:mcp-dependency-oauth-authenticating-message $name)
+   (format-args
+     "Authenticating MCP {}... Follow instructions in your browser if prompted."
+     ($name)))
+
+(= (codex:mcp-dependency-oauth-retrying-message $name)
+   (format-args
+     "Retrying MCP {} authentication without scopes after provider rejection."
+     ($name)))
+
+(= (codex:mcp-dependency-oauth-error-display $error)
+   (case $error
+     (((CodexMcpOAuthProviderError $provider-error $provider-description)
+       (codex:mcp-oauth-provider-error-display $error))
+      ($other $other))))
+
+(= (codex:mcp-dependency-oauth-failed-login-message $name $error)
+   (format-args
+     "failed to login to MCP dependency {}: {}"
+     ($name (codex:mcp-dependency-oauth-error-display $error))))
+
+(= (codex:mcp-dependency-oauth-unknown-support-message $name $error)
+   (format-args
+     "MCP server may or may not require login for dependency {}: {}"
+     ($name $error)))
+
+(= (codex:mcp-dependency-oauth-login-attempt-for
+      $name
+      $oauth-config
+      $server-config
+      $store-mode
+      $callback-port
+      $callback-url
+      $scopes)
+   (codex:mcp-dependency-oauth-login-attempt-op
+     $name
+     (codex:mcp-oauth-login-config-url $oauth-config)
+     $store-mode
+     (codex:mcp-oauth-login-config-http-headers $oauth-config)
+     (codex:mcp-oauth-login-config-env-http-headers $oauth-config)
+     $scopes
+     (codex:mcp-server-config-oauth-resource $server-config)
+     $callback-port
+     $callback-url))
+
+(= (codex:mcp-dependency-oauth-login-plan
+      ()
+      $support-entries
+      $store-mode
+      $callback-port
+      $callback-url)
+   ())
+
+(= (codex:mcp-dependency-oauth-login-plan
+      $added
+      $support-entries
+      $store-mode
+      $callback-port
+      $callback-url)
+   (let $entry (list:first $added)
+     (let $tail (list:rest $added)
+       (list:append
+         (codex:mcp-dependency-oauth-login-plan-for-entry
+           $entry
+           $support-entries
+           $store-mode
+           $callback-port
+           $callback-url)
+         (codex:mcp-dependency-oauth-login-plan
+           $tail
+           $support-entries
+           $store-mode
+           $callback-port
+           $callback-url)))))
+
+(= (codex:mcp-dependency-oauth-login-plan-for-entry
+      $entry
+      $support-entries
+      $store-mode
+      $callback-port
+      $callback-url)
+   (let $name (codex:mcp-server-entry-name $entry)
+     (let $server-config (codex:mcp-server-entry-config $entry)
+       (let $support-entry
+         (codex:mcp-dependency-oauth-support-entry-by-name
+           $support-entries
+           $name)
+         (if (== $support-entry CodexAbsent)
+             ()
+             (let $support
+               (codex:mcp-dependency-oauth-support-entry-support
+                 $support-entry)
+               (if (== $support (codex:mcp-oauth-login-support-unsupported))
+                   ()
+                   (case $support
+                     (((CodexMcpOAuthLoginSupportUnknown $error)
+                       ((codex:mcp-dependency-oauth-warn-op
+                          (codex:mcp-dependency-oauth-unknown-support-message
+                            $name
+                            $error))))
+                      ((CodexMcpOAuthLoginSupportSupported $oauth-config)
+                       (let $resolved-scopes
+                         (codex:resolve-mcp-oauth-scopes
+                           CodexAbsent
+                           (codex:mcp-server-config-scopes $server-config)
+                           (codex:mcp-oauth-login-config-discovered-scopes
+                             $oauth-config))
+                         ((codex:mcp-dependency-oauth-notify-op
+                            (codex:mcp-dependency-oauth-authenticating-message
+                              $name))
+                          (codex:mcp-dependency-oauth-login-attempt-for
+                            $name
+                            $oauth-config
+                            $server-config
+                            $store-mode
+                            $callback-port
+                            $callback-url
+                            (codex:resolved-mcp-oauth-scopes-scopes
+                              $resolved-scopes))))))))))))))
+
+(= (codex:mcp-dependency-oauth-first-attempt-result-plan
+      $name
+      $oauth-config
+      $server-config
+      $store-mode
+      $callback-port
+      $callback-url
+      $resolved-scopes
+      $first-result)
+   (if (== $first-result (codex:mcp-dependency-oauth-login-ok))
+       ()
+       (case $first-result
+         (((CodexMcpDependencyOAuthLoginErr $error)
+           (if (codex:mcp-oauth-should-retry-without-scopes
+                 $resolved-scopes
+                 $error)
+               ((codex:mcp-dependency-oauth-notify-op
+                  (codex:mcp-dependency-oauth-retrying-message $name))
+                (codex:mcp-dependency-oauth-login-attempt-for
+                  $name
+                  $oauth-config
+                  $server-config
+                  $store-mode
+                  $callback-port
+                  $callback-url
+                  ()))
+               ((codex:mcp-dependency-oauth-warn-op
+                  (codex:mcp-dependency-oauth-failed-login-message
+                    $name
+                    $error)))))))))
+
+(= (codex:mcp-dependency-oauth-retry-result-plan $name $retry-result)
+   (if (== $retry-result (codex:mcp-dependency-oauth-login-ok))
+       ()
+       (case $retry-result
+         (((CodexMcpDependencyOAuthLoginErr $error)
+           ((codex:mcp-dependency-oauth-warn-op
+              (codex:mcp-dependency-oauth-failed-login-message
+                $name
+                $error))))))))
 
 (= (codex:mcp-server-entries-by-sorted-names () $entries)
    ())

@@ -1,4 +1,5 @@
 !(register-module! ../codex)
+!(import! &self codex:mcp)
 !(import! &self codex:mcp_skill_dependencies)
 !(import! &self codex:skill_model)
 
@@ -693,3 +694,201 @@
              "Continue anyway"
              "Skip installation for now and do not show again for these MCP servers in this session.")))))
      ("mcp__streamable_http__https://memory.test/mcp"))))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-oauth-login-plan
+    ((codex:mcp-server-entry
+       "memory"
+       (codex:mcp-server-config
+         (codex:mcp-server-transport-streamable-http
+           "https://memory.test/mcp"
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent)
+         CodexAbsent
+         True
+         False
+         False
+         CodexAbsent
+         CodexAbsent
+         CodexAbsent
+         CodexAbsent
+         CodexAbsent
+         CodexAbsent
+         ("configured-scope")
+         "https://resource.test"
+         ())))
+    ((codex:mcp-dependency-oauth-support-entry
+       "memory"
+       (codex:mcp-oauth-login-support-supported
+         (codex:mcp-oauth-login-config
+           "https://memory.test/mcp"
+           (("Authorization" "Bearer token"))
+           (("X-Token" "TOKEN_ENV"))
+           ("discovered-scope")))))
+    "file"
+    4321
+    "https://callback.test/cb")
+  (((CodexMcpDependencyOAuthNotifyOp
+      "Authenticating MCP memory... Follow instructions in your browser if prompted.")
+     (CodexMcpDependencyOAuthLoginAttemptOp
+      "memory"
+      "https://memory.test/mcp"
+      "file"
+      (("Authorization" "Bearer token"))
+      (("X-Token" "TOKEN_ENV"))
+      ("configured-scope")
+      "https://resource.test"
+      4321
+      "https://callback.test/cb"))))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-oauth-login-plan
+    ((codex:mcp-server-entry
+       "memory"
+       (codex:mcp-dependency-default-http-config "https://memory.test/mcp")))
+    ((codex:mcp-dependency-oauth-support-entry
+       "memory"
+       (codex:mcp-oauth-login-support-supported
+         (codex:mcp-oauth-login-config
+           "https://memory.test/mcp"
+           CodexAbsent
+           CodexAbsent
+           ("discovered-scope")))))
+    "file"
+    CodexAbsent
+    CodexAbsent)
+  (((CodexMcpDependencyOAuthNotifyOp
+      "Authenticating MCP memory... Follow instructions in your browser if prompted.")
+     (CodexMcpDependencyOAuthLoginAttemptOp
+      "memory"
+      "https://memory.test/mcp"
+      "file"
+      CodexAbsent
+      CodexAbsent
+      ("discovered-scope")
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent))))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-oauth-login-plan
+    ((codex:mcp-server-entry
+       "stdio"
+       (codex:mcp-dependency-default-stdio-config "stdio-server"))
+     (codex:mcp-server-entry
+       "unknown"
+       (codex:mcp-dependency-default-http-config "https://unknown.test/mcp")))
+    ((codex:mcp-dependency-oauth-support-entry
+       "stdio"
+       (codex:mcp-oauth-login-support-unsupported))
+     (codex:mcp-dependency-oauth-support-entry
+       "unknown"
+       (codex:mcp-oauth-login-support-unknown "discovery failed")))
+    "file"
+    CodexAbsent
+    CodexAbsent)
+  (((CodexMcpDependencyOAuthWarnOp
+      "MCP server may or may not require login for dependency unknown: discovery failed"))))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-oauth-first-attempt-result-plan
+    "memory"
+    (codex:mcp-oauth-login-config
+      "https://memory.test/mcp"
+      (("Authorization" "Bearer token"))
+      (("X-Token" "TOKEN_ENV"))
+      ("discovered-scope"))
+    (codex:mcp-dependency-default-http-config "https://memory.test/mcp")
+    "file"
+    CodexAbsent
+    CodexAbsent
+    (codex:resolved-mcp-oauth-scopes
+      ("discovered-scope")
+      (codex:mcp-oauth-scopes-source-discovered))
+    (codex:mcp-dependency-oauth-login-err
+      (codex:mcp-oauth-provider-error
+        "invalid_scope"
+        "scope rejected")))
+  (((CodexMcpDependencyOAuthNotifyOp
+      "Retrying MCP memory authentication without scopes after provider rejection.")
+     (CodexMcpDependencyOAuthLoginAttemptOp
+      "memory"
+      "https://memory.test/mcp"
+      "file"
+      (("Authorization" "Bearer token"))
+      (("X-Token" "TOKEN_ENV"))
+      ()
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent))))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-oauth-first-attempt-result-plan
+    "memory"
+    (codex:mcp-oauth-login-config
+      "https://memory.test/mcp"
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent)
+    (codex:mcp-dependency-default-http-config "https://memory.test/mcp")
+    "file"
+    CodexAbsent
+    CodexAbsent
+    (codex:resolved-mcp-oauth-scopes
+      ("configured-scope")
+      (codex:mcp-oauth-scopes-source-configured))
+    (codex:mcp-dependency-oauth-login-err
+      (codex:mcp-oauth-provider-error
+        "invalid_scope"
+        "scope rejected")))
+  (((CodexMcpDependencyOAuthWarnOp
+      "failed to login to MCP dependency memory: OAuth provider returned `invalid_scope`: scope rejected"))))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-oauth-first-attempt-result-plan
+    "memory"
+    (codex:mcp-oauth-login-config
+      "https://memory.test/mcp"
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent)
+    (codex:mcp-dependency-default-http-config "https://memory.test/mcp")
+    "file"
+    CodexAbsent
+    CodexAbsent
+    (codex:resolved-mcp-oauth-scopes
+      ("discovered-scope")
+      (codex:mcp-oauth-scopes-source-discovered))
+    (codex:mcp-dependency-oauth-login-err
+      "timed out waiting for OAuth callback"))
+  (((CodexMcpDependencyOAuthWarnOp
+      "failed to login to MCP dependency memory: timed out waiting for OAuth callback"))))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-oauth-first-attempt-result-plan
+    "memory"
+    (codex:mcp-oauth-login-config
+      "https://memory.test/mcp"
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent)
+    (codex:mcp-dependency-default-http-config "https://memory.test/mcp")
+    "file"
+    CodexAbsent
+    CodexAbsent
+    (codex:resolved-mcp-oauth-scopes
+      ()
+      (codex:mcp-oauth-scopes-source-empty))
+    (codex:mcp-dependency-oauth-login-ok))
+  (()))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-oauth-retry-result-plan
+    "memory"
+    (codex:mcp-dependency-oauth-login-err
+      (codex:mcp-oauth-provider-error
+        CodexAbsent
+        "retry rejected")))
+  (((CodexMcpDependencyOAuthWarnOp
+      "failed to login to MCP dependency memory: OAuth error: retry rejected"))))
