@@ -560,6 +560,108 @@
         $mitm))
    $enable-socks5)
 
+(= (codex:network-proxy-settings-socks-url
+      (CodexNetworkProxySettings
+        $enabled
+        $proxy-url
+        $enable-socks5
+        $socks-url
+        $enable-socks5-udp
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $mode
+        $domains
+        $unix-sockets
+        $allow-local-binding
+        $mitm))
+   $socks-url)
+
+(= (codex:network-proxy-settings-enable-socks5-udp
+      (CodexNetworkProxySettings
+        $enabled
+        $proxy-url
+        $enable-socks5
+        $socks-url
+        $enable-socks5-udp
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $mode
+        $domains
+        $unix-sockets
+        $allow-local-binding
+        $mitm))
+   $enable-socks5-udp)
+
+(= (codex:network-proxy-settings-allow-upstream-proxy
+      (CodexNetworkProxySettings
+        $enabled
+        $proxy-url
+        $enable-socks5
+        $socks-url
+        $enable-socks5-udp
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $mode
+        $domains
+        $unix-sockets
+        $allow-local-binding
+        $mitm))
+   $allow-upstream-proxy)
+
+(= (codex:network-proxy-settings-dangerously-allow-non-loopback-proxy
+      (CodexNetworkProxySettings
+        $enabled
+        $proxy-url
+        $enable-socks5
+        $socks-url
+        $enable-socks5-udp
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $mode
+        $domains
+        $unix-sockets
+        $allow-local-binding
+        $mitm))
+   $dangerously-allow-non-loopback-proxy)
+
+(= (codex:network-proxy-settings-dangerously-allow-all-unix-sockets
+      (CodexNetworkProxySettings
+        $enabled
+        $proxy-url
+        $enable-socks5
+        $socks-url
+        $enable-socks5-udp
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $mode
+        $domains
+        $unix-sockets
+        $allow-local-binding
+        $mitm))
+   $dangerously-allow-all-unix-sockets)
+
+(= (codex:network-proxy-settings-mode
+      (CodexNetworkProxySettings
+        $enabled
+        $proxy-url
+        $enable-socks5
+        $socks-url
+        $enable-socks5-udp
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $mode
+        $domains
+        $unix-sockets
+        $allow-local-binding
+        $mitm))
+   $mode)
+
 (= (codex:network-proxy-settings-domains
       (CodexNetworkProxySettings
         $enabled
@@ -593,6 +695,23 @@
         $allow-local-binding
         $mitm))
    $unix-sockets)
+
+(= (codex:network-proxy-settings-allow-local-binding
+      (CodexNetworkProxySettings
+        $enabled
+        $proxy-url
+        $enable-socks5
+        $socks-url
+        $enable-socks5-udp
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $mode
+        $domains
+        $unix-sockets
+        $allow-local-binding
+        $mitm))
+   $allow-local-binding)
 
 (= (codex:network-proxy-settings-allowed-domains $settings)
    (codex:network-domain-permissions-allowed-domains
@@ -634,6 +753,37 @@
      $mode
      $next-domains
      $unix-sockets
+     $allow-local-binding
+     $mitm))
+
+(= (codex:network-proxy-settings-set-unix-sockets
+      (CodexNetworkProxySettings
+        $enabled
+        $proxy-url
+        $enable-socks5
+        $socks-url
+        $enable-socks5-udp
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $mode
+        $domains
+        $unix-sockets
+        $allow-local-binding
+        $mitm)
+      $next-unix-sockets)
+   (CodexNetworkProxySettings
+     $enabled
+     $proxy-url
+     $enable-socks5
+     $socks-url
+     $enable-socks5-udp
+     $allow-upstream-proxy
+     $dangerously-allow-non-loopback-proxy
+     $dangerously-allow-all-unix-sockets
+     $mode
+     $domains
+     $next-unix-sockets
      $allow-local-binding
      $mitm))
 
@@ -745,6 +895,15 @@
        (codex:network-proxy-config-network $config)
        $allow-unix-sockets)))
 
+(= (codex:network-proxy-config-set-unix-sockets
+      $config
+      $unix-sockets)
+   (codex:network-proxy-config-set-network
+     $config
+     (codex:network-proxy-settings-set-unix-sockets
+       (codex:network-proxy-config-network $config)
+       $unix-sockets)))
+
 (= (codex:network-proxy-config-allowed-domains $config)
    (codex:network-proxy-settings-allowed-domains
      (codex:network-proxy-config-network $config)))
@@ -755,6 +914,10 @@
 
 (= (codex:network-proxy-config-allow-unix-sockets $config)
    (codex:network-proxy-settings-allow-unix-sockets
+     (codex:network-proxy-config-network $config)))
+
+(= (codex:network-proxy-config-unix-sockets $config)
+   (codex:network-proxy-settings-unix-sockets
      (codex:network-proxy-config-network $config)))
 
 (= (codex:network-proxy-config-set-enabled
@@ -847,6 +1010,72 @@
        $enable-socks5
        $next-socks-url
        $enable-socks5-udp
+       $allow-upstream-proxy
+       $dangerously-allow-non-loopback-proxy
+       $dangerously-allow-all-unix-sockets
+       $mode
+       $domains
+       $unix-sockets
+       $allow-local-binding
+       $mitm)))
+
+(= (codex:network-proxy-config-set-enable-socks5
+      (CodexNetworkProxyConfig
+        (CodexNetworkProxySettings
+          $enabled
+          $proxy-url
+          $enable-socks5
+          $socks-url
+          $enable-socks5-udp
+          $allow-upstream-proxy
+          $dangerously-allow-non-loopback-proxy
+          $dangerously-allow-all-unix-sockets
+          $mode
+          $domains
+          $unix-sockets
+          $allow-local-binding
+          $mitm))
+      $next-enable-socks5)
+   (CodexNetworkProxyConfig
+     (CodexNetworkProxySettings
+       $enabled
+       $proxy-url
+       $next-enable-socks5
+       $socks-url
+       $enable-socks5-udp
+       $allow-upstream-proxy
+       $dangerously-allow-non-loopback-proxy
+       $dangerously-allow-all-unix-sockets
+       $mode
+       $domains
+       $unix-sockets
+       $allow-local-binding
+       $mitm)))
+
+(= (codex:network-proxy-config-set-enable-socks5-udp
+      (CodexNetworkProxyConfig
+        (CodexNetworkProxySettings
+          $enabled
+          $proxy-url
+          $enable-socks5
+          $socks-url
+          $enable-socks5-udp
+          $allow-upstream-proxy
+          $dangerously-allow-non-loopback-proxy
+          $dangerously-allow-all-unix-sockets
+          $mode
+          $domains
+          $unix-sockets
+          $allow-local-binding
+          $mitm))
+      $next-enable-socks5-udp)
+   (CodexNetworkProxyConfig
+     (CodexNetworkProxySettings
+       $enabled
+       $proxy-url
+       $enable-socks5
+       $socks-url
+       $next-enable-socks5-udp
        $allow-upstream-proxy
        $dangerously-allow-non-loopback-proxy
        $dangerously-allow-all-unix-sockets
@@ -955,6 +1184,39 @@
        $allow-local-binding
        $mitm)))
 
+(= (codex:network-proxy-config-set-mode
+      (CodexNetworkProxyConfig
+        (CodexNetworkProxySettings
+          $enabled
+          $proxy-url
+          $enable-socks5
+          $socks-url
+          $enable-socks5-udp
+          $allow-upstream-proxy
+          $dangerously-allow-non-loopback-proxy
+          $dangerously-allow-all-unix-sockets
+          $mode
+          $domains
+          $unix-sockets
+          $allow-local-binding
+          $mitm))
+      $next-mode)
+   (CodexNetworkProxyConfig
+     (CodexNetworkProxySettings
+       $enabled
+       $proxy-url
+       $enable-socks5
+       $socks-url
+       $enable-socks5-udp
+       $allow-upstream-proxy
+       $dangerously-allow-non-loopback-proxy
+       $dangerously-allow-all-unix-sockets
+       $next-mode
+       $domains
+       $unix-sockets
+       $allow-local-binding
+       $mitm)))
+
 (= (codex:network-proxy-config-set-allow-local-binding
       (CodexNetworkProxyConfig
         (CodexNetworkProxySettings
@@ -987,6 +1249,46 @@
        $unix-sockets
        $next-allow-local-binding
        $mitm)))
+
+(= (codex:network-proxy-config-enabled $config)
+   (codex:network-proxy-settings-enabled
+     (codex:network-proxy-config-network $config)))
+
+(= (codex:network-proxy-config-proxy-url $config)
+   (codex:network-proxy-settings-proxy-url
+     (codex:network-proxy-config-network $config)))
+
+(= (codex:network-proxy-config-enable-socks5 $config)
+   (codex:network-proxy-settings-enable-socks5
+     (codex:network-proxy-config-network $config)))
+
+(= (codex:network-proxy-config-socks-url $config)
+   (codex:network-proxy-settings-socks-url
+     (codex:network-proxy-config-network $config)))
+
+(= (codex:network-proxy-config-enable-socks5-udp $config)
+   (codex:network-proxy-settings-enable-socks5-udp
+     (codex:network-proxy-config-network $config)))
+
+(= (codex:network-proxy-config-allow-upstream-proxy $config)
+   (codex:network-proxy-settings-allow-upstream-proxy
+     (codex:network-proxy-config-network $config)))
+
+(= (codex:network-proxy-config-dangerously-allow-non-loopback-proxy $config)
+   (codex:network-proxy-settings-dangerously-allow-non-loopback-proxy
+     (codex:network-proxy-config-network $config)))
+
+(= (codex:network-proxy-config-dangerously-allow-all-unix-sockets $config)
+   (codex:network-proxy-settings-dangerously-allow-all-unix-sockets
+     (codex:network-proxy-config-network $config)))
+
+(= (codex:network-proxy-config-mode $config)
+   (codex:network-proxy-settings-mode
+     (codex:network-proxy-config-network $config)))
+
+(= (codex:network-proxy-config-allow-local-binding $config)
+   (codex:network-proxy-settings-allow-local-binding
+     (codex:network-proxy-config-network $config)))
 
 (= (codex:network-proxy-constraints
       $enabled
@@ -1026,6 +1328,81 @@
      CodexAbsent
      CodexAbsent
      CodexAbsent))
+
+(= (codex:network-proxy-constraints-enabled
+      (CodexNetworkProxyConstraints
+        $enabled
+        $mode
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $allowed-domains
+        $allowlist-expansion-enabled
+        $denied-domains
+        $denylist-expansion-enabled
+        $allow-unix-sockets
+        $allow-local-binding))
+   $enabled)
+
+(= (codex:network-proxy-constraints-mode
+      (CodexNetworkProxyConstraints
+        $enabled
+        $mode
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $allowed-domains
+        $allowlist-expansion-enabled
+        $denied-domains
+        $denylist-expansion-enabled
+        $allow-unix-sockets
+        $allow-local-binding))
+   $mode)
+
+(= (codex:network-proxy-constraints-allow-upstream-proxy
+      (CodexNetworkProxyConstraints
+        $enabled
+        $mode
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $allowed-domains
+        $allowlist-expansion-enabled
+        $denied-domains
+        $denylist-expansion-enabled
+        $allow-unix-sockets
+        $allow-local-binding))
+   $allow-upstream-proxy)
+
+(= (codex:network-proxy-constraints-dangerously-allow-non-loopback-proxy
+      (CodexNetworkProxyConstraints
+        $enabled
+        $mode
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $allowed-domains
+        $allowlist-expansion-enabled
+        $denied-domains
+        $denylist-expansion-enabled
+        $allow-unix-sockets
+        $allow-local-binding))
+   $dangerously-allow-non-loopback-proxy)
+
+(= (codex:network-proxy-constraints-dangerously-allow-all-unix-sockets
+      (CodexNetworkProxyConstraints
+        $enabled
+        $mode
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $allowed-domains
+        $allowlist-expansion-enabled
+        $denied-domains
+        $denylist-expansion-enabled
+        $allow-unix-sockets
+        $allow-local-binding))
+   $dangerously-allow-all-unix-sockets)
 
 (= (codex:network-proxy-constraints-allowed-domains
       (CodexNetworkProxyConstraints
@@ -1158,6 +1535,21 @@
      $allow-unix-sockets
      $allow-local-binding))
 
+(= (codex:network-proxy-constraints-allow-local-binding
+      (CodexNetworkProxyConstraints
+        $enabled
+        $mode
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $allowed-domains
+        $allowlist-expansion-enabled
+        $denied-domains
+        $denylist-expansion-enabled
+        $allow-unix-sockets
+        $allow-local-binding))
+   $allow-local-binding)
+
 (= (codex:network-proxy-constraints-set-enabled
       (CodexNetworkProxyConstraints
         $enabled
@@ -1175,6 +1567,33 @@
    (CodexNetworkProxyConstraints
      $next-enabled
      $mode
+     $allow-upstream-proxy
+     $dangerously-allow-non-loopback-proxy
+     $dangerously-allow-all-unix-sockets
+     $allowed-domains
+     $allowlist-expansion-enabled
+     $denied-domains
+     $denylist-expansion-enabled
+     $allow-unix-sockets
+     $allow-local-binding))
+
+(= (codex:network-proxy-constraints-set-mode
+      (CodexNetworkProxyConstraints
+        $enabled
+        $mode
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $allowed-domains
+        $allowlist-expansion-enabled
+        $denied-domains
+        $denylist-expansion-enabled
+        $allow-unix-sockets
+        $allow-local-binding)
+      $next-mode)
+   (CodexNetworkProxyConstraints
+     $enabled
+     $next-mode
      $allow-upstream-proxy
      $dangerously-allow-non-loopback-proxy
      $dangerously-allow-all-unix-sockets
