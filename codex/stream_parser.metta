@@ -6,6 +6,7 @@
 ; - openai-codex/codex-rs/utils/stream-parser/src/proposed_plan.rs
 ;
 ; Covered in this increment:
+; - InlineHiddenTagParser push_str / finish semantics for literal tag specs
 ; - CitationStreamParser push_str / finish semantics for the citation tag
 ; - ProposedPlanParser push_str / finish semantics for the proposed_plan tag
 ; - strip_citations
@@ -23,10 +24,10 @@
 ;   under `eval`-heavy stream-events surfaces currently changes reducer search
 ;   behavior. The visible/citation outputs match Rust and the stateful parser is
 ;   exposed separately above.
-; - Rust's `InlineHiddenTagParser<T>` is generic over any non-empty spec list and
-;   breaks same-offset opener ties by longest delimiter and then spec order.
-;   This increment ports the exact one-spec specialization used by
-;   `CitationStreamParser`; the generic multi-spec parser remains future work.
+; - Rust mutates `InlineHiddenTagParser<T>` through the `StreamTextParser`
+;   trait. CeTTa returns an explicit next parser state, visible text, and
+;   extracted tags. The matching, buffering, tie-breaking, and EOF auto-close
+;   behavior match Rust.
 ; - Rust's `TaggedLineParser<T>` is generic over tag specs. CeTTa ports the
 ;   exact one-spec specialization used by `ProposedPlanParser`; a future generic
 ;   multi-tag parser should preserve the same line-buffer state machine.
@@ -100,6 +101,318 @@
                $text
                $needle
                (- $candidate 1))))))
+
+(= (codex:inline-hidden-tag-spec $tag $open $close)
+   (CodexInlineHiddenTagSpec $tag $open $close))
+
+(= (codex:inline-hidden-tag-extracted $tag $content)
+   (CodexExtractedInlineTag $tag $content))
+
+(= (codex:inline-hidden-tag-extracted-tag
+      (CodexExtractedInlineTag $tag $content))
+   $tag)
+
+(= (codex:inline-hidden-tag-extracted-content
+      (CodexExtractedInlineTag $tag $content))
+   $content)
+
+(= (codex:inline-hidden-tag-parser-inactive)
+   CodexInlineHiddenTagParserInactive)
+
+(= (codex:inline-hidden-tag-parser-active $tag $close $content)
+   (CodexInlineHiddenTagParserActive $tag $close $content))
+
+(= (codex:inline-hidden-tag-parser-state $specs $pending $active)
+   (CodexInlineHiddenTagParser $specs $pending $active))
+
+(= (codex:inline-hidden-tag-parser-output $parser $visible-text $extracted)
+   (CodexInlineHiddenTagParserOutput $parser $visible-text $extracted))
+
+(= (codex:inline-hidden-tag-parser-output-parser
+      (CodexInlineHiddenTagParserOutput $parser $visible-text $extracted))
+   $parser)
+
+(= (codex:inline-hidden-tag-parser-output-visible-text
+      (CodexInlineHiddenTagParserOutput $parser $visible-text $extracted))
+   $visible-text)
+
+(= (codex:inline-hidden-tag-parser-output-extracted
+      (CodexInlineHiddenTagParserOutput $parser $visible-text $extracted))
+   $extracted)
+
+(= (codex:inline-hidden-tag-specs-have-empty-open ())
+   False)
+
+(= (codex:inline-hidden-tag-specs-have-empty-open $specs)
+   (let ($head $tail) (decons-atom $specs)
+     (case $head
+       (((CodexInlineHiddenTagSpec $tag $open $close)
+         (if (== $open "")
+             True
+             (codex:inline-hidden-tag-specs-have-empty-open $tail)))))))
+
+(= (codex:inline-hidden-tag-specs-have-empty-close ())
+   False)
+
+(= (codex:inline-hidden-tag-specs-have-empty-close $specs)
+   (let ($head $tail) (decons-atom $specs)
+     (case $head
+       (((CodexInlineHiddenTagSpec $tag $open $close)
+         (if (== $close "")
+             True
+             (codex:inline-hidden-tag-specs-have-empty-close $tail)))))))
+
+(= (codex:inline-hidden-tag-parser-new $specs)
+   (if (== $specs ())
+       (Error
+         (codex:inline-hidden-tag-parser-new $specs)
+         "InlineHiddenTagParser requires at least one tag spec")
+       (if (codex:inline-hidden-tag-specs-have-empty-open $specs)
+           (Error
+             (codex:inline-hidden-tag-parser-new $specs)
+             "InlineHiddenTagParser requires non-empty open delimiters")
+           (if (codex:inline-hidden-tag-specs-have-empty-close $specs)
+               (Error
+                 (codex:inline-hidden-tag-parser-new $specs)
+                 "InlineHiddenTagParser requires non-empty close delimiters")
+               (codex:inline-hidden-tag-parser-state
+                 $specs
+                 ""
+                 (codex:inline-hidden-tag-parser-inactive))))))
+
+(= (codex:inline-hidden-tag-open-match $pos $open-len $spec-index $tag $open $close)
+   (CodexInlineHiddenTagOpenMatch $pos $open-len $spec-index $tag $open $close))
+
+(= (codex:inline-hidden-tag-open-match-is-better
+      (CodexInlineHiddenTagOpenMatch $pos $open-len $spec-index $tag $open $close)
+      CodexAbsent)
+   True)
+
+(= (codex:inline-hidden-tag-open-match-is-better
+      (CodexInlineHiddenTagOpenMatch $pos $open-len $spec-index $tag $open $close)
+      (CodexInlineHiddenTagOpenMatch $best-pos $best-open-len $best-spec-index $best-tag $best-open $best-close))
+   (if (< $pos $best-pos)
+       True
+       (if (> $pos $best-pos)
+           False
+           (if (> $open-len $best-open-len)
+               True
+               (if (< $open-len $best-open-len)
+                   False
+                   (< $spec-index $best-spec-index))))))
+
+(= (codex:inline-hidden-tag-parser-better-open-match $candidate $best)
+   (if (codex:inline-hidden-tag-open-match-is-better $candidate $best)
+       $candidate
+       $best))
+
+(= (codex:inline-hidden-tag-parser-find-next-open-loop $pending () $spec-index $best)
+   $best)
+
+(= (codex:inline-hidden-tag-parser-find-next-open-loop $pending $specs $spec-index $best)
+   (let ($head $tail) (decons-atom $specs)
+     (case $head
+       (((CodexInlineHiddenTagSpec $tag $open $close)
+         (case (str-find $pending $open)
+           ((Empty
+             (codex:inline-hidden-tag-parser-find-next-open-loop
+               $pending
+               $tail
+               (+ $spec-index 1)
+               $best))
+            ($pos
+             (let $candidate
+               (codex:inline-hidden-tag-open-match
+                 $pos
+                 (str-length $open)
+                 $spec-index
+                 $tag
+                 $open
+                 $close)
+               (codex:inline-hidden-tag-parser-find-next-open-loop
+                 $pending
+                 $tail
+                 (+ $spec-index 1)
+                 (codex:inline-hidden-tag-parser-better-open-match
+                   $candidate
+                   $best)))))))))))
+
+(= (codex:inline-hidden-tag-parser-find-next-open $pending $specs)
+   (codex:inline-hidden-tag-parser-find-next-open-loop
+     $pending
+     $specs
+     0
+     CodexAbsent))
+
+(= (codex:stream-parser-max $lhs $rhs)
+   (if (> $lhs $rhs)
+       $lhs
+       $rhs))
+
+(= (codex:inline-hidden-tag-parser-max-open-prefix-suffix-len-loop $pending () $max-len)
+   $max-len)
+
+(= (codex:inline-hidden-tag-parser-max-open-prefix-suffix-len-loop $pending $specs $max-len)
+   (let ($head $tail) (decons-atom $specs)
+     (case $head
+       (((CodexInlineHiddenTagSpec $tag $open $close)
+         (codex:inline-hidden-tag-parser-max-open-prefix-suffix-len-loop
+           $pending
+           $tail
+           (codex:stream-parser-max
+             $max-len
+             (codex:stream-parser-longest-suffix-prefix-len
+               $pending
+               $open))))))))
+
+(= (codex:inline-hidden-tag-parser-max-open-prefix-suffix-len $pending $specs)
+   (codex:inline-hidden-tag-parser-max-open-prefix-suffix-len-loop
+     $pending
+     $specs
+     0))
+
+(= (codex:inline-hidden-tag-parser-push-str
+      (CodexInlineHiddenTagParser $specs $pending $active)
+      $chunk)
+   (codex:inline-hidden-tag-parser-push-loop
+     (CodexInlineHiddenTagParser
+       $specs
+       (str-concat $pending $chunk)
+       $active)
+     ""
+     ()))
+
+(= (codex:inline-hidden-tag-parser-push-loop
+      (CodexInlineHiddenTagParser
+        $specs
+        $pending
+        CodexInlineHiddenTagParserInactive)
+      $visible-text
+      $extracted)
+   (case (codex:inline-hidden-tag-parser-find-next-open $pending $specs)
+     ((CodexAbsent
+       (let $keep
+         (codex:inline-hidden-tag-parser-max-open-prefix-suffix-len
+           $pending
+           $specs)
+         (let $take (- (str-length $pending) $keep)
+           (codex:inline-hidden-tag-parser-output
+             (CodexInlineHiddenTagParser
+               $specs
+               (str-slice $pending $take (str-length $pending))
+               CodexInlineHiddenTagParserInactive)
+             (str-concat
+               $visible-text
+               (str-slice $pending 0 $take))
+             $extracted))))
+      ((CodexInlineHiddenTagOpenMatch $open-index $open-len $spec-index $tag $open $close)
+       (let $open-end (+ $open-index $open-len)
+         (codex:inline-hidden-tag-parser-push-loop
+           (CodexInlineHiddenTagParser
+             $specs
+             (str-slice $pending $open-end (str-length $pending))
+             (codex:inline-hidden-tag-parser-active $tag $close ""))
+           (str-concat
+             $visible-text
+             (str-slice $pending 0 $open-index))
+           $extracted))))))
+
+(= (codex:inline-hidden-tag-parser-push-loop
+      (CodexInlineHiddenTagParser
+        $specs
+        $pending
+        (CodexInlineHiddenTagParserActive $tag $close $content))
+      $visible-text
+      $extracted)
+   (case (str-find $pending $close)
+     ((Empty
+       (let $keep
+         (codex:stream-parser-longest-suffix-prefix-len $pending $close)
+         (let $take (- (str-length $pending) $keep)
+           (codex:inline-hidden-tag-parser-output
+             (CodexInlineHiddenTagParser
+               $specs
+               (str-slice $pending $take (str-length $pending))
+               (codex:inline-hidden-tag-parser-active
+                 $tag
+                 $close
+                 (str-concat
+                   $content
+                   (str-slice $pending 0 $take))))
+             $visible-text
+             $extracted))))
+      ($close-index
+       (let $close-end (+ $close-index (str-length $close))
+         (codex:inline-hidden-tag-parser-push-loop
+           (CodexInlineHiddenTagParser
+             $specs
+             (str-slice $pending $close-end (str-length $pending))
+             CodexInlineHiddenTagParserInactive)
+           $visible-text
+           (codex:stream-parser-list-append
+             $extracted
+             ((codex:inline-hidden-tag-extracted
+                $tag
+                (str-concat
+                  $content
+                  (str-slice $pending 0 $close-index)))))))))))
+
+(= (codex:inline-hidden-tag-parser-finish
+      (CodexInlineHiddenTagParser
+        $specs
+        $pending
+        CodexInlineHiddenTagParserInactive))
+   (codex:inline-hidden-tag-parser-output
+     (CodexInlineHiddenTagParser
+       $specs
+       ""
+       CodexInlineHiddenTagParserInactive)
+     $pending
+     ()))
+
+(= (codex:inline-hidden-tag-parser-finish
+      (CodexInlineHiddenTagParser
+        $specs
+        $pending
+        (CodexInlineHiddenTagParserActive $tag $close $content)))
+   (codex:inline-hidden-tag-parser-output
+     (CodexInlineHiddenTagParser
+       $specs
+       ""
+       CodexInlineHiddenTagParserInactive)
+     ""
+     ((codex:inline-hidden-tag-extracted
+        $tag
+        (str-concat $content $pending)))))
+
+(= (codex:inline-hidden-tag-parser-collect-chunks $parser $chunks)
+   (codex:inline-hidden-tag-parser-collect-chunks-loop
+     $parser
+     $chunks
+     ""
+     ()))
+
+(= (codex:inline-hidden-tag-parser-collect-chunks-loop $parser () $visible-text $extracted)
+   (case (codex:inline-hidden-tag-parser-finish $parser)
+     (((CodexInlineHiddenTagParserOutput $next-parser $tail-visible $tail-extracted)
+       (codex:inline-hidden-tag-parser-output
+         $next-parser
+         (str-concat $visible-text $tail-visible)
+         (codex:stream-parser-list-append
+           $extracted
+           $tail-extracted))))))
+
+(= (codex:inline-hidden-tag-parser-collect-chunks-loop $parser $chunks $visible-text $extracted)
+   (let ($head $tail) (decons-atom $chunks)
+     (case (codex:inline-hidden-tag-parser-push-str $parser $head)
+       (((CodexInlineHiddenTagParserOutput $next-parser $next-visible $next-extracted)
+         (codex:inline-hidden-tag-parser-collect-chunks-loop
+           $next-parser
+           $tail
+           (str-concat $visible-text $next-visible)
+           (codex:stream-parser-list-append
+             $extracted
+             $next-extracted)))))))
 
 (= (codex:citation-stream-parser-inactive)
    CodexCitationStreamParserInactive)

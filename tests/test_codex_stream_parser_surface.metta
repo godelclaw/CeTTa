@@ -130,6 +130,81 @@
   (()))
 
 !(assertEqual
+  (codex:inline-hidden-tag-parser-output-visible-text
+    (codex:inline-hidden-tag-parser-collect-chunks
+      (codex:inline-hidden-tag-parser-new
+        ((codex:inline-hidden-tag-spec CodexInlineTagA "<a>" "</a>")
+         (codex:inline-hidden-tag-spec CodexInlineTagB "<b>" "</b>")))
+      ("1<a>x</a>2<b>y</b>3")))
+  "123")
+
+!(assertEqualToResult
+  (codex:inline-hidden-tag-parser-output-extracted
+    (codex:inline-hidden-tag-parser-collect-chunks
+      (codex:inline-hidden-tag-parser-new
+        ((codex:inline-hidden-tag-spec CodexInlineTagA "<a>" "</a>")
+         (codex:inline-hidden-tag-spec CodexInlineTagB "<b>" "</b>")))
+      ("1<a>x</a>2<b>y</b>3")))
+  (((CodexExtractedInlineTag CodexInlineTagA "x")
+    (CodexExtractedInlineTag CodexInlineTagB "y"))))
+
+!(assertEqual
+  (codex:inline-hidden-tag-parser-output-visible-text
+    (codex:inline-hidden-tag-parser-collect-chunks
+      (codex:inline-hidden-tag-parser-new
+        ((codex:inline-hidden-tag-spec CodexInlineTagA "<é>" "</é>")))
+      ("a<" "é>中</" "é>b")))
+  "ab")
+
+!(assertEqualToResult
+  (codex:inline-hidden-tag-parser-output-extracted
+    (codex:inline-hidden-tag-parser-collect-chunks
+      (codex:inline-hidden-tag-parser-new
+        ((codex:inline-hidden-tag-spec CodexInlineTagA "<é>" "</é>")))
+      ("a<" "é>中</" "é>b")))
+  (((CodexExtractedInlineTag CodexInlineTagA "中"))))
+
+!(assertEqual
+  (codex:inline-hidden-tag-parser-output-visible-text
+    (codex:inline-hidden-tag-parser-collect-chunks
+      (codex:inline-hidden-tag-parser-new
+        ((codex:inline-hidden-tag-spec CodexInlineTagA "<a>" "</a>")
+         (codex:inline-hidden-tag-spec CodexInlineTagB "<ab>" "</ab>")))
+      ("x<ab>y</ab>z")))
+  "xz")
+
+!(assertEqualToResult
+  (codex:inline-hidden-tag-parser-output-extracted
+    (codex:inline-hidden-tag-parser-collect-chunks
+      (codex:inline-hidden-tag-parser-new
+        ((codex:inline-hidden-tag-spec CodexInlineTagA "<a>" "</a>")
+         (codex:inline-hidden-tag-spec CodexInlineTagB "<ab>" "</ab>")))
+      ("x<ab>y</ab>z")))
+  (((CodexExtractedInlineTag CodexInlineTagB "y"))))
+
+!(assertEqualToResult
+  (codex:inline-hidden-tag-parser-new ())
+  ((Error
+     (codex:inline-hidden-tag-parser-new ())
+     "InlineHiddenTagParser requires at least one tag spec")))
+
+!(assertEqualToResult
+  (codex:inline-hidden-tag-parser-new
+    ((codex:inline-hidden-tag-spec CodexInlineTagA "" "</a>")))
+  ((Error
+     (codex:inline-hidden-tag-parser-new
+       ((CodexInlineHiddenTagSpec CodexInlineTagA "" "</a>")))
+     "InlineHiddenTagParser requires non-empty open delimiters")))
+
+!(assertEqualToResult
+  (codex:inline-hidden-tag-parser-new
+    ((codex:inline-hidden-tag-spec CodexInlineTagA "<a>" "")))
+  ((Error
+     (codex:inline-hidden-tag-parser-new
+       ((CodexInlineHiddenTagSpec CodexInlineTagA "<a>" "")))
+     "InlineHiddenTagParser requires non-empty close delimiters")))
+
+!(assertEqual
   (codex:proposed-plan-parser-output-visible-text
     (codex:proposed-plan-parser-collect-chunks
       ("Intro text\n<prop"
