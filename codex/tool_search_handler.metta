@@ -8,22 +8,22 @@
 ; - ToolSearchHandler kind
 ; - tool_search payload validation and FunctionCallError variants
 ; - default and explicit limit handling
+; - BM25 search result ranking over the current CeTTa BM25 token boundary
 ; - computer-use expanded default search limit
 ; - per-bucket default result limiting
 ; - loadable-tool namespace coalescing over the source-preserving markers from
 ;   tool_search_entry.metta
 ;
 ; Required slice-local deviations from Rust, documented for audit:
-; - Rust builds a `bm25::SearchEngine<usize>` with `Language::English` and
-;   searches that index. CeTTa does not yet have a self-contained BM25/text
-;   index library, so this slice keeps the surrounding handler algorithm
-;   identical and preserves source order as a temporary pure-CeTTa
-;   search-engine boundary. Query relevance must be replaced by the BM25 port.
+; - The scorer now uses codex:bm25, which ports the bm25 crate scoring formula.
+;   Its module-level comments document the remaining tokenizer/hash deviations
+;   from Rust's `SearchEngineBuilder::with_documents(Language::English, ...)`.
 ; - Rust coalesces concrete `LoadableToolSpec` values. The earlier
 ;   tool_search_entry slice represents those specs as source-preserving marker
 ;   atoms, so this module coalesces marker atoms into explicit namespace marker
 ;   atoms while preserving Rust's first-namespace-wins order and append logic.
 
+!(import! &self bm25)
 !(import! &self context)
 !(import! &self function_tool)
 !(import! &self list)
@@ -78,137 +78,32 @@
       (CodexToolSearchOutputNamespace $name $description $tools))
    $tools)
 
-(= (codex:tool-search-ascii-lower-char $char)
-   (case $char
-     (("A" "a")
-      ("B" "b")
-      ("C" "c")
-      ("D" "d")
-      ("E" "e")
-      ("F" "f")
-      ("G" "g")
-      ("H" "h")
-      ("I" "i")
-      ("J" "j")
-      ("K" "k")
-      ("L" "l")
-      ("M" "m")
-      ("N" "n")
-      ("O" "o")
-      ("P" "p")
-      ("Q" "q")
-      ("R" "r")
-      ("S" "s")
-      ("T" "t")
-      ("U" "u")
-      ("V" "v")
-      ("W" "w")
-      ("X" "x")
-      ("Y" "y")
-      ("Z" "z")
-      ($other $other))))
+(= (codex:tool-search-entry-document $entries $index)
+   (let $entry (index-atom $entries $index)
+     (codex:bm25-document
+       $index
+       (codex:tool-search-entry-search-text $entry))))
 
-(= (codex:tool-search-ascii-lower-text $text)
-   (if (== $text "")
-       ""
-       (str-concat
-         (codex:tool-search-ascii-lower-char (str-slice $text 0 1))
-         (codex:tool-search-ascii-lower-text
-           (str-slice $text 1 (str-length $text))))))
+(= (codex:tool-search-entry-documents $entries)
+   (let $indexes (range-atom (size-atom $entries))
+     (map-atom-strict
+       $indexes
+       $index
+       (codex:tool-search-entry-document $entries $index))))
 
-(= (codex:is-tool-search-text-containing $text $needle)
-   (case (str-find $text $needle)
-     ((Empty False)
-      ($index True))))
-
-(= (codex:tool-search-score-tokens $tokens $search-text)
-   (let $matching-tokens
-     (filter-atom
-       $tokens
-       $token
-       (codex:is-tool-search-text-containing $search-text $token))
-     (size-atom $matching-tokens)))
-
-(= (codex:tool-search-entry-score $query-tokens $entry)
-   (let $search-text (codex:tool-search-entry-search-text $entry)
-     (let $lower-search-text
-       (codex:tool-search-ascii-lower-text $search-text)
-       (codex:tool-search-score-tokens
-         $query-tokens
-         $lower-search-text))))
-
-(= (codex:tool-search-scored-entry $score $entry)
-   (CodexToolSearchScoredEntry $score $entry))
-
-(= (codex:tool-search-scored-entry-score
-      (CodexToolSearchScoredEntry $score $entry))
-   $score)
-
-(= (codex:tool-search-scored-entry-entry
-      (CodexToolSearchScoredEntry $score $entry))
-   $entry)
-
-(= (codex:tool-search-score-entries $query-tokens $entries)
-   (if (== $entries ())
-       ()
-       (let ($entry $tail) (decons-atom $entries)
-         (let $score (eval (codex:tool-search-entry-score $query-tokens $entry))
-           (let $scored-tail
-             (eval (codex:tool-search-score-entries $query-tokens $tail))
-             (if (> $score 0)
-                 (cons-atom
-                   (CodexToolSearchScoredEntry $score $entry)
-                   $scored-tail)
-                 $scored-tail))))))
-
-(= (codex:tool-search-insert-scored-entry-desc $item $sorted)
-   (if (== $sorted ())
-       ($item)
-       (let $head (list:first $sorted)
-         (let $tail (list:rest $sorted)
-           (let $item-score (codex:tool-search-scored-entry-score $item)
-             (let $head-score (codex:tool-search-scored-entry-score $head)
-               (if (>= $item-score $head-score)
-                   (cons-atom $item $sorted)
-                   (let $inserted-tail
-                     (eval
-                       (codex:tool-search-insert-scored-entry-desc
-                         $item
-                         $tail))
-                     (cons-atom $head $inserted-tail)))))))))
-
-(= (codex:tool-search-sort-scored-entries-desc $items)
-   (if (== $items ())
-       ()
-       (let $head (list:first $items)
-         (let $tail (list:rest $items)
-           (let $sorted-tail
-             (eval (codex:tool-search-sort-scored-entries-desc $tail))
-             (codex:tool-search-insert-scored-entry-desc
-               $head
-               $sorted-tail))))))
-
-(= (codex:tool-search-scored-entries-to-entries $items)
-   (if (== $items ())
-       ()
-       (let $head (list:first $items)
-         (let $tail (list:rest $items)
-           (let $entry (codex:tool-search-scored-entry-entry $head)
-             (let $rest
-               (eval (codex:tool-search-scored-entries-to-entries $tail))
-               (cons-atom $entry $rest)))))))
-
-(= (tool-search-filter-ranked-entries-local $query-tokens $entries)
-   $entries)
-
-(= (codex:tool-search-filter-ranked-entries $query-tokens $entries)
-   (tool-search-filter-ranked-entries-local $query-tokens $entries))
+(= (codex:tool-search-bm25-result-entry $entries $result)
+   (index-atom
+     $entries
+     (codex:bm25-search-result-document-id $result)))
 
 (= (codex:tool-search-rank-entries $query $entries)
-   (let $trimmed-query (str-trim $query)
-       (let $lower-query (codex:tool-search-ascii-lower-text $trimmed-query)
-         (let $query-tokens (str-split-whitespace $lower-query)
-         (tool-search-filter-ranked-entries-local $query-tokens $entries)))))
+   (let $documents (codex:tool-search-entry-documents $entries)
+     (case (codex:bm25-search-documents $documents $query CodexAbsent)
+       (($results
+          (map-atom-strict
+            $results
+            $result
+            (codex:tool-search-bm25-result-entry $entries $result)))))))
 
 (= (tool-search-take-local $items $limit)
    (if (<= $limit 0)
@@ -296,7 +191,7 @@
       $limit
       $use-default-limit)
    (let $ranked
-     $entries
+     (codex:tool-search-rank-entries $query $entries)
      (let $results
        (codex:tool-search-take $ranked $limit)
        (if $use-default-limit

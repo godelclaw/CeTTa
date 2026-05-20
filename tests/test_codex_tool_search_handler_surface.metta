@@ -90,6 +90,57 @@
     False)
   (eval (test:bucket-run-entries "other-server" 4 "computer-use" 8)))
 
+!(assertEqual
+  (codex:tool-search-search-result-entries
+    ((CodexToolSearchEntry
+       "bacon sandwich menu item"
+       (CodexToolSearchOutputMcp
+         "menu"
+         "mcp__menu__"
+         "long"
+         CodexAbsent
+         CodexAbsent)
+       "menu")
+     (CodexToolSearchEntry
+       "bacon sandwich"
+       (CodexToolSearchOutputMcp
+         "menu"
+         "mcp__menu__"
+         "short"
+         CodexAbsent
+         CodexAbsent)
+       "menu")
+     (CodexToolSearchEntry
+       "avocado toast"
+       (CodexToolSearchOutputMcp
+         "menu"
+         "mcp__menu__"
+         "toast"
+         CodexAbsent
+         CodexAbsent)
+       "menu"))
+    "bacon sandwich"
+    8
+    False)
+  ((CodexToolSearchEntry
+     "bacon sandwich"
+     (CodexToolSearchOutputMcp
+       "menu"
+       "mcp__menu__"
+       "short"
+       CodexAbsent
+       CodexAbsent)
+     "menu")
+   (CodexToolSearchEntry
+     "bacon sandwich menu item"
+     (CodexToolSearchOutputMcp
+       "menu"
+       "mcp__menu__"
+       "long"
+       CodexAbsent
+       CodexAbsent)
+     "menu")))
+
 !(assertEqualToResult
   (codex:tool-search-mcp-namespace-description
     "mcp__calendar__"
