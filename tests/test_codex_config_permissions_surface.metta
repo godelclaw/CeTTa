@@ -54,6 +54,28 @@
   (codex:network-sandbox-policy-restricted))
 
 !(assertEqual
+  (codex:config-permissions-readable-roots-required-for-codex-runtime
+    "/home/user/.codex"
+    "/usr/bin/zsh"
+    "/home/user/.codex/tmp/arg0/session/codex-execve-wrapper")
+  ("/usr/bin/zsh"
+   "/home/user/.codex/tmp/arg0/session"))
+
+!(assertEqual
+  (codex:config-permissions-readable-roots-required-for-codex-runtime
+    "/home/user/.codex"
+    CodexAbsent
+    "/opt/codex-execve-wrapper")
+  ("/opt/codex-execve-wrapper"))
+
+!(assertEqual
+  (codex:config-permissions-readable-roots-required-for-codex-runtime
+    "relative-codex-home"
+    "relative-zsh"
+    "relative-wrapper")
+  ())
+
+!(assertEqual
   (codex:config-permissions-has-glob-chars "src/**/*.rs")
   True)
 

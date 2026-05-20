@@ -7,6 +7,7 @@
 ; Covered in this increment:
 ; - FilesystemPermissionsToml / FilesystemPermissionToml data shape
 ; - network_proxy_config_from_profile_network
+; - get_readable_roots_required_for_codex_runtime
 ; - compile_network_sandbox_policy
 ; - glob helper behavior used by filesystem profile compilation
 ; - glob_scan_max_depth validation
@@ -184,6 +185,55 @@
        (if (== (codex:network-toml-enabled $network) True)
            (codex:network-sandbox-policy-enabled)
            (codex:network-sandbox-policy-restricted))))
+
+(= (codex:config-permissions-runtime-absolute-path-list $path)
+   (case $path
+     ((CodexAbsent ())
+      ($value
+       (if (path-is-absolute? $value)
+           ((path-normalize $value))
+           ())))))
+
+(= (codex:config-permissions-runtime-arg0-root $codex-home)
+   (if (path-is-absolute? $codex-home)
+       (path-join $codex-home "tmp/arg0")
+       CodexAbsent))
+
+(= (codex:config-permissions-runtime-parent-path $path)
+   (path-build-from-parts
+     (path-drop-last (path-parts $path))
+     (path-is-absolute? $path)))
+
+(= (codex:config-permissions-runtime-execve-wrapper-root
+      $codex-home
+      $main-execve-wrapper-exe)
+   (case $main-execve-wrapper-exe
+     ((CodexAbsent ())
+      ($path
+       (if (path-is-absolute? $path)
+           (let $absolute-path (eval (path-normalize $path))
+             (let $arg0-root
+               (eval
+                 (codex:config-permissions-runtime-arg0-root $codex-home))
+               (if (and
+                     (not (== $arg0-root CodexAbsent))
+                     (codex:permissions-path-starts-with-path
+                       $absolute-path
+                       $arg0-root))
+                   ((codex:config-permissions-runtime-parent-path
+                      $absolute-path))
+                   ($absolute-path))))
+           ())))))
+
+(= (codex:config-permissions-readable-roots-required-for-codex-runtime
+      $codex-home
+      $zsh-path
+      $main-execve-wrapper-exe)
+   (list:append
+     (codex:config-permissions-runtime-absolute-path-list $zsh-path)
+     (codex:config-permissions-runtime-execve-wrapper-root
+       $codex-home
+       $main-execve-wrapper-exe)))
 
 (= (codex:config-permissions-append-result-list
       $items-result
