@@ -10,9 +10,6 @@
 ; - non-shell command passthrough
 ;
 ; Required slice-local deviations from Rust, documented for audit:
-; - Rust uses `detect_shell_type(PathBuf)` for shell classification. The
-;   current CeTTa port matches the visible behavior in this slice by inspecting
-;   the normalized path basename only.
 ; - Rust uses `Vec<String>` / `Option`. The current CeTTa port preserves the
 ;   same visible argv results and uses `CodexAbsent` for omitted branches.
 ; - Rust calls `parse_shell_lc_plain_commands(command)` directly on argv. The
@@ -23,6 +20,7 @@
 !(import! &self command)
 !(import! &self list)
 !(import! &self shell)
+!(import! &self shell_detect)
 !(import! &self str)
 
 (= (codex:canonical-bash-script-prefix)
@@ -70,19 +68,19 @@
          (codex:command-canonicalization-ascii-lower-text
            (str-slice $text 1 (str-length $text))))))
 
-(= (codex:is-powershell-shell-name? $shell)
-   (let $name
-     (codex:command-canonicalization-ascii-lower-text
-       (codex:path-last-part $shell))
-     (if (== $name "powershell")
+(= (codex:is-command-canonicalization-bash-shell? $shell)
+   (let $shell-type (codex:detect-shell-type $shell)
+     (if (== $shell-type (codex:shell-type-zsh))
          True
-         (if (== $name "powershell.exe")
+         (if (== $shell-type (codex:shell-type-bash))
              True
-             (if (== $name "pwsh")
+             (if (== $shell-type (codex:shell-type-sh))
                  True
-                 (if (== $name "pwsh.exe")
-                     True
-                     False))))))
+                 False)))))
+
+(= (codex:is-powershell-shell-name? $shell)
+   (== (codex:detect-shell-type $shell)
+       (codex:shell-type-powershell)))
 
 (= (codex:is-powershell-flag? $flag)
    (let $lower (codex:command-canonicalization-ascii-lower-text $flag)
@@ -104,12 +102,21 @@
              True
              False))))
 
+(= (codex:is-command-canonicalization-shell-wrapper? $shell $flag)
+   (if (== $flag "-c")
+       (codex:is-command-canonicalization-bash-shell? $shell)
+       (if (== $flag "-lc")
+           (codex:is-command-canonicalization-bash-shell? $shell)
+           False)))
+
 (= (codex:command-canonicalization-extract-bash $command)
    (if (== (list:len $command) 3)
        (let $shell (list:at $command 0)
          (let $flag (list:at $command 1)
            (let $script (list:at $command 2)
-             (if (codex:is-shell-wrapper-parts? $shell $flag)
+             (if (codex:is-command-canonicalization-shell-wrapper?
+                   $shell
+                   $flag)
                  (CodexCommandCanonicalizationBash $flag $script)
                  CodexAbsent))))
        CodexAbsent))

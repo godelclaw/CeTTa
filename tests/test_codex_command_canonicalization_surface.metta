@@ -33,5 +33,15 @@
 
 !(assertEqualToResult
   (codex:canonicalize-command-for-approval
+    ("bash.exe" "-lc" "cargo test"))
+  (("cargo" "test")))
+
+!(assertEqualToResult
+  (codex:canonicalize-command-for-approval
+    ("PowerShell.exe" "-Command" "Write-Host hi"))
+  (("PowerShell.exe" "-Command" "Write-Host hi")))
+
+!(assertEqualToResult
+  (codex:canonicalize-command-for-approval
     ("cargo" "fmt"))
   (("cargo" "fmt")))
