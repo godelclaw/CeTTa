@@ -118,6 +118,9 @@
 (= (codex:tool-sandboxing-hook-tool-name-bash)
    (CodexHookToolName "Bash" ()))
 
+(= (codex:tool-sandboxing-hook-tool-name-apply-patch)
+   (CodexHookToolName "apply_patch" ("Write" "Edit")))
+
 (= (codex:permission-request-payload $tool-name $tool-input)
    (CodexPermissionRequestPayload $tool-name $tool-input))
 
@@ -143,6 +146,12 @@
      (codex:permission-request-payload-bash-input
        $command
        $description)))
+
+(= (codex:permission-request-payload-apply-patch $patch-text)
+   (codex:permission-request-payload
+     (codex:tool-sandboxing-hook-tool-name-apply-patch)
+     (JsonObject
+       ((JsonPair "command" (JsonString $patch-text))))))
 
 (= (codex:tool-sandboxing-hook-tool-name-json
       (CodexHookToolName $name $matcher-aliases))
