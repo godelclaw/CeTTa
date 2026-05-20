@@ -17,6 +17,12 @@
        $option
        (test:mcp-option-label $option))))
 
+(= (test:mcp-event-jsons $events)
+   (map-atom-strict
+     $events
+     $event
+     (codex:item-json $event)))
+
 (= (test:mcp-metadata)
    (codex:mcp-tool-approval-metadata
      "calendar"
@@ -264,6 +270,49 @@
     False
     (codex:mcp-tool-call-result-err "tool call failed"))
   ((CodexMcpToolCallResultErr "tool call failed")))
+
+!(assertEqualToResult
+  (case
+    (codex:notify-mcp-tool-call-skip-plan
+      "call-skip"
+      (codex:mcp-invocation
+        "memory"
+        "read_graph"
+        (JsonObject ((JsonPair "id" (JsonNumber 1)))))
+      "app://memory"
+      "not approved"
+      False)
+    (((CodexMcpToolCallSkipPlan $events $result)
+      (json-stringify (JsonArray (test:mcp-event-jsons $events))))))
+  ("[{\"type\":\"mcp_tool_call_begin\",\"call_id\":\"call-skip\",\"invocation\":{\"server\":\"memory\",\"tool\":\"read_graph\",\"arguments\":{\"id\":1}},\"mcp_app_resource_uri\":\"app://memory\"},{\"type\":\"mcp_tool_call_end\",\"call_id\":\"call-skip\",\"invocation\":{\"server\":\"memory\",\"tool\":\"read_graph\",\"arguments\":{\"id\":1}},\"mcp_app_resource_uri\":\"app://memory\",\"duration\":{\"secs\":0,\"nanos\":0},\"result\":{\"Err\":\"not approved\"}}]"))
+
+!(assertEqualToResult
+  (case
+    (codex:notify-mcp-tool-call-skip-plan
+      "call-skip-started"
+      (codex:mcp-invocation
+        "memory"
+        "read_graph"
+        CodexAbsent)
+      CodexAbsent
+      "cancelled"
+      True)
+    (((CodexMcpToolCallSkipPlan $events $result)
+      (json-stringify (JsonArray (test:mcp-event-jsons $events))))))
+  ("[{\"type\":\"mcp_tool_call_end\",\"call_id\":\"call-skip-started\",\"invocation\":{\"server\":\"memory\",\"tool\":\"read_graph\",\"arguments\":null},\"duration\":{\"secs\":0,\"nanos\":0},\"result\":{\"Err\":\"cancelled\"}}]"))
+
+!(assertEqualToResult
+  (codex:mcp-tool-call-skip-plan-result
+    (codex:notify-mcp-tool-call-skip-plan
+      "call-skip-started"
+      (codex:mcp-invocation
+        "memory"
+        "read_graph"
+        CodexAbsent)
+      CodexAbsent
+      "cancelled"
+      True))
+  ((CodexMcpToolCallResultErr "cancelled")))
 
 !(assertEqualToResult
   (codex:is-mcp-tool-approval-question-id "mcp_tool_call_approval")

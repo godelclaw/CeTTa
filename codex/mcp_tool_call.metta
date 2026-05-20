@@ -16,6 +16,7 @@
 ; - request_user_input and MCP elicitation response parsing
 ; - guardian review-decision mapping
 ; - read-only/destructive/open-world approval requirement logic
+; - MCP tool-call skip event plan construction
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust's full MCP tool-call path is async and crosses session, hooks,
@@ -38,6 +39,9 @@
 ; - Rust obtains guardian rejection messages from async session state. The pure
 ;   mapping helper receives the already-rendered rejection and timeout messages
 ;   explicitly.
+; - Rust's notify_mcp_tool_call_skip emits events through Session and returns
+;   Err(message). This pure helper returns the event list plus the same error
+;   result so a runtime layer can perform the side effects later.
 
 !(import! &self json)
 !(import! &self list)
@@ -833,6 +837,55 @@
                    $structured-content
                    $is-error
                    $meta))))))))))))
+
+(= (codex:mcp-tool-call-skip-plan $events $result)
+   (CodexMcpToolCallSkipPlan $events $result))
+
+(= (codex:mcp-tool-call-skip-plan-events
+      (CodexMcpToolCallSkipPlan $events $result))
+   $events)
+
+(= (codex:mcp-tool-call-skip-plan-result
+      (CodexMcpToolCallSkipPlan $events $result))
+   $result)
+
+(= (codex:notify-mcp-tool-call-skip-plan
+      $call-id
+      $invocation
+      $mcp-app-resource-uri
+      $message
+      True)
+   (let $result
+     (codex:mcp-tool-call-result-err $message)
+     (codex:mcp-tool-call-skip-plan
+       ((codex:mcp-tool-call-end-event
+          $call-id
+          $invocation
+          $mcp-app-resource-uri
+          (codex:duration 0 0)
+          $result))
+       $result)))
+
+(= (codex:notify-mcp-tool-call-skip-plan
+      $call-id
+      $invocation
+      $mcp-app-resource-uri
+      $message
+      False)
+   (let $result
+     (codex:mcp-tool-call-result-err $message)
+     (codex:mcp-tool-call-skip-plan
+       ((codex:mcp-tool-call-begin-event
+          $call-id
+          $invocation
+          $mcp-app-resource-uri)
+        (codex:mcp-tool-call-end-event
+          $call-id
+          $invocation
+          $mcp-app-resource-uri
+          (codex:duration 0 0)
+          $result))
+       $result)))
 
 (= (codex:mcp-tool-call-trim-end-question-marks $text)
    (if (== $text "")
