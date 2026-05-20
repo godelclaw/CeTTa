@@ -1,9 +1,15 @@
 !(register-module! ../codex)
 !(import! &self process)
+!(import! &self str)
 !(import! &self codex:agents_md)
 
 (= (codex-agents-md-root)
    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md")
+
+(= (codex-agents-md-text-contains $text $needle)
+   (case (str-find $text $needle)
+     ((Empty False)
+      ($index True))))
 
 !(assertEqualToResult
   (codex:agents-md-default-filename)
@@ -16,6 +22,60 @@
 !(assertEqualToResult
   (codex:agents-md-separator)
   ("\n\n--- project-doc ---\n\n"))
+
+!(assertEqualToResult
+  (codex:agents-md-text-starts-with
+    (codex:agents-md-js-repl-instructions-base)
+    "## JavaScript REPL (Node)\n")
+  (True))
+
+!(assertEqualToResult
+  (codex:agents-md-text-ends-with
+    (codex:agents-md-js-repl-instructions-base)
+    "Local file modules reload between execs, while top-level bindings persist until `js_repl_reset`.\n")
+  (True))
+
+!(assertEqualToResult
+  (codex:agents-md-js-repl-tools-only-instructions)
+  ("- Do not call tools directly; use `js_repl` + `codex.tool(...)` for all tool calls, including shell commands.\n- MCP tools (if any) can also be called by name via `codex.tool(...)`.\n"))
+
+!(assertEqualToResult
+  (codex:agents-md-js-repl-final-instruction)
+  ("- Avoid direct access to `process.stdout` / `process.stderr` / `process.stdin`; it can corrupt the JSON line protocol. Use `console.log`, `codex.tool(...)`, and `codex.emitImage(...)`."))
+
+!(assertEqualToResult
+  (codex:agents-md-render-js-repl-instructions False False)
+  (CodexAbsent))
+
+!(assertEqualToResult
+  (==
+    (codex:agents-md-render-js-repl-instructions True False)
+    (str-concat
+      (codex:agents-md-js-repl-instructions-base)
+      (codex:agents-md-js-repl-final-instruction)))
+  (True))
+
+!(assertEqualToResult
+  (codex-agents-md-text-contains
+    (codex:agents-md-render-js-repl-instructions True False)
+    "- Do not call tools directly;")
+  (False))
+
+!(assertEqualToResult
+  (==
+    (codex:agents-md-render-js-repl-instructions True True)
+    (str-concat
+      (codex:agents-md-js-repl-instructions-base)
+      (str-concat
+        (codex:agents-md-js-repl-tools-only-instructions)
+        (codex:agents-md-js-repl-final-instruction))))
+  (True))
+
+!(assertEqualToResult
+  (codex:agents-md-text-ends-with
+    (codex:agents-md-render-js-repl-instructions True True)
+    "- MCP tools (if any) can also be called by name via `codex.tool(...)`.\n- Avoid direct access to `process.stdout` / `process.stderr` / `process.stdin`; it can corrupt the JSON line protocol. Use `console.log`, `codex.tool(...)`, and `codex.emitImage(...)`.")
+  (True))
 
 !(assertEqualToResult
   (codex:agents-md-candidate-filenames
@@ -106,3 +166,25 @@
     "js"
     "child")
   ("project\n\njs\n\nchild"))
+
+!(assertEqualToResult
+  (codex:agents-md-text-starts-with
+    (codex:agents-md-compose-configured-user-instructions
+      CodexAbsent
+      "project"
+      True
+      True
+      CodexAbsent)
+    "project\n\n## JavaScript REPL (Node)\n")
+  (True))
+
+!(assertEqualToResult
+  (codex-agents-md-text-contains
+    (codex:agents-md-compose-configured-user-instructions
+      CodexAbsent
+      "project"
+      True
+      True
+      CodexAbsent)
+    "- Do not call tools directly;")
+  (True))
