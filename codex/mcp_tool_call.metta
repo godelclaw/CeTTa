@@ -15,6 +15,7 @@
 ; - elicitation metadata rendering for MCP approval requests
 ; - request_user_input and MCP elicitation response parsing
 ; - guardian review-decision mapping
+; - approval-decision application side-effect planning
 ; - read-only/destructive/open-world approval requirement logic
 ; - MCP tool-call skip event plan construction
 ; - MCP call metric tag sanitization and emission planning
@@ -68,6 +69,10 @@
 ;   MCP connection manager and queues an analytics event. This pure helper
 ;   receives the listed ToolInfo values and connector-selection set, then
 ;   returns the track_app_used operation that the runtime layer should enqueue.
+; - Rust apply_mcp_tool_approval_decision mutates the in-memory approval store,
+;   may persist TOML config, reloads user config after successful persistence,
+;   and falls back to session memory on persistence error. This pure helper
+;   returns those same side-effect branches as explicit runtime operations.
 
 !(import! &self json)
 !(import! &self list)
@@ -196,6 +201,35 @@
 (= (codex:mcp-tool-approval-key-tool-name
       (CodexMcpToolApprovalKey $server $connector-id $tool-name))
    $tool-name)
+
+(= (codex:mcp-tool-approval-remember-op $key)
+   (CodexMcpToolApprovalRememberOp $key))
+
+(= (codex:mcp-tool-approval-persist-codex-app-tool-op
+      $connector-id
+      $tool-name)
+   (CodexMcpToolApprovalPersistCodexAppToolOp
+     $connector-id
+     $tool-name))
+
+(= (codex:mcp-tool-approval-persist-custom-mcp-tool-op
+      $server
+      $tool-name)
+   (CodexMcpToolApprovalPersistCustomMcpToolOp
+     $server
+     $tool-name))
+
+(= (codex:mcp-tool-approval-reload-user-config-op)
+   (CodexMcpToolApprovalReloadUserConfigOp))
+
+(= (codex:mcp-tool-approval-persist-with-fallback-op
+      $persist-op
+      $success-ops
+      $error-ops)
+   (CodexMcpToolApprovalPersistWithFallbackOp
+     $persist-op
+     $success-ops
+     $error-ops))
 
 (= (codex:mcp-tool-approval-prompt-options
       $allow-session-remember
@@ -1855,6 +1889,99 @@
      $invocation
      $metadata
      $approval-mode))
+
+(= (codex:remember-mcp-tool-approval-plan CodexAbsent)
+   ())
+
+(= (codex:remember-mcp-tool-approval-plan Empty)
+   ())
+
+(= (codex:remember-mcp-tool-approval-plan
+      (CodexMcpToolApprovalKey $server $connector-id $tool-name))
+   ((codex:mcp-tool-approval-remember-op
+      (CodexMcpToolApprovalKey $server $connector-id $tool-name))))
+
+(= (codex:maybe-persist-mcp-tool-approval-plan CodexAbsent)
+   ())
+
+(= (codex:maybe-persist-mcp-tool-approval-plan Empty)
+   ())
+
+(= (codex:maybe-persist-mcp-tool-approval-plan
+      (CodexMcpToolApprovalKey $server $connector-id $tool-name))
+   (let $key
+     (CodexMcpToolApprovalKey $server $connector-id $tool-name)
+     (if (== $server (codex:codex-apps-mcp-server-name))
+         (if (or (== $connector-id CodexAbsent) (== $connector-id Empty))
+             (codex:remember-mcp-tool-approval-plan $key)
+             ((codex:mcp-tool-approval-persist-with-fallback-op
+                (codex:mcp-tool-approval-persist-codex-app-tool-op
+                  $connector-id
+                  $tool-name)
+                ((codex:mcp-tool-approval-reload-user-config-op)
+                 (codex:mcp-tool-approval-remember-op $key))
+                ((codex:mcp-tool-approval-remember-op $key)))))
+         ((codex:mcp-tool-approval-persist-with-fallback-op
+            (codex:mcp-tool-approval-persist-custom-mcp-tool-op
+              $server
+              $tool-name)
+            ((codex:mcp-tool-approval-reload-user-config-op)
+             (codex:mcp-tool-approval-remember-op $key))
+            ((codex:mcp-tool-approval-remember-op $key)))))))
+
+(= (codex:apply-mcp-tool-approval-accept-and-remember-plan
+      $session-approval-key
+      CodexAbsent)
+   (codex:remember-mcp-tool-approval-plan $session-approval-key))
+
+(= (codex:apply-mcp-tool-approval-accept-and-remember-plan
+      $session-approval-key
+      Empty)
+   (codex:remember-mcp-tool-approval-plan $session-approval-key))
+
+(= (codex:apply-mcp-tool-approval-accept-and-remember-plan
+      $session-approval-key
+      (CodexMcpToolApprovalKey $server $connector-id $tool-name))
+   (codex:maybe-persist-mcp-tool-approval-plan
+     (CodexMcpToolApprovalKey $server $connector-id $tool-name)))
+
+(= (codex:apply-mcp-tool-approval-decision-plan
+      (CodexMcpToolApprovalDecisionAcceptForSession)
+      $session-approval-key
+      $persistent-approval-key)
+   (codex:remember-mcp-tool-approval-plan $session-approval-key))
+
+(= (codex:apply-mcp-tool-approval-decision-plan
+      (CodexMcpToolApprovalDecisionAcceptAndRemember)
+      $session-approval-key
+      $persistent-approval-key)
+   (codex:apply-mcp-tool-approval-accept-and-remember-plan
+     $session-approval-key
+     $persistent-approval-key))
+
+(= (codex:apply-mcp-tool-approval-decision-plan
+      (CodexMcpToolApprovalDecisionAccept)
+      $session-approval-key
+      $persistent-approval-key)
+   ())
+
+(= (codex:apply-mcp-tool-approval-decision-plan
+      (CodexMcpToolApprovalDecisionDecline $message)
+      $session-approval-key
+      $persistent-approval-key)
+   ())
+
+(= (codex:apply-mcp-tool-approval-decision-plan
+      (CodexMcpToolApprovalDecisionCancel)
+      $session-approval-key
+      $persistent-approval-key)
+   ())
+
+(= (codex:apply-mcp-tool-approval-decision-plan
+      (CodexMcpToolApprovalDecisionBlockedBySafetyMonitor $message)
+      $session-approval-key
+      $persistent-approval-key)
+   ())
 
 (= (codex:mcp-tool-call-json-pair-names ())
    ())

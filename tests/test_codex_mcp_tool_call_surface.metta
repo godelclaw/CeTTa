@@ -685,6 +685,93 @@
   ((CodexMcpToolApprovalKey "codex_apps" "calendar" "create_event")))
 
 !(assertEqualToResult
+  (codex:apply-mcp-tool-approval-decision-plan
+    (codex:mcp-tool-approval-decision-accept-for-session)
+    (codex:mcp-tool-approval-key "custom_server" CodexAbsent "run_action")
+    CodexAbsent)
+  (((CodexMcpToolApprovalRememberOp
+      (CodexMcpToolApprovalKey
+        "custom_server"
+        CodexAbsent
+        "run_action")))))
+
+!(assertEqualToResult
+  (codex:apply-mcp-tool-approval-decision-plan
+    (codex:mcp-tool-approval-decision-accept-for-session)
+    CodexAbsent
+    CodexAbsent)
+  (()))
+
+!(assertEqualToResult
+  (codex:apply-mcp-tool-approval-decision-plan
+    (codex:mcp-tool-approval-decision-accept-and-remember)
+    CodexAbsent
+    (codex:mcp-tool-approval-key "codex_apps" "calendar" "create_event"))
+  (((CodexMcpToolApprovalPersistWithFallbackOp
+      (CodexMcpToolApprovalPersistCodexAppToolOp
+        "calendar"
+        "create_event")
+      ((CodexMcpToolApprovalReloadUserConfigOp)
+       (CodexMcpToolApprovalRememberOp
+         (CodexMcpToolApprovalKey
+           "codex_apps"
+           "calendar"
+           "create_event")))
+      ((CodexMcpToolApprovalRememberOp
+         (CodexMcpToolApprovalKey
+           "codex_apps"
+           "calendar"
+           "create_event")))))))
+
+!(assertEqualToResult
+  (codex:apply-mcp-tool-approval-decision-plan
+    (codex:mcp-tool-approval-decision-accept-and-remember)
+    CodexAbsent
+    (codex:mcp-tool-approval-key "custom_server" CodexAbsent "run_action"))
+  (((CodexMcpToolApprovalPersistWithFallbackOp
+      (CodexMcpToolApprovalPersistCustomMcpToolOp
+        "custom_server"
+        "run_action")
+      ((CodexMcpToolApprovalReloadUserConfigOp)
+       (CodexMcpToolApprovalRememberOp
+         (CodexMcpToolApprovalKey
+           "custom_server"
+           CodexAbsent
+           "run_action")))
+      ((CodexMcpToolApprovalRememberOp
+         (CodexMcpToolApprovalKey
+           "custom_server"
+           CodexAbsent
+           "run_action")))))))
+
+!(assertEqualToResult
+  (codex:apply-mcp-tool-approval-decision-plan
+    (codex:mcp-tool-approval-decision-accept-and-remember)
+    (codex:mcp-tool-approval-key "custom_server" CodexAbsent "run_action")
+    CodexAbsent)
+  (((CodexMcpToolApprovalRememberOp
+      (CodexMcpToolApprovalKey
+        "custom_server"
+        CodexAbsent
+        "run_action")))))
+
+!(assertEqualToResult
+  (codex:maybe-persist-mcp-tool-approval-plan
+    (codex:mcp-tool-approval-key "codex_apps" CodexAbsent "create_event"))
+  (((CodexMcpToolApprovalRememberOp
+      (CodexMcpToolApprovalKey
+        "codex_apps"
+        CodexAbsent
+        "create_event")))))
+
+!(assertEqualToResult
+  (codex:apply-mcp-tool-approval-decision-plan
+    (codex:mcp-tool-approval-decision-decline "no")
+    (codex:mcp-tool-approval-key "custom_server" CodexAbsent "run_action")
+    (codex:mcp-tool-approval-key "custom_server" CodexAbsent "run_action"))
+  (()))
+
+!(assertEqualToResult
   (codex:build-mcp-tool-approval-display-params
     (JsonObject
       ((JsonPair "zeta" (JsonString "last"))
