@@ -28,6 +28,17 @@
      (str-concat "/skills/" (str-concat $name "/SKILL.md"))
      (CodexSkillScopeUser)))
 
+(= (codex-test-mcp-memory-skill)
+   (codex-test-mcp-skill
+     "install"
+     (CodexSkillDependencies
+       ((codex-test-mcp-dep
+          "mcp"
+          "memory"
+          CodexAbsent
+          CodexAbsent
+          "https://memory.test/mcp")))))
+
 !(assertEqualToResult
   (codex:mcp-skill-dependency-prompt-id)
   ("skill_mcp_dependency_install"))
@@ -39,6 +50,30 @@
 !(assertEqualToResult
   (codex:mcp-dependency-option-skip)
   ("Continue anyway"))
+
+!(assertEqualToResult
+  (codex:default-client-originator)
+  ("codex_cli_rs"))
+
+!(assertEqualToResult
+  (codex:is-first-party-originator "codex_cli_rs")
+  (True))
+
+!(assertEqualToResult
+  (codex:is-first-party-originator "codex-tui")
+  (True))
+
+!(assertEqualToResult
+  (codex:is-first-party-originator "codex_vscode")
+  (True))
+
+!(assertEqualToResult
+  (codex:is-first-party-originator "Codex Something Else")
+  (True))
+
+!(assertEqualToResult
+  (codex:is-first-party-originator "codex_cli")
+  (False))
 
 !(assertEqualToResult
   (codex:format-missing-mcp-dependencies
@@ -694,6 +729,100 @@
              "Continue anyway"
              "Skip installation for now and do not show again for these MCP servers in this session.")))))
      ("mcp__streamable_http__https://memory.test/mcp"))))
+
+!(assertEqualToResult
+  (codex:maybe-prompt-and-install-mcp-dependencies-plan
+    "codex_cli"
+    True
+    "never"
+    (CodexApprovalSandboxPolicyDangerFullAccess)
+    "turn-1"
+    ((codex-test-mcp-memory-skill))
+    ()
+    ()
+    CodexAbsent)
+  ((CodexMcpDependencyPromptAndInstallSkip
+     "non_first_party_originator")))
+
+!(assertEqualToResult
+  (codex:maybe-prompt-and-install-mcp-dependencies-plan
+    "codex_cli_rs"
+    True
+    "never"
+    (CodexApprovalSandboxPolicyDangerFullAccess)
+    "turn-1"
+    ((codex-test-mcp-memory-skill))
+    ((codex:mcp-server-entry
+       "memory"
+       (codex:mcp-dependency-default-http-config "https://memory.test/mcp")))
+    ()
+    CodexAbsent)
+  ((CodexMcpDependencyPromptAndInstallSkip "nothing_missing")))
+
+!(assertEqualToResult
+  (codex:maybe-prompt-and-install-mcp-dependencies-plan
+    "codex_cli_rs"
+    True
+    "never"
+    (CodexApprovalSandboxPolicyDangerFullAccess)
+    "turn-1"
+    ((codex-test-mcp-memory-skill))
+    ()
+    ("mcp__streamable_http__https://memory.test/mcp")
+    CodexAbsent)
+  ((CodexMcpDependencyPromptAndInstallSkip "nothing_unprompted")))
+
+!(assertEqualToResult
+  (codex:mcp-skill-metadata-name
+    (list:first
+      (codex:mcp-dependency-prompt-install-op-mentioned-skills
+        (codex:mcp-dependency-prompt-and-install-ready-install-op
+          (codex:maybe-prompt-and-install-mcp-dependencies-plan
+            "codex_cli_rs"
+            True
+            "never"
+            (CodexApprovalSandboxPolicyDangerFullAccess)
+            "turn-1"
+            ((codex-test-mcp-memory-skill))
+            ()
+            ()
+            CodexAbsent)))))
+  ("install"))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-prompt-and-install-ready-install-op
+    (codex:maybe-prompt-and-install-mcp-dependencies-plan
+      "Codex Desktop"
+      True
+      "on_request"
+      (CodexApprovalSandboxPolicyReadOnly)
+      "turn-2"
+      ((codex-test-mcp-memory-skill))
+      ()
+      ()
+      (CodexRequestUserInputResponse
+        ((CodexRequestUserInputResponseEntry
+           "skill_mcp_dependency_install"
+           (CodexRequestUserInputAnswer ("Continue anyway")))))))
+  (CodexAbsent))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-should-install-plan-record-prompted-keys
+    (codex:mcp-dependency-prompt-and-install-ready-should-install-plan
+      (codex:maybe-prompt-and-install-mcp-dependencies-plan
+        "codex_vscode"
+        True
+        "on_request"
+        (CodexApprovalSandboxPolicyReadOnly)
+        "turn-3"
+        ((codex-test-mcp-memory-skill))
+        ()
+        ()
+        (CodexRequestUserInputResponse
+          ((CodexRequestUserInputResponseEntry
+             "skill_mcp_dependency_install"
+             (CodexRequestUserInputAnswer ("Install"))))))))
+  (("mcp__streamable_http__https://memory.test/mcp")))
 
 !(assertEqualToResult
   (codex:mcp-dependency-oauth-login-plan

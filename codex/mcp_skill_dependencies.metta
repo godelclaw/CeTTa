@@ -13,6 +13,7 @@
 ; - `collect_missing_mcp_dependencies`
 ; - `should_install_mcp_dependencies` prompt/answer side-effect planning
 ; - `filter_prompted_mcp_dependencies`
+; - `maybe_prompt_and_install_mcp_dependencies` gating and install trigger
 ; - `maybe_install_mcp_dependencies` pre-persist planning and install merge
 ; - `maybe_install_mcp_dependencies` post-persist OAuth login planning
 ; - `maybe_install_mcp_dependencies` refresh overlay planning
@@ -37,6 +38,12 @@
 ; - Rust `filter_prompted_mcp_dependencies` reads a session HashSet of prompted
 ;   canonical keys. This pure helper receives that set as a list and preserves
 ;   the same canonical-key exclusion predicate.
+; - Rust `maybe_prompt_and_install_mcp_dependencies` reads the process
+;   originator singleton, feature flags, configured MCP servers, and prompted
+;   dependency keys through async session state before optionally calling
+;   `maybe_install_mcp_dependencies`. This pure helper receives those
+;   materialized values and returns either the same early-return reason or an
+;   install-trigger operation for the runtime layer to execute.
 ; - Rust `maybe_install_mcp_dependencies` reads feature state, configured MCP
 ;   servers, and global config from async services before applying config edits.
 ;   This helper receives those materialized values and returns the pre-persist
@@ -64,6 +71,9 @@
 
 (= (codex:mcp-dependency-option-skip)
    "Continue anyway")
+
+(= (codex:default-client-originator)
+   "codex_cli_rs")
 
 (= (codex:mcp-server-transport-stdio
       $command
@@ -218,6 +228,27 @@
      $request-event
      $record-prompted-keys))
 
+(= (codex:mcp-dependency-should-install-plan-install
+      (CodexMcpDependencyShouldInstallPlan
+        $install
+        $request-event
+        $record-prompted-keys))
+   $install)
+
+(= (codex:mcp-dependency-should-install-plan-request-event
+      (CodexMcpDependencyShouldInstallPlan
+        $install
+        $request-event
+        $record-prompted-keys))
+   $request-event)
+
+(= (codex:mcp-dependency-should-install-plan-record-prompted-keys
+      (CodexMcpDependencyShouldInstallPlan
+        $install
+        $request-event
+        $record-prompted-keys))
+   $record-prompted-keys)
+
 (= (codex:mcp-dependency-load-global-servers-ok $servers)
    (CodexMcpDependencyLoadGlobalServersOk $servers))
 
@@ -240,6 +271,46 @@
 
 (= (codex:mcp-dependency-install-load-error $message)
    (CodexMcpDependencyInstallLoadError $message))
+
+(= (codex:mcp-dependency-prompt-and-install-skip $reason)
+   (CodexMcpDependencyPromptAndInstallSkip $reason))
+
+(= (codex:mcp-dependency-prompt-install-op $mentioned-skills)
+   (CodexMcpDependencyPromptInstallOp $mentioned-skills))
+
+(= (codex:mcp-dependency-prompt-install-op-mentioned-skills
+      (CodexMcpDependencyPromptInstallOp $mentioned-skills))
+   $mentioned-skills)
+
+(= (codex:mcp-dependency-prompt-and-install-ready
+      $unprompted-missing
+      $should-install-plan
+      $install-op)
+   (CodexMcpDependencyPromptAndInstallReady
+     $unprompted-missing
+     $should-install-plan
+     $install-op))
+
+(= (codex:mcp-dependency-prompt-and-install-ready-unprompted-missing
+      (CodexMcpDependencyPromptAndInstallReady
+        $unprompted-missing
+        $should-install-plan
+        $install-op))
+   $unprompted-missing)
+
+(= (codex:mcp-dependency-prompt-and-install-ready-should-install-plan
+      (CodexMcpDependencyPromptAndInstallReady
+        $unprompted-missing
+        $should-install-plan
+        $install-op))
+   $should-install-plan)
+
+(= (codex:mcp-dependency-prompt-and-install-ready-install-op
+      (CodexMcpDependencyPromptAndInstallReady
+        $unprompted-missing
+        $should-install-plan
+        $install-op))
+   $install-op)
 
 (= (codex:mcp-dependency-install-ready
       $missing
@@ -512,6 +583,15 @@
 (= (codex:mcp-skill-dependencies-eq-ignore-ascii-case $left $right)
    (== (codex:mcp-skill-dependencies-ascii-lower-text $left)
        (codex:mcp-skill-dependencies-ascii-lower-text $right)))
+
+(= (codex:is-first-party-originator $originator-value)
+   (or
+     (== $originator-value (codex:default-client-originator))
+     (or
+       (== $originator-value "codex-tui")
+       (or
+         (== $originator-value "codex_vscode")
+         (str-starts-with? $originator-value "Codex ")))))
 
 (= (codex:mcp-skill-dependencies-list-contains $items $item)
    (if (== $items ())
@@ -793,6 +873,60 @@
            $sub-id
            ((codex:mcp-dependency-install-question $missing)))
          (codex:mcp-dependency-prompted-canonical-keys $missing))))
+
+(= (codex:mcp-dependency-prompt-and-install-decision
+      $unprompted-missing
+      $should-install-plan
+      $mentioned-skills)
+   (codex:mcp-dependency-prompt-and-install-ready
+     $unprompted-missing
+     $should-install-plan
+     (if (codex:mcp-dependency-should-install-plan-install
+           $should-install-plan)
+         (codex:mcp-dependency-prompt-install-op $mentioned-skills)
+         CodexAbsent)))
+
+(= (codex:maybe-prompt-and-install-mcp-dependencies-plan
+      $originator-value
+      $skill-mcp-dependency-install-enabled
+      $approval-policy
+      $sandbox-policy
+      $sub-id
+      $mentioned-skills
+      $configured-servers
+      $prompted-canonical-keys
+      $response)
+   (if (not (codex:is-first-party-originator $originator-value))
+       (codex:mcp-dependency-prompt-and-install-skip
+         "non_first_party_originator")
+       (if (or
+             (== $mentioned-skills ())
+             (not $skill-mcp-dependency-install-enabled))
+           (codex:mcp-dependency-prompt-and-install-skip
+             "disabled_or_no_skills")
+           (let $missing
+             (codex:collect-missing-mcp-dependencies
+               $mentioned-skills
+               $configured-servers)
+             (if (== $missing ())
+                 (codex:mcp-dependency-prompt-and-install-skip
+                   "nothing_missing")
+                 (let $unprompted-missing
+                   (codex:filter-prompted-mcp-dependencies
+                     $missing
+                     $prompted-canonical-keys)
+                   (if (== $unprompted-missing ())
+                       (codex:mcp-dependency-prompt-and-install-skip
+                         "nothing_unprompted")
+                       (codex:mcp-dependency-prompt-and-install-decision
+                         $unprompted-missing
+                         (codex:should-install-mcp-dependencies-plan
+                           $approval-policy
+                           $sandbox-policy
+                           $sub-id
+                           $unprompted-missing
+                           $response)
+                         $mentioned-skills))))))))
 
 (= (codex:mcp-server-entry-upsert () $name $config)
    ((codex:mcp-server-entry $name $config)))
