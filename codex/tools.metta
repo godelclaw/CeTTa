@@ -10,6 +10,7 @@
 ; - custom-tool-call -> custom-tool-call-output lowering for exec_command and
 ;   write_stdin
 ; - unified-exec pre/post hook payload helpers
+; - apply_patch pre/post hook payload helpers
 ;
 ; Required slice-local deviations from Rust, documented for later audit:
 ; - Rust generates random six-hex chunk IDs. This slice derives a stable chunk
@@ -261,6 +262,9 @@
 (= (codex:hook-tool-name-bash)
    (codex:hook-tool-name "Bash" ()))
 
+(= (codex:hook-tool-name-apply-patch)
+   (codex:hook-tool-name "apply_patch" ("Write" "Edit")))
+
 (= (codex:pre-tool-use-payload $tool-name $tool-input)
    (CodexPreToolUsePayload $tool-name $tool-input))
 
@@ -355,6 +359,50 @@
       (JsonPair "tool_use_id" (JsonString $tool-use-id))
       (JsonPair "tool_input" $tool-input)
       (JsonPair "tool_response" $tool-response))))
+
+(= (codex:apply-patch-function-payload-command $arguments)
+   (case (json-parse $arguments)
+     (((JsonObject $pairs)
+       (case (json-object-get (JsonObject $pairs) "input")
+         (((JsonString $input) $input)
+          ($other Empty))))
+      ($other Empty))))
+
+(= (codex:apply-patch-payload-command $payload)
+   (case $payload
+     (((CodexToolPayloadFunction $arguments)
+       (codex:apply-patch-function-payload-command $arguments))
+      ((CodexToolPayloadCustom $input)
+       $input)
+      ($other Empty))))
+
+(= (codex:apply-patch-tool-output-post-tool-use-response-json $output)
+   (case $output
+     (((CodexToolOutputApplyPatch $text)
+       (JsonString $text))
+      ($other Empty))))
+
+(= (codex:apply-patch-pre-tool-use-payload $payload)
+   (case (codex:apply-patch-payload-command $payload)
+     ((Empty Empty)
+      ($command
+       (codex:pre-tool-use-payload
+         (codex:hook-tool-name-apply-patch)
+         (codex:hook-command-input-json $command))))))
+
+(= (codex:apply-patch-post-tool-use-payload $tool-call-id $payload $output)
+   (case (codex:apply-patch-payload-command $payload)
+     ((Empty Empty)
+      ($command
+       (case
+         (codex:apply-patch-tool-output-post-tool-use-response-json $output)
+         ((Empty Empty)
+          ($tool-response
+           (codex:post-tool-use-payload
+             (codex:hook-tool-name-apply-patch)
+             $tool-call-id
+             (codex:hook-command-input-json $command)
+             $tool-response))))))))
 
 (= (codex:parse-exec-command-args-prefix-rule
       $json
