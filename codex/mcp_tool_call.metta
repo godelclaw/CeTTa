@@ -21,6 +21,7 @@
 ; - MCP tool-call tracing span field planning
 ; - MCP sandbox-state request metadata augmentation
 ; - Codex Apps MCP app-used analytics planning
+; - Codex Apps MCP app-used metadata lookup
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust's full MCP tool-call path is async and crosses session, hooks,
@@ -63,10 +64,10 @@
 ;   The augmentation helper materializes the same field sequence inline because
 ;   passing the constructed JSON through a nested helper can remain ungrounded
 ;   under CeTTa reduction.
-; - Rust maybe_track_codex_app_used performs async metadata lookup and queues an
-;   analytics event. This pure helper receives the resolved usage metadata and
-;   connector-selection set, then returns the track_app_used operation that the
-;   runtime layer should enqueue.
+; - Rust maybe_track_codex_app_used performs async metadata lookup through the
+;   MCP connection manager and queues an analytics event. This pure helper
+;   receives the listed ToolInfo values and connector-selection set, then
+;   returns the track_app_used operation that the runtime layer should enqueue.
 
 !(import! &self json)
 !(import! &self list)
@@ -269,6 +270,17 @@
 
 (= (codex:mcp-app-used-tracking-plan $tracking $app)
    (CodexMcpAppUsedTrackingPlan $tracking $app))
+
+(= (codex:mcp-tool-info
+      $server-name
+      $tool
+      $connector-id
+      $connector-name)
+   (CodexMcpToolInfo
+     $server-name
+     $tool
+     $connector-id
+     $connector-name))
 
 (= (codex:mcp-tool-approval-prompt-options-allow-session-remember
       (CodexMcpToolApprovalPromptOptions
@@ -2149,6 +2161,42 @@
       (CodexMcpAppUsageMetadata $connector-id $app-name))
    (CodexMcpAppUsageMetadata $connector-id $app-name))
 
+(= (codex:lookup-mcp-app-usage-metadata () $server $tool-name)
+   Empty)
+
+(= (codex:lookup-mcp-app-usage-metadata $tools $server $tool-name)
+   (let $head (list:first $tools)
+     (let $tail (list:rest $tools)
+       (case (eval $head)
+         (((CodexMcpToolInfo
+             $server-name
+             (CodexMcpTool
+               $name
+               $title
+               $description
+               $input-schema
+               $output-schema
+               $annotations
+               $icons
+               $meta)
+             $connector-id
+             $connector-name)
+           (if (and
+                 (== $server-name $server)
+                 (== $name $tool-name))
+               (codex:mcp-app-usage-metadata
+                 $connector-id
+                 $connector-name)
+               (codex:lookup-mcp-app-usage-metadata
+                 $tail
+                 $server
+                 $tool-name)))
+          ($other
+           (codex:lookup-mcp-app-usage-metadata
+             $tail
+             $server
+             $tool-name)))))))
+
 (= (codex:mcp-app-used-invocation-type $connector-id $selected-connector-ids)
    (case $connector-id
      ((CodexAbsent (codex:mcp-app-invocation-type-implicit))
@@ -2181,6 +2229,38 @@
                (codex:mcp-app-used-invocation-type
                  $connector-id
                  $selected-connector-ids))))))
+       Empty))
+
+(= (codex:maybe-track-codex-app-used-plan-from-tools
+      $server
+      $tool-name
+      $tools
+      $selected-connector-ids
+      $model-slug
+      $thread-id
+      $turn-id)
+   (if (== $server (codex:codex-apps-mcp-server-name))
+       (case
+         (codex:lookup-mcp-app-usage-metadata
+           $tools
+           $server
+           $tool-name)
+         ((Empty
+            (codex:maybe-track-codex-app-used-plan
+              $server
+              CodexAbsent
+              $selected-connector-ids
+              $model-slug
+              $thread-id
+              $turn-id))
+          ($metadata
+           (codex:maybe-track-codex-app-used-plan
+             $server
+             $metadata
+             $selected-connector-ids
+             $model-slug
+             $thread-id
+             $turn-id))))
        Empty))
 
 (= (codex:mcp-tool-call-request-meta-initial-pairs $turn-metadata)
