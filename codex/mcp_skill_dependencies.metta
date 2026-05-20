@@ -13,6 +13,7 @@
 ; - `collect_missing_mcp_dependencies`
 ; - `should_install_mcp_dependencies` prompt/answer side-effect planning
 ; - `filter_prompted_mcp_dependencies`
+; - `maybe_install_mcp_dependencies` pre-persist planning and install merge
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust stores installed/missing MCP servers in `HashMap<String,
@@ -34,6 +35,10 @@
 ; - Rust `filter_prompted_mcp_dependencies` reads a session HashSet of prompted
 ;   canonical keys. This pure helper receives that set as a list and preserves
 ;   the same canonical-key exclusion predicate.
+; - Rust `maybe_install_mcp_dependencies` reads feature state, configured MCP
+;   servers, and global config from async services before applying config edits.
+;   This helper receives those materialized values and returns the pre-persist
+;   plan that the runtime layer must execute with ConfigEditsBuilder.
 
 !(import! &self list)
 !(import! &self mcp)
@@ -165,6 +170,93 @@
      $install
      $request-event
      $record-prompted-keys))
+
+(= (codex:mcp-dependency-load-global-servers-ok $servers)
+   (CodexMcpDependencyLoadGlobalServersOk $servers))
+
+(= (codex:mcp-dependency-load-global-servers-error $message)
+   (CodexMcpDependencyLoadGlobalServersError $message))
+
+(= (codex:mcp-dependency-persist-servers-op $codex-home $servers)
+   (CodexMcpDependencyPersistServersOp $codex-home $servers))
+
+(= (codex:mcp-dependency-persist-servers-op-codex-home
+      (CodexMcpDependencyPersistServersOp $codex-home $servers))
+   $codex-home)
+
+(= (codex:mcp-dependency-persist-servers-op-servers
+      (CodexMcpDependencyPersistServersOp $codex-home $servers))
+   $servers)
+
+(= (codex:mcp-dependency-install-skip $reason)
+   (CodexMcpDependencyInstallSkip $reason))
+
+(= (codex:mcp-dependency-install-load-error $message)
+   (CodexMcpDependencyInstallLoadError $message))
+
+(= (codex:mcp-dependency-install-ready
+      $missing
+      $updated-global-servers
+      $added
+      $persist-op)
+   (CodexMcpDependencyInstallReady
+     $missing
+     $updated-global-servers
+     $added
+     $persist-op))
+
+(= (codex:mcp-dependency-install-ready-missing
+      (CodexMcpDependencyInstallReady
+        $missing
+        $updated-global-servers
+        $added
+        $persist-op))
+   $missing)
+
+(= (codex:mcp-dependency-install-ready-updated-global-servers
+      (CodexMcpDependencyInstallReady
+        $missing
+        $updated-global-servers
+        $added
+        $persist-op))
+   $updated-global-servers)
+
+(= (codex:mcp-dependency-install-ready-added
+      (CodexMcpDependencyInstallReady
+        $missing
+        $updated-global-servers
+        $added
+        $persist-op))
+   $added)
+
+(= (codex:mcp-dependency-install-ready-persist-op
+      (CodexMcpDependencyInstallReady
+        $missing
+        $updated-global-servers
+        $added
+        $persist-op))
+   $persist-op)
+
+(= (codex:mcp-dependency-install-merge-state
+      $updated
+      $servers
+      $added)
+   (CodexMcpDependencyInstallMergeState
+     $updated
+     $servers
+     $added))
+
+(= (codex:mcp-dependency-install-merge-state-updated
+      (CodexMcpDependencyInstallMergeState $updated $servers $added))
+   $updated)
+
+(= (codex:mcp-dependency-install-merge-state-servers
+      (CodexMcpDependencyInstallMergeState $updated $servers $added))
+   $servers)
+
+(= (codex:mcp-dependency-install-merge-state-added
+      (CodexMcpDependencyInstallMergeState $updated $servers $added))
+   $added)
 
 (= (codex:mcp-dependency-collect-state-seen
       (CodexMcpDependencyCollectState $seen-canonical-keys $missing))
@@ -613,6 +705,123 @@
            (list:append
              ($head)
              (codex:mcp-server-entry-upsert $tail $name $config))))))
+
+(= (codex:mcp-server-entry-list-contains-name () $name)
+   False)
+
+(= (codex:mcp-server-entry-list-contains-name $entries $name)
+   (let $head (list:first $entries)
+     (let $tail (list:rest $entries)
+       (if (== (codex:mcp-server-entry-name $head) $name)
+           True
+           (codex:mcp-server-entry-list-contains-name $tail $name)))))
+
+(= (codex:mcp-server-entry-by-name () $name)
+   Empty)
+
+(= (codex:mcp-server-entry-by-name $entries $name)
+   (let $head (list:first $entries)
+     (let $tail (list:rest $entries)
+       (if (== (codex:mcp-server-entry-name $head) $name)
+           $head
+           (codex:mcp-server-entry-by-name $tail $name)))))
+
+(= (codex:mcp-server-entries-by-sorted-names () $entries)
+   ())
+
+(= (codex:mcp-server-entries-by-sorted-names $names $entries)
+   (let $name (list:first $names)
+     (let $tail (list:rest $names)
+       (case (codex:mcp-server-entry-by-name $entries $name)
+         ((Empty
+           (codex:mcp-server-entries-by-sorted-names $tail $entries))
+          ($entry
+           (list:append
+             ($entry)
+             (codex:mcp-server-entries-by-sorted-names
+               $tail
+               $entries))))))))
+
+(= (codex:mcp-server-entries-sort-by-name $entries)
+   (let $names (once (eval (codex:mcp-server-entry-names $entries)))
+     (case (sort-strings $names)
+       ((() ())
+        ($sorted-names
+         (codex:mcp-server-entries-by-sorted-names
+           $sorted-names
+           $entries))))))
+
+(= (codex:mcp-dependency-install-merge-plan $global-servers $missing)
+   (codex:mcp-dependency-install-merge-plan-inner
+     $missing
+     (codex:mcp-dependency-install-merge-state
+       False
+       $global-servers
+       ())))
+
+(= (codex:mcp-dependency-install-merge-plan-inner () $state)
+   $state)
+
+(= (codex:mcp-dependency-install-merge-plan-inner
+      $missing
+      (CodexMcpDependencyInstallMergeState $updated $servers $added))
+   (let $entry (list:first $missing)
+     (let $tail (list:rest $missing)
+       (let $name (codex:mcp-server-entry-name $entry)
+         (if (codex:mcp-server-entry-list-contains-name $servers $name)
+             (codex:mcp-dependency-install-merge-plan-inner
+               $tail
+               (codex:mcp-dependency-install-merge-state
+                 $updated
+                 $servers
+                 $added))
+             (codex:mcp-dependency-install-merge-plan-inner
+               $tail
+               (codex:mcp-dependency-install-merge-state
+                 True
+                 (codex:mcp-server-entries-sort-by-name
+                   (list:append $servers ($entry)))
+                 (list:append $added ($entry)))))))))
+
+(= (codex:maybe-install-mcp-dependencies-plan
+      $skill-mcp-dependency-install-enabled
+      $codex-home
+      $mentioned-skills
+      $configured-servers
+      $global-load-result)
+   (if (or
+         (== $mentioned-skills ())
+         (not $skill-mcp-dependency-install-enabled))
+       (codex:mcp-dependency-install-skip "disabled_or_no_skills")
+       (let $missing
+         (codex:collect-missing-mcp-dependencies
+           $mentioned-skills
+           $configured-servers)
+         (if (== $missing ())
+             (codex:mcp-dependency-install-skip "nothing_missing")
+             (case $global-load-result
+               (((CodexMcpDependencyLoadGlobalServersError $message)
+                 (codex:mcp-dependency-install-load-error $message))
+                ((CodexMcpDependencyLoadGlobalServersOk $global-servers)
+                 (let $merge
+                   (codex:mcp-dependency-install-merge-plan
+                     $global-servers
+                     $missing)
+                   (if (codex:mcp-dependency-install-merge-state-updated
+                         $merge)
+                       (let $updated-global-servers
+                         (codex:mcp-dependency-install-merge-state-servers
+                           $merge)
+                         (codex:mcp-dependency-install-ready
+                           $missing
+                           $updated-global-servers
+                           (codex:mcp-dependency-install-merge-state-added
+                             $merge)
+                           (codex:mcp-dependency-persist-servers-op
+                             $codex-home
+                             $updated-global-servers)))
+                       (codex:mcp-dependency-install-skip
+                         "nothing_new_in_global_config"))))))))))
 
 (= (codex:collect-missing-mcp-dependencies $mentioned-skills $installed)
    (codex:mcp-dependency-collect-state-missing

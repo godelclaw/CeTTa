@@ -386,6 +386,236 @@
         ())))))
 
 !(assertEqualToResult
+  (codex:mcp-dependency-install-merge-state-updated
+    (codex:mcp-dependency-install-merge-plan
+      ((CodexMcpServerEntry
+         "zeta"
+         (CodexMcpServerConfig
+           (CodexMcpServerTransportStreamableHttp
+             "https://zeta.test/mcp"
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent)
+           CodexAbsent
+           True
+           False
+           False
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           ())))
+      ((CodexMcpServerEntry
+         "alpha"
+         (CodexMcpServerConfig
+           (CodexMcpServerTransportStdio
+             "alpha-server"
+             ()
+             CodexAbsent
+             ()
+             CodexAbsent)
+           CodexAbsent
+           True
+           False
+           False
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           ()))
+       (CodexMcpServerEntry
+         "zeta"
+         (CodexMcpServerConfig
+           (CodexMcpServerTransportStreamableHttp
+             "https://replacement.test/mcp"
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent)
+           CodexAbsent
+           True
+           False
+           False
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           ())))))
+  (True))
+
+!(assertEqualToResult
+  (codex:mcp-server-entry-names
+    (codex:mcp-dependency-install-merge-state-servers
+      (codex:mcp-dependency-install-merge-plan
+        ((CodexMcpServerEntry
+           "zeta"
+           (CodexMcpServerConfig
+             (CodexMcpServerTransportStreamableHttp
+               "https://zeta.test/mcp"
+               CodexAbsent
+               CodexAbsent
+               CodexAbsent)
+             CodexAbsent
+             True
+             False
+             False
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             ())))
+        ((CodexMcpServerEntry
+           "alpha"
+           (CodexMcpServerConfig
+             (CodexMcpServerTransportStdio
+               "alpha-server"
+               ()
+               CodexAbsent
+               ()
+               CodexAbsent)
+             CodexAbsent
+             True
+             False
+             False
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             ()))))))
+  (("alpha" "zeta")))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-install-ready-added
+    (codex:maybe-install-mcp-dependencies-plan
+      True
+      "/home/user/.codex"
+      ((codex-test-mcp-skill
+         "install"
+         (CodexSkillDependencies
+           ((codex-test-mcp-dep
+              "mcp"
+              "memory"
+              CodexAbsent
+              CodexAbsent
+              "https://memory.test/mcp")))))
+      ()
+      (codex:mcp-dependency-load-global-servers-ok
+        ((CodexMcpServerEntry
+           "zeta"
+           (CodexMcpServerConfig
+             (CodexMcpServerTransportStreamableHttp
+               "https://zeta.test/mcp"
+               CodexAbsent
+               CodexAbsent
+               CodexAbsent)
+             CodexAbsent
+             True
+             False
+             False
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             CodexAbsent
+             ()))))))
+  (((CodexMcpServerEntry
+      "memory"
+      (CodexMcpServerConfig
+        (CodexMcpServerTransportStreamableHttp
+          "https://memory.test/mcp"
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent)
+        CodexAbsent
+        True
+        False
+        False
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        ())))))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-persist-servers-op-codex-home
+    (codex:mcp-dependency-install-ready-persist-op
+      (codex:maybe-install-mcp-dependencies-plan
+        True
+        "/home/user/.codex"
+        ((codex-test-mcp-skill
+           "install"
+           (CodexSkillDependencies
+             ((codex-test-mcp-dep
+                "mcp"
+                "memory"
+                CodexAbsent
+                CodexAbsent
+                "https://memory.test/mcp")))))
+        ()
+        (codex:mcp-dependency-load-global-servers-ok ()))))
+  ("/home/user/.codex"))
+
+!(assertEqualToResult
+  (codex:maybe-install-mcp-dependencies-plan
+    False
+    "/home/user/.codex"
+    ((codex-test-mcp-skill
+       "install"
+       (CodexSkillDependencies
+         ((codex-test-mcp-dep
+            "mcp"
+            "memory"
+            CodexAbsent
+            CodexAbsent
+            "https://memory.test/mcp")))))
+    ()
+    (codex:mcp-dependency-load-global-servers-ok ()))
+  ((CodexMcpDependencyInstallSkip "disabled_or_no_skills")))
+
+!(assertEqualToResult
+  (codex:maybe-install-mcp-dependencies-plan
+    True
+    "/home/user/.codex"
+    ((codex-test-mcp-skill
+       "install"
+       (CodexSkillDependencies
+         ((codex-test-mcp-dep
+            "mcp"
+            "memory"
+            CodexAbsent
+            CodexAbsent
+            "https://memory.test/mcp")))))
+    ()
+    (codex:mcp-dependency-load-global-servers-error "read failed"))
+  ((CodexMcpDependencyInstallLoadError "read failed")))
+
+!(assertEqualToResult
   (codex:mcp-dependency-install-question
     ((codex:mcp-server-entry
        "zeta"
