@@ -22,6 +22,14 @@
 ;   removed path separators from session and call ids, the visible path is the
 ;   same for the absolute codex_home values used by Codex and avoids symbolic
 ;   path-helper reduction at this eval boundary.
+; - Rust's artifact path sanitizer maps every non `[A-Za-z0-9_-]` ASCII
+;   character to `_`. The exact recursive sanitizer is exposed below as
+;   `image-generation-sanitize-artifact-component`. The path constructor uses a
+;   non-recursive separator/dot fast path for this eval boundary because the
+;   exact recursive helper loses reductions when this module is evaluated beside
+;   memory-citation parsing surfaces. The fast path preserves the Rust behavior
+;   for path traversal separators and dotted ids; extending it to all invalid
+;   ASCII punctuation remains future cleanup.
 ; - The current CeTTa protocol serializer has not yet exposed Rust
 ;   `ResponseItem::ToolSearchCall`. This helper still recognizes the Rust
 ;   constructor shape locally so the external-context predicate keeps the same
@@ -147,13 +155,41 @@
        "/")
      $file-name))
 
+(= (codex:image-generation-sanitize-artifact-path-component $value)
+   (str-join
+     "_"
+     (str-split
+       "/"
+       (str-join "_" (str-split "." $value)))))
+
 (= (codex:image-generation-artifact-path $codex-home $session-id $call-id)
-   (codex:image-generation-artifact-path-session-from
-     $codex-home
-     $session-id
-     $call-id
-     0
-     ""))
+   (if (== $session-id "")
+       (if (== $call-id "")
+           (codex:image-generation-artifact-path-from-components
+             (codex:image-generation-artifact-root $codex-home)
+             (codex:image-generation-artifact-fallback-name)
+             (str-concat
+               (codex:image-generation-artifact-fallback-name)
+               ".png"))
+           (codex:image-generation-artifact-path-from-components
+             (codex:image-generation-artifact-root $codex-home)
+             (codex:image-generation-artifact-fallback-name)
+             (str-concat
+               (codex:image-generation-sanitize-artifact-path-component $call-id)
+               ".png")))
+       (if (== $call-id "")
+           (codex:image-generation-artifact-path-from-components
+             (codex:image-generation-artifact-root $codex-home)
+             (codex:image-generation-sanitize-artifact-path-component $session-id)
+             (str-concat
+               (codex:image-generation-artifact-fallback-name)
+               ".png"))
+           (codex:image-generation-artifact-path-from-components
+             (codex:image-generation-artifact-root $codex-home)
+             (codex:image-generation-sanitize-artifact-path-component $session-id)
+             (str-concat
+               (codex:image-generation-sanitize-artifact-path-component $call-id)
+               ".png")))))
 
 (= (codex:image-generation-artifact-path-session-from
       $codex-home
@@ -228,7 +264,7 @@
    $memory-citation)
 
 (= (codex:strip-hidden-assistant-markup $text $plan-mode)
-   (case (once (eval (codex:strip-citations $text)))
+   (case (codex:strip-citations $text)
      (((CodexStreamParserStripCitationsResult $without-citations $citations)
        (if $plan-mode
            (case
@@ -239,7 +275,7 @@
 (= (codex:strip-hidden-assistant-markup-and-parse-memory-citation
       $text
       $plan-mode)
-   (case (once (eval (codex:strip-citations $text)))
+   (case (codex:strip-citations $text)
      (((CodexStreamParserStripCitationsResult $without-citations $citations)
        (let $visible
          (if $plan-mode

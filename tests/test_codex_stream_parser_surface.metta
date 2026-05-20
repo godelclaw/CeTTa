@@ -36,6 +36,100 @@
   (("x<oai-mem-citation>y")))
 
 !(assertEqual
+  (codex:citation-stream-parser-output-visible-text
+    (codex:citation-stream-parser-collect-chunks
+      ("Hello <oai-mem-"
+       "citation>source A</oai-mem-"
+       "citation> world")))
+  "Hello  world")
+
+!(assertEqualToResult
+  (codex:citation-stream-parser-output-extracted
+    (codex:citation-stream-parser-collect-chunks
+      ("Hello <oai-mem-"
+       "citation>source A</oai-mem-"
+       "citation> world")))
+  (("source A")))
+
+!(assertEqual
+  (let $first
+    (codex:citation-stream-parser-push-str
+      (codex:citation-stream-parser-new)
+      "abc <oai-mem-")
+    (codex:citation-stream-parser-output-visible-text $first))
+  "abc ")
+
+!(assertEqualToResult
+  (let $first
+    (codex:citation-stream-parser-push-str
+      (codex:citation-stream-parser-new)
+      "abc <oai-mem-")
+    (codex:citation-stream-parser-output-extracted $first))
+  (()))
+
+!(assertEqual
+  (let $first
+    (codex:citation-stream-parser-push-str
+      (codex:citation-stream-parser-new)
+      "abc <oai-mem-")
+    (let $second
+      (codex:citation-stream-parser-push-str
+        (codex:citation-stream-parser-output-parser $first)
+        "citation>x</oai-mem-citation>z")
+      (codex:citation-stream-parser-output-visible-text $second)))
+  "z")
+
+!(assertEqualToResult
+  (let $first
+    (codex:citation-stream-parser-push-str
+      (codex:citation-stream-parser-new)
+      "abc <oai-mem-")
+    (let $second
+      (codex:citation-stream-parser-push-str
+        (codex:citation-stream-parser-output-parser $first)
+        "citation>x</oai-mem-citation>z")
+      (codex:citation-stream-parser-output-extracted $second)))
+  (("x")))
+
+!(assertEqual
+  (let $first
+    (codex:citation-stream-parser-push-str
+      (codex:citation-stream-parser-new)
+      "abc <oai-mem-")
+    (let $second
+      (codex:citation-stream-parser-push-str
+        (codex:citation-stream-parser-output-parser $first)
+        "citation>x</oai-mem-citation>z")
+      (codex:citation-stream-parser-output-is-empty
+        (codex:citation-stream-parser-finish
+          (codex:citation-stream-parser-output-parser $second)))))
+  True)
+
+!(assertEqual
+  (codex:citation-stream-parser-output-visible-text
+    (codex:citation-stream-parser-collect-chunks
+      ("x<oai-mem-citation>source")))
+  "x")
+
+!(assertEqualToResult
+  (codex:citation-stream-parser-output-extracted
+    (codex:citation-stream-parser-collect-chunks
+      ("x<oai-mem-citation>source")))
+  (("source")))
+
+!(assertEqual
+  (codex:citation-stream-parser-output-visible-text
+    (codex:citation-stream-parser-collect-chunks
+      ("hello <oai-mem-")))
+  "hello <oai-mem-")
+
+!(assertEqualToResult
+  (codex:citation-stream-parser-output-extracted
+    (codex:citation-stream-parser-collect-chunks
+      ("hello <oai-mem-")))
+  (()))
+
+!(assertEqual
   (codex:strip-proposed-plan-blocks
     "before\n<proposed_plan>\n- step\n</proposed_plan>\nafter")
   "before\nafter")
