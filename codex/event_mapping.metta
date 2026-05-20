@@ -28,6 +28,7 @@
 !(import! &self context_fragment)
 !(import! &self protocol)
 !(import! &self str)
+!(import! &self web_search)
 
 (= (codex:trim-start-basic $text)
    (if (== $text "")
@@ -505,42 +506,6 @@
               (case (codex:parse-reasoning-raw-content $tail)
                 (($parsed-tail
                    $parsed-tail))))))))))
-
-(= (codex:web-search-search-action-detail $query $queries)
-   (if (== $query CodexAbsent)
-       (if (== $queries CodexAbsent)
-           ""
-           (if (== $queries ())
-               ""
-               (let $first (list:first $queries)
-                 (let $tail (list:rest $queries)
-                   (if (and (!= $first "")
-                            (!= $tail ()))
-                       (str-concat $first " ...")
-                       $first)))))
-       (if (== $query "")
-           (codex:web-search-search-action-detail CodexAbsent $queries)
-           $query)))
-
-(= (codex:web-search-action-detail
-      (CodexWebSearchActionSearch $query $queries))
-   (codex:web-search-search-action-detail $query $queries))
-
-(= (codex:web-search-action-detail
-      (CodexWebSearchActionOpenPage $url))
-   (if (== $url CodexAbsent) "" $url))
-
-(= (codex:web-search-action-detail
-      (CodexWebSearchActionFindInPage $url $pattern))
-   (if (== $pattern CodexAbsent)
-       (if (== $url CodexAbsent) "" $url)
-       (if (== $url CodexAbsent)
-           (format-args "'{}'" ($pattern))
-           (format-args "'{}' in {}" ($pattern $url)))))
-
-(= (codex:web-search-action-detail
-      (CodexWebSearchActionOther))
-   "")
 
 ; CeTTa-specific reduction forcing: the imported hook-prompt parser must be
 ; evaluated eagerly here so this helper preserves Rust's
