@@ -13,6 +13,7 @@
 ;   turn/session grant recording
 ; - approval-policy short-circuit and cancellation behavior
 ; - same-turn apply_patch carry-over, including strict-auto-review propagation
+; - Rust-shaped apply_patch runtime request construction after carry-over
 ;
 ; Required slice-local deviations from Rust, documented for later audit:
 ; - Rust normalizes filesystem permissions with
@@ -35,6 +36,7 @@
 !(import! &self json)
 !(import! &self list)
 !(import! &self path)
+!(import! &self protocol)
 !(import! &self str)
 !(import! &self system)
 
@@ -141,6 +143,28 @@
       $permissions-preapproved)
    (CodexRequestPermissionsEffectiveAdditionalPermissions
      $file-system-sandbox-policy
+     $additional-permissions
+     $permissions-preapproved))
+
+; Mirrors Rust `ApplyPatchRequest` after request_permissions carry-over. Rust's
+; `ApplyPatchAction` owns the raw patch text; CeTTa keeps that text alongside
+; the action until the parsed-action executor stores it directly on the action.
+(= (codex:apply-patch-runtime-request
+      $action
+      $patch-text
+      $file-paths
+      $changes
+      $auto-approved
+      $exec-approval-requirement
+      $additional-permissions
+      $permissions-preapproved)
+   (CodexApplyPatchRuntimeRequest
+     $action
+     $patch-text
+     $file-paths
+     $changes
+     $auto-approved
+     $exec-approval-requirement
      $additional-permissions
      $permissions-preapproved))
 
@@ -353,6 +377,102 @@
 (= (codex:request-permissions-effective-additional-permissions-preapproved
       (CodexRequestPermissionsEffectiveAdditionalPermissions
         $file-system-sandbox-policy
+        $additional-permissions
+        $permissions-preapproved))
+   $permissions-preapproved)
+
+(= (codex:apply-patch-runtime-request-action
+      (CodexApplyPatchRuntimeRequest
+        $action
+        $patch-text
+        $file-paths
+        $changes
+        $auto-approved
+        $exec-approval-requirement
+        $additional-permissions
+        $permissions-preapproved))
+   $action)
+
+(= (codex:apply-patch-runtime-request-patch-text
+      (CodexApplyPatchRuntimeRequest
+        $action
+        $patch-text
+        $file-paths
+        $changes
+        $auto-approved
+        $exec-approval-requirement
+        $additional-permissions
+        $permissions-preapproved))
+   $patch-text)
+
+(= (codex:apply-patch-runtime-request-file-paths
+      (CodexApplyPatchRuntimeRequest
+        $action
+        $patch-text
+        $file-paths
+        $changes
+        $auto-approved
+        $exec-approval-requirement
+        $additional-permissions
+        $permissions-preapproved))
+   $file-paths)
+
+(= (codex:apply-patch-runtime-request-changes
+      (CodexApplyPatchRuntimeRequest
+        $action
+        $patch-text
+        $file-paths
+        $changes
+        $auto-approved
+        $exec-approval-requirement
+        $additional-permissions
+        $permissions-preapproved))
+   $changes)
+
+(= (codex:apply-patch-runtime-request-auto-approved
+      (CodexApplyPatchRuntimeRequest
+        $action
+        $patch-text
+        $file-paths
+        $changes
+        $auto-approved
+        $exec-approval-requirement
+        $additional-permissions
+        $permissions-preapproved))
+   $auto-approved)
+
+(= (codex:apply-patch-runtime-request-approval
+      (CodexApplyPatchRuntimeRequest
+        $action
+        $patch-text
+        $file-paths
+        $changes
+        $auto-approved
+        $exec-approval-requirement
+        $additional-permissions
+        $permissions-preapproved))
+   $exec-approval-requirement)
+
+(= (codex:apply-patch-runtime-request-additional-permissions
+      (CodexApplyPatchRuntimeRequest
+        $action
+        $patch-text
+        $file-paths
+        $changes
+        $auto-approved
+        $exec-approval-requirement
+        $additional-permissions
+        $permissions-preapproved))
+   $additional-permissions)
+
+(= (codex:apply-patch-runtime-request-permissions-preapproved
+      (CodexApplyPatchRuntimeRequest
+        $action
+        $patch-text
+        $file-paths
+        $changes
+        $auto-approved
+        $exec-approval-requirement
         $additional-permissions
         $permissions-preapproved))
    $permissions-preapproved)
@@ -638,6 +758,49 @@
           (codex:request-permission-profile-json-resolved CodexAbsent))
         ($other
           Empty)))))
+
+(= (codex:request-permission-profile-option-json $permissions)
+   (let $resolved-permissions (once (eval $permissions))
+     (case $resolved-permissions
+       ((CodexAbsent JsonNull)
+        ((CodexRequestPermissionProfile $network $file-system)
+         (codex:request-permission-profile-json
+           (CodexRequestPermissionProfile $network $file-system)))))))
+
+(= (codex:apply-patch-runtime-request-action-json $action $patch-text)
+   (JsonObject
+     ((JsonPair "cwd"
+        (JsonString (codex:apply-patch-action-cwd $action)))
+      (JsonPair "patch" (JsonString $patch-text)))))
+
+(= (codex:apply-patch-runtime-request-json $request)
+   (let $resolved-request (once (eval $request))
+     (case $resolved-request
+       (((CodexApplyPatchRuntimeRequest
+            $action
+            $patch-text
+            $file-paths
+            $changes
+            $auto-approved
+            $exec-approval-requirement
+            $additional-permissions
+            $permissions-preapproved)
+         (JsonObject
+           ((JsonPair "action"
+              (codex:apply-patch-runtime-request-action-json
+                $action
+                $patch-text))
+            (JsonPair "file_paths"
+              (codex:request-permissions-string-array-json $file-paths))
+            (JsonPair "changes" (codex:file-change-map-json $changes))
+            (JsonPair "auto_approved" (JsonBool $auto-approved))
+            (JsonPair "exec_approval_requirement"
+              (codex:approval-requirement-json $exec-approval-requirement))
+            (JsonPair "additional_permissions"
+              (codex:request-permission-profile-option-json
+                $additional-permissions))
+            (JsonPair "permissions_preapproved"
+              (JsonBool $permissions-preapproved)))))))))
 
 ; CeTTa evaluator detail: the state surface tests need a stable public boundary
 ; from request-permissions state to the visible JSON profile payload. Reducing
@@ -1401,6 +1564,58 @@
        (codex:apply-patch-action-cwd $action))
      ((True True)
       (False False))))
+
+(= (codex:request-permissions-apply-patch-effective-permissions
+      $state
+      $effective-file-system-sandbox-policy
+      $action)
+   (let $granted-permissions
+     (codex:request-permissions-granted-permissions $state)
+     (if (codex:is-write-patch-constrained-to-writable-paths
+           $action
+           $effective-file-system-sandbox-policy
+           (codex:apply-patch-action-cwd $action))
+         $granted-permissions
+         (codex:merge-request-permission-profiles
+           (codex:request-permissions-write-permissions-for-apply-patch
+             $action
+             $effective-file-system-sandbox-policy)
+           $granted-permissions))))
+
+(= (codex:request-permissions-apply-patch-runtime-request
+      $state
+      $file-system-sandbox-policy
+      $runtime)
+   (let $resolved-runtime (once (eval $runtime))
+     (case $resolved-runtime
+       (((CodexApplyPatchRuntimeInvocation
+            $action
+            $patch-text
+            $auto-approved
+            $exec-approval-requirement)
+         (let $effective-file-system-sandbox-policy
+           (codex:request-permissions-effective-file-system-sandbox-policy-for-apply-patch
+             $state
+             $file-system-sandbox-policy)
+           (let $granted-permissions
+             (codex:request-permissions-granted-permissions $state)
+             (let $permissions-preapproved
+               (codex:request-permissions-apply-patch-permissions-preapproved
+                 $action
+                 $effective-file-system-sandbox-policy
+                 $granted-permissions)
+               (CodexApplyPatchRuntimeRequest
+                 $action
+                 $patch-text
+                 (codex:request-permissions-apply-patch-file-paths $action)
+                 (codex:convert-apply-patch-to-protocol $action)
+                 $auto-approved
+                 $exec-approval-requirement
+                 (codex:request-permissions-apply-patch-effective-permissions
+                   $state
+                   $effective-file-system-sandbox-policy
+                   $action)
+                 $permissions-preapproved)))))))))
 
 (= (codex:request-permissions-effective-file-system-sandbox-policy-for-apply-patch
       (CodexRequestPermissionsState
