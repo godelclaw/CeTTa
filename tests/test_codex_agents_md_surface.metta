@@ -85,7 +85,13 @@
 !(assertEqualToResult
   (process-result-exit-code
     (process-run-shell
-      "rm -rf /home/zarclaw/repos/CeTTa/runtime/codex-agents-md && mkdir -p /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global-empty-override /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/workspace/crate /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/fallback /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/unmarked/child && printf 'global\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global/AGENTS.md && printf ' local override \\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global/AGENTS.override.md && printf 'versioned\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global-empty-override/AGENTS.md && printf '  \\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global-empty-override/AGENTS.override.md && printf 'gitdir: elsewhere\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/.git && printf 'root\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/AGENTS.md && printf 'root-local\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/AGENTS.override.md && printf 'crate\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/workspace/crate/AGENTS.md && printf 'fallback\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/fallback/EXAMPLE.md && printf 'parent\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/unmarked/AGENTS.md && printf 'child\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/unmarked/child/AGENTS.md"))
+      "rm -rf /home/zarclaw/repos/CeTTa/runtime/codex-agents-md && mkdir -p /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global-empty-override /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/workspace/crate /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/fallback /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/unmarked/child && printf 'global\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global/AGENTS.md && printf ' local override \\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global/AGENTS.override.md && printf 'versioned\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global-empty-override/AGENTS.md && printf '  \\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global-empty-override/AGENTS.override.md && printf 'gitdir: elsewhere\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/.git && printf 'root' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/AGENTS.md && printf 'root-local' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/AGENTS.override.md && printf 'crate' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/workspace/crate/AGENTS.md && printf 'fallback' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/fallback/EXAMPLE.md && printf 'parent' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/unmarked/AGENTS.md && printf 'child' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/unmarked/child/AGENTS.md"))
+  (0))
+
+!(assertEqualToResult
+  (process-result-exit-code
+    (process-run-shell
+      "mkdir -p /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/read-truncate /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/blank-budget/repo/child && printf 'ABCDEFG' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/read-truncate/AGENTS.md && printf 'gitdir: elsewhere\\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/blank-budget/repo/.git && printf '   \\n' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/blank-budget/repo/AGENTS.md && printf 'child' > /home/zarclaw/repos/CeTTa/runtime/codex-agents-md/blank-budget/repo/child/AGENTS.md"))
   (0))
 
 !(assertEqualToResult
@@ -144,6 +150,54 @@
   (()))
 
 !(assertEqualToResult
+  (codex:agents-md-read-docs
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/missing"
+    4096
+    ()
+    ())
+  (CodexAbsent))
+
+!(assertEqualToResult
+  (codex:agents-md-read-docs
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/workspace/crate"
+    4096
+    (".git")
+    ())
+  ("root-local\n\ncrate"))
+
+!(assertEqualToResult
+  (codex:agents-md-read-docs
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/fallback"
+    4096
+    ()
+    ("EXAMPLE.md"))
+  ("fallback"))
+
+!(assertEqualToResult
+  (codex:agents-md-read-docs
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/read-truncate"
+    4
+    ()
+    ())
+  ("ABCD"))
+
+!(assertEqualToResult
+  (codex:agents-md-read-docs
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/blank-budget/repo/child"
+    5
+    (".git")
+    ())
+  ("child"))
+
+!(assertEqualToResult
+  (codex:agents-md-read-docs
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/workspace/crate"
+    0
+    (".git")
+    ())
+  (CodexAbsent))
+
+!(assertEqualToResult
   (codex:agents-md-compose-user-instructions
     CodexAbsent
     CodexAbsent
@@ -188,3 +242,15 @@
       CodexAbsent)
     "- Do not call tools directly;")
   (True))
+
+!(assertEqualToResult
+  (codex:agents-md-user-instructions
+    "base"
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/read-truncate"
+    4
+    ()
+    ()
+    False
+    False
+    CodexAbsent)
+  ("base\n\n--- project-doc ---\n\nABCD"))

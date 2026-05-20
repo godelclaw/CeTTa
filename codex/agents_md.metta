@@ -8,6 +8,8 @@
 ;   - load_global_instructions filename priority
 ;   - candidate_filenames
 ;   - agents_md_paths path ordering and per-directory candidate preference
+;   - read_agents_md successful-path loading, truncation budget, whitespace
+;     skipping, and root-to-cwd concatenation
 ;   - render_js_repl_instructions
 ;   - user_instructions concatenation over already-materialized optional
 ;     sections
@@ -21,6 +23,16 @@
 ; - Rust derives project_root_markers by merging non-project config layers and
 ;   parsing TOML before discovery. This slice accepts the already-resolved
 ;   marker list, using CodexAbsent to mean Rust's default marker list.
+; - Rust reads project docs as bytes, truncates the byte buffer, and converts
+;   with String::from_utf8_lossy. The current CeTTa fs layer exposes text reads
+;   only, so agents-md-read-docs uses byte-counting text strings and truncates
+;   at UTF-8 character boundaries. This is exact for ASCII project docs; a
+;   future byte-vector fs API should replace the truncation step to preserve
+;   Rust's replacement-character behavior for invalid or partial UTF-8.
+; - Rust distinguishes NotFound from other read errors and bubbles unexpected
+;   I/O errors to the caller. The current CeTTa fs-read-text surface exposes an
+;   opaque Error atom without io::ErrorKind, so read failures are skipped like
+;   Rust's NotFound branch until a richer filesystem Result layer exists.
 ; - Rust's user_instructions appends include_str!("../hierarchical_agents_message.md")
 ;   when the corresponding feature flag is enabled. This slice accepts an
 ;   already-materialized hierarchical section string so the prompt resource can
@@ -272,6 +284,91 @@
          (codex:agents-md-candidate-filenames
            $project-doc-fallback-filenames))))
 
+(= (codex:agents-md-read-docs-finish $parts-reversed)
+   (if (== $parts-reversed ())
+       CodexAbsent
+       (str-join
+         "\n\n"
+         (codex:agents-md-reverse $parts-reversed))))
+
+(= (codex:agents-md-read-docs-consumed-bytes $raw-size $remaining)
+   (if (> $raw-size $remaining)
+       $remaining
+       $raw-size))
+
+(= (codex:agents-md-read-docs-slice $raw $raw-size $remaining)
+   (if (> $raw-size $remaining)
+       (str-take-bytes-at-char-boundary $raw $remaining)
+       $raw))
+
+(= (codex:agents-md-read-docs-after-read
+      $tail
+      $remaining
+      $parts-reversed
+      (Error $source $message))
+   (codex:agents-md-read-docs-from-paths
+     $tail
+     $remaining
+     $parts-reversed))
+
+(= (codex:agents-md-read-docs-after-read
+      $tail
+      $remaining
+      $parts-reversed
+      $raw)
+   (let $raw-size (str-length $raw)
+     (let $text
+       (codex:agents-md-read-docs-slice $raw $raw-size $remaining)
+       (if (== (str-trim $text) "")
+           (codex:agents-md-read-docs-from-paths
+             $tail
+             $remaining
+             $parts-reversed)
+           (codex:agents-md-read-docs-from-paths
+             $tail
+             (- $remaining
+                (codex:agents-md-read-docs-consumed-bytes
+                  $raw-size
+                  $remaining))
+             (list:cons $text $parts-reversed))))))
+
+(= (codex:agents-md-read-docs-from-paths
+      $paths
+      $remaining
+      $parts-reversed)
+   (if (== $remaining 0)
+       (codex:agents-md-read-docs-finish $parts-reversed)
+       (if (== $paths ())
+           (codex:agents-md-read-docs-finish $parts-reversed)
+           (let $path (list:first $paths)
+             (let $tail (list:rest $paths)
+               (if (not (codex:agents-md-is-file-path $path))
+                   (codex:agents-md-read-docs-from-paths
+                     $tail
+                     $remaining
+                     $parts-reversed)
+                   (codex:agents-md-read-docs-after-read
+                     $tail
+                     $remaining
+                     $parts-reversed
+                     (fs-read-text $path))))))))
+
+(= (codex:agents-md-read-docs
+      $cwd
+      $project-doc-max-bytes
+      $project-root-markers
+      $project-doc-fallback-filenames)
+   (if (== $project-doc-max-bytes 0)
+       CodexAbsent
+       (codex:agents-md-read-docs-from-paths
+         (codex:agents-md-paths
+           $cwd
+           $project-doc-max-bytes
+           $project-root-markers
+           $project-doc-fallback-filenames)
+         $project-doc-max-bytes
+         ())))
+
 (= (codex:agents-md-append-project-docs $output $agents-md-docs)
    (if (== $agents-md-docs CodexAbsent)
        $output
@@ -327,4 +424,24 @@
      (codex:agents-md-render-js-repl-instructions
        $js-repl-enabled
        $js-repl-tools-only-enabled)
+     $hierarchical-agents-message))
+
+(= (codex:agents-md-user-instructions
+      $user-instructions
+      $cwd
+      $project-doc-max-bytes
+      $project-root-markers
+      $project-doc-fallback-filenames
+      $js-repl-enabled
+      $js-repl-tools-only-enabled
+      $hierarchical-agents-message)
+   (codex:agents-md-compose-configured-user-instructions
+     $user-instructions
+     (codex:agents-md-read-docs
+       $cwd
+       $project-doc-max-bytes
+       $project-root-markers
+       $project-doc-fallback-filenames)
+     $js-repl-enabled
+     $js-repl-tools-only-enabled
      $hierarchical-agents-message))
