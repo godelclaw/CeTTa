@@ -11,6 +11,7 @@
 ;   - read_agents_md successful-path loading, truncation budget, whitespace
 ;     skipping, and root-to-cwd concatenation
 ;   - render_js_repl_instructions
+;   - instruction_sources source ordering
 ;   - user_instructions concatenation over already-materialized optional
 ;     sections
 ;
@@ -216,6 +217,22 @@
          $codex-dir
          (codex:agents-md-global-candidate-filenames))))
 
+(= (codex:agents-md-list-append () $rhs)
+   $rhs)
+
+(= (codex:agents-md-list-append $lhs $rhs)
+   (let $head (list:first $lhs)
+     (let $tail (list:rest $lhs)
+       (list:cons
+         $head
+         (codex:agents-md-list-append $tail $rhs)))))
+
+(= (codex:agents-md-global-instruction-source-paths $codex-dir)
+   (let $loaded (codex:agents-md-load-global-instructions $codex-dir)
+     (if (== $loaded CodexAbsent)
+         ()
+         ((codex:agents-md-loaded-path $loaded)))))
+
 (= (codex:agents-md-normalized-cwd $cwd)
    (path-normalize $cwd))
 
@@ -283,6 +300,20 @@
          (codex:agents-md-search-dirs $cwd $project-root-markers)
          (codex:agents-md-candidate-filenames
            $project-doc-fallback-filenames))))
+
+(= (codex:agents-md-instruction-sources
+      $codex-dir
+      $cwd
+      $project-doc-max-bytes
+      $project-root-markers
+      $project-doc-fallback-filenames)
+   (codex:agents-md-list-append
+     (codex:agents-md-global-instruction-source-paths $codex-dir)
+     (codex:agents-md-paths
+       $cwd
+       $project-doc-max-bytes
+       $project-root-markers
+       $project-doc-fallback-filenames)))
 
 (= (codex:agents-md-read-docs-finish $parts-reversed)
    (if (== $parts-reversed ())

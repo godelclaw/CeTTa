@@ -117,6 +117,15 @@
   (CodexAbsent))
 
 !(assertEqualToResult
+  (codex:agents-md-global-instruction-source-paths
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global")
+  (("/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global/AGENTS.override.md")))
+
+!(assertEqualToResult
+  (codex:agents-md-global-instruction-source-paths CodexAbsent)
+  (()))
+
+!(assertEqualToResult
   (codex:agents-md-paths
     "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/workspace/crate"
     4096
@@ -148,6 +157,35 @@
     (".git")
     ())
   (()))
+
+!(assertEqualToResult
+  (codex:agents-md-instruction-sources
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global"
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/workspace/crate"
+    4096
+    (".git")
+    ())
+  (("/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global/AGENTS.override.md"
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/AGENTS.override.md"
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/workspace/crate/AGENTS.md")))
+
+!(assertEqualToResult
+  (codex:agents-md-instruction-sources
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global"
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/repo/workspace/crate"
+    0
+    (".git")
+    ())
+  (("/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/global/AGENTS.override.md")))
+
+!(assertEqualToResult
+  (codex:agents-md-instruction-sources
+    CodexAbsent
+    "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/fallback"
+    4096
+    ()
+    ("EXAMPLE.md"))
+  (("/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/fallback/EXAMPLE.md")))
 
 !(assertEqualToResult
   (codex:agents-md-read-docs
