@@ -6,6 +6,7 @@
 ; Covered in this increment:
 ; - approval question ids, labels, fallback text, and prompt options
 ; - MCP tool result sanitization for models without image input
+; - MCP tool metadata extraction for app resources and file input params
 ; - MCP tool-call request metadata and thread-id metadata merging
 ; - guardian/ARC MCP tool-call review request JSON shape
 ; - session/persistent approval key eligibility
@@ -103,8 +104,17 @@
 (= (codex:mcp-tool-codex-apps-meta-key)
    "_codex_apps")
 
+(= (codex:mcp-tool-openai-output-template-meta-key)
+   "openai/outputTemplate")
+
+(= (codex:mcp-tool-ui-resource-uri-meta-key)
+   "ui/resourceUri")
+
 (= (codex:mcp-tool-thread-id-meta-key)
    "threadId")
+
+(= (codex:mcp-tool-openai-file-params-meta-key)
+   "openai/fileParams")
 
 (= (codex:codex-turn-metadata-header-key)
    "x-codex-turn-metadata")
@@ -388,6 +398,62 @@
 (= (codex:mcp-tool-approval-metadata-codex-apps-meta Empty)
    CodexAbsent)
 
+(= (codex:mcp-tool-approval-metadata-mcp-app-resource-uri
+      (CodexMcpToolApprovalMetadata
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description))
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-mcp-app-resource-uri
+      (CodexMcpToolApprovalMetadataFull
+        $annotations
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description
+        $mcp-app-resource-uri
+        $codex-apps-meta
+        $openai-file-input-params))
+   $mcp-app-resource-uri)
+
+(= (codex:mcp-tool-approval-metadata-mcp-app-resource-uri CodexAbsent)
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-mcp-app-resource-uri Empty)
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-openai-file-input-params
+      (CodexMcpToolApprovalMetadata
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description))
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-openai-file-input-params
+      (CodexMcpToolApprovalMetadataFull
+        $annotations
+        $connector-id
+        $connector-name
+        $connector-description
+        $tool-title
+        $tool-description
+        $mcp-app-resource-uri
+        $codex-apps-meta
+        $openai-file-input-params))
+   $openai-file-input-params)
+
+(= (codex:mcp-tool-approval-metadata-openai-file-input-params CodexAbsent)
+   CodexAbsent)
+
+(= (codex:mcp-tool-approval-metadata-openai-file-input-params Empty)
+   CodexAbsent)
+
 (= (codex:mcp-tool-annotations
       $read-only-hint
       $destructive-hint
@@ -453,6 +519,100 @@
 
 (= (codex:mcp-tool-call-bool-or-default $value $default)
    (if (== $value CodexAbsent) $default $value))
+
+(= (codex:mcp-tool-call-json-string-or-empty $value)
+   (case $value
+     (((JsonString $text) $text)
+      ($other Empty))))
+
+(= (codex:get-mcp-app-resource-uri CodexAbsent)
+   Empty)
+
+(= (codex:get-mcp-app-resource-uri Empty)
+   Empty)
+
+(= (codex:get-mcp-app-resource-uri (JsonObject $pairs))
+   (let $meta (JsonObject $pairs)
+     (case
+       (case (json-object-get $meta "ui")
+         (((JsonObject $ui-pairs)
+           (codex:mcp-tool-call-json-string-or-empty
+             (json-object-get
+               (JsonObject $ui-pairs)
+               "resourceUri")))
+          ($other Empty)))
+       ((Empty
+          (case
+            (codex:mcp-tool-call-json-string-or-empty
+              (json-object-get
+                $meta
+                (codex:mcp-tool-ui-resource-uri-meta-key)))
+            ((Empty
+               (codex:mcp-tool-call-json-string-or-empty
+                 (json-object-get
+                   $meta
+                   (codex:mcp-tool-openai-output-template-meta-key))))
+             ($flat-uri $flat-uri))))
+        ($nested-uri $nested-uri)))))
+
+(= (codex:get-mcp-app-resource-uri (JsonString $value))
+   Empty)
+
+(= (codex:get-mcp-app-resource-uri (JsonArray $items))
+   Empty)
+
+(= (codex:get-mcp-app-resource-uri (JsonNumber $value))
+   Empty)
+
+(= (codex:get-mcp-app-resource-uri (JsonBool $value))
+   Empty)
+
+(= (codex:get-mcp-app-resource-uri JsonNull)
+   Empty)
+
+(= (codex:declared-openai-file-input-param-names CodexAbsent)
+   ())
+
+(= (codex:declared-openai-file-input-param-names Empty)
+   ())
+
+(= (codex:declared-openai-file-input-param-names (JsonObject $pairs))
+   (case
+     (json-object-get
+       (JsonObject $pairs)
+       (codex:mcp-tool-openai-file-params-meta-key))
+     (((JsonArray $items)
+       (codex:mcp-tool-call-openai-file-param-names $items))
+      ($other ()))))
+
+(= (codex:declared-openai-file-input-param-names (JsonString $value))
+   ())
+
+(= (codex:declared-openai-file-input-param-names (JsonArray $items))
+   ())
+
+(= (codex:declared-openai-file-input-param-names (JsonNumber $value))
+   ())
+
+(= (codex:declared-openai-file-input-param-names (JsonBool $value))
+   ())
+
+(= (codex:declared-openai-file-input-param-names JsonNull)
+   ())
+
+(= (codex:mcp-tool-call-openai-file-param-names $items)
+   (if (== $items ())
+       ()
+       (let ($head $tail) (decons-atom $items)
+         (case
+           (codex:mcp-tool-call-openai-file-param-names $tail)
+           (($tail-names
+             (case $head
+               (((JsonString $value)
+                 (if (== $value "")
+                     $tail-names
+                     (cons-atom $value $tail-names)))
+                ($other $tail-names)))))))))
 
 (= (codex:mcp-tool-call-image-content-omitted-text)
    "<image content omitted because you do not support image input>")

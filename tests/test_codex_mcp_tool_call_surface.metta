@@ -66,6 +66,106 @@
      (JsonObject ((JsonPair "k" (JsonString "v"))))))
 
 !(assertEqualToResult
+  (codex:get-mcp-app-resource-uri
+    (JsonObject
+      ((JsonPair
+         "ui"
+         (JsonObject
+           ((JsonPair
+              "resourceUri"
+              (JsonString "ui://widget/nested.html"))))))))
+  ("ui://widget/nested.html"))
+
+!(assertEqualToResult
+  (codex:get-mcp-app-resource-uri
+    (JsonObject
+      ((JsonPair
+         "ui/resourceUri"
+         (JsonString "ui://widget/flat.html")))))
+  ("ui://widget/flat.html"))
+
+!(assertEqualToResult
+  (codex:get-mcp-app-resource-uri
+    (JsonObject
+      ((JsonPair
+         "openai/outputTemplate"
+         (JsonString "ui://widget/output-template.html")))))
+  ("ui://widget/output-template.html"))
+
+!(assertEqualToResult
+  (codex:get-mcp-app-resource-uri
+    (JsonObject
+      ((JsonPair
+         "ui"
+         (JsonObject
+           ((JsonPair
+              "resourceUri"
+              (JsonString "ui://widget/nested.html")))))
+       (JsonPair
+         "ui/resourceUri"
+         (JsonString "ui://widget/flat.html"))
+       (JsonPair
+         "openai/outputTemplate"
+         (JsonString "ui://widget/output-template.html")))))
+  ("ui://widget/nested.html"))
+
+!(assertEqualToResult
+  (codex:get-mcp-app-resource-uri
+    (JsonObject
+      ((JsonPair
+         "ui"
+         (JsonObject
+           ((JsonPair "resourceUri" (JsonNumber 7))))))))
+  (Empty))
+
+!(assertEqualToResult
+  (codex:declared-openai-file-input-param-names
+    (JsonObject
+      ((JsonPair
+         "openai/fileParams"
+         (JsonArray
+           ((JsonString "file")
+            (JsonString "")
+            (JsonNumber 7)
+            (JsonString "input_file")
+            (JsonString "attachments")))))))
+  (("file" "input_file" "attachments")))
+
+!(assertEqualToResult
+  (codex:declared-openai-file-input-param-names
+    (JsonObject
+      ((JsonPair "other" (JsonString "value")))))
+  (()))
+
+!(assertEqualToResult
+  (codex:mcp-tool-approval-metadata-mcp-app-resource-uri
+    (codex:mcp-tool-approval-metadata-full
+      CodexAbsent
+      "calendar"
+      "Calendar"
+      CodexAbsent
+      "create_event"
+      CodexAbsent
+      "ui://widget/calendar.html"
+      CodexAbsent
+      ("file")))
+  ("ui://widget/calendar.html"))
+
+!(assertEqualToResult
+  (codex:mcp-tool-approval-metadata-openai-file-input-params
+    (codex:mcp-tool-approval-metadata-full
+      CodexAbsent
+      "calendar"
+      "Calendar"
+      CodexAbsent
+      "create_event"
+      CodexAbsent
+      "ui://widget/calendar.html"
+      CodexAbsent
+      ("file" "attachments")))
+  (("file" "attachments")))
+
+!(assertEqualToResult
   (codex:is-mcp-tool-approval-question-id "mcp_tool_call_approval_call-1")
   (True))
 
