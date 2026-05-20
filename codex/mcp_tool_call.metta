@@ -20,6 +20,7 @@
 ; - MCP call metric tag sanitization and emission planning
 ; - MCP tool-call tracing span field planning
 ; - MCP sandbox-state request metadata augmentation
+; - Codex Apps MCP app-used analytics planning
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust's full MCP tool-call path is async and crosses session, hooks,
@@ -59,6 +60,13 @@
 ;   SandboxState with serde_json before augmenting request metadata. This pure
 ;   helper receives the resolved capability bit and turn-context fields, then
 ;   projects the same metadata JSON shape for the runtime layer to pass through.
+;   The augmentation helper materializes the same field sequence inline because
+;   passing the constructed JSON through a nested helper can remain ungrounded
+;   under CeTTa reduction.
+; - Rust maybe_track_codex_app_used performs async metadata lookup and queues an
+;   analytics event. This pure helper receives the resolved usage metadata and
+;   connector-selection set, then returns the track_app_used operation that the
+;   runtime layer should enqueue.
 
 !(import! &self json)
 !(import! &self list)
@@ -243,6 +251,24 @@
 
 (= (codex:mcp-span-empty-field-value)
    CodexMcpSpanEmpty)
+
+(= (codex:mcp-app-usage-metadata $connector-id $app-name)
+   (CodexMcpAppUsageMetadata $connector-id $app-name))
+
+(= (codex:mcp-track-events-context $model-slug $thread-id $turn-id)
+   (CodexMcpTrackEventsContext $model-slug $thread-id $turn-id))
+
+(= (codex:mcp-app-invocation-type-explicit)
+   (CodexMcpAppInvocationTypeExplicit))
+
+(= (codex:mcp-app-invocation-type-implicit)
+   (CodexMcpAppInvocationTypeImplicit))
+
+(= (codex:mcp-app-invocation $connector-id $app-name $invocation-type)
+   (CodexMcpAppInvocation $connector-id $app-name $invocation-type))
+
+(= (codex:mcp-app-used-tracking-plan $tracking $app)
+   (CodexMcpAppUsedTrackingPlan $tracking $app))
 
 (= (codex:mcp-tool-approval-prompt-options-allow-session-remember
       (CodexMcpToolApprovalPromptOptions
@@ -2084,15 +2110,78 @@
       $sandbox-cwd
       $use-legacy-landlock)
    (if (== $supports-sandbox-state-meta True)
-       (codex:augment-mcp-tool-request-meta-with-sandbox-state-json
-         $meta
-         (codex:mcp-tool-call-sandbox-state-json
-           $permission-profile-json
-           $sandbox-policy
-           $codex-linux-sandbox-exe
-           $sandbox-cwd
-           $use-legacy-landlock))
+       (let $pairs-1
+         (codex:mcp-tool-call-sandbox-state-permission-profile-pairs
+           $permission-profile-json)
+         (let $pairs-2
+           (codex:mcp-tool-call-append-json-pair
+             $pairs-1
+             "sandboxPolicy"
+             (codex:session-sandbox-policy-json $sandbox-policy))
+           (let $pairs-3
+             (codex:mcp-tool-call-append-json-pair
+               $pairs-2
+               "codexLinuxSandboxExe"
+               (codex:mcp-tool-call-sandbox-state-optional-path-json
+                 $codex-linux-sandbox-exe))
+             (let $pairs-4
+               (codex:mcp-tool-call-append-json-pair
+                 $pairs-3
+                 "sandboxCwd"
+                 (JsonString $sandbox-cwd))
+               (let $pairs-5
+                 (codex:mcp-tool-call-append-json-pair
+                   $pairs-4
+                   "useLegacyLandlock"
+                   (JsonBool $use-legacy-landlock))
+                 (codex:augment-mcp-tool-request-meta-with-sandbox-state-json
+                   $meta
+                   (JsonObject $pairs-5)))))))
        $meta))
+
+(= (codex:mcp-app-usage-metadata-or-default CodexAbsent)
+   (CodexMcpAppUsageMetadata CodexAbsent CodexAbsent))
+
+(= (codex:mcp-app-usage-metadata-or-default Empty)
+   (CodexMcpAppUsageMetadata CodexAbsent CodexAbsent))
+
+(= (codex:mcp-app-usage-metadata-or-default
+      (CodexMcpAppUsageMetadata $connector-id $app-name))
+   (CodexMcpAppUsageMetadata $connector-id $app-name))
+
+(= (codex:mcp-app-used-invocation-type $connector-id $selected-connector-ids)
+   (case $connector-id
+     ((CodexAbsent (codex:mcp-app-invocation-type-implicit))
+      (Empty (codex:mcp-app-invocation-type-implicit))
+      ($id
+        (if (codex:mcp-tool-call-list-contains
+              $selected-connector-ids
+              $id)
+            (codex:mcp-app-invocation-type-explicit)
+            (codex:mcp-app-invocation-type-implicit))))))
+
+(= (codex:maybe-track-codex-app-used-plan
+      $server
+      $metadata
+      $selected-connector-ids
+      $model-slug
+      $thread-id
+      $turn-id)
+   (if (== $server (codex:codex-apps-mcp-server-name))
+       (case (codex:mcp-app-usage-metadata-or-default $metadata)
+         (((CodexMcpAppUsageMetadata $connector-id $app-name)
+           (codex:mcp-app-used-tracking-plan
+             (codex:mcp-track-events-context
+               $model-slug
+               $thread-id
+               $turn-id)
+             (codex:mcp-app-invocation
+               $connector-id
+               $app-name
+               (codex:mcp-app-used-invocation-type
+                 $connector-id
+                 $selected-connector-ids))))))
+       Empty))
 
 (= (codex:mcp-tool-call-request-meta-initial-pairs $turn-metadata)
    (if (== $turn-metadata CodexAbsent)
