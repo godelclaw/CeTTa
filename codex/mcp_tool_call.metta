@@ -16,6 +16,7 @@
 ; - request_user_input and MCP elicitation response parsing
 ; - guardian review-decision mapping
 ; - approval-decision application side-effect planning
+; - approval persistence config-edit target planning
 ; - read-only/destructive/open-world approval requirement logic
 ; - MCP tool-call skip event plan construction
 ; - MCP call metric tag sanitization and emission planning
@@ -73,6 +74,10 @@
 ;   may persist TOML config, reloads user config after successful persistence,
 ;   and falls back to session memory on persistence error. This pure helper
 ;   returns those same side-effect branches as explicit runtime operations.
+; - Rust persistence helpers apply TOML edits through ConfigEditsBuilder and
+;   load global MCP servers from disk. This pure helper receives the already
+;   visible config roots/layers/server lists and returns the exact SetPath edit
+;   target or Rust-equivalent missing-server error for the runtime to execute.
 
 !(import! &self json)
 !(import! &self list)
@@ -201,6 +206,54 @@
 (= (codex:mcp-tool-approval-key-tool-name
       (CodexMcpToolApprovalKey $server $connector-id $tool-name))
    $tool-name)
+
+(= (codex:mcp-tool-approval-config-layer-source-project)
+   (CodexMcpToolApprovalConfigLayerSourceProject))
+
+(= (codex:mcp-tool-approval-config-layer-source-other $name)
+   (CodexMcpToolApprovalConfigLayerSourceOther $name))
+
+(= (codex:mcp-tool-approval-config-layer
+      $source
+      $config-folder
+      $servers)
+   (CodexMcpToolApprovalConfigLayer
+     $source
+     $config-folder
+     $servers))
+
+(= (codex:mcp-tool-approval-config-layer-source
+      (CodexMcpToolApprovalConfigLayer
+        $source
+        $config-folder
+        $servers))
+   $source)
+
+(= (codex:mcp-tool-approval-config-layer-folder
+      (CodexMcpToolApprovalConfigLayer
+        $source
+        $config-folder
+        $servers))
+   $config-folder)
+
+(= (codex:mcp-tool-approval-config-layer-servers
+      (CodexMcpToolApprovalConfigLayer
+        $source
+        $config-folder
+        $servers))
+   $servers)
+
+(= (codex:mcp-tool-approval-config-edit-set-path-op
+      $config-folder
+      $segments
+      $value)
+   (CodexMcpToolApprovalConfigEditSetPathOp
+     $config-folder
+     $segments
+     $value))
+
+(= (codex:mcp-tool-approval-persist-error $message)
+   (CodexMcpToolApprovalPersistError $message))
 
 (= (codex:mcp-tool-approval-remember-op $key)
    (CodexMcpToolApprovalRememberOp $key))
@@ -1889,6 +1942,71 @@
      $invocation
      $metadata
      $approval-mode))
+
+(= (codex:persist-codex-app-tool-approval-plan
+      $codex-home
+      $connector-id
+      $tool-name)
+   (codex:mcp-tool-approval-config-edit-set-path-op
+     $codex-home
+     ("apps" $connector-id "tools" $tool-name "approval_mode")
+     "approve"))
+
+(= (codex:is-mcp-tool-approval-project-config-layer-source
+      (CodexMcpToolApprovalConfigLayerSourceProject))
+   True)
+
+(= (codex:is-mcp-tool-approval-project-config-layer-source
+      (CodexMcpToolApprovalConfigLayerSourceOther $name))
+   False)
+
+(= (codex:mcp-tool-approval-server-is-configured $servers $server)
+   (case (codex:mcp-tool-approval-server-config-by-name $servers $server)
+     ((Empty False)
+      ($config True))))
+
+(= (codex:project-mcp-tool-approval-config-folder () $server)
+   Empty)
+
+(= (codex:project-mcp-tool-approval-config-folder $layers $server)
+   (let $layer (list:first $layers)
+     (let $tail (list:rest $layers)
+       (if (and
+             (codex:is-mcp-tool-approval-project-config-layer-source
+               (codex:mcp-tool-approval-config-layer-source $layer))
+             (codex:mcp-tool-approval-server-is-configured
+               (codex:mcp-tool-approval-config-layer-servers $layer)
+               $server))
+           (codex:mcp-tool-approval-config-layer-folder $layer)
+           (codex:project-mcp-tool-approval-config-folder $tail $server)))))
+
+(= (codex:persist-custom-mcp-tool-approval-plan
+      $codex-home
+      $config-layers-high-to-low
+      $global-servers
+      $server
+      $tool-name)
+   (case
+     (codex:project-mcp-tool-approval-config-folder
+       $config-layers-high-to-low
+       $server)
+     ((Empty
+        (if (codex:mcp-tool-approval-server-is-configured
+              $global-servers
+              $server)
+            (codex:mcp-tool-approval-config-edit-set-path-op
+              $codex-home
+              ("mcp_servers" $server "tools" $tool-name "approval_mode")
+              "approve")
+            (codex:mcp-tool-approval-persist-error
+              (format-args
+                "MCP server `{}` is not configured in config.toml"
+                ($server)))))
+      ($config-folder
+       (codex:mcp-tool-approval-config-edit-set-path-op
+         $config-folder
+         ("mcp_servers" $server "tools" $tool-name "approval_mode")
+         "approve")))))
 
 (= (codex:remember-mcp-tool-approval-plan CodexAbsent)
    ())

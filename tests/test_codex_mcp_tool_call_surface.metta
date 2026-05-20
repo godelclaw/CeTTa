@@ -41,12 +41,17 @@
      "Create a calendar event"
      CodexAbsent
      (JsonObject
-       ((JsonPair
+        ((JsonPair
           "resource_uri"
           (JsonString "connector://calendar/tools/calendar_create_event"))
         (JsonPair "contains_mcp_source" (JsonBool True))
         (JsonPair "connector_id" (JsonString "calendar"))))
      CodexAbsent))
+
+(= (test:mcp-server-entry $name)
+   (codex:mcp-tool-approval-server-entry
+     $name
+     (codex:mcp-tool-approval-server-config CodexAbsent ())))
 
 (= (test:mcp-image-call-tool-result)
    (codex:mcp-call-tool-result
@@ -683,6 +688,70 @@
     (test:mcp-metadata)
     (codex:app-tool-approval-auto))
   ((CodexMcpToolApprovalKey "codex_apps" "calendar" "create_event")))
+
+!(assertEqualToResult
+  (codex:persist-codex-app-tool-approval-plan
+    "/home/user/.codex"
+    "calendar"
+    "create_event")
+  ((CodexMcpToolApprovalConfigEditSetPathOp
+     "/home/user/.codex"
+     ("apps" "calendar" "tools" "create_event" "approval_mode")
+     "approve")))
+
+!(assertEqualToResult
+  (codex:project-mcp-tool-approval-config-folder
+    ((codex:mcp-tool-approval-config-layer
+       (codex:mcp-tool-approval-config-layer-source-other "user")
+       "/home/user/.codex"
+       ((test:mcp-server-entry "docs")))
+     (codex:mcp-tool-approval-config-layer
+       (codex:mcp-tool-approval-config-layer-source-project)
+       "/repo-a/.codex"
+       ((test:mcp-server-entry "memory")))
+     (codex:mcp-tool-approval-config-layer
+       (codex:mcp-tool-approval-config-layer-source-project)
+       "/repo-b/.codex"
+       ((test:mcp-server-entry "docs"))))
+    "docs")
+  ("/repo-b/.codex"))
+
+!(assertEqualToResult
+  (codex:persist-custom-mcp-tool-approval-plan
+    "/home/user/.codex"
+    ((codex:mcp-tool-approval-config-layer
+       (codex:mcp-tool-approval-config-layer-source-project)
+       "/repo/.codex"
+       ((test:mcp-server-entry "docs"))))
+    ((test:mcp-server-entry "docs"))
+    "docs"
+    "search")
+  ((CodexMcpToolApprovalConfigEditSetPathOp
+     "/repo/.codex"
+     ("mcp_servers" "docs" "tools" "search" "approval_mode")
+     "approve")))
+
+!(assertEqualToResult
+  (codex:persist-custom-mcp-tool-approval-plan
+    "/home/user/.codex"
+    ()
+    ((test:mcp-server-entry "docs"))
+    "docs"
+    "search")
+  ((CodexMcpToolApprovalConfigEditSetPathOp
+     "/home/user/.codex"
+     ("mcp_servers" "docs" "tools" "search" "approval_mode")
+     "approve")))
+
+!(assertEqualToResult
+  (codex:persist-custom-mcp-tool-approval-plan
+    "/home/user/.codex"
+    ()
+    ()
+    "docs"
+    "search")
+  ((CodexMcpToolApprovalPersistError
+     "MCP server `docs` is not configured in config.toml")))
 
 !(assertEqualToResult
   (codex:apply-mcp-tool-approval-decision-plan
