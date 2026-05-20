@@ -11,6 +11,7 @@
 ;   - read_agents_md successful-path loading, truncation budget, whitespace
 ;     skipping, and root-to-cwd concatenation
 ;   - render_js_repl_instructions
+;   - hierarchical_agents_message.md feature-gated append
 ;   - instruction_sources source ordering
 ;   - user_instructions concatenation over already-materialized optional
 ;     sections
@@ -34,11 +35,6 @@
 ;   I/O errors to the caller. The current CeTTa fs-read-text surface exposes an
 ;   opaque Error atom without io::ErrorKind, so read failures are skipped like
 ;   Rust's NotFound branch until a richer filesystem Result layer exists.
-; - Rust's user_instructions appends include_str!("../hierarchical_agents_message.md")
-;   when the corresponding feature flag is enabled. This slice accepts an
-;   already-materialized hierarchical section string so the prompt resource can
-;   land in a separate file-embedding slice.
-
 !(import! &self codex:project_root_markers)
 !(import! &self fs)
 !(import! &self list)
@@ -82,6 +78,14 @@
 (= (codex:agents-md-js-repl-final-instruction)
    "- Avoid direct access to `process.stdout` / `process.stderr` / `process.stdin`; it can corrupt the JSON line protocol. Use `console.log`, `codex.tool(...)`, and `codex.emitImage(...)`.")
 
+(= (codex:agents-md-hierarchical-agents-message)
+   (str-join
+     "\n\n"
+     ("Files called AGENTS.md commonly appear in many places inside a container - at \"/\", in \"~\", deep within git repositories, or in any other directory; their location is not limited to version-controlled folders."
+      "Their purpose is to pass along human guidance to you, the agent. Such guidance can include coding standards, explanations of the project layout, steps for building or testing, and even wording that must accompany a GitHub pull-request description produced by the agent; all of it is to be followed."
+      "Each AGENTS.md governs the entire directory that contains it and every child directory beneath that point. Whenever you change a file, you have to comply with every AGENTS.md whose scope covers that file. Naming conventions, stylistic rules and similar directives are restricted to the code that falls inside that scope unless the document explicitly states otherwise."
+      "When two AGENTS.md files disagree, the one located deeper in the directory structure overrides the higher-level file, while instructions given directly in the prompt by the system, developer, or user outrank any AGENTS.md content.\n")))
+
 (= (codex:agents-md-render-js-repl-instructions
       $js-repl-enabled
       $js-repl-tools-only-enabled)
@@ -96,6 +100,12 @@
            (str-concat
              $with-tools-only
              (codex:agents-md-js-repl-final-instruction))))
+       CodexAbsent))
+
+(= (codex:agents-md-render-hierarchical-agents-message
+      $child-agents-md-enabled)
+   (if (== $child-agents-md-enabled True)
+       (codex:agents-md-hierarchical-agents-message)
        CodexAbsent))
 
 (= (codex:agents-md-loaded $contents $path)
@@ -448,14 +458,15 @@
       $agents-md-docs
       $js-repl-enabled
       $js-repl-tools-only-enabled
-      $hierarchical-agents-message)
+      $child-agents-md-enabled)
    (codex:agents-md-compose-user-instructions
      $user-instructions
      $agents-md-docs
      (codex:agents-md-render-js-repl-instructions
        $js-repl-enabled
        $js-repl-tools-only-enabled)
-     $hierarchical-agents-message))
+     (codex:agents-md-render-hierarchical-agents-message
+       $child-agents-md-enabled)))
 
 (= (codex:agents-md-user-instructions
       $user-instructions
@@ -465,7 +476,7 @@
       $project-doc-fallback-filenames
       $js-repl-enabled
       $js-repl-tools-only-enabled
-      $hierarchical-agents-message)
+      $child-agents-md-enabled)
    (codex:agents-md-compose-configured-user-instructions
      $user-instructions
      (codex:agents-md-read-docs
@@ -475,4 +486,4 @@
        $project-doc-fallback-filenames)
      $js-repl-enabled
      $js-repl-tools-only-enabled
-     $hierarchical-agents-message))
+     $child-agents-md-enabled))

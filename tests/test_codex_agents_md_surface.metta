@@ -44,8 +44,30 @@
   ("- Avoid direct access to `process.stdout` / `process.stderr` / `process.stdin`; it can corrupt the JSON line protocol. Use `console.log`, `codex.tool(...)`, and `codex.emitImage(...)`."))
 
 !(assertEqualToResult
+  (codex:agents-md-text-starts-with
+    (codex:agents-md-hierarchical-agents-message)
+    "Files called AGENTS.md commonly appear in many places inside a container - at \"/\", in \"~\", deep within git repositories")
+  (True))
+
+!(assertEqualToResult
+  (codex:agents-md-text-ends-with
+    (codex:agents-md-hierarchical-agents-message)
+    "while instructions given directly in the prompt by the system, developer, or user outrank any AGENTS.md content.\n")
+  (True))
+
+!(assertEqualToResult
   (codex:agents-md-render-js-repl-instructions False False)
   (CodexAbsent))
+
+!(assertEqualToResult
+  (codex:agents-md-render-hierarchical-agents-message False)
+  (CodexAbsent))
+
+!(assertEqualToResult
+  (==
+    (codex:agents-md-render-hierarchical-agents-message True)
+    (codex:agents-md-hierarchical-agents-message))
+  (True))
 
 !(assertEqualToResult
   (==
@@ -266,7 +288,7 @@
       "project"
       True
       True
-      CodexAbsent)
+      False)
     "project\n\n## JavaScript REPL (Node)\n")
   (True))
 
@@ -277,8 +299,30 @@
       "project"
       True
       True
-      CodexAbsent)
+      False)
     "- Do not call tools directly;")
+  (True))
+
+!(assertEqualToResult
+  (codex-agents-md-text-contains
+    (codex:agents-md-compose-configured-user-instructions
+      CodexAbsent
+      "project"
+      False
+      False
+      True)
+    "Files called AGENTS.md commonly appear in many places inside a container")
+  (True))
+
+!(assertEqualToResult
+  (==
+    (codex:agents-md-compose-configured-user-instructions
+      CodexAbsent
+      CodexAbsent
+      False
+      False
+      True)
+    (codex:agents-md-hierarchical-agents-message))
   (True))
 
 !(assertEqualToResult
@@ -290,5 +334,19 @@
     ()
     False
     False
-    CodexAbsent)
+    False)
   ("base\n\n--- project-doc ---\n\nABCD"))
+
+!(assertEqualToResult
+  (==
+    (codex:agents-md-user-instructions
+      CodexAbsent
+      "/home/zarclaw/repos/CeTTa/runtime/codex-agents-md/missing"
+      4096
+      ()
+      ()
+      False
+      False
+      True)
+    (codex:agents-md-hierarchical-agents-message))
+  (True))
