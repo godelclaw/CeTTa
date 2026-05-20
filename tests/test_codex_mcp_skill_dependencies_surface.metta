@@ -300,5 +300,84 @@
               CodexAbsent
               CodexAbsent
               "https://alpha.test/mcp")))))
-      ()))
+        ()))
   ("alpha, zeta"))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-install-question
+    ((codex:mcp-server-entry
+       "zeta"
+       (codex:mcp-dependency-default-http-config "https://zeta.test/mcp"))
+     (codex:mcp-server-entry
+       "alpha"
+       (codex:mcp-dependency-default-stdio-config "alpha-mcp"))))
+  ((CodexRequestUserInputQuestion
+     "skill_mcp_dependency_install"
+     "Install MCP servers?"
+     "The following MCP servers are required by the selected skills but are not installed yet: alpha, zeta. Install them now?"
+     False
+     False
+     ((CodexRequestUserInputQuestionOption
+        "Install"
+        "Install and enable the missing MCP servers in your global config.")
+      (CodexRequestUserInputQuestionOption
+        "Continue anyway"
+        "Skip installation for now and do not show again for these MCP servers in this session.")))))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-install-answer-selected
+    (CodexRequestUserInputResponse
+      ((CodexRequestUserInputResponseEntry
+         "skill_mcp_dependency_install"
+         (CodexRequestUserInputAnswer ("Install"))))))
+  (True))
+
+!(assertEqualToResult
+  (codex:mcp-dependency-install-answer-selected
+    (CodexRequestUserInputResponse
+      ((CodexRequestUserInputResponseEntry
+         "skill_mcp_dependency_install"
+         (CodexRequestUserInputAnswer ("Continue anyway"))))))
+  (False))
+
+!(assertEqualToResult
+  (codex:should-install-mcp-dependencies-plan
+    "never"
+    (CodexApprovalSandboxPolicyDangerFullAccess)
+    "turn-1"
+    ((codex:mcp-server-entry
+       "memory"
+       (codex:mcp-dependency-default-http-config "https://memory.test/mcp")))
+    CodexAbsent)
+  ((CodexMcpDependencyShouldInstallPlan True CodexAbsent ())))
+
+!(assertEqualToResult
+  (codex:should-install-mcp-dependencies-plan
+    "on_request"
+    (CodexApprovalSandboxPolicyReadOnly)
+    "turn-2"
+    ((codex:mcp-server-entry
+       "memory"
+       (codex:mcp-dependency-default-http-config "https://memory.test/mcp")))
+    (CodexRequestUserInputResponse
+      ((CodexRequestUserInputResponseEntry
+         "skill_mcp_dependency_install"
+         (CodexRequestUserInputAnswer ("Install"))))))
+  ((CodexMcpDependencyShouldInstallPlan
+     True
+     (CodexRequestUserInputEvent
+       "mcp-deps-turn-2"
+       "turn-2"
+       ((CodexRequestUserInputQuestion
+          "skill_mcp_dependency_install"
+          "Install MCP servers?"
+          "The following MCP servers are required by the selected skills but are not installed yet: memory. Install them now?"
+          False
+          False
+          ((CodexRequestUserInputQuestionOption
+             "Install"
+             "Install and enable the missing MCP servers in your global config.")
+           (CodexRequestUserInputQuestionOption
+             "Continue anyway"
+             "Skip installation for now and do not show again for these MCP servers in this session.")))))
+     ("mcp__streamable_http__https://memory.test/mcp"))))
