@@ -204,6 +204,57 @@
        ((CodexInlineHiddenTagSpec CodexInlineTagA "<a>" "")))
      "InlineHiddenTagParser requires non-empty close delimiters")))
 
+!(assertEqualToResult
+  (codex:tagged-line-parser-output-segments
+    (codex:tagged-line-parser-collect-chunks
+      (codex:tagged-line-parser-new
+        ((codex:tagged-line-spec CodexTaggedLineBlock "<tag>" "</tag>")))
+      ("<t" "ag>\nline\n</tag>\n")))
+  (((CodexTaggedLineSegmentStart CodexTaggedLineBlock)
+    (CodexTaggedLineSegmentDelta CodexTaggedLineBlock "line\n")
+    (CodexTaggedLineSegmentEnd CodexTaggedLineBlock))))
+
+!(assertEqualToResult
+  (codex:tagged-line-parser-output-segments
+    (codex:tagged-line-parser-collect-chunks
+      (codex:tagged-line-parser-new
+        ((codex:tagged-line-spec CodexTaggedLineBlock "<tag>" "</tag>")))
+      ("<tag> extra\n")))
+  (((CodexTaggedLineSegmentNormal "<tag> extra\n"))))
+
+!(assertEqualToResult
+  (codex:tagged-line-parser-output-segments
+    (codex:tagged-line-parser-collect-chunks
+      (codex:tagged-line-parser-new
+        ((codex:tagged-line-spec CodexTaggedLineA "<a>" "</a>")
+         (codex:tagged-line-spec CodexTaggedLineB "<b>" "</b>")))
+      ("<a>\nA\n</a>\n<b>\nB\n</b>\n")))
+  (((CodexTaggedLineSegmentStart CodexTaggedLineA)
+    (CodexTaggedLineSegmentDelta CodexTaggedLineA "A\n")
+    (CodexTaggedLineSegmentEnd CodexTaggedLineA)
+    (CodexTaggedLineSegmentStart CodexTaggedLineB)
+    (CodexTaggedLineSegmentDelta CodexTaggedLineB "B\n")
+    (CodexTaggedLineSegmentEnd CodexTaggedLineB))))
+
+!(assertEqualToResult
+  (codex:tagged-line-parser-output-segments
+    (codex:tagged-line-parser-collect-chunks
+      (codex:tagged-line-parser-new
+        ((codex:tagged-line-spec CodexTaggedLineA "<a>" "</a>")
+         (codex:tagged-line-spec CodexTaggedLineB "<b>" "</b>")))
+      ("<a>\n</b>\n</a>\n")))
+  (((CodexTaggedLineSegmentStart CodexTaggedLineA)
+    (CodexTaggedLineSegmentDelta CodexTaggedLineA "</b>\n")
+    (CodexTaggedLineSegmentEnd CodexTaggedLineA))))
+
+!(assertEqualToResult
+  (codex:tagged-line-parser-output-segments
+    (codex:tagged-line-parser-collect-chunks
+      (codex:tagged-line-parser-new
+        ((codex:tagged-line-spec CodexTaggedLineBlock "<tag>" "</tag>")))
+      ("plain text\nnext\n")))
+  (((CodexTaggedLineSegmentNormal "plain text\nnext\n"))))
+
 !(assertEqual
   (codex:proposed-plan-parser-output-visible-text
     (codex:proposed-plan-parser-collect-chunks

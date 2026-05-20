@@ -7,6 +7,7 @@
 ;
 ; Covered in this increment:
 ; - InlineHiddenTagParser push_str / finish semantics for literal tag specs
+; - TaggedLineParser parse / finish semantics for generic tag specs
 ; - CitationStreamParser push_str / finish semantics for the citation tag
 ; - ProposedPlanParser push_str / finish semantics for the proposed_plan tag
 ; - strip_citations
@@ -28,9 +29,9 @@
 ;   trait. CeTTa returns an explicit next parser state, visible text, and
 ;   extracted tags. The matching, buffering, tie-breaking, and EOF auto-close
 ;   behavior match Rust.
-; - Rust's `TaggedLineParser<T>` is generic over tag specs. CeTTa ports the
-;   exact one-spec specialization used by `ProposedPlanParser`; a future generic
-;   multi-tag parser should preserve the same line-buffer state machine.
+; - Rust mutates `TaggedLineParser<T>` in place. CeTTa returns an explicit next
+;   parser state with each segment batch. The tag-spec ordering, line buffering,
+;   segment merging, and EOF auto-close behavior match Rust.
 
 !(import! &self list)
 !(import! &self str)
@@ -413,6 +414,438 @@
            (codex:stream-parser-list-append
              $extracted
              $next-extracted)))))))
+
+(= (codex:tagged-line-spec $tag $open $close)
+   (CodexTaggedLineSpec $tag $open $close))
+
+(= (codex:tagged-line-parser-inactive)
+   CodexTaggedLineParserInactive)
+
+(= (codex:tagged-line-parser-active $tag)
+   (CodexTaggedLineParserActive $tag))
+
+(= (codex:tagged-line-parser-state $specs $active $detect-tag $line-buffer)
+   (CodexTaggedLineParser $specs $active $detect-tag $line-buffer))
+
+(= (codex:tagged-line-parser-new $specs)
+   (codex:tagged-line-parser-state
+     $specs
+     (codex:tagged-line-parser-inactive)
+     True
+     ""))
+
+(= (codex:tagged-line-segment-normal $text)
+   (CodexTaggedLineSegmentNormal $text))
+
+(= (codex:tagged-line-segment-start $tag)
+   (CodexTaggedLineSegmentStart $tag))
+
+(= (codex:tagged-line-segment-delta $tag $text)
+   (CodexTaggedLineSegmentDelta $tag $text))
+
+(= (codex:tagged-line-segment-end $tag)
+   (CodexTaggedLineSegmentEnd $tag))
+
+(= (codex:tagged-line-parser-output $parser $segments)
+   (CodexTaggedLineParserOutput $parser $segments))
+
+(= (codex:tagged-line-parser-output-parser
+      (CodexTaggedLineParserOutput $parser $segments))
+   $parser)
+
+(= (codex:tagged-line-parser-output-segments
+      (CodexTaggedLineParserOutput $parser $segments))
+   $segments)
+
+(= (codex:tagged-line-parser-match $tag)
+   (CodexTaggedLineParserMatch $tag))
+
+(= (codex:tagged-line-parser-push-nonempty-normal () $text)
+   ((codex:tagged-line-segment-normal $text)))
+
+(= (codex:tagged-line-parser-push-nonempty-normal $segments $text)
+   (let ($head $tail) (decons-atom $segments)
+     (if (== $tail ())
+         (case $head
+           (((CodexTaggedLineSegmentNormal $existing)
+             ((codex:tagged-line-segment-normal
+                (str-concat $existing $text))))
+            ($other
+             (cons-atom
+               $other
+               ((codex:tagged-line-segment-normal $text))))))
+         (cons-atom
+           $head
+           (codex:tagged-line-parser-push-nonempty-normal
+             $tail
+             $text)))))
+
+(= (codex:tagged-line-parser-push-normal $segments $text)
+   (if (== $text "")
+       $segments
+       (codex:tagged-line-parser-push-nonempty-normal $segments $text)))
+
+(= (codex:tagged-line-parser-push-nonempty-delta () $tag $text)
+   ((codex:tagged-line-segment-delta $tag $text)))
+
+(= (codex:tagged-line-parser-push-nonempty-delta $segments $tag $text)
+   (let ($head $tail) (decons-atom $segments)
+     (if (== $tail ())
+         (case $head
+           (((CodexTaggedLineSegmentDelta $existing-tag $existing)
+             (if (== $existing-tag $tag)
+                 ((codex:tagged-line-segment-delta
+                    $tag
+                    (str-concat $existing $text)))
+                 (cons-atom
+                   $head
+                   ((codex:tagged-line-segment-delta $tag $text)))))
+            ($other
+             (cons-atom
+               $other
+               ((codex:tagged-line-segment-delta $tag $text))))))
+         (cons-atom
+           $head
+           (codex:tagged-line-parser-push-nonempty-delta
+             $tail
+             $tag
+             $text)))))
+
+(= (codex:tagged-line-parser-push-delta $segments $tag $text)
+   (if (== $text "")
+       $segments
+       (codex:tagged-line-parser-push-nonempty-delta $segments $tag $text)))
+
+(= (codex:tagged-line-parser-push-start $segments $tag)
+   (codex:stream-parser-list-append
+     $segments
+     ((codex:tagged-line-segment-start $tag))))
+
+(= (codex:tagged-line-parser-push-end $segments $tag)
+   (codex:stream-parser-list-append
+     $segments
+     ((codex:tagged-line-segment-end $tag))))
+
+(= (codex:tagged-line-parser-push-text
+      CodexTaggedLineParserInactive
+      $segments
+      $text)
+   (codex:tagged-line-parser-push-normal $segments $text))
+
+(= (codex:tagged-line-parser-push-text
+      (CodexTaggedLineParserActive $tag)
+      $segments
+      $text)
+   (codex:tagged-line-parser-push-delta $segments $tag $text))
+
+(= (codex:tagged-line-parser-is-tag-prefix-loop $slug ())
+   False)
+
+(= (codex:tagged-line-parser-is-tag-prefix-loop $slug $specs)
+   (let ($head $tail) (decons-atom $specs)
+     (case $head
+       (((CodexTaggedLineSpec $tag $open $close)
+         (if (or (str-starts-with? $open $slug)
+                 (str-starts-with? $close $slug))
+             True
+             (codex:tagged-line-parser-is-tag-prefix-loop
+               $slug
+               $tail)))))))
+
+(= (codex:tagged-line-parser-is-tag-prefix $slug $specs)
+   (codex:tagged-line-parser-is-tag-prefix-loop
+     (str-trim $slug)
+     $specs))
+
+(= (codex:tagged-line-parser-match-open $slug ())
+   CodexAbsent)
+
+(= (codex:tagged-line-parser-match-open $slug $specs)
+   (let ($head $tail) (decons-atom $specs)
+     (case $head
+       (((CodexTaggedLineSpec $tag $open $close)
+         (if (== $open $slug)
+             (codex:tagged-line-parser-match $tag)
+             (codex:tagged-line-parser-match-open
+               $slug
+               $tail)))))))
+
+(= (codex:tagged-line-parser-match-close $slug ())
+   CodexAbsent)
+
+(= (codex:tagged-line-parser-match-close $slug $specs)
+   (let ($head $tail) (decons-atom $specs)
+     (case $head
+       (((CodexTaggedLineSpec $tag $open $close)
+         (if (== $close $slug)
+             (codex:tagged-line-parser-match $tag)
+             (codex:tagged-line-parser-match-close
+               $slug
+               $tail)))))))
+
+(= (codex:tagged-line-parser-finish-line
+      (CodexTaggedLineParser $specs CodexTaggedLineParserInactive $detect-tag $line-buffer)
+      $line-without-newline
+      $segments)
+   (let $line-text (str-concat $line-without-newline "\n")
+     (let $slug (str-trim $line-without-newline)
+       (case (codex:tagged-line-parser-match-open $slug $specs)
+         (((CodexTaggedLineParserMatch $tag)
+           (codex:tagged-line-parser-output
+             (CodexTaggedLineParser
+               $specs
+               (codex:tagged-line-parser-active $tag)
+               True
+               "")
+             (codex:tagged-line-parser-push-start $segments $tag)))
+          (CodexAbsent
+           (codex:tagged-line-parser-output
+             (CodexTaggedLineParser
+               $specs
+               CodexTaggedLineParserInactive
+               True
+               "")
+             (codex:tagged-line-parser-push-text
+               CodexTaggedLineParserInactive
+               $segments
+               $line-text))))))))
+
+(= (codex:tagged-line-parser-finish-line
+      (CodexTaggedLineParser $specs (CodexTaggedLineParserActive $active-tag) $detect-tag $line-buffer)
+      $line-without-newline
+      $segments)
+   (let $line-text (str-concat $line-without-newline "\n")
+     (let $slug (str-trim $line-without-newline)
+       (case (codex:tagged-line-parser-match-close $slug $specs)
+         (((CodexTaggedLineParserMatch $close-tag)
+           (if (== $active-tag $close-tag)
+               (codex:tagged-line-parser-output
+                 (CodexTaggedLineParser
+                   $specs
+                   CodexTaggedLineParserInactive
+                   True
+                   "")
+                 (codex:tagged-line-parser-push-end $segments $active-tag))
+               (codex:tagged-line-parser-output
+                 (CodexTaggedLineParser
+                   $specs
+                   (CodexTaggedLineParserActive $active-tag)
+                   True
+                   "")
+                 (codex:tagged-line-parser-push-text
+                   (CodexTaggedLineParserActive $active-tag)
+                   $segments
+                   $line-text))))
+          (CodexAbsent
+           (codex:tagged-line-parser-output
+             (CodexTaggedLineParser
+               $specs
+               (CodexTaggedLineParserActive $active-tag)
+               True
+               "")
+             (codex:tagged-line-parser-push-text
+               (CodexTaggedLineParserActive $active-tag)
+               $segments
+               $line-text))))))))
+
+(= (codex:tagged-line-parser-process-part
+      (CodexTaggedLineParser $specs $active True $line-buffer)
+      $part
+      True
+      $segments)
+   (codex:tagged-line-parser-finish-line
+     (CodexTaggedLineParser $specs $active True "")
+     (str-concat $line-buffer $part)
+     $segments))
+
+(= (codex:tagged-line-parser-process-part
+      (CodexTaggedLineParser $specs $active True $line-buffer)
+      $part
+      False
+      $segments)
+   (let $next-buffer (str-concat $line-buffer $part)
+     (let $slug (str-trim $next-buffer)
+       (if (or (== $slug "")
+               (codex:tagged-line-parser-is-tag-prefix $slug $specs))
+           (codex:tagged-line-parser-output
+             (CodexTaggedLineParser
+               $specs
+               $active
+               True
+               $next-buffer)
+             $segments)
+           (codex:tagged-line-parser-output
+             (CodexTaggedLineParser
+               $specs
+               $active
+               False
+               "")
+             (codex:tagged-line-parser-push-text
+               $active
+               $segments
+               $next-buffer))))))
+
+(= (codex:tagged-line-parser-process-part
+      (CodexTaggedLineParser $specs $active False $line-buffer)
+      $part
+      True
+      $segments)
+   (codex:tagged-line-parser-output
+     (CodexTaggedLineParser
+       $specs
+       $active
+       True
+       "")
+     (codex:tagged-line-parser-push-text
+       $active
+       $segments
+       (str-concat $part "\n"))))
+
+(= (codex:tagged-line-parser-process-part
+      (CodexTaggedLineParser $specs $active False $line-buffer)
+      $part
+      False
+      $segments)
+   (codex:tagged-line-parser-output
+     (CodexTaggedLineParser
+       $specs
+       $active
+       False
+       "")
+     (codex:tagged-line-parser-push-text
+       $active
+       $segments
+       $part)))
+
+(= (codex:tagged-line-parser-process-parts $parser () $segments)
+   (codex:tagged-line-parser-output $parser $segments))
+
+(= (codex:tagged-line-parser-process-parts $parser $parts $segments)
+   (let ($head $tail) (decons-atom $parts)
+     (case
+       (codex:tagged-line-parser-process-part
+         $parser
+         $head
+         (not (== $tail ()))
+         $segments)
+       (((CodexTaggedLineParserOutput $next-parser $next-segments)
+         (codex:tagged-line-parser-process-parts
+           $next-parser
+           $tail
+           $next-segments))))))
+
+(= (codex:tagged-line-parser-push-str
+      (CodexTaggedLineParser $specs $active $detect-tag $line-buffer)
+      $chunk)
+   (codex:tagged-line-parser-process-parts
+     (CodexTaggedLineParser $specs $active $detect-tag $line-buffer)
+     (str-split "\n" $chunk)
+     ()))
+
+(= (codex:tagged-line-parser-finish-line-buffer
+      (CodexTaggedLineParser $specs $active $detect-tag $line-buffer)
+      $segments)
+   (if (== $line-buffer "")
+       (codex:tagged-line-parser-output
+         (CodexTaggedLineParser $specs $active True "")
+         $segments)
+       (let $slug (str-trim $line-buffer)
+         (case $active
+           ((CodexTaggedLineParserInactive
+             (case (codex:tagged-line-parser-match-open $slug $specs)
+               (((CodexTaggedLineParserMatch $tag)
+                 (codex:tagged-line-parser-output
+                   (CodexTaggedLineParser
+                     $specs
+                     (CodexTaggedLineParserActive $tag)
+                     True
+                     "")
+                   (codex:tagged-line-parser-push-start $segments $tag)))
+                (CodexAbsent
+                 (codex:tagged-line-parser-output
+                   (CodexTaggedLineParser
+                     $specs
+                     CodexTaggedLineParserInactive
+                     True
+                     "")
+                   (codex:tagged-line-parser-push-text
+                     CodexTaggedLineParserInactive
+                     $segments
+                     $line-buffer))))))
+            ((CodexTaggedLineParserActive $active-tag)
+             (case (codex:tagged-line-parser-match-close $slug $specs)
+               (((CodexTaggedLineParserMatch $close-tag)
+                 (if (== $active-tag $close-tag)
+                     (codex:tagged-line-parser-output
+                       (CodexTaggedLineParser
+                         $specs
+                         CodexTaggedLineParserInactive
+                         True
+                         "")
+                       (codex:tagged-line-parser-push-end $segments $active-tag))
+                     (codex:tagged-line-parser-output
+                       (CodexTaggedLineParser
+                         $specs
+                         (CodexTaggedLineParserActive $active-tag)
+                         True
+                         "")
+                       (codex:tagged-line-parser-push-text
+                         (CodexTaggedLineParserActive $active-tag)
+                         $segments
+                         $line-buffer))))
+                (CodexAbsent
+                 (codex:tagged-line-parser-output
+                   (CodexTaggedLineParser
+                     $specs
+                     (CodexTaggedLineParserActive $active-tag)
+                     True
+                     "")
+                   (codex:tagged-line-parser-push-text
+                     (CodexTaggedLineParserActive $active-tag)
+                     $segments
+                     $line-buffer)))))))))))
+
+(= (codex:tagged-line-parser-finish $parser)
+   (case
+     (codex:tagged-line-parser-finish-line-buffer $parser ())
+     (((CodexTaggedLineParserOutput
+         (CodexTaggedLineParser $specs CodexTaggedLineParserInactive $detect-tag $line-buffer)
+         $segments)
+       (codex:tagged-line-parser-output
+         (codex:tagged-line-parser-new $specs)
+         $segments))
+      ((CodexTaggedLineParserOutput
+         (CodexTaggedLineParser $specs (CodexTaggedLineParserActive $tag) $detect-tag $line-buffer)
+         $segments)
+       (codex:tagged-line-parser-output
+         (codex:tagged-line-parser-new $specs)
+         (codex:tagged-line-parser-push-end $segments $tag))))))
+
+(= (codex:tagged-line-parser-collect-chunks $parser $chunks)
+   (codex:tagged-line-parser-collect-chunks-loop
+     $parser
+     $chunks
+     ()))
+
+(= (codex:tagged-line-parser-collect-chunks-loop $parser () $segments)
+   (case (codex:tagged-line-parser-finish $parser)
+     (((CodexTaggedLineParserOutput $next-parser $tail-segments)
+       (codex:tagged-line-parser-output
+         $next-parser
+         (codex:stream-parser-list-append
+           $segments
+           $tail-segments))))))
+
+(= (codex:tagged-line-parser-collect-chunks-loop $parser $chunks $segments)
+   (let ($head $tail) (decons-atom $chunks)
+     (case (codex:tagged-line-parser-push-str $parser $head)
+       (((CodexTaggedLineParserOutput $next-parser $next-segments)
+         (codex:tagged-line-parser-collect-chunks-loop
+           $next-parser
+           $tail
+           (codex:stream-parser-list-append
+             $segments
+             $next-segments)))))))
 
 (= (codex:citation-stream-parser-inactive)
    CodexCitationStreamParserInactive)
