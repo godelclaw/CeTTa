@@ -19,6 +19,7 @@
 ; - MCP tool-call skip event plan construction
 ; - MCP call metric tag sanitization and emission planning
 ; - MCP tool-call tracing span field planning
+; - MCP sandbox-state request metadata augmentation
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust's full MCP tool-call path is async and crosses session, hooks,
@@ -54,6 +55,10 @@
 ;   runtime integration concern.
 ;   CeTTa's Empty cannot be nested as a constructor value, so Rust tracing
 ;   Empty field values are represented as CodexMcpSpanEmpty.
+; - Rust queries the MCP connection manager asynchronously and serializes
+;   SandboxState with serde_json before augmenting request metadata. This pure
+;   helper receives the resolved capability bit and turn-context fields, then
+;   projects the same metadata JSON shape for the runtime layer to pass through.
 
 !(import! &self json)
 !(import! &self list)
@@ -137,6 +142,9 @@
 
 (= (codex:mcp-tool-thread-id-meta-key)
    "threadId")
+
+(= (codex:mcp-sandbox-state-meta-capability-key)
+   "codex/sandbox-state-meta")
 
 (= (codex:mcp-tool-openai-file-params-meta-key)
    "openai/fileParams")
@@ -1972,6 +1980,119 @@
 
 (= (codex:with-mcp-tool-call-thread-id-meta JsonNull $thread-id)
    JsonNull)
+
+(= (codex:mcp-tool-call-sandbox-state-permission-profile-pairs
+      $permission-profile-json)
+   (case $permission-profile-json
+     ((CodexAbsent ())
+      (Empty ())
+      ($json ((JsonPair "permissionProfile" $json))))))
+
+(= (codex:mcp-tool-call-sandbox-state-optional-path-json $path)
+   (case $path
+     ((CodexAbsent JsonNull)
+      (Empty JsonNull)
+      ($value (JsonString $value)))))
+
+(= (codex:mcp-tool-call-sandbox-state-json
+      $permission-profile-json
+      $sandbox-policy
+      $codex-linux-sandbox-exe
+      $sandbox-cwd
+      $use-legacy-landlock)
+   (let $pairs-1
+     (codex:mcp-tool-call-sandbox-state-permission-profile-pairs
+       $permission-profile-json)
+     (let $pairs-2
+       (codex:mcp-tool-call-append-json-pair
+         $pairs-1
+         "sandboxPolicy"
+         (codex:session-sandbox-policy-json $sandbox-policy))
+       (let $pairs-3
+         (codex:mcp-tool-call-append-json-pair
+           $pairs-2
+           "codexLinuxSandboxExe"
+           (codex:mcp-tool-call-sandbox-state-optional-path-json
+             $codex-linux-sandbox-exe))
+         (let $pairs-4
+           (codex:mcp-tool-call-append-json-pair
+             $pairs-3
+             "sandboxCwd"
+             (JsonString $sandbox-cwd))
+           (let $pairs-5
+             (codex:mcp-tool-call-append-json-pair
+               $pairs-4
+               "useLegacyLandlock"
+               (JsonBool $use-legacy-landlock))
+             (JsonObject $pairs-5)))))))
+
+(= (codex:augment-mcp-tool-request-meta-with-sandbox-state-json
+      CodexAbsent
+      $sandbox-state)
+   (JsonObject
+     ((JsonPair
+        (codex:mcp-sandbox-state-meta-capability-key)
+        $sandbox-state))))
+
+(= (codex:augment-mcp-tool-request-meta-with-sandbox-state-json
+      Empty
+      $sandbox-state)
+   (codex:augment-mcp-tool-request-meta-with-sandbox-state-json
+     CodexAbsent
+     $sandbox-state))
+
+(= (codex:augment-mcp-tool-request-meta-with-sandbox-state-json
+      (JsonObject $pairs)
+      $sandbox-state)
+   (JsonObject
+     (codex:mcp-tool-call-set-json-pair
+       $pairs
+       (codex:mcp-sandbox-state-meta-capability-key)
+       $sandbox-state)))
+
+(= (codex:augment-mcp-tool-request-meta-with-sandbox-state-json
+      (JsonString $value)
+      $sandbox-state)
+   (JsonString $value))
+
+(= (codex:augment-mcp-tool-request-meta-with-sandbox-state-json
+      (JsonArray $items)
+      $sandbox-state)
+   (JsonArray $items))
+
+(= (codex:augment-mcp-tool-request-meta-with-sandbox-state-json
+      (JsonNumber $value)
+      $sandbox-state)
+   (JsonNumber $value))
+
+(= (codex:augment-mcp-tool-request-meta-with-sandbox-state-json
+      (JsonBool $value)
+      $sandbox-state)
+   (JsonBool $value))
+
+(= (codex:augment-mcp-tool-request-meta-with-sandbox-state-json
+      JsonNull
+      $sandbox-state)
+   JsonNull)
+
+(= (codex:augment-mcp-tool-request-meta-with-sandbox-state
+      $supports-sandbox-state-meta
+      $meta
+      $permission-profile-json
+      $sandbox-policy
+      $codex-linux-sandbox-exe
+      $sandbox-cwd
+      $use-legacy-landlock)
+   (if (== $supports-sandbox-state-meta True)
+       (codex:augment-mcp-tool-request-meta-with-sandbox-state-json
+         $meta
+         (codex:mcp-tool-call-sandbox-state-json
+           $permission-profile-json
+           $sandbox-policy
+           $codex-linux-sandbox-exe
+           $sandbox-cwd
+           $use-legacy-landlock))
+       $meta))
 
 (= (codex:mcp-tool-call-request-meta-initial-pairs $turn-metadata)
    (if (== $turn-metadata CodexAbsent)
