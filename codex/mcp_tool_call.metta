@@ -7,6 +7,7 @@
 ; - approval question ids, labels, fallback text, and prompt options
 ; - MCP tool result sanitization for models without image input
 ; - MCP tool metadata extraction for app resources and file input params
+; - MCP approval elicitation request construction
 ; - MCP tool-call request metadata and thread-id metadata merging
 ; - guardian/ARC MCP tool-call review request JSON shape
 ; - session/persistent approval key eligibility
@@ -23,6 +24,9 @@
 ;   CodexAbsent for optional inputs and Empty for Rust `None` return values.
 ; - Rust receives rmcp ToolAnnotations and a larger metadata struct. The CeTTa
 ;   records below carry only the fields read by this pure helper subset.
+; - Rust's MCP approval elicitation request builder reads thread_id and turn_id
+;   from Session and TurnContext. This pure CeTTa helper receives those ids
+;   explicitly while preserving the produced request shape.
 ; - Rust's serde_json object map is represented by JsonObject pair lists. For
 ;   cloned parameter objects we preserve the local pair order; display params
 ;   are sorted by name to match Rust's Vec sort_by branch.
@@ -505,6 +509,43 @@
 (= (codex:mcp-tool-approval-elicitation-response $action $content $meta)
    (CodexMcpToolApprovalElicitationResponse $action $content $meta))
 
+(= (codex:mcp-tool-approval-elicitation-request
+      $server
+      $metadata
+      $tool-params
+      $tool-params-display
+      $question
+      $message-override
+      $prompt-options)
+   (CodexMcpToolApprovalElicitationRequest
+     $server
+     $metadata
+     $tool-params
+     $tool-params-display
+     $question
+     $message-override
+     $prompt-options))
+
+(= (codex:mcp-server-elicitation-request-form
+      $meta
+      $message
+      $requested-schema)
+   (CodexMcpServerElicitationRequestForm
+     $meta
+     $message
+     $requested-schema))
+
+(= (codex:mcp-server-elicitation-request-params
+      $thread-id
+      $turn-id
+      $server-name
+      $request)
+   (CodexMcpServerElicitationRequestParams
+     $thread-id
+     $turn-id
+     $server-name
+     $request))
+
 (= (codex:mcp-tool-call-present $value)
    (if (== $value CodexAbsent) False True))
 
@@ -519,6 +560,13 @@
 
 (= (codex:mcp-tool-call-bool-or-default $value $default)
    (if (== $value CodexAbsent) $default $value))
+
+(= (codex:mcp-tool-call-json-value-or-null $value)
+   (if (== $value CodexAbsent)
+       JsonNull
+       (if (== $value Empty)
+           JsonNull
+           $value)))
 
 (= (codex:mcp-tool-call-json-string-or-empty $value)
    (case $value
@@ -613,6 +661,71 @@
                      $tail-names
                      (cons-atom $value $tail-names)))
                 ($other $tail-names)))))))))
+
+(= (codex:mcp-tool-approval-elicitation-object-schema)
+   (JsonObject
+     ((JsonPair "type" (JsonString "object"))
+      (JsonPair "properties" (JsonObject ())))))
+
+(= (codex:mcp-tool-approval-elicitation-message
+      $question
+      $message-override)
+   (if (== $message-override CodexAbsent)
+       (codex:request-user-input-question-text $question)
+       (if (== $message-override Empty)
+           (codex:request-user-input-question-text $question)
+           $message-override)))
+
+(= (codex:build-mcp-tool-approval-elicitation-request
+      $thread-id
+      $turn-id
+      $request)
+   (case (eval $request)
+     (((CodexMcpToolApprovalElicitationRequest
+         $server
+         $metadata
+         $tool-params
+         $tool-params-display
+         $question
+         $message-override
+         $prompt-options)
+       (codex:mcp-server-elicitation-request-params
+         $thread-id
+         $turn-id
+         $server
+         (codex:mcp-server-elicitation-request-form
+           (codex:build-mcp-tool-approval-elicitation-meta
+             $server
+             $metadata
+             $tool-params
+             $tool-params-display
+             $prompt-options)
+           (codex:mcp-tool-approval-elicitation-message
+             $question
+             $message-override)
+           (codex:mcp-tool-approval-elicitation-object-schema)))))))
+
+(= (codex:mcp-server-elicitation-request-json
+      (CodexMcpServerElicitationRequestParams
+        $thread-id
+        $turn-id
+        $server-name
+        (CodexMcpServerElicitationRequestForm
+          $meta
+          $message
+          $requested-schema)))
+   (JsonObject
+     ((JsonPair "threadId" (JsonString $thread-id))
+      (JsonPair
+        "turnId"
+        (if (== $turn-id CodexAbsent)
+            JsonNull
+            (JsonString $turn-id)))
+      (JsonPair "serverName" (JsonString $server-name))
+      (JsonPair "mode" (JsonString "form"))
+      (JsonPair "_meta" (codex:mcp-tool-call-json-value-or-null $meta))
+      (JsonPair "message" (JsonString $message))
+      (JsonPair "requestedSchema" $requested-schema))))
 
 (= (codex:mcp-tool-call-image-content-omitted-text)
    "<image content omitted because you do not support image input>")

@@ -166,6 +166,74 @@
   (("file" "attachments")))
 
 !(assertEqualToResult
+  (case
+    (codex:build-mcp-tool-approval-elicitation-request
+      "thread-1"
+      "turn-1"
+      (codex:mcp-tool-approval-elicitation-request
+        "codex_apps"
+        (codex:mcp-tool-approval-metadata
+          "calendar"
+          "Calendar"
+          "Manage events and schedules."
+          "Create Event"
+          "Create a calendar event.")
+        (JsonObject
+          ((JsonPair "calendar_id" (JsonString "primary"))
+           (JsonPair "title" (JsonString "Roadmap review"))))
+        ((codex:rendered-mcp-tool-approval-param
+           "calendar_id"
+           (JsonString "primary")
+           "Calendar")
+         (codex:rendered-mcp-tool-approval-param
+           "title"
+           (JsonString "Roadmap review")
+           "Title"))
+        (codex:build-mcp-tool-approval-question
+          "q"
+          "codex_apps"
+          "create_event"
+          "Calendar"
+          (codex:mcp-tool-approval-prompt-options True True)
+          "Allow Calendar to create an event?")
+        "Allow Calendar to create an event?"
+        (codex:mcp-tool-approval-prompt-options True True)))
+    (($request
+      (json-stringify
+        (codex:mcp-server-elicitation-request-json $request)))))
+  ("{\"threadId\":\"thread-1\",\"turnId\":\"turn-1\",\"serverName\":\"codex_apps\",\"mode\":\"form\",\"_meta\":{\"codex_approval_kind\":\"mcp_tool_call\",\"persist\":[\"session\",\"always\"],\"tool_title\":\"Create Event\",\"tool_description\":\"Create a calendar event.\",\"source\":\"connector\",\"connector_id\":\"calendar\",\"connector_name\":\"Calendar\",\"connector_description\":\"Manage events and schedules.\",\"tool_params\":{\"calendar_id\":\"primary\",\"title\":\"Roadmap review\"},\"tool_params_display\":[{\"name\":\"calendar_id\",\"value\":\"primary\",\"display_name\":\"Calendar\"},{\"name\":\"title\",\"value\":\"Roadmap review\",\"display_name\":\"Title\"}]},\"message\":\"Allow Calendar to create an event?\",\"requestedSchema\":{\"type\":\"object\",\"properties\":{}}}"))
+
+!(assertEqualToResult
+  (case
+    (codex:build-mcp-tool-approval-elicitation-request
+      "thread-2"
+      "turn-2"
+      (codex:mcp-tool-approval-elicitation-request
+        "custom_server"
+        CodexAbsent
+        CodexAbsent
+        CodexAbsent
+        (codex:build-mcp-tool-approval-question
+          "q"
+          "custom_server"
+          "run_action"
+          CodexAbsent
+          (codex:mcp-tool-approval-prompt-options False False)
+          CodexAbsent)
+        CodexAbsent
+        (codex:mcp-tool-approval-prompt-options False False)))
+    (((CodexMcpServerElicitationRequestParams
+        $thread-id
+        $turn-id
+        $server-name
+        (CodexMcpServerElicitationRequestForm
+          $meta
+          $message
+          $schema))
+      $message)))
+  ("Allow the custom_server MCP server to run tool \"run_action\"?"))
+
+!(assertEqualToResult
   (codex:is-mcp-tool-approval-question-id "mcp_tool_call_approval_call-1")
   (True))
 
