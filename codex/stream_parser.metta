@@ -6,13 +6,17 @@
 ; - openai-codex/codex-rs/utils/stream-parser/src/tagged_line_parser.rs
 ; - openai-codex/codex-rs/utils/stream-parser/src/proposed_plan.rs
 ; - openai-codex/codex-rs/utils/stream-parser/src/assistant_text.rs
+; - openai-codex/codex-rs/utils/stream-parser/src/stream_text.rs
+; - openai-codex/codex-rs/utils/stream-parser/src/utf8_stream.rs
 ;
 ; Covered in this increment:
+; - StreamTextChunk helper surface for wrapped stream parsers
 ; - InlineHiddenTagParser push_str / finish semantics for literal tag specs
 ; - TaggedLineParser parse / finish semantics for generic tag specs
 ; - CitationStreamParser push_str / finish semantics for the citation tag
 ; - ProposedPlanParser push_str / finish semantics for the proposed_plan tag
 ; - AssistantTextStreamParser push_str / finish composition
+; - Utf8StreamParser push_bytes / finish / into_inner semantics
 ; - strip_citations
 ; - strip_proposed_plan_blocks
 ; - extract_proposed_plan_text
@@ -42,9 +46,23 @@
 ; - Rust mutates `AssistantTextStreamParser` in place. CeTTa returns an
 ;   explicit next parser state together with the assistant text chunk. Citation
 ;   parsing, optional plan parsing, and finish flushing follow the Rust order.
+; - Rust's `Utf8StreamParser<P>` mutates the wrapped parser and returns
+;   `Result<StreamTextChunk<_>, Utf8StreamParserError>`. CeTTa represents raw
+;   bytes as integer byte lists and returns an explicit next parser state on
+;   both Ok and Err results so callers can continue from the same rolled-back
+;   state Rust would leave in the mutable parser. Valid UTF-8 is decoded through
+;   the CeTTa string library before being pushed into the wrapped text parser.
+;   Current CeTTa strings are C strings, so embedded NUL bytes cannot be
+;   represented and are reported as invalid byte sequences; non-NUL UTF-8 chunk
+;   boundary, rollback, and EOF behavior match Rust.
 
 !(import! &self list)
 !(import! &self str)
+
+(= (codex:stream-parser-string-from-utf8-bytes $bytes)
+   (function
+     (case (__cetta_lib_str_base64_encode "__from_utf8_bytes" $bytes)
+       (($result (return $result))))))
 
 (= (codex:stream-parser-citation-open-tag)
    "<oai-mem-citation>")
@@ -93,6 +111,40 @@
      (case (codex:stream-parser-list-append $tail $rhs)
       (($rest
          (cons-atom $head $rest))))))
+
+(= (codex:stream-parser-list-take $items $count)
+   (if (or (== $items ()) (<= $count 0))
+       ()
+       (let $head (list:first $items)
+         (let $tail (list:rest $items)
+           (let $next-count (eval (- $count 1))
+             (case
+               (codex:stream-parser-list-take $tail $next-count)
+               (($rest
+                 (cons-atom $head $rest)))))))))
+
+(= (codex:stream-parser-list-drop $items $count)
+   (if (or (== $items ()) (<= $count 0))
+       $items
+       (let $next-count (eval (- $count 1))
+         (codex:stream-parser-list-drop
+           (list:rest $items)
+           $next-count))))
+
+(= (codex:stream-text-chunk $visible-text $extracted)
+   (CodexStreamTextChunk $visible-text $extracted))
+
+(= (codex:stream-text-chunk-visible-text
+      (CodexStreamTextChunk $visible-text $extracted))
+   $visible-text)
+
+(= (codex:stream-text-chunk-extracted
+      (CodexStreamTextChunk $visible-text $extracted))
+   $extracted)
+
+(= (codex:stream-text-chunk-is-empty
+      (CodexStreamTextChunk $visible-text $extracted))
+   (and (== $visible-text "") (== $extracted ())))
 
 (= (codex:stream-parser-longest-suffix-prefix-len $text $needle)
    (codex:stream-parser-longest-suffix-prefix-len-loop
@@ -1389,3 +1441,426 @@
            (codex:assistant-text-stream-parser-finish-after-visible
              $after-visible-parser
              $chunk))))))))
+
+(= (codex:stream-text-parser-output $parser $chunk)
+   (CodexStreamTextParserOutput $parser $chunk))
+
+(= (codex:stream-text-parser-output-parser
+      (CodexStreamTextParserOutput $parser $chunk))
+   $parser)
+
+(= (codex:stream-text-parser-output-chunk
+      (CodexStreamTextParserOutput $parser $chunk))
+   $chunk)
+
+(= (codex:stream-text-parser-push-str
+      (CodexInlineHiddenTagParser $specs $pending $active)
+      $text)
+   (case
+     (codex:inline-hidden-tag-parser-push-str
+       (CodexInlineHiddenTagParser $specs $pending $active)
+       $text)
+     (((CodexInlineHiddenTagParserOutput $next-parser $visible-text $extracted)
+       (codex:stream-text-parser-output
+         $next-parser
+         (codex:stream-text-chunk $visible-text $extracted))))))
+
+(= (codex:stream-text-parser-finish
+      (CodexInlineHiddenTagParser $specs $pending $active))
+   (case
+     (codex:inline-hidden-tag-parser-finish
+       (CodexInlineHiddenTagParser $specs $pending $active))
+     (((CodexInlineHiddenTagParserOutput $next-parser $visible-text $extracted)
+       (codex:stream-text-parser-output
+         $next-parser
+         (codex:stream-text-chunk $visible-text $extracted))))))
+
+(= (codex:stream-text-parser-push-str
+      (CodexCitationStreamParser $pending $active)
+      $text)
+   (case
+     (codex:citation-stream-parser-push-str
+       (CodexCitationStreamParser $pending $active)
+       $text)
+     (((CodexCitationStreamParserOutput $next-parser $visible-text $extracted)
+       (codex:stream-text-parser-output
+         $next-parser
+         (codex:stream-text-chunk $visible-text $extracted))))))
+
+(= (codex:stream-text-parser-finish
+      (CodexCitationStreamParser $pending $active))
+   (case
+     (codex:citation-stream-parser-finish
+       (CodexCitationStreamParser $pending $active))
+     (((CodexCitationStreamParserOutput $next-parser $visible-text $extracted)
+       (codex:stream-text-parser-output
+         $next-parser
+         (codex:stream-text-chunk $visible-text $extracted))))))
+
+(= (codex:stream-text-parser-push-str
+      (CodexProposedPlanParser $tagged-line-parser)
+      $text)
+   (case
+     (codex:proposed-plan-parser-push-str
+       (CodexProposedPlanParser $tagged-line-parser)
+       $text)
+     (((CodexProposedPlanParserOutput $next-parser $visible-text $extracted)
+       (codex:stream-text-parser-output
+         $next-parser
+         (codex:stream-text-chunk $visible-text $extracted))))))
+
+(= (codex:stream-text-parser-finish
+      (CodexProposedPlanParser $tagged-line-parser))
+   (case
+     (codex:proposed-plan-parser-finish
+       (CodexProposedPlanParser $tagged-line-parser))
+     (((CodexProposedPlanParserOutput $next-parser $visible-text $extracted)
+       (codex:stream-text-parser-output
+         $next-parser
+         (codex:stream-text-chunk $visible-text $extracted))))))
+
+(= (codex:utf8-byte-is-continuation $byte)
+   (and (>= $byte 128) (<= $byte 191)))
+
+(= (codex:utf8-byte-list-has-at-least $bytes $count)
+   (>= (list:len $bytes) $count))
+
+(= (codex:utf8-codepoint-valid $len)
+   (CodexUtf8CodepointValid $len))
+
+(= (codex:utf8-codepoint-invalid $error-len)
+   (CodexUtf8CodepointInvalid $error-len))
+
+(= (codex:utf8-codepoint-incomplete)
+   CodexUtf8CodepointIncomplete)
+
+(= (codex:utf8-codepoint-status-2 $bytes)
+   (if (not (codex:utf8-byte-list-has-at-least $bytes 2))
+       (codex:utf8-codepoint-incomplete)
+       (let $b2 (list:at $bytes 1)
+         (if (codex:utf8-byte-is-continuation $b2)
+             (codex:utf8-codepoint-valid 2)
+             (codex:utf8-codepoint-invalid 1)))))
+
+(= (codex:utf8-codepoint-status-e0 $bytes)
+   (if (not (codex:utf8-byte-list-has-at-least $bytes 2))
+       (codex:utf8-codepoint-incomplete)
+       (let $b2 (list:at $bytes 1)
+         (if (not (and (>= $b2 160) (<= $b2 191)))
+             (codex:utf8-codepoint-invalid 1)
+             (if (not (codex:utf8-byte-list-has-at-least $bytes 3))
+                 (codex:utf8-codepoint-incomplete)
+                 (let $b3 (list:at $bytes 2)
+                   (if (codex:utf8-byte-is-continuation $b3)
+                       (codex:utf8-codepoint-valid 3)
+                       (codex:utf8-codepoint-invalid 1))))))))
+
+(= (codex:utf8-codepoint-status-3-cont $bytes)
+   (if (not (codex:utf8-byte-list-has-at-least $bytes 2))
+       (codex:utf8-codepoint-incomplete)
+       (let $b2 (list:at $bytes 1)
+         (if (not (codex:utf8-byte-is-continuation $b2))
+             (codex:utf8-codepoint-invalid 1)
+             (if (not (codex:utf8-byte-list-has-at-least $bytes 3))
+                 (codex:utf8-codepoint-incomplete)
+                 (let $b3 (list:at $bytes 2)
+                   (if (codex:utf8-byte-is-continuation $b3)
+                       (codex:utf8-codepoint-valid 3)
+                       (codex:utf8-codepoint-invalid 1))))))))
+
+(= (codex:utf8-codepoint-status-ed $bytes)
+   (if (not (codex:utf8-byte-list-has-at-least $bytes 2))
+       (codex:utf8-codepoint-incomplete)
+       (let $b2 (list:at $bytes 1)
+         (if (not (and (>= $b2 128) (<= $b2 159)))
+             (codex:utf8-codepoint-invalid 1)
+             (if (not (codex:utf8-byte-list-has-at-least $bytes 3))
+                 (codex:utf8-codepoint-incomplete)
+                 (let $b3 (list:at $bytes 2)
+                   (if (codex:utf8-byte-is-continuation $b3)
+                       (codex:utf8-codepoint-valid 3)
+                       (codex:utf8-codepoint-invalid 1))))))))
+
+(= (codex:utf8-codepoint-status-f0 $bytes)
+   (if (not (codex:utf8-byte-list-has-at-least $bytes 2))
+       (codex:utf8-codepoint-incomplete)
+       (let $b2 (list:at $bytes 1)
+         (if (not (and (>= $b2 144) (<= $b2 191)))
+             (codex:utf8-codepoint-invalid 1)
+             (codex:utf8-codepoint-status-4-tail $bytes)))))
+
+(= (codex:utf8-codepoint-status-4-cont $bytes)
+   (if (not (codex:utf8-byte-list-has-at-least $bytes 2))
+       (codex:utf8-codepoint-incomplete)
+       (let $b2 (list:at $bytes 1)
+         (if (not (codex:utf8-byte-is-continuation $b2))
+             (codex:utf8-codepoint-invalid 1)
+             (codex:utf8-codepoint-status-4-tail $bytes)))))
+
+(= (codex:utf8-codepoint-status-f4 $bytes)
+   (if (not (codex:utf8-byte-list-has-at-least $bytes 2))
+       (codex:utf8-codepoint-incomplete)
+       (let $b2 (list:at $bytes 1)
+         (if (not (and (>= $b2 128) (<= $b2 143)))
+             (codex:utf8-codepoint-invalid 1)
+             (codex:utf8-codepoint-status-4-tail $bytes)))))
+
+(= (codex:utf8-codepoint-status-4-tail $bytes)
+   (if (not (codex:utf8-byte-list-has-at-least $bytes 3))
+       (codex:utf8-codepoint-incomplete)
+       (let $b3 (list:at $bytes 2)
+         (if (not (codex:utf8-byte-is-continuation $b3))
+             (codex:utf8-codepoint-invalid 1)
+             (if (not (codex:utf8-byte-list-has-at-least $bytes 4))
+                 (codex:utf8-codepoint-incomplete)
+                 (let $b4 (list:at $bytes 3)
+                   (if (codex:utf8-byte-is-continuation $b4)
+                       (codex:utf8-codepoint-valid 4)
+                       (codex:utf8-codepoint-invalid 1))))))))
+
+(= (codex:utf8-codepoint-status $bytes)
+   (if (== $bytes ())
+       (codex:utf8-codepoint-incomplete)
+       (let $b1 (list:first $bytes)
+         (if (== $b1 0)
+             (codex:utf8-codepoint-invalid 1)
+             (if (<= $b1 127)
+                 (codex:utf8-codepoint-valid 1)
+                 (if (and (>= $b1 194) (<= $b1 223))
+                     (codex:utf8-codepoint-status-2 $bytes)
+                     (if (== $b1 224)
+                         (codex:utf8-codepoint-status-e0 $bytes)
+                         (if (and (>= $b1 225) (<= $b1 236))
+                             (codex:utf8-codepoint-status-3-cont $bytes)
+                             (if (== $b1 237)
+                                 (codex:utf8-codepoint-status-ed $bytes)
+                                 (if (and (>= $b1 238) (<= $b1 239))
+                                     (codex:utf8-codepoint-status-3-cont $bytes)
+                                     (if (== $b1 240)
+                                         (codex:utf8-codepoint-status-f0 $bytes)
+                                         (if (and (>= $b1 241) (<= $b1 243))
+                                             (codex:utf8-codepoint-status-4-cont $bytes)
+                                             (if (== $b1 244)
+                                                 (codex:utf8-codepoint-status-f4 $bytes)
+                                                 (codex:utf8-codepoint-invalid 1))))))))))))))
+
+(= (codex:utf8-scan-ok)
+   CodexUtf8ScanOk)
+
+(= (codex:utf8-scan-invalid $valid-up-to $error-len)
+   (CodexUtf8ScanInvalid $valid-up-to $error-len))
+
+(= (codex:utf8-scan-incomplete $valid-up-to)
+   (CodexUtf8ScanIncomplete $valid-up-to))
+
+(= (codex:utf8-scan-bytes $bytes)
+   (codex:utf8-scan-bytes-from $bytes 0))
+
+(= (codex:utf8-scan-bytes-from $bytes $offset)
+   (if (== $bytes ())
+       (codex:utf8-scan-ok)
+       (case (codex:utf8-codepoint-status $bytes)
+         (((CodexUtf8CodepointValid $len)
+           (let $next-offset (eval (+ $offset $len))
+             (codex:utf8-scan-bytes-from
+               (codex:stream-parser-list-drop $bytes $len)
+               $next-offset)))
+          ((CodexUtf8CodepointInvalid $error-len)
+           (codex:utf8-scan-invalid $offset $error-len))
+          (CodexUtf8CodepointIncomplete
+           (codex:utf8-scan-incomplete $offset))))))
+
+(= (codex:utf8-stream-parser-error-invalid-utf8
+      $valid-up-to
+      $error-len)
+   (CodexUtf8StreamParserErrorInvalidUtf8 $valid-up-to $error-len))
+
+(= (codex:utf8-stream-parser-error-incomplete-utf8-at-eof)
+   CodexUtf8StreamParserErrorIncompleteUtf8AtEof)
+
+(= (codex:utf8-stream-parser-state $inner $pending-utf8)
+   (CodexUtf8StreamParser $inner $pending-utf8))
+
+(= (codex:utf8-stream-parser-new $inner)
+   (codex:utf8-stream-parser-state $inner ()))
+
+(= (codex:utf8-stream-parser-output-ok $parser $chunk)
+   (CodexUtf8StreamParserOutputOk $parser $chunk))
+
+(= (codex:utf8-stream-parser-output-err $parser $error)
+   (CodexUtf8StreamParserOutputErr $parser $error))
+
+(= (codex:utf8-stream-parser-output-kind
+      (CodexUtf8StreamParserOutputOk $parser $chunk))
+   ok)
+
+(= (codex:utf8-stream-parser-output-kind
+      (CodexUtf8StreamParserOutputErr $parser $error))
+   err)
+
+(= (codex:utf8-stream-parser-output-parser
+      (CodexUtf8StreamParserOutputOk $parser $chunk))
+   $parser)
+
+(= (codex:utf8-stream-parser-output-parser
+      (CodexUtf8StreamParserOutputErr $parser $error))
+   $parser)
+
+(= (codex:utf8-stream-parser-output-chunk
+      (CodexUtf8StreamParserOutputOk $parser $chunk))
+   $chunk)
+
+(= (codex:utf8-stream-parser-output-error
+      (CodexUtf8StreamParserOutputErr $parser $error))
+   $error)
+
+(= (codex:utf8-stream-parser-output-visible-text $output)
+   (codex:stream-text-chunk-visible-text
+     (codex:utf8-stream-parser-output-chunk $output)))
+
+(= (codex:utf8-stream-parser-output-extracted $output)
+   (codex:stream-text-chunk-extracted
+     (codex:utf8-stream-parser-output-chunk $output)))
+
+(= (codex:utf8-stream-parser-output-is-empty $output)
+   (codex:stream-text-chunk-is-empty
+     (codex:utf8-stream-parser-output-chunk $output)))
+
+(= (codex:utf8-stream-parser-push-text
+      (CodexUtf8StreamParser $inner $pending-utf8)
+      $text
+      $next-pending)
+   (case (codex:stream-text-parser-push-str $inner $text)
+     (((CodexStreamTextParserOutput $next-inner $chunk)
+       (codex:utf8-stream-parser-output-ok
+         (CodexUtf8StreamParser $next-inner $next-pending)
+         $chunk)))))
+
+(= (codex:utf8-stream-parser-push-bytes
+      (CodexUtf8StreamParser $inner $pending-utf8)
+      $chunk)
+   (let $old-len (list:len $pending-utf8)
+     (let $next-bytes
+       (codex:stream-parser-list-append $pending-utf8 $chunk)
+       (case (codex:utf8-scan-bytes $next-bytes)
+         ((CodexUtf8ScanOk
+           (codex:utf8-stream-parser-push-text
+             (CodexUtf8StreamParser $inner $pending-utf8)
+             (codex:stream-parser-string-from-utf8-bytes $next-bytes)
+             ()))
+          ((CodexUtf8ScanInvalid $valid-up-to $error-len)
+           (codex:utf8-stream-parser-output-err
+             (CodexUtf8StreamParser
+               $inner
+               (codex:stream-parser-list-take $next-bytes $old-len))
+             (codex:utf8-stream-parser-error-invalid-utf8
+               $valid-up-to
+               $error-len)))
+          ((CodexUtf8ScanIncomplete $valid-up-to)
+           (if (== $valid-up-to 0)
+               (codex:utf8-stream-parser-output-ok
+                 (CodexUtf8StreamParser $inner $next-bytes)
+                 (codex:stream-text-chunk "" ()))
+               (let $valid-prefix
+                 (codex:stream-parser-list-take $next-bytes $valid-up-to)
+                 (codex:utf8-stream-parser-push-text
+                   (CodexUtf8StreamParser $inner $pending-utf8)
+                   (codex:stream-parser-string-from-utf8-bytes $valid-prefix)
+                   (codex:stream-parser-list-drop
+                     $next-bytes
+                     $valid-up-to))))))))))
+
+(= (codex:utf8-stream-parser-append-chunk
+      (CodexStreamTextChunk $visible-text $extracted)
+      (CodexStreamTextChunk $tail-visible-text $tail-extracted))
+   (codex:stream-text-chunk
+     (str-concat $visible-text $tail-visible-text)
+     (codex:stream-parser-list-append $extracted $tail-extracted)))
+
+(= (codex:utf8-stream-parser-finish-inner
+      (CodexUtf8StreamParser $inner $pending-utf8)
+      $chunk)
+   (case (codex:stream-text-parser-finish $inner)
+     (((CodexStreamTextParserOutput $next-inner $tail)
+       (codex:utf8-stream-parser-output-ok
+         (CodexUtf8StreamParser $next-inner ())
+         (codex:utf8-stream-parser-append-chunk
+           $chunk
+           $tail))))))
+
+(= (codex:utf8-stream-parser-finish-pending-ok
+      (CodexUtf8StreamParser $inner $pending-utf8))
+   (if (== $pending-utf8 ())
+       (codex:utf8-stream-parser-finish-inner
+         (CodexUtf8StreamParser $inner ())
+         (codex:stream-text-chunk "" ()))
+       (case
+         (codex:stream-text-parser-push-str
+           $inner
+           (codex:stream-parser-string-from-utf8-bytes $pending-utf8))
+         (((CodexStreamTextParserOutput $next-inner $chunk)
+           (codex:utf8-stream-parser-finish-inner
+             (CodexUtf8StreamParser $next-inner ())
+             $chunk))))))
+
+(= (codex:utf8-stream-parser-finish
+      (CodexUtf8StreamParser $inner $pending-utf8))
+   (if (== $pending-utf8 ())
+       (codex:utf8-stream-parser-finish-pending-ok
+         (CodexUtf8StreamParser $inner $pending-utf8))
+       (case (codex:utf8-scan-bytes $pending-utf8)
+         ((CodexUtf8ScanOk
+           (codex:utf8-stream-parser-finish-pending-ok
+             (CodexUtf8StreamParser $inner $pending-utf8)))
+          ((CodexUtf8ScanInvalid $valid-up-to $error-len)
+           (codex:utf8-stream-parser-output-err
+             (CodexUtf8StreamParser $inner $pending-utf8)
+             (codex:utf8-stream-parser-error-invalid-utf8
+               $valid-up-to
+               $error-len)))
+          ((CodexUtf8ScanIncomplete $valid-up-to)
+           (codex:utf8-stream-parser-output-err
+             (CodexUtf8StreamParser $inner $pending-utf8)
+             (codex:utf8-stream-parser-error-incomplete-utf8-at-eof)))))))
+
+(= (codex:utf8-stream-parser-into-inner-output-ok $inner)
+   (CodexUtf8StreamParserIntoInnerOutputOk $inner))
+
+(= (codex:utf8-stream-parser-into-inner-output-err $error)
+   (CodexUtf8StreamParserIntoInnerOutputErr $error))
+
+(= (codex:utf8-stream-parser-into-inner-output-kind
+      (CodexUtf8StreamParserIntoInnerOutputOk $inner))
+   ok)
+
+(= (codex:utf8-stream-parser-into-inner-output-kind
+      (CodexUtf8StreamParserIntoInnerOutputErr $error))
+   err)
+
+(= (codex:utf8-stream-parser-into-inner-output-inner
+      (CodexUtf8StreamParserIntoInnerOutputOk $inner))
+   $inner)
+
+(= (codex:utf8-stream-parser-into-inner-output-error
+      (CodexUtf8StreamParserIntoInnerOutputErr $error))
+   $error)
+
+(= (codex:utf8-stream-parser-into-inner
+      (CodexUtf8StreamParser $inner $pending-utf8))
+   (if (== $pending-utf8 ())
+       (codex:utf8-stream-parser-into-inner-output-ok $inner)
+       (case (codex:utf8-scan-bytes $pending-utf8)
+         ((CodexUtf8ScanOk
+           (codex:utf8-stream-parser-into-inner-output-ok $inner))
+          ((CodexUtf8ScanInvalid $valid-up-to $error-len)
+           (codex:utf8-stream-parser-into-inner-output-err
+             (codex:utf8-stream-parser-error-invalid-utf8
+               $valid-up-to
+               $error-len)))
+          ((CodexUtf8ScanIncomplete $valid-up-to)
+           (codex:utf8-stream-parser-into-inner-output-err
+             (codex:utf8-stream-parser-error-incomplete-utf8-at-eof)))))))
+
+(= (codex:utf8-stream-parser-into-inner-lossy
+      (CodexUtf8StreamParser $inner $pending-utf8))
+   $inner)

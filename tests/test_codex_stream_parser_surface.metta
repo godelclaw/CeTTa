@@ -526,3 +526,173 @@
             (codex:assistant-text-stream-parser-finish
               (codex:assistant-text-stream-parser-output-parser $tail)))))))
   True)
+
+(= (test:utf8-stream-parser-collect-ok $parser $chunks $visible-text $extracted)
+   (if (== $chunks ())
+       (case (codex:utf8-stream-parser-finish $parser)
+         (((CodexUtf8StreamParserOutputOk $next-parser $chunk)
+           (codex:stream-text-chunk
+             (str-concat
+               $visible-text
+               (codex:stream-text-chunk-visible-text $chunk))
+             (codex:stream-parser-list-append
+               $extracted
+               (codex:stream-text-chunk-extracted $chunk))))
+          ((CodexUtf8StreamParserOutputErr $next-parser $error)
+           (CodexTestUtf8CollectError $error))))
+       (let $bytes (list:first $chunks)
+         (case (codex:utf8-stream-parser-push-bytes $parser $bytes)
+           (((CodexUtf8StreamParserOutputOk $next-parser $chunk)
+             (test:utf8-stream-parser-collect-ok
+               $next-parser
+               (list:rest $chunks)
+               (str-concat
+                 $visible-text
+                 (codex:stream-text-chunk-visible-text $chunk))
+               (codex:stream-parser-list-append
+                 $extracted
+                 (codex:stream-text-chunk-extracted $chunk))))
+            ((CodexUtf8StreamParserOutputErr $next-parser $error)
+             (CodexTestUtf8CollectError $error)))))))
+
+(= (test:utf8-citation-collect $chunks)
+   (test:utf8-stream-parser-collect-ok
+     (codex:utf8-stream-parser-new
+       (codex:citation-stream-parser-new))
+     $chunks
+     ""
+     ()))
+
+!(assertEqual
+  (codex:stream-text-chunk-visible-text
+    (test:utf8-citation-collect
+      ((65 195)
+       (169 60 111 97 105 45 109 101 109 45 99 105 116 97 116 105 111 110 62 228)
+       (184 173 60 47 111 97 105 45 109 101 109 45 99 105 116 97 116 105 111 110 62 90))))
+  "AéZ")
+
+!(assertEqualToResult
+  (codex:stream-text-chunk-extracted
+    (test:utf8-citation-collect
+      ((65 195)
+       (169 60 111 97 105 45 109 101 109 45 99 105 116 97 116 105 111 110 62 228)
+       (184 173 60 47 111 97 105 45 109 101 109 45 99 105 116 97 116 105 111 110 62 90))))
+  (("中")))
+
+!(assertEqual
+  (let $parser
+    (codex:utf8-stream-parser-new
+      (codex:citation-stream-parser-new))
+    (let $first
+      (codex:utf8-stream-parser-push-bytes $parser (195))
+      (codex:utf8-stream-parser-output-is-empty $first)))
+  True)
+
+!(assertEqual
+  (let $parser
+    (codex:utf8-stream-parser-new
+      (codex:citation-stream-parser-new))
+    (let $first
+      (codex:utf8-stream-parser-push-bytes $parser (195))
+      (let $err
+        (codex:utf8-stream-parser-push-bytes
+          (codex:utf8-stream-parser-output-parser $first)
+          (40))
+        (codex:utf8-stream-parser-output-error $err))))
+  (CodexUtf8StreamParserErrorInvalidUtf8 0 1))
+
+!(assertEqual
+  (let $parser
+    (codex:utf8-stream-parser-new
+      (codex:citation-stream-parser-new))
+    (let $first
+      (codex:utf8-stream-parser-push-bytes $parser (195))
+      (let $err
+        (codex:utf8-stream-parser-push-bytes
+          (codex:utf8-stream-parser-output-parser $first)
+          (40))
+        (let $second
+          (codex:utf8-stream-parser-push-bytes
+            (codex:utf8-stream-parser-output-parser $err)
+            (169 120))
+          (codex:utf8-stream-parser-output-visible-text $second)))))
+  "éx")
+
+!(assertEqual
+  (let $parser
+    (codex:utf8-stream-parser-new
+      (codex:citation-stream-parser-new))
+    (let $err
+      (codex:utf8-stream-parser-push-bytes $parser (111 107 255))
+      (codex:utf8-stream-parser-output-error $err)))
+  (CodexUtf8StreamParserErrorInvalidUtf8 2 1))
+
+!(assertEqual
+  (let $parser
+    (codex:utf8-stream-parser-new
+      (codex:citation-stream-parser-new))
+    (let $err
+      (codex:utf8-stream-parser-push-bytes $parser (111 107 255))
+      (let $next
+        (codex:utf8-stream-parser-push-bytes
+          (codex:utf8-stream-parser-output-parser $err)
+          (33))
+        (codex:utf8-stream-parser-output-visible-text $next))))
+  "!")
+
+!(assertEqual
+  (let $parser
+    (codex:utf8-stream-parser-new
+      (codex:citation-stream-parser-new))
+    (let $out
+      (codex:utf8-stream-parser-push-bytes $parser (226 130))
+      (codex:utf8-stream-parser-output-is-empty $out)))
+  True)
+
+!(assertEqual
+  (let $parser
+    (codex:utf8-stream-parser-new
+      (codex:citation-stream-parser-new))
+    (let $out
+      (codex:utf8-stream-parser-push-bytes $parser (226 130))
+      (let $err
+        (codex:utf8-stream-parser-finish
+          (codex:utf8-stream-parser-output-parser $out))
+        (codex:utf8-stream-parser-output-error $err))))
+  CodexUtf8StreamParserErrorIncompleteUtf8AtEof)
+
+!(assertEqual
+  (let $parser
+    (codex:utf8-stream-parser-new
+      (codex:citation-stream-parser-new))
+    (let $out
+      (codex:utf8-stream-parser-push-bytes $parser (195))
+      (let $inner
+        (codex:utf8-stream-parser-into-inner
+          (codex:utf8-stream-parser-output-parser $out))
+        (codex:utf8-stream-parser-into-inner-output-error $inner))))
+  CodexUtf8StreamParserErrorIncompleteUtf8AtEof)
+
+!(assertEqual
+  (let $parser
+    (codex:utf8-stream-parser-new
+      (codex:citation-stream-parser-new))
+    (let $out
+      (codex:utf8-stream-parser-push-bytes $parser (195))
+      (let $inner
+        (codex:utf8-stream-parser-into-inner-lossy
+          (codex:utf8-stream-parser-output-parser $out))
+        (let $tail
+          (codex:stream-text-parser-finish $inner)
+          (codex:stream-text-chunk-is-empty
+            (codex:stream-text-parser-output-chunk $tail))))))
+  True)
+
+!(assertEqual
+  (let $parser
+    (codex:utf8-stream-parser-new
+      (codex:citation-stream-parser-new))
+    (let $err
+      (codex:utf8-stream-parser-push-bytes $parser (0))
+      (codex:utf8-stream-parser-output-error $err)))
+  (CodexUtf8StreamParserErrorInvalidUtf8 0 1))

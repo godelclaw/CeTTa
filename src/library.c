@@ -9019,6 +9019,127 @@ static Atom *str_base64url_encode_no_pad(Arena *a, Atom *head,
     return result;
 }
 
+static bool str_utf8_byte_is_continuation(uint8_t byte) {
+    return byte >= 0x80u && byte <= 0xbfu;
+}
+
+static bool str_utf8_bytes_are_valid(const uint8_t *bytes, size_t len) {
+    size_t i = 0u;
+    while (i < len) {
+        uint8_t b0 = bytes[i];
+        if (b0 == 0u) return false;
+        if (b0 <= 0x7fu) {
+            i++;
+            continue;
+        }
+        if (b0 >= 0xc2u && b0 <= 0xdfu) {
+            if (i + 1u >= len || !str_utf8_byte_is_continuation(bytes[i + 1u])) {
+                return false;
+            }
+            i += 2u;
+            continue;
+        }
+        if (b0 == 0xe0u) {
+            if (i + 2u >= len || bytes[i + 1u] < 0xa0u || bytes[i + 1u] > 0xbfu ||
+                !str_utf8_byte_is_continuation(bytes[i + 2u])) {
+                return false;
+            }
+            i += 3u;
+            continue;
+        }
+        if (b0 >= 0xe1u && b0 <= 0xecu) {
+            if (i + 2u >= len || !str_utf8_byte_is_continuation(bytes[i + 1u]) ||
+                !str_utf8_byte_is_continuation(bytes[i + 2u])) {
+                return false;
+            }
+            i += 3u;
+            continue;
+        }
+        if (b0 == 0xedu) {
+            if (i + 2u >= len || bytes[i + 1u] < 0x80u || bytes[i + 1u] > 0x9fu ||
+                !str_utf8_byte_is_continuation(bytes[i + 2u])) {
+                return false;
+            }
+            i += 3u;
+            continue;
+        }
+        if (b0 >= 0xeeu && b0 <= 0xefu) {
+            if (i + 2u >= len || !str_utf8_byte_is_continuation(bytes[i + 1u]) ||
+                !str_utf8_byte_is_continuation(bytes[i + 2u])) {
+                return false;
+            }
+            i += 3u;
+            continue;
+        }
+        if (b0 == 0xf0u) {
+            if (i + 3u >= len || bytes[i + 1u] < 0x90u || bytes[i + 1u] > 0xbfu ||
+                !str_utf8_byte_is_continuation(bytes[i + 2u]) ||
+                !str_utf8_byte_is_continuation(bytes[i + 3u])) {
+                return false;
+            }
+            i += 4u;
+            continue;
+        }
+        if (b0 >= 0xf1u && b0 <= 0xf3u) {
+            if (i + 3u >= len || !str_utf8_byte_is_continuation(bytes[i + 1u]) ||
+                !str_utf8_byte_is_continuation(bytes[i + 2u]) ||
+                !str_utf8_byte_is_continuation(bytes[i + 3u])) {
+                return false;
+            }
+            i += 4u;
+            continue;
+        }
+        if (b0 == 0xf4u) {
+            if (i + 3u >= len || bytes[i + 1u] < 0x80u || bytes[i + 1u] > 0x8fu ||
+                !str_utf8_byte_is_continuation(bytes[i + 2u]) ||
+                !str_utf8_byte_is_continuation(bytes[i + 3u])) {
+                return false;
+            }
+            i += 4u;
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+static Atom *str_from_utf8_bytes(Arena *a, Atom *head,
+                                 Atom **args, uint32_t nargs) {
+    uint8_t *bytes;
+    char *text;
+    Atom *result;
+
+    if (nargs != 1 || !args[0] || args[0]->kind != ATOM_EXPR) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected expression of UTF-8 bytes");
+    }
+
+    bytes = cetta_malloc(args[0]->expr.len ? args[0]->expr.len : 1u);
+    for (uint32_t i = 0; i < args[0]->expr.len; i++) {
+        int byte;
+        if (!library_int_arg(args[0]->expr.elems[i], &byte) || byte < 0 || byte > 255) {
+            free(bytes);
+            return library_signature_error(a, head, args, nargs,
+                                           "expected expression of UTF-8 bytes");
+        }
+        bytes[i] = (uint8_t)byte;
+    }
+
+    if (!str_utf8_bytes_are_valid(bytes, args[0]->expr.len)) {
+        free(bytes);
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_symbol(a, "invalid UTF-8 byte expression"));
+    }
+
+    text = cetta_malloc((size_t)args[0]->expr.len + 1u);
+    memcpy(text, bytes, args[0]->expr.len);
+    text[args[0]->expr.len] = '\0';
+    result = atom_string(a, text);
+    free(text);
+    free(bytes);
+    return result;
+}
+
 static Atom *str_base64_encode(Arena *a, Atom *head,
                                Atom **args, uint32_t nargs) {
     static const char table[] =
@@ -9039,6 +9160,9 @@ static Atom *str_base64_encode(Arena *a, Atom *head,
         }
         if (mode && strcmp(mode, "__decode_url_no_pad") == 0) {
             return str_base64url_decode(a, head, args + 1, 1);
+        }
+        if (mode && strcmp(mode, "__from_utf8_bytes") == 0) {
+            return str_from_utf8_bytes(a, head, args + 1, 1);
         }
     }
     if (nargs != 1 || !(text = library_text_arg(args[0]))) {
