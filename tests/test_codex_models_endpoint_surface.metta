@@ -104,6 +104,50 @@
        ()
        False)))
 
+(= (test:request-plan-fields
+      (CodexOpenAiModelsEndpointRequestPlan
+        $client-version
+        $endpoint
+        $timeout-ms
+        $api-provider
+        $api-auth
+        $request-telemetry))
+   ($client-version
+    $endpoint
+    $timeout-ms
+    (codex:api-provider-base-url $api-provider)
+    (codex:model-provider-headers-get
+      (codex:api-provider-headers $api-provider)
+      "x-env")
+    (codex:headers-get
+      (codex:auth-provider-to-auth-headers $api-auth)
+      "authorization")))
+
+(= (test:telemetry-fields
+      (CodexModelsRequestTelemetry
+        $auth-mode
+        $auth-header-attached
+        $auth-header-name
+        $auth-env))
+   ($auth-mode
+    $auth-header-attached
+    $auth-header-name
+    (codex:auth-env-telemetry-codex-api-key-env-enabled $auth-env)))
+
+(= (test:chatgpt-request-plan-fields
+      (CodexOpenAiModelsEndpointRequestPlan
+        $client-version
+        $endpoint
+        $timeout-ms
+        $api-provider
+        $api-auth
+        $request-telemetry))
+   ((codex:api-provider-base-url $api-provider)
+    (codex:models-request-telemetry-auth-mode $request-telemetry)
+    (codex:headers-get
+      (codex:auth-provider-to-auth-headers $api-auth)
+      "authorization")))
+
 !(assertEqualToResult
   ((codex:models-refresh-timeout-ms)
    (codex:models-endpoint-path))
@@ -153,25 +197,8 @@
      True)))
 
 !(assertEqualToResult
-  ((codex:openai-models-endpoint-request-plan-client-version
-      (test:models-endpoint-provider-env-request-plan))
-   (codex:openai-models-endpoint-request-plan-endpoint
-      (test:models-endpoint-provider-env-request-plan))
-   (codex:openai-models-endpoint-request-plan-timeout-ms
-      (test:models-endpoint-provider-env-request-plan))
-   (codex:api-provider-base-url
-      (codex:openai-models-endpoint-request-plan-api-provider
-        (test:models-endpoint-provider-env-request-plan)))
-   (codex:model-provider-headers-get
-      (codex:api-provider-headers
-        (codex:openai-models-endpoint-request-plan-api-provider
-          (test:models-endpoint-provider-env-request-plan)))
-      "x-env")
-   (codex:headers-get
-      (codex:auth-provider-to-auth-headers
-        (codex:openai-models-endpoint-request-plan-api-auth
-          (test:models-endpoint-provider-env-request-plan)))
-      "authorization"))
+  (test:request-plan-fields
+    (test:models-endpoint-provider-env-request-plan))
   (("0.124.0"
     "/models"
     5000
@@ -180,28 +207,14 @@
     "Bearer sk-provider")))
 
 !(assertEqualToResult
-  (let $telemetry
+  (test:telemetry-fields
     (codex:openai-models-endpoint-request-plan-telemetry
-      (test:models-endpoint-provider-env-request-plan))
-    ((codex:models-request-telemetry-auth-mode $telemetry)
-     (codex:models-request-telemetry-auth-header-attached $telemetry)
-     (codex:models-request-telemetry-auth-header-name $telemetry)
-     (codex:auth-env-telemetry-codex-api-key-env-enabled
-       (codex:models-request-telemetry-auth-env $telemetry))))
+      (test:models-endpoint-provider-env-request-plan)))
   ((CodexAbsent True "authorization" True)))
 
 !(assertEqualToResult
-  ((codex:api-provider-base-url
-      (codex:openai-models-endpoint-request-plan-api-provider
-        (test:models-endpoint-chatgpt-request-plan)))
-   (codex:models-request-telemetry-auth-mode
-      (codex:openai-models-endpoint-request-plan-telemetry
-        (test:models-endpoint-chatgpt-request-plan)))
-   (codex:headers-get
-      (codex:auth-provider-to-auth-headers
-        (codex:openai-models-endpoint-request-plan-api-auth
-          (test:models-endpoint-chatgpt-request-plan)))
-      "authorization"))
+  (test:chatgpt-request-plan-fields
+    (test:models-endpoint-chatgpt-request-plan))
   (("https://chatgpt.com/backend-api/codex"
     (CodexAuthModeChatgpt)
     "Bearer chatgpt-access")))

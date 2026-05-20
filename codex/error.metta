@@ -5,6 +5,7 @@
 ;
 ; Covered in this increment:
 ; - CodexErr::Fatal
+; - CodexErr::InvalidRequest
 ; - EnvVarError / CodexErr::EnvVar display surface
 ; - display formatting for the Fatal variant
 ;
@@ -18,6 +19,12 @@
    (CodexErrFatal $message))
 
 (= (codex:error-fatal-message (CodexErrFatal $message))
+   $message)
+
+(= (codex:error-invalid-request $message)
+   (CodexErrInvalidRequest $message))
+
+(= (codex:error-invalid-request-message (CodexErrInvalidRequest $message))
    $message)
 
 (= (codex:env-var-error $var $instructions)
@@ -36,6 +43,9 @@
 
 (= (codex:error-display (CodexErrFatal $message))
    (str-concat "Fatal error: " $message))
+
+(= (codex:error-display (CodexErrInvalidRequest $message))
+   $message)
 
 (= (codex:env-var-error-display (CodexEnvVarError $var $instructions))
    (if (== $instructions CodexAbsent)

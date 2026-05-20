@@ -191,21 +191,31 @@
       $provider-info
       $codex-api-key-env-enabled
       $env-values)
-   (codex:auth-env-telemetry
+   (let $openai-api-key-env-present
      (codex:models-endpoint-env-var-present-from-values
        $env-values
        (codex:openai-api-key-env-var))
-     (codex:models-endpoint-env-var-present-from-values
-       $env-values
-       (codex:codex-api-key-env-var))
-     $codex-api-key-env-enabled
-     (codex:models-endpoint-provider-env-key-name $provider-info)
-     (codex:models-endpoint-provider-env-key-present
-       $provider-info
-       $env-values)
-     (codex:models-endpoint-env-var-present-from-values
-       $env-values
-       (codex:refresh-token-url-override-env-var))))
+     (let $codex-api-key-env-present
+       (codex:models-endpoint-env-var-present-from-values
+         $env-values
+         (codex:codex-api-key-env-var))
+       (let $provider-env-key-name
+         (codex:models-endpoint-provider-env-key-name $provider-info)
+         (let $provider-env-key-present
+           (codex:models-endpoint-provider-env-key-present
+             $provider-info
+             $env-values)
+           (let $refresh-token-url-override-present
+             (codex:models-endpoint-env-var-present-from-values
+               $env-values
+               (codex:refresh-token-url-override-env-var))
+             (codex:auth-env-telemetry
+               $openai-api-key-env-present
+               $codex-api-key-env-present
+               $codex-api-key-env-enabled
+               $provider-env-key-name
+               $provider-env-key-present
+               $refresh-token-url-override-present)))))))
 
 (= (codex:openai-models-endpoint-auth-env-from-env-values
       (CodexOpenAiModelsEndpoint $provider-info $auth-manager)
@@ -378,20 +388,30 @@
               ((CodexModelProviderAuthResolveOk $api-auth)
                (let $auth-header-telemetry
                  (codex:auth-header-telemetry $api-auth)
-                 (codex:openai-models-endpoint-request-plan-ok
-                   (codex:openai-models-endpoint-request-plan
-                     $client-version
-                     (codex:models-endpoint-path)
-                     (codex:models-refresh-timeout-ms)
-                     $api-provider
-                     $api-auth
-                     (codex:models-request-telemetry
-                       $auth-mode
-                       (codex:auth-header-telemetry-attached
-                         $auth-header-telemetry)
-                       (codex:auth-header-telemetry-name
-                         $auth-header-telemetry)
+                 (let $auth-header-attached
+                   (codex:auth-header-telemetry-attached
+                     $auth-header-telemetry)
+                   (let $auth-header-name
+                     (codex:auth-header-telemetry-name
+                       $auth-header-telemetry)
+                     (let $auth-env
                        (codex:collect-auth-env-telemetry-from-env-values
                          $provider-info
                          $codex-api-key-env-enabled
-                         $env-values))))))))))))))
+                         $env-values)
+                       (let $request-telemetry
+                         (codex:models-request-telemetry
+                           $auth-mode
+                           $auth-header-attached
+                           $auth-header-name
+                           $auth-env)
+                         (let $endpoint (codex:models-endpoint-path)
+                           (let $timeout-ms (codex:models-refresh-timeout-ms)
+                             (codex:openai-models-endpoint-request-plan-ok
+                               (codex:openai-models-endpoint-request-plan
+                                 $client-version
+                                 $endpoint
+                                 $timeout-ms
+                                 $api-provider
+                                 $api-auth
+                                 $request-telemetry))))))))))))))))))
