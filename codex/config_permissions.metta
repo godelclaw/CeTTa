@@ -229,11 +229,15 @@
       $codex-home
       $zsh-path
       $main-execve-wrapper-exe)
-   (list:append
-     (codex:config-permissions-runtime-absolute-path-list $zsh-path)
-     (codex:config-permissions-runtime-execve-wrapper-root
-       $codex-home
-       $main-execve-wrapper-exe)))
+   (let $zsh-roots
+     (eval
+       (codex:config-permissions-runtime-absolute-path-list $zsh-path))
+     (let $execve-wrapper-roots
+       (eval
+         (codex:config-permissions-runtime-execve-wrapper-root
+           $codex-home
+           $main-execve-wrapper-exe))
+       (list:append $zsh-roots $execve-wrapper-roots))))
 
 (= (codex:config-permissions-append-result-list
       $items-result
@@ -482,15 +486,155 @@
        $path
        "` must be absolute, use `~/...`, or start with `:`")))
 
+(= (codex:config-permissions-is-ascii-alpha $char)
+   (case $char
+     (("A" True)
+      ("B" True)
+      ("C" True)
+      ("D" True)
+      ("E" True)
+      ("F" True)
+      ("G" True)
+      ("H" True)
+      ("I" True)
+      ("J" True)
+      ("K" True)
+      ("L" True)
+      ("M" True)
+      ("N" True)
+      ("O" True)
+      ("P" True)
+      ("Q" True)
+      ("R" True)
+      ("S" True)
+      ("T" True)
+      ("U" True)
+      ("V" True)
+      ("W" True)
+      ("X" True)
+      ("Y" True)
+      ("Z" True)
+      ("a" True)
+      ("b" True)
+      ("c" True)
+      ("d" True)
+      ("e" True)
+      ("f" True)
+      ("g" True)
+      ("h" True)
+      ("i" True)
+      ("j" True)
+      ("k" True)
+      ("l" True)
+      ("m" True)
+      ("n" True)
+      ("o" True)
+      ("p" True)
+      ("q" True)
+      ("r" True)
+      ("s" True)
+      ("t" True)
+      ("u" True)
+      ("v" True)
+      ("w" True)
+      ("x" True)
+      ("y" True)
+      ("z" True)
+      ($other False))))
+
+(= (codex:config-permissions-windows-drive-absolute-path $path)
+   (if (< (str-length $path) 3)
+       False
+       (and
+         (codex:config-permissions-is-ascii-alpha
+           (str-slice $path 0 1))
+         (and
+           (== (str-slice $path 1 2) ":")
+           (or
+             (== (str-slice $path 2 3) "\\")
+             (== (str-slice $path 2 3) "/"))))))
+
+(= (codex:config-permissions-windows-absolute-path $path)
+   (or
+     (codex:config-permissions-windows-drive-absolute-path $path)
+     (str-starts-with? $path "\\\\")))
+
+(= (codex:config-permissions-normalize-windows-device-path
+      $path)
+   (if (str-starts-with? $path "\\\\?\\UNC\\")
+       (str-concat
+         "\\\\"
+         (str-slice $path 8 (str-length $path)))
+       (if (str-starts-with? $path "\\\\.\\UNC\\")
+           (str-concat
+             "\\\\"
+             (str-slice $path 8 (str-length $path)))
+           (if (str-starts-with? $path "\\\\?\\")
+               (let $without-prefix
+                 (eval (str-slice $path 4 (str-length $path)))
+                 (if (codex:config-permissions-windows-drive-absolute-path
+                       $without-prefix)
+                     $without-prefix
+                     CodexAbsent))
+               (if (str-starts-with? $path "\\\\.\\")
+                   (let $without-prefix
+                     (eval (str-slice $path 4 (str-length $path)))
+                     (if (codex:config-permissions-windows-drive-absolute-path
+                           $without-prefix)
+                         $without-prefix
+                         CodexAbsent))
+                   CodexAbsent)))))
+
+(= (codex:config-permissions-normalize-absolute-path-for-platform
+      $path
+      $is-windows)
+   (if $is-windows
+       (let $normalized
+         (codex:config-permissions-normalize-windows-device-path $path)
+         (if (== $normalized CodexAbsent)
+             $path
+             $normalized))
+       $path))
+
+(= (codex:config-permissions-is-absolute-path-for-platform
+      $path
+      $normalized-path
+      $is-windows)
+   (if $is-windows
+       (or
+         (codex:config-permissions-windows-absolute-path $path)
+         (codex:config-permissions-windows-absolute-path
+           $normalized-path))
+       (path-is-absolute? $normalized-path)))
+
+(= (codex:config-permissions-parse-absolute-path-for-platform
+      $path
+      $is-windows)
+   (let $normalized-path
+     (eval
+       (codex:config-permissions-normalize-absolute-path-for-platform
+         $path
+         $is-windows))
+     (if (and
+           (not
+             (codex:config-permissions-is-absolute-path-for-platform
+               $path
+               $normalized-path
+               $is-windows))
+           (and
+             (not (== $path "~"))
+             (not (str-starts-with? $path "~/"))))
+         (codex:config-permissions-result-error
+           (codex:config-permissions-absolute-path-error $path))
+         (codex:config-permissions-result-ok
+           (if $is-windows
+               $normalized-path
+               (path-normalize $normalized-path))))))
+
 (= (codex:config-permissions-parse-absolute-path $path)
-   (if (or
-         (path-is-absolute? $path)
-         (or
-           (== $path "~")
-           (str-starts-with? $path "~/")))
-       (codex:config-permissions-result-ok (path-normalize $path))
-       (codex:config-permissions-result-error
-         (codex:config-permissions-absolute-path-error $path))))
+   (codex:config-permissions-parse-absolute-path-for-platform
+     $path
+     False))
 
 (= (codex:config-permissions-valid-relative-subpath-parts ())
    True)

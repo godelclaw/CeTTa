@@ -122,6 +122,32 @@
   "filesystem subpath `../secrets` must be a descendant path without `.` or `..` components")
 
 !(assertEqual
+  (codex:config-permissions-normalize-absolute-path-for-platform
+    "\\\\?\\D:\\c\\x\\worktrees\\2508\\swift-base"
+    True)
+  "D:\\c\\x\\worktrees\\2508\\swift-base")
+
+!(assertEqual
+  (codex:config-permissions-normalize-absolute-path-for-platform
+    "\\\\?\\UNC\\server\\share"
+    True)
+  "\\\\server\\share")
+
+!(assertEqual
+  (config-permissions-result-value
+    (codex:config-permissions-parse-absolute-path-for-platform
+      "\\\\?\\D:\\c\\x"
+      True))
+  "D:\\c\\x")
+
+!(assertEqual
+  (config-permissions-result-error-message
+    (codex:config-permissions-parse-absolute-path-for-platform
+      "relative\\path"
+      True))
+  "filesystem path `relative\\path` must be absolute, use `~/...`, or start with `:`")
+
+!(assertEqual
   (codex:config-permissions-parse-special-path ":project_roots")
   (codex:file-system-special-path-project-roots CodexAbsent))
 
