@@ -16,6 +16,13 @@
   "/tmp/codex/generated_images/generated_image/generated_image.png")
 
 !(assertEqual
+  (codex:image-generation-artifact-path
+    "/tmp/codex"
+    "sess:ion one"
+    "ig?name#1")
+  "/tmp/codex/generated_images/sess_ion_one/ig_name_1.png")
+
+!(assertEqual
   (codex:strip-hidden-assistant-markup
     "before<oai-mem-citation>doc1</oai-mem-citation>\n<proposed_plan>\n- x\n</proposed_plan>\nafter"
     True)

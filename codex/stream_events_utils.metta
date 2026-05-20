@@ -22,14 +22,14 @@
 ;   removed path separators from session and call ids, the visible path is the
 ;   same for the absolute codex_home values used by Codex and avoids symbolic
 ;   path-helper reduction at this eval boundary.
-; - Rust's artifact path sanitizer maps every non `[A-Za-z0-9_-]` ASCII
-;   character to `_`. The exact recursive sanitizer is exposed below as
+; - Rust's artifact path sanitizer maps every non `[A-Za-z0-9_-]` character to
+;   `_`. The exact recursive sanitizer is exposed below as
 ;   `image-generation-sanitize-artifact-component`. The path constructor uses a
-;   non-recursive separator/dot fast path for this eval boundary because the
-;   exact recursive helper loses reductions when this module is evaluated beside
-;   memory-citation parsing surfaces. The fast path preserves the Rust behavior
-;   for path traversal separators and dotted ids; extending it to all invalid
-;   ASCII punctuation remains future cleanup.
+;   printable-ASCII replacement list for this eval boundary because the exact
+;   recursive helper loses reductions when this module is evaluated beside
+;   memory-citation parsing surfaces. This preserves the Rust behavior for
+;   printable ASCII ids used by Codex tool calls; non-ASCII id sanitization
+;   should move back to the exact helper when the reducer issue is removed.
 ; - The current CeTTa protocol serializer has not yet exposed Rust
 ;   `ResponseItem::ToolSearchCall`. This helper still recognizes the Rust
 ;   constructor shape locally so the external-context predicate keeps the same
@@ -155,12 +155,27 @@
        "/")
      $file-name))
 
+(= (codex:image-generation-artifact-invalid-printable-chars)
+   ("." "/" "\\" " " "!" "\"" "#" "$" "%" "&" "'" "(" ")" "*" "+"
+    "," ":" ";" "<" "=" ">" "?" "@" "[" "]" "^" "`" "{" "|" "}" "~"
+    "\n" "\t"))
+
+(= (codex:image-generation-replace-artifact-path-char $text $needle)
+   (str-join "_" (str-split $needle $text)))
+
+(= (codex:image-generation-sanitize-artifact-path-component-from-chars $value ())
+   $value)
+
+(= (codex:image-generation-sanitize-artifact-path-component-from-chars $value $chars)
+   (let ($head $tail) (decons-atom $chars)
+     (codex:image-generation-sanitize-artifact-path-component-from-chars
+       (codex:image-generation-replace-artifact-path-char $value $head)
+       $tail)))
+
 (= (codex:image-generation-sanitize-artifact-path-component $value)
-   (str-join
-     "_"
-     (str-split
-       "/"
-       (str-join "_" (str-split "." $value)))))
+   (codex:image-generation-sanitize-artifact-path-component-from-chars
+     $value
+     (codex:image-generation-artifact-invalid-printable-chars)))
 
 (= (codex:image-generation-artifact-path $codex-home $session-id $call-id)
    (if (== $session-id "")
