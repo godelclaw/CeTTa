@@ -1,4 +1,5 @@
 !(register-module! ../codex)
+!(import! &self fs)
 !(import! &self json)
 !(import! &self codex:apply_patch)
 !(import! &self codex:apply_patch_runtime)
@@ -104,6 +105,38 @@
      False
      (codex:windows-sandbox-level-disabled)
      False))
+
+(= (runtime-run-patch-text)
+   "*** Begin Patch\n*** Update File: runtime/codex-apply-runtime-run.txt\n@@\n-before\n+after\n*** End Patch")
+
+(= (runtime-run-stdout)
+   "Success. Updated the following files:\nM runtime/codex-apply-runtime-run.txt\n")
+
+(= (runtime-run-request)
+   (codex:apply-patch-runtime-request
+     (CodexApplyPatchAction
+       "/home/zarclaw/repos/CeTTa"
+       ((CodexApplyPatchFileChangeUpdate
+          "runtime/codex-apply-runtime-run.txt"
+          "@@\n-before\n+after\n"
+          CodexAbsent
+          "after\n")))
+     (runtime-run-patch-text)
+     ("/home/zarclaw/repos/CeTTa/runtime/codex-apply-runtime-run.txt")
+     ((codex:file-change-map-entry
+        "runtime/codex-apply-runtime-run.txt"
+        (codex:file-change-update "@@\n-before\n+after\n" CodexAbsent)))
+     False
+     (codex:approval-skip False)
+     CodexAbsent
+     False))
+
+(= (runtime-run-context $environment-available)
+   (codex:apply-patch-runtime-run-context
+     "call-run"
+     "linux"
+     $environment-available
+     CodexAbsent))
 
 (= (approval-ctx $guardian-review-id $retry-reason)
    (codex:approval-ctx
@@ -354,3 +387,114 @@
     (runtime-request)
     (runtime-no-sandbox-attempt))
   CodexAbsent)
+
+!(assertEqual
+  (codex:apply-patch-runtime-output-delta-events
+    "call-delta"
+    "stdout text"
+    "")
+  ((codex:exec-command-output-delta-event
+     "call-delta"
+     "stdout"
+     "stdout text")))
+
+!(assertEqual
+  (codex:apply-patch-runtime-finish-patch-result
+    "LinuxSeccomp"
+    "linux"
+    "call-denied"
+    CodexAbsent
+    (PatchResult False "" "Operation not permitted" ()))
+  (codex:apply-patch-runtime-run-err
+    (codex:apply-patch-runtime-tool-error-sandbox-denied
+      (codex:apply-patch-runtime-exec-tool-call-output
+        1
+        ""
+        "Operation not permitted"
+        CodexAbsent)
+      CodexAbsent)
+    ((codex:exec-command-output-delta-event
+       "call-denied"
+       "stderr"
+       "Operation not permitted"))))
+
+!(assertEqual
+  (codex:apply-patch-runtime-is-likely-sandbox-denied
+    "None"
+    (codex:apply-patch-runtime-exec-tool-call-output
+      1
+      ""
+      "Operation not permitted"
+      CodexAbsent)
+    "linux")
+  False)
+
+!(assertEqual
+  (codex:apply-patch-runtime-is-likely-sandbox-denied
+    "LinuxSeccomp"
+    (codex:apply-patch-runtime-exec-tool-call-output
+      0
+      ""
+      "Operation not permitted"
+      CodexAbsent)
+    "linux")
+  False)
+
+!(assertEqual
+  (codex:apply-patch-runtime-is-likely-sandbox-denied
+    "LinuxSeccomp"
+    (codex:apply-patch-runtime-exec-tool-call-output
+      2
+      ""
+      "ordinary failure"
+      CodexAbsent)
+    "linux")
+  False)
+
+!(assertEqual
+  (codex:apply-patch-runtime-is-likely-sandbox-denied
+    "LinuxSeccomp"
+    (codex:apply-patch-runtime-exec-tool-call-output
+      159
+      ""
+      "ordinary failure"
+      CodexAbsent)
+    "linux")
+  True)
+
+!(assertEqual
+  (codex:apply-patch-runtime-run
+    (runtime)
+    (runtime-run-request)
+    (runtime-no-sandbox-attempt)
+    (runtime-run-context False))
+  (codex:apply-patch-runtime-run-err
+    (codex:apply-patch-runtime-tool-error-rejected
+      "apply_patch is unavailable in this session")
+    ()))
+
+!(fs-write-text
+   "/home/zarclaw/repos/CeTTa/runtime/codex-apply-runtime-run.txt"
+   "before\n")
+
+!(assertEqual
+  (codex:apply-patch-runtime-run
+    (runtime)
+    (runtime-run-request)
+    (runtime-no-sandbox-attempt)
+    (runtime-run-context True))
+  (codex:apply-patch-runtime-run-ok
+    (codex:apply-patch-runtime-exec-tool-call-output
+      0
+      (runtime-run-stdout)
+      ""
+      CodexAbsent)
+    ((codex:exec-command-output-delta-event
+       "call-run"
+       "stdout"
+       (runtime-run-stdout)))))
+
+!(assertEqualToResult
+  (fs-read-text
+    "/home/zarclaw/repos/CeTTa/runtime/codex-apply-runtime-run.txt")
+  ("after\n"))

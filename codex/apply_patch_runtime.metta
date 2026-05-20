@@ -28,14 +28,24 @@
 ;   surface currently stores the public legacy read/write root lists, so this
 ;   slice materializes those lists into the equivalent path entries at the
 ;   apply-patch runtime boundary before applying Rust's policy transform.
+; - Rust `ToolRuntime::run` reads `ctx.turn.environment` and invokes the
+;   environment filesystem asynchronously. This pure CeTTa runtime boundary
+;   carries environment availability explicitly and uses the already-ported
+;   local `patch-apply` primitive for the filesystem operation; the branch
+;   ordering, output shaping, delta emission, and sandbox-denial classification
+;   match the Rust helper. The sandbox-denial heuristic is kept local here to
+;   avoid importing unrelated unified-exec constructor surfaces into protocol
+;   tests; it is the same algorithm as Rust `exec::is_likely_sandbox_denied`.
 
 !(import! &self apply_patch)
 !(import! &self approval)
 !(import! &self json)
 !(import! &self list)
+!(import! &self patch)
 !(import! &self permissions)
 !(import! &self protocol)
 !(import! &self request_permissions)
+!(import! &self str)
 !(import! &self tool_sandboxing)
 
 (= (codex:apply-patch-runtime-new)
@@ -919,3 +929,440 @@
                    $resolved-attempt)
                  (codex:apply-patch-runtime-attempt-use-legacy-landlock
                    $resolved-attempt))))))))
+
+(= (codex:apply-patch-runtime-run-context
+      $call-id
+      $host-platform
+      $environment-available
+      $duration)
+   (CodexApplyPatchRuntimeRunContext
+     $call-id
+     $host-platform
+     $environment-available
+     $duration))
+
+(= (codex:apply-patch-runtime-run-context-call-id
+      (CodexApplyPatchRuntimeRunContext
+        $call-id
+        $host-platform
+        $environment-available
+        $duration))
+   $call-id)
+
+(= (codex:apply-patch-runtime-run-context-host-platform
+      (CodexApplyPatchRuntimeRunContext
+        $call-id
+        $host-platform
+        $environment-available
+        $duration))
+   $host-platform)
+
+(= (codex:apply-patch-runtime-run-context-environment-available
+      (CodexApplyPatchRuntimeRunContext
+        $call-id
+        $host-platform
+        $environment-available
+        $duration))
+   $environment-available)
+
+(= (codex:apply-patch-runtime-run-context-duration
+      (CodexApplyPatchRuntimeRunContext
+        $call-id
+        $host-platform
+        $environment-available
+        $duration))
+   $duration)
+
+(= (codex:apply-patch-runtime-output-delta-event
+      $call-id
+      $stream
+      $chunk)
+   (if (== $chunk "")
+       ()
+       ((codex:exec-command-output-delta-event $call-id $stream $chunk))))
+
+(= (codex:apply-patch-runtime-output-delta-events
+      $call-id
+      $stdout
+      $stderr)
+   (list:append
+     (codex:apply-patch-runtime-output-delta-event
+       $call-id
+       "stdout"
+       $stdout)
+     (codex:apply-patch-runtime-output-delta-event
+       $call-id
+       "stderr"
+       $stderr)))
+
+(= (codex:apply-patch-runtime-exec-tool-call-output
+      $exit-code
+      $stdout
+      $stderr
+      $duration)
+   (CodexApplyPatchRuntimeExecToolCallOutput
+     $exit-code
+     $stdout
+     $stderr
+     (str-concat $stdout $stderr)
+     $duration
+     False))
+
+(= (codex:apply-patch-runtime-exec-tool-call-output-exit-code
+      (CodexApplyPatchRuntimeExecToolCallOutput
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration
+        $timed-out))
+   $exit-code)
+
+(= (codex:apply-patch-runtime-exec-tool-call-output-stdout
+      (CodexApplyPatchRuntimeExecToolCallOutput
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration
+        $timed-out))
+   $stdout)
+
+(= (codex:apply-patch-runtime-exec-tool-call-output-stderr
+      (CodexApplyPatchRuntimeExecToolCallOutput
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration
+        $timed-out))
+   $stderr)
+
+(= (codex:apply-patch-runtime-exec-tool-call-output-aggregated-output
+      (CodexApplyPatchRuntimeExecToolCallOutput
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration
+        $timed-out))
+   $aggregated-output)
+
+(= (codex:apply-patch-runtime-ascii-lower-char $char)
+   (if (== $char "A")
+       "a"
+       (if (== $char "B")
+           "b"
+           (if (== $char "C")
+               "c"
+               (if (== $char "D")
+                   "d"
+                   (if (== $char "E")
+                       "e"
+                       (if (== $char "F")
+                           "f"
+                           (if (== $char "G")
+                               "g"
+                               (if (== $char "H")
+                                   "h"
+                                   (if (== $char "I")
+                                       "i"
+                                       (if (== $char "J")
+                                           "j"
+                                           (if (== $char "K")
+                                               "k"
+                                               (if (== $char "L")
+                                                   "l"
+                                                   (if (== $char "M")
+                                                       "m"
+                                                       (if (== $char "N")
+                                                           "n"
+                                                           (if (== $char "O")
+                                                               "o"
+                                                               (if (== $char "P")
+                                                                   "p"
+                                                                   (if (== $char "Q")
+                                                                       "q"
+                                                                       (if (== $char "R")
+                                                                           "r"
+                                                                           (if (== $char "S")
+                                                                               "s"
+                                                                               (if (== $char "T")
+                                                                                   "t"
+                                                                                   (if (== $char "U")
+                                                                                       "u"
+                                                                                       (if (== $char "V")
+                                                                                           "v"
+                                                                                           (if (== $char "W")
+                                                                                               "w"
+                                                                                               (if (== $char "X")
+                                                                                                   "x"
+                                                                                                   (if (== $char "Y")
+                                                                                                       "y"
+                                                                                                       (if (== $char "Z")
+                                                                                                           "z"
+                                                                                                           $char)))))))))))))))))))))))))))
+
+(= (codex:apply-patch-runtime-ascii-lower $text)
+   (codex:apply-patch-runtime-ascii-lower-from
+     $text
+     0
+     ""))
+
+(= (codex:apply-patch-runtime-ascii-lower-from
+      $text
+      $index
+      $out)
+   (if (>= $index (eval (str-length $text)))
+       $out
+       (let $char
+         (eval (str-slice $text $index (+ $index 1)))
+         (codex:apply-patch-runtime-ascii-lower-from
+           $text
+           (+ $index 1)
+           (str-concat
+             $out
+             (codex:apply-patch-runtime-ascii-lower-char
+               $char))))))
+
+(= (codex:apply-patch-runtime-text-contains $text $needle)
+   (> (list:len (eval (str-split $needle $text))) 1))
+
+(= (codex:apply-patch-runtime-sandbox-denied-keywords)
+   ("operation not permitted"
+    "permission denied"
+    "read-only file system"
+    "seccomp"
+    "sandbox"
+    "landlock"
+    "failed to write file"))
+
+(= (codex:apply-patch-runtime-text-has-sandbox-keyword
+      $text
+      $keywords)
+   (let $lower-results
+     (collapse (codex:apply-patch-runtime-ascii-lower $text))
+     (let $keyword-results (collapse $keywords)
+       (codex:apply-patch-runtime-text-has-sandbox-keyword-resolved
+         (list:first $lower-results)
+         (list:first $keyword-results)))))
+
+(= (codex:apply-patch-runtime-text-has-sandbox-keyword-resolved
+      $lower
+      ())
+   False)
+
+(= (codex:apply-patch-runtime-text-has-sandbox-keyword-resolved
+      $lower
+      $keywords)
+   (let ($head $tail) (decons-atom $keywords)
+     (if (codex:apply-patch-runtime-text-contains $lower $head)
+         True
+         (codex:apply-patch-runtime-text-has-sandbox-keyword-resolved
+           $lower
+           $tail))))
+
+(= (codex:apply-patch-runtime-output-has-sandbox-keyword $output)
+   (let $resolved-output (list:first (collapse $output))
+     (let $keywords
+       (codex:apply-patch-runtime-sandbox-denied-keywords)
+       (case
+         (collapse
+           (codex:apply-patch-runtime-text-has-sandbox-keyword
+             (codex:apply-patch-runtime-exec-tool-call-output-stderr
+               $resolved-output)
+             $keywords))
+         (((True)
+           True)
+          ((False)
+           (case
+             (collapse
+               (codex:apply-patch-runtime-text-has-sandbox-keyword
+                 (codex:apply-patch-runtime-exec-tool-call-output-stdout
+                   $resolved-output)
+                 $keywords))
+             (((True)
+               True)
+              ((False)
+               (codex:apply-patch-runtime-text-has-sandbox-keyword
+                 (codex:apply-patch-runtime-exec-tool-call-output-aggregated-output
+                   $resolved-output)
+                 $keywords))))))))))
+
+(= (codex:apply-patch-runtime-quick-reject-exit-code $exit-code)
+   (or
+     (== $exit-code 2)
+     (or
+       (== $exit-code 126)
+       (== $exit-code 127))))
+
+(= (codex:apply-patch-runtime-linux-sigsys-exit-code)
+   159)
+
+(= (codex:apply-patch-runtime-is-likely-sandbox-denied
+      $sandbox-type
+      $output
+      $host-platform)
+   (let $resolved-output (list:first (collapse $output))
+     (let $exit-code
+       (codex:apply-patch-runtime-exec-tool-call-output-exit-code
+         $resolved-output)
+       (case
+         (collapse
+           (or
+             (== $sandbox-type "None")
+             (== $exit-code 0)))
+         (((True)
+           False)
+          ((False)
+           (case
+             (collapse
+               (codex:apply-patch-runtime-output-has-sandbox-keyword
+                 $resolved-output))
+             (((True)
+               True)
+              ((False)
+               (case
+                 (collapse
+                   (codex:apply-patch-runtime-quick-reject-exit-code
+                     $exit-code))
+                 (((True)
+                   False)
+                  ((False)
+                   (and
+                     (== $host-platform "linux")
+                     (and
+                       (== $sandbox-type "LinuxSeccomp")
+                       (== $exit-code
+                           (codex:apply-patch-runtime-linux-sigsys-exit-code))))))))))))))))
+
+(= (codex:apply-patch-runtime-run-ok $output $events)
+   (CodexApplyPatchRuntimeRunOk $output $events))
+
+(= (codex:apply-patch-runtime-run-err $error $events)
+   (CodexApplyPatchRuntimeRunErr $error $events))
+
+(= (codex:apply-patch-runtime-tool-error-rejected $message)
+   (CodexApplyPatchRuntimeToolErrorRejected $message))
+
+(= (codex:apply-patch-runtime-tool-error-sandbox-denied
+      $output
+      $network-policy-decision)
+   (CodexApplyPatchRuntimeToolErrorSandboxDenied
+     $output
+     $network-policy-decision))
+
+(= (codex:apply-patch-runtime-run-result-kind
+      (CodexApplyPatchRuntimeRunOk $output $events))
+   ok)
+
+(= (codex:apply-patch-runtime-run-result-kind
+      (CodexApplyPatchRuntimeRunErr $error $events))
+   err)
+
+(= (codex:apply-patch-runtime-run-result-output
+      (CodexApplyPatchRuntimeRunOk $output $events))
+   $output)
+
+(= (codex:apply-patch-runtime-run-result-error
+      (CodexApplyPatchRuntimeRunErr $error $events))
+   $error)
+
+(= (codex:apply-patch-runtime-run-result-events
+      (CodexApplyPatchRuntimeRunOk $output $events))
+   $events)
+
+(= (codex:apply-patch-runtime-run-result-events
+      (CodexApplyPatchRuntimeRunErr $error $events))
+   $events)
+
+(= (codex:apply-patch-runtime-tool-error-kind
+      (CodexApplyPatchRuntimeToolErrorRejected $message))
+   rejected)
+
+(= (codex:apply-patch-runtime-tool-error-kind
+      (CodexApplyPatchRuntimeToolErrorSandboxDenied
+        $output
+        $network-policy-decision))
+   sandbox_denied)
+
+(= (codex:apply-patch-runtime-tool-error-message
+      (CodexApplyPatchRuntimeToolErrorRejected $message))
+   $message)
+
+(= (codex:apply-patch-runtime-tool-error-output
+      (CodexApplyPatchRuntimeToolErrorSandboxDenied
+        $output
+        $network-policy-decision))
+   $output)
+
+(= (codex:apply-patch-runtime-tool-error-network-policy-decision
+      (CodexApplyPatchRuntimeToolErrorSandboxDenied
+        $output
+        $network-policy-decision))
+   $network-policy-decision)
+
+(= (codex:apply-patch-runtime-finish-patch-result
+      $sandbox-type
+      $host-platform
+      $call-id
+      $duration
+      $patch-result)
+   (let $stdout (patch-result-stdout $patch-result)
+     (let $stderr (patch-result-stderr $patch-result)
+       (let $ok (patch-result-ok? $patch-result)
+         (let $output
+           (codex:apply-patch-runtime-exec-tool-call-output
+             (if $ok 0 1)
+             $stdout
+             $stderr
+             $duration)
+           (let $events
+             (codex:apply-patch-runtime-output-delta-events
+               $call-id
+               $stdout
+               $stderr)
+             (if (and
+                   (not $ok)
+                   (codex:apply-patch-runtime-is-likely-sandbox-denied
+                     $sandbox-type
+                     $output
+                     $host-platform))
+                 (CodexApplyPatchRuntimeRunErr
+                   (CodexApplyPatchRuntimeToolErrorSandboxDenied
+                     $output
+                     CodexAbsent)
+                   $events)
+                 (CodexApplyPatchRuntimeRunOk $output $events))))))))
+
+(= (codex:apply-patch-runtime-run
+      $runtime
+      $request
+      $attempt
+      $ctx)
+   (let $resolved-ctx $ctx
+     (if (not
+           (codex:apply-patch-runtime-run-context-environment-available
+             $resolved-ctx))
+         (CodexApplyPatchRuntimeRunErr
+           (CodexApplyPatchRuntimeToolErrorRejected
+             "apply_patch is unavailable in this session")
+           ())
+         (let $req (codex:apply-patch-runtime-materialize-request $request)
+           (let $resolved-attempt
+             (codex:apply-patch-runtime-materialize-sandbox-attempt $attempt)
+             (let $patch-result
+               (patch-apply
+                 (codex:apply-patch-action-cwd
+                   (codex:apply-patch-runtime-request-action $req))
+                 (codex:apply-patch-runtime-request-patch-text $req))
+               (codex:apply-patch-runtime-finish-patch-result
+                 (codex:apply-patch-runtime-attempt-sandbox
+                   $resolved-attempt)
+                 (codex:apply-patch-runtime-run-context-host-platform
+                   $resolved-ctx)
+                 (codex:apply-patch-runtime-run-context-call-id
+                   $resolved-ctx)
+                 (codex:apply-patch-runtime-run-context-duration
+                   $resolved-ctx)
+                 $patch-result)))))))
