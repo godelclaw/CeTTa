@@ -315,6 +315,81 @@
   ((CodexMcpToolCallResultErr "cancelled")))
 
 !(assertEqualToResult
+  (codex:sanitize-mcp-metric-tag-value "bad value!")
+  ("bad_value"))
+
+!(assertEqualToResult
+  (codex:sanitize-mcp-metric-tag-value "///")
+  ("unspecified"))
+
+!(assertEqualToResult
+  (codex:sanitize-mcp-metric-tag-value "___ok___")
+  ("ok"))
+
+!(assertEqualToResult
+  (codex:mcp-call-metric-tags
+    "error"
+    "run tool!"
+    "calendar/id"
+    "Calendar Connector!")
+  (((CodexMcpCallMetricTag "status" "error")
+    (CodexMcpCallMetricTag "tool" "run_tool")
+    (CodexMcpCallMetricTag "connector_id" "calendar/id")
+    (CodexMcpCallMetricTag "connector_name" "Calendar_Connector"))))
+
+!(assertEqualToResult
+  (codex:mcp-call-metric-tags
+    "///"
+    ""
+    ""
+    CodexAbsent)
+  (((CodexMcpCallMetricTag "status" "unspecified")
+    (CodexMcpCallMetricTag "tool" "unspecified"))))
+
+!(assertEqualToResult
+  (codex:mcp-call-metric-tags
+    "ok"
+    "tool"
+    CodexAbsent
+    "connector")
+  (((CodexMcpCallMetricTag "status" "ok")
+    (CodexMcpCallMetricTag "tool" "tool")
+    (CodexMcpCallMetricTag "connector_name" "connector"))))
+
+!(assertEqualToResult
+  (codex:emit-mcp-call-metrics-plan
+    "ok"
+    "tool"
+    CodexAbsent
+    CodexAbsent
+    CodexAbsent)
+  (((CodexMcpCallCounterMetricOp
+      "codex.mcp.call"
+      1
+      ((CodexMcpCallMetricTag "status" "ok")
+       (CodexMcpCallMetricTag "tool" "tool"))))))
+
+!(assertEqualToResult
+  (codex:emit-mcp-call-metrics-plan
+    "error"
+    "tool"
+    "connector"
+    CodexAbsent
+    (codex:duration 0 5000000))
+  (((CodexMcpCallCounterMetricOp
+      "codex.mcp.call"
+      1
+      ((CodexMcpCallMetricTag "status" "error")
+       (CodexMcpCallMetricTag "tool" "tool")
+       (CodexMcpCallMetricTag "connector_id" "connector")))
+    (CodexMcpCallDurationMetricOp
+      "codex.mcp.call.duration_ms"
+      (CodexDuration 0 5000000)
+      ((CodexMcpCallMetricTag "status" "error")
+       (CodexMcpCallMetricTag "tool" "tool")
+       (CodexMcpCallMetricTag "connector_id" "connector"))))))
+
+!(assertEqualToResult
   (codex:is-mcp-tool-approval-question-id "mcp_tool_call_approval")
   (False))
 

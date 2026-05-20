@@ -17,6 +17,7 @@
 ; - guardian review-decision mapping
 ; - read-only/destructive/open-world approval requirement logic
 ; - MCP tool-call skip event plan construction
+; - MCP call metric tag sanitization and emission planning
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust's full MCP tool-call path is async and crosses session, hooks,
@@ -42,6 +43,9 @@
 ; - Rust's notify_mcp_tool_call_skip emits events through Session and returns
 ;   Err(message). This pure helper returns the event list plus the same error
 ;   result so a runtime layer can perform the side effects later.
+; - Rust emits MCP metrics through TurnContext.session_telemetry and reuses
+;   codex_otel::sanitize_metric_tag_value. This slice ports the sanitizer
+;   locally and returns the metric operations that the runtime should emit.
 
 !(import! &self json)
 !(import! &self list)
@@ -138,6 +142,12 @@
 (= (codex:mcp-tool-call-arc-monitor-callsite-always-allow)
    "mcp_tool_call__always_allow")
 
+(= (codex:mcp-call-count-metric-name)
+   "codex.mcp.call")
+
+(= (codex:mcp-call-duration-metric-name)
+   "codex.mcp.call.duration_ms")
+
 (= (codex:app-tool-approval-auto)
    (CodexAppToolApprovalAuto))
 
@@ -184,6 +194,15 @@
 
 (= (codex:mcp-tool-approval-server-entry $server-name $config)
    (CodexMcpToolApprovalServerEntry $server-name $config))
+
+(= (codex:mcp-call-metric-tag $key $value)
+   (CodexMcpCallMetricTag $key $value))
+
+(= (codex:mcp-call-counter-metric-op $metric-name $inc $tags)
+   (CodexMcpCallCounterMetricOp $metric-name $inc $tags))
+
+(= (codex:mcp-call-duration-metric-op $metric-name $duration $tags)
+   (CodexMcpCallDurationMetricOp $metric-name $duration $tags))
 
 (= (codex:mcp-tool-approval-prompt-options-allow-session-remember
       (CodexMcpToolApprovalPromptOptions
@@ -585,6 +604,222 @@
 
 (= (codex:mcp-tool-call-bool-or-default $value $default)
    (if (== $value CodexAbsent) $default $value))
+
+(= (codex:mcp-metric-tag-max-len)
+   256)
+
+(= (codex:mcp-metric-tag-is-ascii-alphanumeric $char)
+   (let $found
+     (str-find
+       "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+       $char)
+     (if (== $found Empty) False True)))
+
+(= (codex:mcp-metric-tag-is-valid-char $char)
+   (let $found
+     (str-find
+       "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz._-/"
+       $char)
+     (if (== $found Empty) False True)))
+
+(= (codex:mcp-metric-tag-sanitize-chars-from $value $index $acc)
+   (let $len (str-length $value)
+     (if (== $index $len)
+         $acc
+         (let $char (str-slice $value $index (+ $index 1))
+           (case (codex:mcp-metric-tag-is-valid-char $char)
+             ((True
+               (codex:mcp-metric-tag-sanitize-chars-from
+                 $value
+                 (+ $index 1)
+                 (str-concat $acc $char)))
+              (False
+               (codex:mcp-metric-tag-sanitize-chars-from
+                 $value
+                 (+ $index 1)
+                 (str-concat $acc "_")))))))))
+
+(= (codex:mcp-metric-tag-trim-leading-underscores $value)
+   (if (== (str-length $value) 0)
+       ""
+       (if (== (str-slice $value 0 1) "_")
+           (codex:mcp-metric-tag-trim-leading-underscores
+             (str-slice $value 1 (str-length $value)))
+           $value)))
+
+(= (codex:mcp-metric-tag-trim-trailing-underscores $value)
+   (let $len (str-length $value)
+     (if (== $len 0)
+         ""
+         (if (== (str-slice $value (- $len 1) $len) "_")
+             (codex:mcp-metric-tag-trim-trailing-underscores
+               (str-slice $value 0 (- $len 1)))
+             $value))))
+
+(= (codex:mcp-metric-tag-trim-underscores $value)
+   (codex:mcp-metric-tag-trim-trailing-underscores
+     (codex:mcp-metric-tag-trim-leading-underscores $value)))
+
+(= (codex:mcp-metric-tag-contains-ascii-alphanumeric-from $value $index)
+   (if (== $index (str-length $value))
+       False
+       (if (codex:mcp-metric-tag-is-ascii-alphanumeric
+             (str-slice $value $index (+ $index 1)))
+           True
+           (codex:mcp-metric-tag-contains-ascii-alphanumeric-from
+             $value
+             (+ $index 1)))))
+
+(= (codex:mcp-metric-tag-contains-ascii-alphanumeric $value)
+   (codex:mcp-metric-tag-contains-ascii-alphanumeric-from $value 0))
+
+(= (codex:sanitize-mcp-metric-tag-value-after-trim "")
+   "unspecified")
+
+(= (codex:sanitize-mcp-metric-tag-value-after-trim $trimmed)
+   (if (codex:mcp-metric-tag-contains-ascii-alphanumeric $trimmed)
+       (if (<= (str-length $trimmed)
+               (codex:mcp-metric-tag-max-len))
+           $trimmed
+           (str-slice
+             $trimmed
+             0
+             (codex:mcp-metric-tag-max-len)))
+       "unspecified"))
+
+(= (codex:sanitize-mcp-metric-tag-value-after-sanitize $sanitized)
+   (case (codex:mcp-metric-tag-trim-underscores $sanitized)
+     (($trimmed
+       (codex:sanitize-mcp-metric-tag-value-after-trim $trimmed)))))
+
+(= (codex:sanitize-mcp-metric-tag-value $value)
+   (if (== $value "")
+       "unspecified"
+       (case (codex:mcp-metric-tag-sanitize-chars-from $value 0 "")
+         (($sanitized
+           (codex:sanitize-mcp-metric-tag-value-after-sanitize
+             $sanitized))))))
+
+(= (codex:mcp-call-metric-optional-string-is-nonempty $value)
+   (if (or (== $value CodexAbsent)
+           (== $value ""))
+       False
+       True))
+
+(= (codex:mcp-call-metric-tags-from-presence
+      $status-value
+      $tool-value
+      False
+      False
+      $connector-id
+      $connector-name)
+   ((CodexMcpCallMetricTag "status" $status-value)
+    (CodexMcpCallMetricTag "tool" $tool-value)))
+
+(= (codex:mcp-call-metric-tags-from-presence
+      $status-value
+      $tool-value
+      True
+      False
+      $connector-id
+      $connector-name)
+   (case (codex:sanitize-mcp-metric-tag-value $connector-id)
+     (($connector-id-value
+       ((CodexMcpCallMetricTag "status" $status-value)
+        (CodexMcpCallMetricTag "tool" $tool-value)
+        (CodexMcpCallMetricTag
+          "connector_id"
+          $connector-id-value))))))
+
+(= (codex:mcp-call-metric-tags-from-presence
+      $status-value
+      $tool-value
+      False
+      True
+      $connector-id
+      $connector-name)
+   (case (codex:sanitize-mcp-metric-tag-value $connector-name)
+     (($connector-name-value
+       ((CodexMcpCallMetricTag "status" $status-value)
+        (CodexMcpCallMetricTag "tool" $tool-value)
+        (CodexMcpCallMetricTag
+          "connector_name"
+          $connector-name-value))))))
+
+(= (codex:mcp-call-metric-tags-from-presence
+      $status-value
+      $tool-value
+      True
+      True
+      $connector-id
+      $connector-name)
+   (case (codex:sanitize-mcp-metric-tag-value $connector-id)
+     (($connector-id-value
+       (case (codex:sanitize-mcp-metric-tag-value $connector-name)
+         (($connector-name-value
+           ((CodexMcpCallMetricTag "status" $status-value)
+            (CodexMcpCallMetricTag "tool" $tool-value)
+            (CodexMcpCallMetricTag
+              "connector_id"
+              $connector-id-value)
+            (CodexMcpCallMetricTag
+              "connector_name"
+              $connector-name-value)))))))))
+
+(= (codex:mcp-call-metric-tags
+      $status
+      $tool-name
+      $connector-id
+      $connector-name)
+   (case (codex:sanitize-mcp-metric-tag-value $status)
+     (($status-value
+       (case (codex:sanitize-mcp-metric-tag-value $tool-name)
+         (($tool-value
+           (case
+             (codex:mcp-call-metric-optional-string-is-nonempty
+               $connector-id)
+             (($connector-id-present
+               (case
+                 (codex:mcp-call-metric-optional-string-is-nonempty
+                   $connector-name)
+                 (($connector-name-present
+                   (codex:mcp-call-metric-tags-from-presence
+                     $status-value
+                     $tool-value
+                     $connector-id-present
+                     $connector-name-present
+                     $connector-id
+                     $connector-name))))))))))))))
+
+(= (codex:emit-mcp-call-metrics-plan-from-tags $tags $duration)
+   (if (or (== $duration CodexAbsent)
+           (== $duration Empty))
+       ((CodexMcpCallCounterMetricOp
+          (codex:mcp-call-count-metric-name)
+          1
+          $tags))
+       ((CodexMcpCallCounterMetricOp
+          (codex:mcp-call-count-metric-name)
+          1
+          $tags)
+        (CodexMcpCallDurationMetricOp
+          (codex:mcp-call-duration-metric-name)
+          $duration
+          $tags))))
+
+(= (codex:emit-mcp-call-metrics-plan
+      $status
+      $tool-name
+      $connector-id
+      $connector-name
+      $duration)
+   (case (codex:mcp-call-metric-tags
+           $status
+           $tool-name
+           $connector-id
+           $connector-name)
+     (($tags
+       (codex:emit-mcp-call-metrics-plan-from-tags $tags $duration)))))
 
 (= (codex:mcp-tool-call-approval-mode-or-default CodexAbsent)
    (codex:app-tool-approval-auto))
