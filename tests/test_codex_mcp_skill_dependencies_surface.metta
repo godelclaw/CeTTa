@@ -1,4 +1,5 @@
 !(register-module! ../codex)
+!(import! &self codex:default_client)
 !(import! &self codex:mcp)
 !(import! &self codex:mcp_skill_dependencies)
 !(import! &self codex:skill_model)
@@ -52,27 +53,28 @@
   ("Continue anyway"))
 
 !(assertEqualToResult
-  (codex:default-client-originator)
+  (codex:default-client-default-originator)
   ("codex_cli_rs"))
 
 !(assertEqualToResult
-  (codex:is-first-party-originator "codex_cli_rs")
+  (codex:default-client-is-first-party-originator "codex_cli_rs")
   (True))
 
 !(assertEqualToResult
-  (codex:is-first-party-originator "codex-tui")
+  (codex:default-client-is-first-party-originator "codex-tui")
   (True))
 
 !(assertEqualToResult
-  (codex:is-first-party-originator "codex_vscode")
+  (codex:default-client-is-first-party-originator "codex_vscode")
   (True))
 
 !(assertEqualToResult
-  (codex:is-first-party-originator "Codex Something Else")
+  (codex:default-client-is-first-party-originator
+    "Codex Something Else")
   (True))
 
 !(assertEqualToResult
-  (codex:is-first-party-originator "codex_cli")
+  (codex:default-client-is-first-party-originator "codex_cli")
   (False))
 
 !(assertEqualToResult

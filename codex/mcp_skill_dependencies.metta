@@ -59,6 +59,7 @@
 ;   for name collisions, and appends missing updated globals in input order.
 
 !(import! &self list)
+!(import! &self default_client)
 !(import! &self mcp)
 !(import! &self str)
 !(import! &self codex:skill_model)
@@ -71,9 +72,6 @@
 
 (= (codex:mcp-dependency-option-skip)
    "Continue anyway")
-
-(= (codex:default-client-originator)
-   "codex_cli_rs")
 
 (= (codex:mcp-server-transport-stdio
       $command
@@ -584,15 +582,6 @@
    (== (codex:mcp-skill-dependencies-ascii-lower-text $left)
        (codex:mcp-skill-dependencies-ascii-lower-text $right)))
 
-(= (codex:is-first-party-originator $originator-value)
-   (or
-     (== $originator-value (codex:default-client-originator))
-     (or
-       (== $originator-value "codex-tui")
-       (or
-         (== $originator-value "codex_vscode")
-         (str-starts-with? $originator-value "Codex ")))))
-
 (= (codex:mcp-skill-dependencies-list-contains $items $item)
    (if (== $items ())
        False
@@ -896,7 +885,9 @@
       $configured-servers
       $prompted-canonical-keys
       $response)
-   (if (not (codex:is-first-party-originator $originator-value))
+   (if (not
+         (codex:default-client-is-first-party-originator
+           $originator-value))
        (codex:mcp-dependency-prompt-and-install-skip
          "non_first_party_originator")
        (if (or
