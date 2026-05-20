@@ -5,12 +5,14 @@
 ; - openai-codex/codex-rs/utils/stream-parser/src/inline_hidden_tag.rs
 ; - openai-codex/codex-rs/utils/stream-parser/src/tagged_line_parser.rs
 ; - openai-codex/codex-rs/utils/stream-parser/src/proposed_plan.rs
+; - openai-codex/codex-rs/utils/stream-parser/src/assistant_text.rs
 ;
 ; Covered in this increment:
 ; - InlineHiddenTagParser push_str / finish semantics for literal tag specs
 ; - TaggedLineParser parse / finish semantics for generic tag specs
 ; - CitationStreamParser push_str / finish semantics for the citation tag
 ; - ProposedPlanParser push_str / finish semantics for the proposed_plan tag
+; - AssistantTextStreamParser push_str / finish composition
 ; - strip_citations
 ; - strip_proposed_plan_blocks
 ; - extract_proposed_plan_text
@@ -37,6 +39,9 @@
 ;   `ProposedPlanSegment::Normal` segments. CeTTa's one-shot helper reads the
 ;   same normal text directly from the tagged-line segments so the helper
 ;   reduces reliably when imported through stream-events surfaces.
+; - Rust mutates `AssistantTextStreamParser` in place. CeTTa returns an
+;   explicit next parser state together with the assistant text chunk. Citation
+;   parsing, optional plan parsing, and finish flushing follow the Rust order.
 
 !(import! &self list)
 !(import! &self str)
@@ -1241,3 +1246,146 @@
        (codex:proposed-plan-parser-collect-chunks ($text)))
      False
      ""))
+
+(= (codex:assistant-text-chunk $visible-text $citations $plan-segments)
+   (CodexAssistantTextChunk $visible-text $citations $plan-segments))
+
+(= (codex:assistant-text-chunk-visible-text
+      (CodexAssistantTextChunk $visible-text $citations $plan-segments))
+   $visible-text)
+
+(= (codex:assistant-text-chunk-citations
+      (CodexAssistantTextChunk $visible-text $citations $plan-segments))
+   $citations)
+
+(= (codex:assistant-text-chunk-plan-segments
+      (CodexAssistantTextChunk $visible-text $citations $plan-segments))
+   $plan-segments)
+
+(= (codex:assistant-text-chunk-is-empty
+      (CodexAssistantTextChunk $visible-text $citations $plan-segments))
+   (and (== $visible-text "")
+        (and (== $citations ())
+             (== $plan-segments ()))))
+
+(= (codex:assistant-text-stream-parser-state
+      $plan-mode
+      $citation-parser
+      $plan-parser)
+   (CodexAssistantTextStreamParser $plan-mode $citation-parser $plan-parser))
+
+(= (codex:assistant-text-stream-parser-new $plan-mode)
+   (codex:assistant-text-stream-parser-state
+     $plan-mode
+     (codex:citation-stream-parser-new)
+     (codex:proposed-plan-parser-new)))
+
+(= (codex:assistant-text-stream-parser-output $parser $chunk)
+   (CodexAssistantTextStreamParserOutput $parser $chunk))
+
+(= (codex:assistant-text-stream-parser-output-parser
+      (CodexAssistantTextStreamParserOutput $parser $chunk))
+   $parser)
+
+(= (codex:assistant-text-stream-parser-output-chunk
+      (CodexAssistantTextStreamParserOutput $parser $chunk))
+   $chunk)
+
+(= (codex:assistant-text-stream-parser-output-visible-text $output)
+   (codex:assistant-text-chunk-visible-text
+     (codex:assistant-text-stream-parser-output-chunk $output)))
+
+(= (codex:assistant-text-stream-parser-output-citations $output)
+   (codex:assistant-text-chunk-citations
+     (codex:assistant-text-stream-parser-output-chunk $output)))
+
+(= (codex:assistant-text-stream-parser-output-plan-segments $output)
+   (codex:assistant-text-chunk-plan-segments
+     (codex:assistant-text-stream-parser-output-chunk $output)))
+
+(= (codex:assistant-text-stream-parser-output-is-empty $output)
+   (codex:assistant-text-chunk-is-empty
+     (codex:assistant-text-stream-parser-output-chunk $output)))
+
+(= (codex:assistant-text-stream-parser-parse-visible-text
+      (CodexAssistantTextStreamParser False $citation-parser $plan-parser)
+      $visible-text
+      $citations)
+   (codex:assistant-text-stream-parser-output
+     (CodexAssistantTextStreamParser False $citation-parser $plan-parser)
+     (codex:assistant-text-chunk $visible-text $citations ())))
+
+(= (codex:assistant-text-stream-parser-parse-visible-text
+      (CodexAssistantTextStreamParser True $citation-parser $plan-parser)
+      $visible-text
+      $citations)
+   (case (codex:proposed-plan-parser-push-str $plan-parser $visible-text)
+     (((CodexProposedPlanParserOutput $next-plan-parser $next-visible $plan-segments)
+       (codex:assistant-text-stream-parser-output
+         (CodexAssistantTextStreamParser True $citation-parser $next-plan-parser)
+         (codex:assistant-text-chunk
+           $next-visible
+           $citations
+           $plan-segments))))))
+
+(= (codex:assistant-text-stream-parser-push-str
+      (CodexAssistantTextStreamParser $plan-mode $citation-parser $plan-parser)
+      $chunk)
+   (case (codex:citation-stream-parser-push-str $citation-parser $chunk)
+     (((CodexCitationStreamParserOutput $next-citation-parser $visible-text $citations)
+       (codex:assistant-text-stream-parser-parse-visible-text
+         (CodexAssistantTextStreamParser
+           $plan-mode
+           $next-citation-parser
+           $plan-parser)
+         $visible-text
+         $citations)))))
+
+(= (codex:assistant-text-stream-parser-append-plan-tail
+      (CodexAssistantTextChunk $visible-text $citations $plan-segments)
+      $tail-visible
+      $tail-plan-segments)
+   (codex:assistant-text-chunk
+     (str-concat $visible-text $tail-visible)
+     $citations
+     (codex:stream-parser-list-append
+       $plan-segments
+       $tail-plan-segments)))
+
+(= (codex:assistant-text-stream-parser-finish-after-visible
+      (CodexAssistantTextStreamParser False $citation-parser $plan-parser)
+      $chunk)
+   (codex:assistant-text-stream-parser-output
+     (CodexAssistantTextStreamParser False $citation-parser $plan-parser)
+     $chunk))
+
+(= (codex:assistant-text-stream-parser-finish-after-visible
+      (CodexAssistantTextStreamParser True $citation-parser $plan-parser)
+      $chunk)
+   (case (codex:proposed-plan-parser-finish $plan-parser)
+     (((CodexProposedPlanParserOutput $next-plan-parser $tail-visible $tail-plan-segments)
+       (codex:assistant-text-stream-parser-output
+         (CodexAssistantTextStreamParser True $citation-parser $next-plan-parser)
+         (codex:assistant-text-stream-parser-append-plan-tail
+           $chunk
+           $tail-visible
+           $tail-plan-segments))))))
+
+(= (codex:assistant-text-stream-parser-finish
+      (CodexAssistantTextStreamParser $plan-mode $citation-parser $plan-parser))
+   (case (codex:citation-stream-parser-finish $citation-parser)
+     (((CodexCitationStreamParserOutput $next-citation-parser $visible-text $citations)
+       (case
+         (codex:assistant-text-stream-parser-parse-visible-text
+           (CodexAssistantTextStreamParser
+             $plan-mode
+             $next-citation-parser
+             $plan-parser)
+           $visible-text
+           $citations)
+         (((CodexAssistantTextStreamParserOutput
+             $after-visible-parser
+             $chunk)
+           (codex:assistant-text-stream-parser-finish-after-visible
+             $after-visible-parser
+             $chunk))))))))

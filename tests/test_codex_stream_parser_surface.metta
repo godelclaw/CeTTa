@@ -342,3 +342,187 @@
   (codex:extract-proposed-plan-text
     "<proposed_plan>\n- step 1\n")
   "- step 1\n")
+
+!(assertEqual
+  (let $parser
+    (codex:assistant-text-stream-parser-new False)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "hello <oai-mem-citation>doc")
+      (codex:assistant-text-stream-parser-output-visible-text $seeded)))
+  "hello ")
+
+!(assertEqualToResult
+  (let $parser
+    (codex:assistant-text-stream-parser-new False)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "hello <oai-mem-citation>doc")
+      (codex:assistant-text-stream-parser-output-citations $seeded)))
+  (()))
+
+!(assertEqual
+  (let $parser
+    (codex:assistant-text-stream-parser-new False)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "hello <oai-mem-citation>doc")
+      (let $parsed
+        (codex:assistant-text-stream-parser-push-str
+          (codex:assistant-text-stream-parser-output-parser $seeded)
+          "1</oai-mem-citation> world")
+        (codex:assistant-text-stream-parser-output-visible-text $parsed))))
+  " world")
+
+!(assertEqualToResult
+  (let $parser
+    (codex:assistant-text-stream-parser-new False)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "hello <oai-mem-citation>doc")
+      (let $parsed
+        (codex:assistant-text-stream-parser-push-str
+          (codex:assistant-text-stream-parser-output-parser $seeded)
+          "1</oai-mem-citation> world")
+        (codex:assistant-text-stream-parser-output-citations $parsed))))
+  (("doc1")))
+
+!(assertEqual
+  (let $parser
+    (codex:assistant-text-stream-parser-new False)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "hello <oai-mem-citation>doc")
+      (let $parsed
+        (codex:assistant-text-stream-parser-push-str
+          (codex:assistant-text-stream-parser-output-parser $seeded)
+          "1</oai-mem-citation> world")
+        (codex:assistant-text-stream-parser-output-is-empty
+          (codex:assistant-text-stream-parser-finish
+            (codex:assistant-text-stream-parser-output-parser $parsed))))))
+  True)
+
+!(assertEqual
+  (let $parser
+    (codex:assistant-text-stream-parser-new True)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "Intro\n<proposed")
+      (codex:assistant-text-stream-parser-output-visible-text $seeded)))
+  "Intro\n")
+
+!(assertEqualToResult
+  (let $parser
+    (codex:assistant-text-stream-parser-new True)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "Intro\n<proposed")
+      (codex:assistant-text-stream-parser-output-plan-segments $seeded)))
+  (((CodexProposedPlanSegmentNormal "Intro\n"))))
+
+!(assertEqual
+  (let $parser
+    (codex:assistant-text-stream-parser-new True)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "Intro\n<proposed")
+      (let $parsed
+        (codex:assistant-text-stream-parser-push-str
+          (codex:assistant-text-stream-parser-output-parser $seeded)
+          "_plan>\n- step <oai-mem-citation>doc</oai-mem-citation>\n")
+        (codex:assistant-text-stream-parser-output-visible-text $parsed))))
+  "")
+
+!(assertEqualToResult
+  (let $parser
+    (codex:assistant-text-stream-parser-new True)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "Intro\n<proposed")
+      (let $parsed
+        (codex:assistant-text-stream-parser-push-str
+          (codex:assistant-text-stream-parser-output-parser $seeded)
+          "_plan>\n- step <oai-mem-citation>doc</oai-mem-citation>\n")
+        (codex:assistant-text-stream-parser-output-citations $parsed))))
+  (("doc")))
+
+!(assertEqualToResult
+  (let $parser
+    (codex:assistant-text-stream-parser-new True)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "Intro\n<proposed")
+      (let $parsed
+        (codex:assistant-text-stream-parser-push-str
+          (codex:assistant-text-stream-parser-output-parser $seeded)
+          "_plan>\n- step <oai-mem-citation>doc</oai-mem-citation>\n")
+        (codex:assistant-text-stream-parser-output-plan-segments $parsed))))
+  ((CodexProposedPlanSegmentStart
+    (CodexProposedPlanSegmentDelta "- step \n"))))
+
+!(assertEqual
+  (let $parser
+    (codex:assistant-text-stream-parser-new True)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "Intro\n<proposed")
+      (let $parsed
+        (codex:assistant-text-stream-parser-push-str
+          (codex:assistant-text-stream-parser-output-parser $seeded)
+          "_plan>\n- step <oai-mem-citation>doc</oai-mem-citation>\n")
+        (let $tail
+          (codex:assistant-text-stream-parser-push-str
+            (codex:assistant-text-stream-parser-output-parser $parsed)
+            "</proposed_plan>\nOutro")
+          (codex:assistant-text-stream-parser-output-visible-text $tail)))))
+  "Outro")
+
+!(assertEqualToResult
+  (let $parser
+    (codex:assistant-text-stream-parser-new True)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "Intro\n<proposed")
+      (let $parsed
+        (codex:assistant-text-stream-parser-push-str
+          (codex:assistant-text-stream-parser-output-parser $seeded)
+          "_plan>\n- step <oai-mem-citation>doc</oai-mem-citation>\n")
+        (let $tail
+          (codex:assistant-text-stream-parser-push-str
+            (codex:assistant-text-stream-parser-output-parser $parsed)
+            "</proposed_plan>\nOutro")
+          (codex:assistant-text-stream-parser-output-plan-segments $tail)))))
+  ((CodexProposedPlanSegmentEnd
+    (CodexProposedPlanSegmentNormal "Outro"))))
+
+!(assertEqual
+  (let $parser
+    (codex:assistant-text-stream-parser-new True)
+    (let $seeded
+      (codex:assistant-text-stream-parser-push-str
+        $parser
+        "Intro\n<proposed")
+      (let $parsed
+        (codex:assistant-text-stream-parser-push-str
+          (codex:assistant-text-stream-parser-output-parser $seeded)
+          "_plan>\n- step <oai-mem-citation>doc</oai-mem-citation>\n")
+        (let $tail
+          (codex:assistant-text-stream-parser-push-str
+            (codex:assistant-text-stream-parser-output-parser $parsed)
+            "</proposed_plan>\nOutro")
+          (codex:assistant-text-stream-parser-output-is-empty
+            (codex:assistant-text-stream-parser-finish
+              (codex:assistant-text-stream-parser-output-parser $tail)))))))
+  True)
