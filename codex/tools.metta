@@ -72,6 +72,7 @@
 !(import! &self str)
 !(import! &self str_middle)
 !(import! &self system)
+!(import! &self codex:hook_names)
 !(import! &self codex:output_truncation)
 !(import! &self codex:string_truncate)
 
@@ -258,15 +259,6 @@
                (str-concat (system-cwd) "/")
                $workdir)))))
 
-(= (codex:hook-tool-name $name $matcher-aliases)
-   (CodexHookToolName $name $matcher-aliases))
-
-(= (codex:hook-tool-name-bash)
-   (codex:hook-tool-name "Bash" ()))
-
-(= (codex:hook-tool-name-apply-patch)
-   (codex:hook-tool-name "apply_patch" ("Write" "Edit")))
-
 (= (codex:pre-tool-use-payload $tool-name $tool-input)
    (CodexPreToolUsePayload $tool-name $tool-input))
 
@@ -280,14 +272,6 @@
      $tool-use-id
      $tool-input
      $tool-response))
-
-(= (codex:hook-tool-name-name
-      (CodexHookToolName $name $matcher-aliases))
-   $name)
-
-(= (codex:hook-tool-name-matcher-aliases
-      (CodexHookToolName $name $matcher-aliases))
-   $matcher-aliases)
 
 (= (codex:pre-tool-use-payload-tool-name
       (CodexPreToolUsePayload $tool-name $tool-input))
@@ -332,17 +316,6 @@
 (= (codex:hook-command-input-json $command)
    (JsonObject
      ((JsonPair "command" (JsonString $command)))))
-
-(= (codex:hook-tool-name-json (CodexHookToolName $name $matcher-aliases))
-   (JsonObject
-     ((JsonPair "name" (JsonString $name))
-      (JsonPair "matcher_aliases"
-        (JsonArray
-          (eval
-            (map-atom
-              $matcher-aliases
-              $alias
-              (JsonString $alias))))))))
 
 (= (codex:pre-tool-use-payload-json
       (CodexPreToolUsePayload $tool-name $tool-input))

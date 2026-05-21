@@ -24,6 +24,7 @@
 
 !(import! &self approval)
 !(import! &self json)
+!(import! &self codex:hook_names)
 
 (= (codex:approval-ctx
       $session
@@ -116,10 +117,10 @@
    (CodexSandboxOverrideBypassSandboxFirstAttempt))
 
 (= (codex:tool-sandboxing-hook-tool-name-bash)
-   (CodexHookToolName "Bash" ()))
+   (codex:hook-tool-name-bash))
 
 (= (codex:tool-sandboxing-hook-tool-name-apply-patch)
-   (CodexHookToolName "apply_patch" ("Write" "Edit")))
+   (codex:hook-tool-name-apply-patch))
 
 (= (codex:permission-request-payload $tool-name $tool-input)
    (CodexPermissionRequestPayload $tool-name $tool-input))
@@ -154,16 +155,8 @@
        ((JsonPair "command" (JsonString $patch-text))))))
 
 (= (codex:tool-sandboxing-hook-tool-name-json
-      (CodexHookToolName $name $matcher-aliases))
-   (JsonObject
-     ((JsonPair "name" (JsonString $name))
-      (JsonPair "matcher_aliases"
-        (JsonArray
-          (eval
-            (map-atom
-              $matcher-aliases
-              $alias
-              (JsonString $alias))))))))
+      $hook-tool-name)
+   (codex:hook-tool-name-json $hook-tool-name))
 
 (= (codex:permission-request-payload-json
       (CodexPermissionRequestPayload $tool-name $tool-input))
