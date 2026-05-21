@@ -58,7 +58,7 @@
    "js_repl expects raw JavaScript source, not markdown code fences. Resend plain JS only (optional first line `// codex-js-repl: ...`).")
 
 (= (codex:js-repl-freeform-grammar)
-   "\nstart: pragma_source | plain_source\n\npragma_source: PRAGMA_LINE NEWLINE js_source\nplain_source: PLAIN_JS_SOURCE\n\njs_source: JS_SOURCE\n\nPRAGMA_LINE: /[ \\t]*// codex-js-repl:[^\\r\\n]*/\nNEWLINE: /\\r?\\n/\nPLAIN_JS_SOURCE: /(?:\\s*)(?:[^\\s{\\\"`]|`[^`]|``[^`])[\\s\\S]*/\nJS_SOURCE: /(?:\\s*)(?:[^\\s{\\\"`]|`[^`]|``[^`])[\\s\\S]*/\n")
+   "\nstart: pragma_source | plain_source\n\npragma_source: PRAGMA_LINE NEWLINE js_source\nplain_source: PLAIN_JS_SOURCE\n\njs_source: JS_SOURCE\n\nPRAGMA_LINE: /[ \\t]*\\/\\/ codex-js-repl:[^\\r\\n]*/\nNEWLINE: /\\r?\\n/\nPLAIN_JS_SOURCE: /(?:\\s*)(?:[^\\s{\\\"`]|`[^`]|``[^`])[\\s\\S]*/\nJS_SOURCE: /(?:\\s*)(?:[^\\s{\\\"`]|`[^`]|``[^`])[\\s\\S]*/\n")
 
 (= (codex:js-repl-tool-json)
    (JsonObject

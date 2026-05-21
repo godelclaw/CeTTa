@@ -1,5 +1,6 @@
 !(register-module! ../codex)
 !(import! &self json)
+!(import! &self codex:js_repl)
 !(import! &self codex:tool_config)
 !(import! &self codex:tool_registry_plan)
 
@@ -44,6 +45,18 @@
      True
      False))
 
+(= (codex-tool-config-js-repl-features)
+   (codex:tool-config-features-with-js-repl
+     True
+     True
+     False
+     True
+     False
+     False
+     True
+     False
+     False))
+
 (= (codex-tool-registry-default-config)
    (codex:tools-config-new
      (codex:tools-config-new-params
@@ -58,6 +71,15 @@
      (codex:tools-config-new-params
        (codex-tool-config-model)
        (codex-tool-config-request-permissions-features)
+       False
+       (codex:tool-config-sandbox-policy-danger-full-access)
+       (codex:windows-sandbox-level-disabled))))
+
+(= (codex-tool-registry-js-repl-config)
+   (codex:tools-config-new
+     (codex:tools-config-new-params
+       (codex-tool-config-model)
+       (codex-tool-config-js-repl-features)
        False
        (codex:tool-config-sandbox-policy-danger-full-access)
        (codex:windows-sandbox-level-disabled))))
@@ -122,6 +144,18 @@
       (codex:create-apply-patch-freeform-tool)))
   "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\n\nhunk: add_hunk | delete_hunk | update_hunk\nadd_hunk: \"*** Add File: \" filename LF add_line+\ndelete_hunk: \"*** Delete File: \" filename LF\nupdate_hunk: \"*** Update File: \" filename LF change_move? change?\n\nfilename: /(.+)/\nadd_line: \"+\" /(.*)/ LF -> line\n\nchange_move: \"*** Move to: \" filename LF\nchange: (change_context | change_line)+ eof_line?\nchange_context: (\"@@\" | \"@@ \" /(.+)/) LF\nchange_line: (\"+\" | \"-\" | \" \") /(.*)/ LF\neof_line: \"*** End of File\" LF\n\n%import common.LF\n")
 
+!(assertEqual
+  (codex:freeform-tool-format-definition
+    (codex:tool-spec-freeform-tool
+      (codex:create-js-repl-tool)))
+  (codex:js-repl-freeform-grammar))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:tool-spec-json
+      (codex:create-js-repl-reset-tool)))
+  ("{\"type\":\"function\",\"name\":\"js_repl_reset\",\"description\":\"Restarts the js_repl kernel for this run and clears persisted top-level bindings.\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}}"))
+
 !(assertEqualToResult
   (json-stringify
     (json-object-get
@@ -139,3 +173,56 @@
       (codex:tool-spec-function-tool
         (codex:create-write-stdin-tool))))
   ("{\"type\":\"object\",\"properties\":{\"chunk_id\":{\"type\":\"string\",\"description\":\"Chunk identifier included when the response reports one.\"},\"wall_time_seconds\":{\"type\":\"number\",\"description\":\"Elapsed wall time spent waiting for output in seconds.\"},\"exit_code\":{\"type\":\"number\",\"description\":\"Process exit code when the command finished during this call.\"},\"session_id\":{\"type\":\"number\",\"description\":\"Session identifier to pass to write_stdin when the process is still running.\"},\"original_token_count\":{\"type\":\"number\",\"description\":\"Approximate token count before output truncation.\"},\"output\":{\"type\":\"string\",\"description\":\"Command output text, possibly truncated.\"}},\"required\":[\"wall_time_seconds\",\"output\"],\"additionalProperties\":false}"))
+
+!(assertEqualToResult
+  (unique
+    (codex:string-list-contains
+      (codex:tool-registry-plan-spec-names
+        (codex:build-tool-registry-plan
+          (codex-tool-registry-default-config)))
+      "js_repl"))
+  (False))
+
+!(assertEqualToResult
+  (unique
+    (codex:string-list-contains
+      (codex:tool-registry-plan-spec-names
+        (codex:build-tool-registry-plan
+          (codex-tool-registry-js-repl-config)))
+      "js_repl"))
+  (True))
+
+!(assertEqualToResult
+  (unique
+    (codex:string-list-contains
+      (codex:tool-registry-plan-spec-names
+        (codex:build-tool-registry-plan
+          (codex-tool-registry-js-repl-config)))
+      "js_repl_reset"))
+  (True))
+
+!(assertEqualToResult
+  (unique
+    (codex:tool-registry-plan-handler-pairs-json
+      (codex:build-tool-registry-plan
+        (codex-tool-registry-js-repl-config))))
+  ((JsonArray
+     ((JsonArray ((JsonString "exec_command") (JsonString "UnifiedExec")))
+      (JsonArray ((JsonString "write_stdin") (JsonString "UnifiedExec")))
+      (JsonArray ((JsonString "update_plan") (JsonString "Plan")))
+      (JsonArray ((JsonString "js_repl") (JsonString "JsRepl")))
+      (JsonArray ((JsonString "js_repl_reset") (JsonString "JsReplReset")))
+      (JsonArray ((JsonString "request_user_input") (JsonString "RequestUserInput")))
+      (JsonArray ((JsonString "apply_patch") (JsonString "ApplyPatch")))
+      (JsonArray ((JsonString "view_image") (JsonString "ViewImage")))))))
+
+!(assertEqualToResult
+  (unique
+    (codex:string-list-contains
+      (codex:tool-registry-plan-spec-names
+        (codex:build-tool-registry-plan
+          (codex:tools-config-with-has-environment
+            (codex-tool-registry-js-repl-config)
+            False)))
+      "js_repl"))
+  (False))

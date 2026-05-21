@@ -45,6 +45,30 @@
      True
      True))
 
+(= (codex-tool-config-js-repl-features)
+   (codex:tool-config-features-with-js-repl
+     True
+     True
+     False
+     True
+     False
+     False
+     True
+     False
+     False))
+
+(= (codex-tool-config-js-repl-tools-only-features)
+   (codex:tool-config-features-with-js-repl
+     True
+     True
+     False
+     True
+     False
+     False
+     True
+     True
+     False))
+
 (= (codex-tool-config-default-config)
    (codex:tools-config-new
      (codex:tools-config-new-params
@@ -219,6 +243,44 @@
       (codex:tools-config-new-params
         (codex-tool-config-default-model)
         (codex-tool-config-request-permissions-features)
+        False
+        (codex:tool-config-sandbox-policy-danger-full-access)
+       (codex:windows-sandbox-level-disabled))))
+  (True))
+
+!(assertEqualToResult
+  (codex:tools-config-js-repl-enabled
+    (codex-tool-config-default-config))
+  (False))
+
+!(assertEqualToResult
+  (codex:tools-config-js-repl-enabled
+    (codex:tools-config-new
+      (codex:tools-config-new-params
+        (codex-tool-config-default-model)
+        (codex-tool-config-js-repl-features)
+        False
+        (codex:tool-config-sandbox-policy-danger-full-access)
+        (codex:windows-sandbox-level-disabled))))
+  (True))
+
+!(assertEqualToResult
+  (codex:tools-config-js-repl-tools-only
+    (codex:tools-config-new
+      (codex:tools-config-new-params
+        (codex-tool-config-default-model)
+        (codex-tool-config-js-repl-features)
+        False
+        (codex:tool-config-sandbox-policy-danger-full-access)
+        (codex:windows-sandbox-level-disabled))))
+  (False))
+
+!(assertEqualToResult
+  (codex:tools-config-js-repl-tools-only
+    (codex:tools-config-new
+      (codex:tools-config-new-params
+        (codex-tool-config-default-model)
+        (codex-tool-config-js-repl-tools-only-features)
         False
         (codex:tool-config-sandbox-policy-danger-full-access)
         (codex:windows-sandbox-level-disabled))))

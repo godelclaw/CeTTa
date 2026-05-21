@@ -10,7 +10,7 @@
 ; - Responses API JSON projection for function/custom tool specs
 ; - Rust-shaped tool specs for exec_command, write_stdin, update_plan,
 ;   request_user_input, request_permissions, list_dir, view_image, and
-;   freeform apply_patch
+;   js_repl, js_repl_reset, and freeform apply_patch
 ; - the matching narrow build_tool_registry_plan order/handler wiring for the
 ;   currently ported CeTTa runtime surface
 ;
@@ -27,6 +27,7 @@
 ;   surface, so this slice currently builds the freeform branch only.
 
 !(import! &self json)
+!(import! &self js_repl)
 !(import! &self list)
 !(import! &self list_dir)
 !(import! &self request_permissions)
@@ -55,6 +56,12 @@
 
 (= (codex:tool-handler-kind-apply-patch)
    "ApplyPatch")
+
+(= (codex:tool-handler-kind-js-repl)
+   "JsRepl")
+
+(= (codex:tool-handler-kind-js-repl-reset)
+   "JsReplReset")
 
 (= (codex:responses-api-tool
       $name
@@ -181,11 +188,15 @@
 (= (codex:tool-handler-spec-pair (CodexToolHandlerSpec $name $kind))
    ($name $kind))
 
-(= (codex:tool-registry-plan-specs (CodexToolRegistryPlan $specs $handlers))
-   $specs)
+(= (codex:tool-registry-plan-specs $plan)
+   (unique (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       $specs)))))
 
-(= (codex:tool-registry-plan-handlers (CodexToolRegistryPlan $specs $handlers))
-   $handlers)
+(= (codex:tool-registry-plan-handlers $plan)
+   (unique (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       $handlers)))))
 
 (= (codex:tool-registry-json-string-array $items)
    (function
@@ -347,9 +358,10 @@
 (= (codex:create-tools-json-for-responses-api $specs)
    (JsonArray (codex:tool-spec-json-items $specs)))
 
-(= (codex:tool-registry-plan-tools-json
-      (CodexToolRegistryPlan $specs $handlers))
-   (JsonArray (codex:configured-tool-spec-json-items $specs)))
+(= (codex:tool-registry-plan-tools-json $plan)
+   (unique (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       (JsonArray (codex:configured-tool-spec-json-items $specs)))))))
 
 (= (codex:configured-tool-spec-names $specs)
    (function
@@ -391,31 +403,37 @@
          (map-atom $handlers $handler (codex:tool-handler-spec-pair-json $handler)))
        (return (JsonArray $json-items)))))
 
-(= (codex:tool-registry-plan-spec-names
-      (CodexToolRegistryPlan $specs $handlers))
-   (codex:configured-tool-spec-names $specs))
+(= (codex:tool-registry-plan-spec-names $plan)
+   (unique (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       (codex:configured-tool-spec-names $specs))))))
 
-(= (codex:tool-registry-plan-spec-names-json
-      (CodexToolRegistryPlan $specs $handlers))
-   (codex:tool-registry-json-string-array
-     (codex:configured-tool-spec-names $specs)))
+(= (codex:tool-registry-plan-spec-names-json $plan)
+   (unique (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       (codex:tool-registry-json-string-array
+         (codex:configured-tool-spec-names $specs)))))))
 
-(= (codex:tool-registry-plan-spec-parallel-flags
-      (CodexToolRegistryPlan $specs $handlers))
-   (codex:configured-tool-spec-parallel-flags $specs))
+(= (codex:tool-registry-plan-spec-parallel-flags $plan)
+   (unique (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       (codex:configured-tool-spec-parallel-flags $specs))))))
 
-(= (codex:tool-registry-plan-spec-parallel-flags-json
-      (CodexToolRegistryPlan $specs $handlers))
-   (codex:json-bool-array
-     (codex:configured-tool-spec-parallel-flags $specs)))
+(= (codex:tool-registry-plan-spec-parallel-flags-json $plan)
+   (unique (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       (codex:json-bool-array
+         (codex:configured-tool-spec-parallel-flags $specs)))))))
 
-(= (codex:tool-registry-plan-handler-pairs
-      (CodexToolRegistryPlan $specs $handlers))
-   (codex:tool-handler-spec-pairs $handlers))
+(= (codex:tool-registry-plan-handler-pairs $plan)
+   (unique (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       (codex:tool-handler-spec-pairs $handlers))))))
 
-(= (codex:tool-registry-plan-handler-pairs-json
-      (CodexToolRegistryPlan $specs $handlers))
-   (codex:tool-handler-spec-pairs-json $handlers))
+(= (codex:tool-registry-plan-handler-pairs-json $plan)
+   (unique (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       (codex:tool-handler-spec-pairs-json $handlers))))))
 
 (= (codex:find-configured-tool-spec-by-name () $name)
    Empty)
@@ -811,6 +829,27 @@
          $can-request-original-image-detail)
        (codex:view-image-output-schema))))
 
+(= (codex:create-js-repl-tool)
+   (codex:tool-spec-freeform
+     (codex:freeform-tool
+       (codex:js-repl-tool-name)
+       (codex:js-repl-tool-description)
+       "grammar"
+       "lark"
+       (codex:js-repl-freeform-grammar))))
+
+(= (codex:create-js-repl-reset-tool)
+   (codex:tool-spec-function
+     (codex:responses-api-tool
+       (codex:js-repl-reset-tool-name)
+       (codex:js-repl-reset-tool-description)
+       False
+       CodexAbsent
+       (codex:json-schema-object-with-additional-properties
+         ()
+         False)
+       CodexAbsent)))
+
 (= (codex:create-exec-command-tool
       $allow-login-shell
       $exec-permission-approvals-enabled)
@@ -850,44 +889,111 @@
        "lark"
        (codex:apply-patch-freeform-grammar))))
 
+; CeTTa reduction accommodation: recursive append drops case-bound handler
+; lists in this registry builder. These append-one clauses preserve Rust's
+; push order for the currently ported fixed tool surface.
+(= (codex:tool-registry-plan-append-one () $item)
+   ($item))
+
+(= (codex:tool-registry-plan-append-one ($a0) $item)
+   ($a0 $item))
+
+(= (codex:tool-registry-plan-append-one ($a0 $a1) $item)
+   ($a0 $a1 $item))
+
+(= (codex:tool-registry-plan-append-one ($a0 $a1 $a2) $item)
+   ($a0 $a1 $a2 $item))
+
+(= (codex:tool-registry-plan-append-one ($a0 $a1 $a2 $a3) $item)
+   ($a0 $a1 $a2 $a3 $item))
+
+(= (codex:tool-registry-plan-append-one ($a0 $a1 $a2 $a3 $a4) $item)
+   ($a0 $a1 $a2 $a3 $a4 $item))
+
+(= (codex:tool-registry-plan-append-one ($a0 $a1 $a2 $a3 $a4 $a5) $item)
+   ($a0 $a1 $a2 $a3 $a4 $a5 $item))
+
+(= (codex:tool-registry-plan-append-one ($a0 $a1 $a2 $a3 $a4 $a5 $a6) $item)
+   ($a0 $a1 $a2 $a3 $a4 $a5 $a6 $item))
+
+(= (codex:tool-registry-plan-append-one
+      ($a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7)
+      $item)
+   ($a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7 $item))
+
+(= (codex:tool-registry-plan-append-one
+      ($a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7 $a8)
+      $item)
+   ($a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7 $a8 $item))
+
+(= (codex:tool-registry-plan-append-one
+      ($a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7 $a8 $a9)
+      $item)
+   ($a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7 $a8 $a9 $item))
+
+(= (codex:tool-registry-plan-append-one
+      ($a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7 $a8 $a9 $a10)
+      $item)
+   ($a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7 $a8 $a9 $a10 $item))
+
+(= (codex:tool-registry-plan-append-one
+      ($a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7 $a8 $a9 $a10 $a11)
+      $item)
+   ($a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7 $a8 $a9 $a10 $a11 $item))
+
 (= (codex:tool-registry-plan-add-entry
-      (CodexToolRegistryPlan $specs $handlers)
+      $plan
       $spec
       $supports-parallel-tool-calls
       $name
       $kind)
-   (codex:tool-registry-plan
-     (list:append
-       $specs
-       ((codex:configured-tool-spec $spec $supports-parallel-tool-calls)))
-     (list:append
-       $handlers
-       ((codex:tool-handler-spec $name $kind)))))
-
-(= (codex:string-list-contains () $needle)
-   False)
+   (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       (codex:tool-registry-plan
+         (codex:tool-registry-plan-append-one
+           $specs
+           (codex:configured-tool-spec $spec $supports-parallel-tool-calls))
+         (codex:tool-registry-plan-append-one
+           $handlers
+           (codex:tool-handler-spec $name $kind)))))))
 
 (= (codex:string-list-contains $values $needle)
-   (if (== (list:first $values) $needle)
-       True
-       (codex:string-list-contains (list:rest $values) $needle)))
+   (case (unique (eval $values))
+     (($materialized-values
+       (codex:string-list-contains-materialized
+         $materialized-values
+         $needle)))))
+
+(= (codex:string-list-contains-materialized $values $needle)
+   (if (list:empty? $values)
+       False
+       (if (== (list:first $values) $needle)
+           True
+           (codex:string-list-contains-materialized
+             (list:rest $values)
+             $needle))))
 
 (= (codex:build-tool-registry-plan $config)
+   (unique
+   (let $config-value (once (eval $config))
    (let $plan0 (codex:tool-registry-plan-empty)
+     ; CeTTa reduction accommodation: materialize each accumulated plan before
+     ; passing it to the next append, matching Rust's mutable plan builder.
      (let $plan1
-       (if (codex:tools-config-has-environment $config)
+       (once (eval (if (codex:tools-config-has-environment $config-value)
            (if (==
-                 (codex:tools-config-shell-type $config)
+                 (codex:tools-config-shell-type $config-value)
                  (codex:config-shell-tool-type-unified-exec))
                (let $exec-plan
-                 (codex:tool-registry-plan-add-entry
-                   $plan0
-                   (codex:create-exec-command-tool
-                     (codex:tools-config-allow-login-shell $config)
-                     (codex:tools-config-exec-permission-approvals-enabled $config))
-                   True
-                   "exec_command"
-                   (codex:tool-handler-kind-unified-exec))
+                 (once (eval
+                   (codex:tool-registry-plan-add-entry
+                     $plan0
+                     (codex:create-exec-command-tool
+                       (codex:tools-config-allow-login-shell $config-value)
+                       (codex:tools-config-exec-permission-approvals-enabled $config-value))
+                     True
+                     "exec_command"
+                     (codex:tool-handler-kind-unified-exec))))
                  (codex:tool-registry-plan-add-entry
                    $exec-plan
                    (codex:create-write-stdin-tool)
@@ -895,68 +1001,87 @@
                    "write_stdin"
                    (codex:tool-handler-kind-unified-exec)))
                $plan0)
-           $plan0)
+           $plan0)))
        (let $plan2
-         (codex:tool-registry-plan-add-entry
+         (once (eval (codex:tool-registry-plan-add-entry
            $plan1
            (codex:create-update-plan-tool)
            False
            "update_plan"
-           (codex:tool-handler-kind-plan))
+           (codex:tool-handler-kind-plan))))
          (let $plan3
-           (codex:tool-registry-plan-add-entry
-             $plan2
-             (codex:create-request-user-input-tool
-               (codex:request-user-input-tool-description
-                 (codex:tools-config-default-mode-request-user-input $config)))
-             False
-             "request_user_input"
-             (codex:tool-handler-kind-request-user-input))
-           (let $plan4
-             (if (codex:tools-config-request-permissions-tool-enabled $config)
+           (once (eval (if (and
+                 (codex:tools-config-has-environment $config-value)
+                 (codex:tools-config-js-repl-enabled $config-value))
+               (let $js-repl-plan
+                 (once (eval
+                   (codex:tool-registry-plan-add-entry
+                     $plan2
+                     (codex:create-js-repl-tool)
+                     False
+                     (codex:js-repl-tool-name)
+                     (codex:tool-handler-kind-js-repl))))
                  (codex:tool-registry-plan-add-entry
-                   $plan3
+                   $js-repl-plan
+                   (codex:create-js-repl-reset-tool)
+                   False
+                   (codex:js-repl-reset-tool-name)
+                   (codex:tool-handler-kind-js-repl-reset)))
+               $plan2)))
+           (let $plan4
+             (once (eval (codex:tool-registry-plan-add-entry
+               $plan3
+               (codex:create-request-user-input-tool
+                 (codex:request-user-input-tool-description
+                   (codex:tools-config-default-mode-request-user-input $config-value)))
+               False
+               "request_user_input"
+               (codex:tool-handler-kind-request-user-input))))
+             (let $plan5
+               (once (eval (if (codex:tools-config-request-permissions-tool-enabled $config-value)
+                 (codex:tool-registry-plan-add-entry
+                   $plan4
                    (codex:create-request-permissions-tool
                      (codex:request-permissions-tool-description))
                    False
                    "request_permissions"
                    (codex:tool-handler-kind-request-permissions))
-                 $plan3)
-             (let $plan5
-               (if (and
-                     (codex:tools-config-has-environment $config)
+                 $plan4)))
+             (let $plan6
+               (once (eval (if (and
+                     (codex:tools-config-has-environment $config-value)
                      (==
-                       (codex:tools-config-apply-patch-tool-type $config)
+                       (codex:tools-config-apply-patch-tool-type $config-value)
                        (codex:apply-patch-tool-type-freeform)))
                    (codex:tool-registry-plan-add-entry
-                     $plan4
+                     $plan5
                      (codex:create-apply-patch-freeform-tool)
                      False
                      "apply_patch"
                      (codex:tool-handler-kind-apply-patch))
-                   $plan4)
-               (let $plan6
-                 (if (and
-                       (codex:tools-config-has-environment $config)
+                   $plan5)))
+               (let $plan7
+                 (once (eval (if (and
+                       (codex:tools-config-has-environment $config-value)
                        (codex:string-list-contains
-                         (codex:tools-config-experimental-supported-tools $config)
+                         (codex:tools-config-experimental-supported-tools $config-value)
                          "list_dir"))
                      (codex:tool-registry-plan-add-entry
-                       $plan5
+                       $plan6
                        (codex:create-list-dir-tool)
                        True
                        "list_dir"
                        (codex:tool-handler-kind-list-dir))
-                     $plan5)
-                 (let $plan7
-                   (if (codex:tools-config-has-environment $config)
+                     $plan6)))
+                 (let $plan8
+                   (once (eval (if (codex:tools-config-has-environment $config-value)
                        (codex:tool-registry-plan-add-entry
-                         $plan6
+                         $plan7
                          (codex:create-view-image-tool
                            (codex:tools-config-can-request-original-image-detail
-                             $config))
+                             $config-value))
                          True
                          "view_image"
                          (codex:tool-handler-kind-view-image))
-                       $plan6)
-                  $plan7)))))))))
+                       $plan7)))
+                  $plan8))))))))))))

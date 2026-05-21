@@ -10,6 +10,7 @@
 ; - apply_patch tool type selection
 ; - request_permissions / request_user_input feature gating fields
 ; - view_image original-detail capability wiring
+; - js_repl / js_repl_tools_only feature gating fields
 ; - UnifiedExecShellMode::for_session branch selection
 ; - core/src/tools/spec.rs::tool_user_shell_type shell mapping
 ; - builder-style `with_*` helpers used by Rust tests and callers
@@ -141,6 +142,27 @@
       $exec-permission-approvals
       $request-permissions-tool
       $default-mode-request-user-input)
+   (codex:tool-config-features-with-js-repl
+     $shell-tool
+     $unified-exec
+     $shell-zsh-fork
+     $apply-patch-freeform
+     $exec-permission-approvals
+     $request-permissions-tool
+     False
+     False
+     $default-mode-request-user-input))
+
+(= (codex:tool-config-features-with-js-repl
+      $shell-tool
+      $unified-exec
+      $shell-zsh-fork
+      $apply-patch-freeform
+      $exec-permission-approvals
+      $request-permissions-tool
+      $js-repl
+      $js-repl-tools-only
+      $default-mode-request-user-input)
    (CodexToolConfigFeatures
      $shell-tool
      $unified-exec
@@ -148,6 +170,8 @@
      $apply-patch-freeform
      $exec-permission-approvals
      $request-permissions-tool
+     $js-repl
+     $js-repl-tools-only
      $default-mode-request-user-input))
 
 (= (codex:default-tool-config-features)
@@ -182,6 +206,8 @@
       $apply-patch-tool-type
       $exec-permission-approvals-enabled
       $request-permissions-tool-enabled
+      $js-repl-enabled
+      $js-repl-tools-only
       $default-mode-request-user-input
       $experimental-supported-tools
       $can-request-original-image-detail)
@@ -194,6 +220,8 @@
      $apply-patch-tool-type
      $exec-permission-approvals-enabled
      $request-permissions-tool-enabled
+     $js-repl-enabled
+     $js-repl-tools-only
      $default-mode-request-user-input
      $experimental-supported-tools
      $can-request-original-image-detail))
@@ -238,6 +266,8 @@
         $apply-patch-freeform
         $exec-permission-approvals
         $request-permissions-tool
+        $js-repl
+        $js-repl-tools-only
         $default-mode-request-user-input))
    $shell-tool)
 
@@ -249,6 +279,8 @@
         $apply-patch-freeform
         $exec-permission-approvals
         $request-permissions-tool
+        $js-repl
+        $js-repl-tools-only
         $default-mode-request-user-input))
    $unified-exec)
 
@@ -260,6 +292,8 @@
         $apply-patch-freeform
         $exec-permission-approvals
         $request-permissions-tool
+        $js-repl
+        $js-repl-tools-only
         $default-mode-request-user-input))
    $shell-zsh-fork)
 
@@ -271,6 +305,8 @@
         $apply-patch-freeform
         $exec-permission-approvals
         $request-permissions-tool
+        $js-repl
+        $js-repl-tools-only
         $default-mode-request-user-input))
    $apply-patch-freeform)
 
@@ -282,6 +318,8 @@
         $apply-patch-freeform
         $exec-permission-approvals
         $request-permissions-tool
+        $js-repl
+        $js-repl-tools-only
         $default-mode-request-user-input))
    $exec-permission-approvals)
 
@@ -293,8 +331,36 @@
         $apply-patch-freeform
         $exec-permission-approvals
         $request-permissions-tool
+        $js-repl
+        $js-repl-tools-only
         $default-mode-request-user-input))
    $request-permissions-tool)
+
+(= (codex:tool-config-features-js-repl
+      (CodexToolConfigFeatures
+        $shell-tool
+        $unified-exec
+        $shell-zsh-fork
+        $apply-patch-freeform
+        $exec-permission-approvals
+        $request-permissions-tool
+        $js-repl
+        $js-repl-tools-only
+        $default-mode-request-user-input))
+   $js-repl)
+
+(= (codex:tool-config-features-js-repl-tools-only
+      (CodexToolConfigFeatures
+        $shell-tool
+        $unified-exec
+        $shell-zsh-fork
+        $apply-patch-freeform
+        $exec-permission-approvals
+        $request-permissions-tool
+        $js-repl
+        $js-repl-tools-only
+        $default-mode-request-user-input))
+   (and $js-repl $js-repl-tools-only))
 
 (= (codex:tool-config-features-default-mode-request-user-input
       (CodexToolConfigFeatures
@@ -304,6 +370,8 @@
         $apply-patch-freeform
         $exec-permission-approvals
         $request-permissions-tool
+        $js-repl
+        $js-repl-tools-only
         $default-mode-request-user-input))
    $default-mode-request-user-input)
 
@@ -362,6 +430,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail))
@@ -377,6 +447,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail))
@@ -392,6 +464,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail))
@@ -407,6 +481,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail))
@@ -422,6 +498,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail))
@@ -437,6 +515,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail))
@@ -454,6 +534,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail))
@@ -469,10 +551,46 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail))
    $request-permissions-tool-enabled)
+
+(= (codex:tools-config-js-repl-enabled
+      (CodexToolsConfig
+        $shell-type
+        $shell-command-backend
+        $unified-exec-shell-mode
+        $has-environment
+        $allow-login-shell
+        $apply-patch-tool-type
+        $exec-permission-approvals-enabled
+        $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
+        $default-mode-request-user-input
+        $experimental-supported-tools
+        $can-request-original-image-detail))
+   $js-repl-enabled)
+
+(= (codex:tools-config-js-repl-tools-only
+      (CodexToolsConfig
+        $shell-type
+        $shell-command-backend
+        $unified-exec-shell-mode
+        $has-environment
+        $allow-login-shell
+        $apply-patch-tool-type
+        $exec-permission-approvals-enabled
+        $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
+        $default-mode-request-user-input
+        $experimental-supported-tools
+        $can-request-original-image-detail))
+   $js-repl-tools-only)
 
 (= (codex:tools-config-default-mode-request-user-input
       (CodexToolsConfig
@@ -484,6 +602,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail))
@@ -499,6 +619,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail))
@@ -514,6 +636,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail))
@@ -529,6 +653,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail)
@@ -542,6 +668,8 @@
      $apply-patch-tool-type
      $exec-permission-approvals-enabled
      $request-permissions-tool-enabled
+     $js-repl-enabled
+     $js-repl-tools-only
      $default-mode-request-user-input
      $experimental-supported-tools
      $can-request-original-image-detail))
@@ -556,6 +684,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail)
@@ -569,6 +699,8 @@
      $apply-patch-tool-type
      $exec-permission-approvals-enabled
      $request-permissions-tool-enabled
+     $js-repl-enabled
+     $js-repl-tools-only
      $default-mode-request-user-input
      $experimental-supported-tools
      $can-request-original-image-detail))
@@ -609,6 +741,8 @@
         $apply-patch-tool-type
         $exec-permission-approvals-enabled
         $request-permissions-tool-enabled
+        $js-repl-enabled
+        $js-repl-tools-only
         $default-mode-request-user-input
         $experimental-supported-tools
         $can-request-original-image-detail)
@@ -622,6 +756,8 @@
      $apply-patch-tool-type
      $exec-permission-approvals-enabled
      $request-permissions-tool-enabled
+     $js-repl-enabled
+     $js-repl-tools-only
      $default-mode-request-user-input
      $experimental-supported-tools
      $can-request-original-image-detail))
@@ -732,6 +868,8 @@
          $windows-sandbox-level))
      (codex:tool-config-features-exec-permission-approvals $features)
      (codex:tool-config-features-request-permissions-tool $features)
+     (codex:tool-config-features-js-repl $features)
+     (codex:tool-config-features-js-repl-tools-only $features)
      (codex:tool-config-features-default-mode-request-user-input $features)
      (codex:tool-config-model-info-experimental-supported-tools $model-info)
      (codex:can-request-original-image-detail $model-info)))
