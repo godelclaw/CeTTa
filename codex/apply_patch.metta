@@ -33,6 +33,7 @@
 
 !(import! &self approval)
 !(import! &self json)
+!(import! &self list)
 !(import! &self patch)
 !(import! &self path)
 !(import! &self protocol)
@@ -643,11 +644,11 @@
            True
            False)))
 
-; CeTTa's path builtins in this profile do not reduce reliably when given
-; symbolic string values (for example list/accessor-derived paths). The current
-; restarted apply_patch slice only needs already-normalized Unix-style absolute
-; roots plus relative patch paths from patch-inspect, so use string-based path
-; normalization here to preserve the Rust-visible behavior for that surface.
+; Rust's safety.rs normalizes apply-patch paths by iterating Path::components:
+; `.` is skipped and `..` pops the previous component without touching the
+; filesystem. Keep this local string implementation because CeTTa's path
+; builtins in this profile do not reduce reliably for list/accessor-derived
+; symbolic path values at this boundary.
 (= (codex:trim-trailing-slash-unless-root $text)
    (if (== $text "/")
        "/"
@@ -659,20 +660,100 @@
 (= (codex:is-unix-absolute-path $path)
    (str-starts-with? $path "/"))
 
+(= (codex:apply-patch-path-drop-empty-components ())
+   ())
+
+(= (codex:apply-patch-path-drop-empty-components $components)
+   (let ($head $tail) (decons-atom $components)
+     (if (== $head "")
+         (codex:apply-patch-path-drop-empty-components $tail)
+         (case (codex:apply-patch-path-drop-empty-components $tail)
+           (($rest
+             (cons-atom $head $rest)))))))
+
+(= (codex:apply-patch-normalize-path-pop-reversed ())
+   ())
+
+(= (codex:apply-patch-normalize-path-pop-reversed $reversed-parts)
+   (list:rest $reversed-parts))
+
+(= (codex:apply-patch-normalize-path-parts-reversed
+      ()
+      $reversed-parts)
+   $reversed-parts)
+
+(= (codex:apply-patch-normalize-path-parts-reversed
+      $parts
+      $reversed-parts)
+   (let $head (list:first $parts)
+     (let $tail (list:rest $parts)
+       (if (== $head ".")
+           (codex:apply-patch-normalize-path-parts-reversed
+             $tail
+             $reversed-parts)
+           (if (== $head "..")
+               (codex:apply-patch-normalize-path-parts-reversed
+                 $tail
+                 (codex:apply-patch-normalize-path-pop-reversed
+                   $reversed-parts))
+               (codex:apply-patch-normalize-path-parts-reversed
+                 $tail
+                 (list:cons $head $reversed-parts)))))))
+
+(= (codex:apply-patch-join-normalized-parts ())
+   "")
+
+(= (codex:apply-patch-join-normalized-parts $parts)
+   (let ($head $tail) (decons-atom $parts)
+     (case $tail
+       ((()
+         $head)
+        ($rest
+         (case (codex:apply-patch-join-normalized-parts $tail)
+           (($joined-tail
+             (str-concat
+               (str-concat $head "/")
+               $joined-tail)))))))))
+
+(= (codex:apply-patch-normalize-path-text $path)
+   (let $absolute (codex:is-unix-absolute-path $path)
+     (case (str-split "/" $path)
+       (($split-parts
+         (case (codex:apply-patch-path-drop-empty-components $split-parts)
+           (($raw-parts
+             (case (codex:apply-patch-normalize-path-parts-reversed
+                     $raw-parts
+                     ())
+               (($reversed-parts
+                 (case (list:reverse $reversed-parts)
+                   (($parts
+                     (case (codex:apply-patch-join-normalized-parts $parts)
+                       (($joined
+                         (if $absolute
+                             (if (== $joined "")
+                                 "/"
+                                 (str-concat "/" $joined))
+                             $joined))))))))))))))))))
+
 (= (codex:normalized-policy-path $cwd $path)
    (let $resolved-cwd $cwd
      (let $resolved-path $path
        (if (codex:is-unix-absolute-path $resolved-path)
-           (codex:trim-trailing-slash-unless-root $resolved-path)
-           (str-concat
+           (codex:apply-patch-normalize-path-text $resolved-path)
+           (codex:apply-patch-normalize-path-text
              (str-concat
-               (codex:trim-trailing-slash-unless-root $resolved-cwd)
-               "/")
-             $resolved-path)))))
+               (str-concat
+                 (codex:trim-trailing-slash-unless-root $resolved-cwd)
+                 "/")
+               $resolved-path))))))
 
 (= (codex:is-path-within-root $path $root)
-   (let $norm-path (codex:trim-trailing-slash-unless-root $path)
-     (let $norm-root (codex:trim-trailing-slash-unless-root $root)
+   (let $norm-path
+     (codex:trim-trailing-slash-unless-root
+       (codex:apply-patch-normalize-path-text $path))
+     (let $norm-root
+       (codex:trim-trailing-slash-unless-root
+         (codex:apply-patch-normalize-path-text $root))
        (if (== $norm-root "/")
            True
            (if (== $norm-path $norm-root)
@@ -682,17 +763,18 @@
                  (str-concat $norm-root "/")))))))
 
 (= (codex:is-path-within-any-root $path $roots)
-   (let $resolved-roots (eval $roots)
-     (if (== $resolved-roots ())
-         False
-         (let $head (list:first $resolved-roots)
-           (let $tail (list:rest $resolved-roots)
-             (if (codex:is-path-within-root $path $head)
-                 True
-                 (case
-                   (codex:is-path-within-any-root $path $tail)
-                   ((True True)
-                    (False False)))))))))
+   (case (eval $roots)
+     ((()
+       False)
+      ($resolved-roots
+       (let $head (list:first $resolved-roots)
+         (let $tail (list:rest $resolved-roots)
+           (case (codex:is-path-within-root $path $head)
+             ((True True)
+              (False
+               (case
+                 (codex:is-path-within-any-root $path $tail)
+                 (($is-within $is-within))))))))))))
 
 (= (codex:fs-policy-can-write-path-with-cwd
       $file-system-sandbox-policy
@@ -705,13 +787,17 @@
        (let $blocked-roots
          (codex:patch-fs-policy-blocked-roots $file-system-sandbox-policy)
          (let $abs-path (codex:normalized-policy-path $cwd $path)
-           (if (codex:is-path-within-any-root $abs-path $blocked-roots)
-               False
-               (if (codex:is-path-within-any-root $abs-path $read-only-roots)
-                   False
-                   (codex:is-path-within-any-root
-                     $abs-path
-                     $writable-roots))))))))
+           (case (codex:is-path-within-any-root $abs-path $blocked-roots)
+             ((True False)
+              (False
+               (case (codex:is-path-within-any-root $abs-path $read-only-roots)
+                 ((True False)
+                  (False
+                   (case
+                     (codex:is-path-within-any-root
+                       $abs-path
+                       $writable-roots)
+                     (($can-write $can-write))))))))))))))
 
 (= (codex:is-apply-patch-change-writable?
       $change
