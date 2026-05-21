@@ -17,19 +17,7 @@
 !(import! &self function_tool)
 !(import! &self js_repl_exec_tool_calls)
 !(import! &self js_repl_kernel_io)
-
-(= (codex:js-repl-kernel-to-host-run-tool
-      $id
-      $exec-id
-      $tool-name
-      $arguments)
-   (CodexJsReplKernelToHostRunTool $id $exec-id $tool-name $arguments))
-
-(= (codex:js-repl-run-tool-context-missing-message)
-   "js_repl exec context not found")
-
-(= (codex:js-repl-read-stdout-run-tool-warning-message)
-   "failed to reply to kernel run_tool request")
+!(import! &self js_repl_run_tool_common)
 
 (= (codex:js-repl-read-stdout-run-tool-status-replied-missing-context)
    CodexJsReplReadStdoutRunToolStatusRepliedMissingContext)
@@ -44,13 +32,6 @@
        False
        CodexAbsent
        (codex:js-repl-run-tool-context-missing-message))))
-
-(= (codex:js-repl-read-stdout-run-tool-action-write-message
-      $message
-      $write-result)
-   (CodexJsReplReadStdoutRunToolActionWriteMessage
-     $message
-     $write-result))
 
 (= (codex:js-repl-read-stdout-run-tool-action-spawn-task
       $request
