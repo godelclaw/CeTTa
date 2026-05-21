@@ -123,6 +123,30 @@
         CodexAbsent)))
   "configured-path.rules: plain parser failure")
 
+!(assertEqual
+  (codex:default-policy-path "/tmp/codex-home")
+  "/tmp/codex-home/rules/default.rules")
+
+!(assertEqual
+  (codex:exec-policy-collect-policy-files-value
+    (codex:collect-policy-files-from-entries
+      "/tmp/codex-home/rules"
+      (("z.rules" "file")
+       ("notes.txt" "file")
+       ("dir.rules" "directory")
+       (".rules" "file")
+       (".hidden.rules" "file")
+       ("a.rules" "file"))))
+  ("/tmp/codex-home/rules/.hidden.rules"
+   "/tmp/codex-home/rules/a.rules"
+   "/tmp/codex-home/rules/z.rules"))
+
+!(assertEqualToResult
+  (codex:exec-policy-collect-policy-files-value
+    (codex:collect-policy-files
+      "/home/zarclaw/repos/CeTTa/runtime/codex-policy-missing-fixture-0e9bde4d2f7e4ca9"))
+  (()))
+
 !(assertEqualToResult
   (json-stringify
     (codex:check-output-json
@@ -646,3 +670,10 @@
       (codex:exec-policy-error-read-file "deny.rules" "permission denied")))
   (codex:exec-policy-load-error
     (codex:exec-policy-error-read-file "deny.rules" "permission denied")))
+
+!(assertEqual
+  (codex:load-exec-policy-with-warning-from-result
+    (codex:exec-policy-load-error
+      (codex:exec-policy-error-read-dir "rules" "permission denied")))
+  (codex:exec-policy-load-error
+    (codex:exec-policy-error-read-dir "rules" "permission denied")))

@@ -13,15 +13,43 @@
 ;   values used by Rust
 ; - format_exec_policy_error_with_source parse-error display selection
 ; - load_exec_policy layer ordering and load_exec_policy_with_warning downgrade
+; - collect_policy_files and default policy path helpers
 ;
 ; This increment intentionally starts from already-parsed rule constructors
 ; rather than Starlark policy-file parsing. That parser and its validation
 ; hooks (`match` / `not_match`, file loading) land in later exec-policy
 ; slices.
 
+!(import! &self fs)
 !(import! &self json)
 !(import! &self list)
 !(import! &self str)
+
+(= (codex:exec-policy-rules-dir-name)
+   "rules")
+
+(= (codex:exec-policy-rule-extension)
+   "rules")
+
+(= (codex:exec-policy-default-policy-file)
+   "default.rules")
+
+; Rust uses Path::join here only with fixed relative children and read_dir
+; entry names. This helper preserves that subset while the wider path layer is
+; ported independently.
+(= (codex:exec-policy-join-path $base $name)
+   (if (== $base "")
+       $name
+       (if (str-ends-with? $base "/")
+           (str-concat $base $name)
+           (str-concat (str-concat $base "/") $name))))
+
+(= (codex:default-policy-path $codex-home)
+   (codex:exec-policy-join-path
+     (codex:exec-policy-join-path
+       $codex-home
+       (codex:exec-policy-rules-dir-name))
+     (codex:exec-policy-default-policy-file)))
 
 ; Rust receives full Config values and derives these fields from
 ; ConfigLayerStack. The CeTTa port keeps the exact comparison boundary explicit
@@ -70,6 +98,23 @@
 
 (= (codex:exec-policy-error-read-file $path $message)
    (CodexExecPolicyErrorReadFile $path $message))
+
+(= (codex:exec-policy-error-read-dir $dir $message)
+   (CodexExecPolicyErrorReadDir $dir $message))
+
+(= (codex:exec-policy-collect-policy-files-ok $paths)
+   (CodexExecPolicyCollectPolicyFilesOk $paths))
+
+(= (codex:exec-policy-collect-policy-files-error $error)
+   (CodexExecPolicyCollectPolicyFilesError $error))
+
+(= (codex:exec-policy-collect-policy-files-value
+      (CodexExecPolicyCollectPolicyFilesOk $paths))
+   $paths)
+
+(= (codex:exec-policy-collect-policy-files-error-value
+      (CodexExecPolicyCollectPolicyFilesError $error))
+   $error)
 
 (= (codex:exec-policy-load-ok $policy)
    (CodexExecPolicyLoadOk $policy))
@@ -232,9 +277,81 @@
 
 (= (codex:load-exec-policy-with-warning-from-result
       (CodexExecPolicyLoadError
+        (CodexExecPolicyErrorReadDir $dir $message)))
+   (codex:exec-policy-load-error
+     (CodexExecPolicyErrorReadDir $dir $message)))
+
+(= (codex:load-exec-policy-with-warning-from-result
+      (CodexExecPolicyLoadError
         (CodexExecPolicyErrorOther $message)))
    (codex:exec-policy-load-error
      (CodexExecPolicyErrorOther $message)))
+
+(= (codex:exec-policy-fs-entry-name ($name $kind))
+   $name)
+
+(= (codex:exec-policy-fs-entry-kind ($name $kind))
+   $kind)
+
+(= (codex:is-exec-policy-rule-file-name $name)
+   (and
+     (str-ends-with?
+       $name
+       (str-concat "." (codex:exec-policy-rule-extension)))
+     (not (== $name (str-concat "." (codex:exec-policy-rule-extension))))))
+
+(= (codex:collect-policy-file-paths-from-entries $dir () $acc)
+   $acc)
+
+(= (codex:collect-policy-file-paths-from-entries $dir $entries $acc)
+   (let $head (list:first $entries)
+     (let $tail (list:rest $entries)
+       (let $name (codex:exec-policy-fs-entry-name $head)
+         (let $kind (codex:exec-policy-fs-entry-kind $head)
+           (if (and
+                 (== $kind "file")
+                 (codex:is-exec-policy-rule-file-name $name))
+               (codex:collect-policy-file-paths-from-entries
+                 $dir
+                 $tail
+                 (cons-atom
+                   (codex:exec-policy-join-path $dir $name)
+                   $acc))
+               (codex:collect-policy-file-paths-from-entries
+                 $dir
+                 $tail
+                 $acc)))))))
+
+(= (codex:exec-policy-sort-paths $paths)
+   (if (== $paths ())
+       ()
+       (case (sort-strings $paths)
+         (($sorted-paths $sorted-paths)))))
+
+(= (codex:collect-policy-files-from-entries $dir $entries)
+   (codex:exec-policy-collect-policy-files-ok
+     (codex:exec-policy-sort-paths
+       (codex:collect-policy-file-paths-from-entries
+         $dir
+         $entries
+         ()))))
+
+; Required CeTTa runtime detail for audit: Rust distinguishes
+; `read_dir` ErrorKind::NotFound from other read errors. The current CeTTa fs
+; surface exposes `fs-exists?` plus directory-read results, so missing dirs
+; short-circuit here while read/inspect failures still surface as ReadDir.
+(= (codex:collect-policy-files $dir)
+   (if (fs-exists? $dir)
+       (case (fs-read-dir-entries $dir)
+         (((Error $source ("read" $message))
+           (codex:exec-policy-collect-policy-files-error
+             (CodexExecPolicyErrorReadDir $dir $message)))
+          ((Error $source ("inspect" $message))
+           (codex:exec-policy-collect-policy-files-error
+             (CodexExecPolicyErrorReadDir $dir $message)))
+          ($entries
+           (codex:collect-policy-files-from-entries $dir $entries))))
+       (codex:exec-policy-collect-policy-files-ok ())))
 
 (= (codex:exec-policy-source-error-message
       (CodexExecPolicyParseSourceError $message $structured-location))
@@ -657,7 +774,12 @@
    (JsonArray
      (eval (map-atom $matched_rules $rule_match (codex:rule-match-json $rule_match)))))
 
-(= (codex:check-output-json (CodexExecPolicyCheckOutput $matched_rules $decision))
+(= (codex:check-output-json $output)
+   (case (once (eval $output))
+     (((CodexExecPolicyCheckOutput $matched_rules $decision)
+       (codex:check-output-json-from-parts $matched_rules $decision)))))
+
+(= (codex:check-output-json-from-parts $matched_rules $decision)
    (if (== $decision CodexAbsent)
        (JsonObject
          ((JsonPair "matchedRules" (codex:matched-rules-json $matched_rules))))
@@ -665,11 +787,15 @@
          ((JsonPair "matchedRules" (codex:matched-rules-json $matched_rules))
           (JsonPair "decision" (JsonString $decision))))))
 
-(= (codex:check-output-decision (CodexExecPolicyCheckOutput $matched_rules $decision))
-   (if (== $decision CodexAbsent) Empty $decision))
+(= (codex:check-output-decision $output)
+   (case (once (eval $output))
+     (((CodexExecPolicyCheckOutput $matched_rules $decision)
+       (if (== $decision CodexAbsent) Empty $decision)))))
 
-(= (codex:check-output-matched-rules (CodexExecPolicyCheckOutput $matched_rules $decision))
-   $matched_rules)
+(= (codex:check-output-matched-rules $output)
+   (case (once (eval $output))
+     (((CodexExecPolicyCheckOutput $matched_rules $decision)
+       $matched_rules))))
 
 (= (codex:pattern-token-matches? (CodexExecPolicyPatternTokenSingle $expected) $token)
    (== $expected $token))
@@ -1424,17 +1550,25 @@
       $command
       $heuristics_fallback
       $options)
-   (let $matched_rules
-     (codex:matches-for-command-rules (codex:policy-rules $policy) $command)
-     (if (== $matched_rules ())
-         (let $host_matches
-           (if (codex:match-options-resolve-host-executables $options)
-               (codex:match-host-executable-rules $policy $command)
-               ())
-           (if (== $host_matches ())
-               (codex:heuristics-match-or-empty $command $heuristics_fallback)
-               $host_matches))
-         $matched_rules)))
+   (case (once (eval $policy))
+     (($materialized-policy
+       (let $matched_rules
+         (codex:matches-for-command-rules
+           (codex:policy-rules $materialized-policy)
+           $command)
+         (if (== $matched_rules ())
+             (let $host_matches
+               (if (codex:match-options-resolve-host-executables $options)
+                   (codex:match-host-executable-rules
+                     $materialized-policy
+                     $command)
+                   ())
+               (if (== $host_matches ())
+                   (codex:heuristics-match-or-empty
+                     $command
+                     $heuristics_fallback)
+                   $host_matches))
+             $matched_rules))))))
 
 (= (codex:heuristics-match-or-empty $command $heuristics_fallback)
    (if (== $heuristics_fallback CodexAbsent)
