@@ -16,7 +16,7 @@
 ; - top-level exec-state transition helpers
 ; - kernel stderr-tail and model-facing diagnostic helpers
 ; - emitted-image URL validation, exec-result content item build/split, internal
-;   tool predicate, and Node version parse/ordering helpers
+;   tool predicate, and Node version parse/check/error-format helpers
 ; - nested tool-call response summary for message/function/custom/mcp/tool_search
 ;   responses plus handler errors
 ; - small exec-output aggregation helper used by js_repl events
@@ -46,6 +46,10 @@
 ;   bounded line from `push_stderr_tail_line`. This pure slice returns
 ;   `CodexJsReplStderrTailPushResult` with the updated tail plus that same
 ;   bounded line so tests can pin the mutation boundary.
+; - Rust obtains the Node version by spawning `node --version`. This pure slice
+;   accepts already-observed spawn/status/stdout/stderr values at that runtime
+;   boundary and preserves Rust's exact post-observation formatting and version
+;   comparison branches.
 ; - Some parser/runtime-boundary helpers bind intermediate results with `let`
 ;   where Rust would call a helper inline. This only materializes the same value
 ;   in CeTTa's evaluator and does not change the branch order or accepted cases.
@@ -1132,6 +1136,70 @@
 (= (codex:js-repl-node-version-at-least $found $required)
    (not (codex:js-repl-node-version-less-than $found $required)))
 
+(= (codex:js-repl-node-version-check-ok)
+   (CodexJsReplNodeVersionCheckOk))
+
+(= (codex:js-repl-node-version-check-error $message)
+   (CodexJsReplNodeVersionCheckError $message))
+
+(= (codex:js-repl-node-version-check-error-message
+      (CodexJsReplNodeVersionCheckError $message))
+   $message)
+
+; Mirrors `JS_REPL_MIN_NODE_VERSION = include_str!(../../../../node-version.txt)`.
+(= (codex:js-repl-required-node-version-text)
+   "22.22.0")
+
+(= (codex:js-repl-required-node-version)
+   (codex:js-repl-node-version-parse
+     (codex:js-repl-required-node-version-text)))
+
+(= (codex:js-repl-read-node-version-execute-error-message $error)
+   (str-concat "failed to execute Node: " $error))
+
+(= (codex:js-repl-read-node-version-status-details $stdout $stderr)
+   (let $stdout-trimmed (str-trim $stdout)
+     (let $stderr-trimmed (str-trim $stderr)
+       (let $stdout-details
+         (if (== $stdout-trimmed "")
+             ""
+             (str-concat " stdout: " $stdout-trimmed))
+         (let $stderr-details
+           (if (== $stderr-trimmed "")
+               ""
+               (str-concat " stderr: " $stderr-trimmed))
+           (let $details (str-concat $stdout-details $stderr-details)
+             (if (== $details "")
+                 ""
+                 (str-concat " (" (str-concat $details ")")))))))))
+
+(= (codex:js-repl-read-node-version-status-error-message
+      $status
+      $stdout
+      $stderr)
+   (str-concat
+     "failed to read Node version (status "
+     (str-concat
+       $status
+       (str-concat
+         ")"
+         (codex:js-repl-read-node-version-status-details
+           $stdout
+           $stderr)))))
+
+(= (codex:js-repl-read-node-version-parse-output $stdout)
+   (let $trimmed (str-trim $stdout)
+     (case (codex:js-repl-node-version-parse $trimmed)
+       (((CodexJsReplNodeVersionParseOk $version)
+         (codex:js-repl-node-version-parse-ok $version))
+        ((CodexJsReplNodeVersionParseError $message)
+         (codex:js-repl-node-version-parse-error
+           (str-concat
+             "failed to parse Node version output `"
+             (str-concat
+               $trimmed
+               (str-concat "`: " $message)))))))))
+
 (= (codex:js-repl-node-version-too-old-message
       $node-path
       $found
@@ -1149,6 +1217,15 @@
              (str-concat
                (codex:js-repl-node-version-display $required)
                ". Install/update Node or set js_repl_node_path to a newer runtime.")))))))
+
+(= (codex:js-repl-ensure-node-version $node-path $found $required)
+   (if (codex:js-repl-node-version-less-than $found $required)
+       (codex:js-repl-node-version-check-error
+         (codex:js-repl-node-version-too-old-message
+           $node-path
+           $found
+           $required))
+       (codex:js-repl-node-version-check-ok)))
 
 (= (codex:js-repl-tool-call-payload-kind-message-content)
    (CodexJsReplToolCallPayloadKindMessageContent))

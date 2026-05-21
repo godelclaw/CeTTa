@@ -311,8 +311,57 @@
   True)
 
 !(assertEqual
+  (codex:js-repl-required-node-version)
+  (CodexJsReplNodeVersionParseOk
+    (CodexJsReplNodeVersion 22 22 0)))
+
+!(assertEqual
+  (codex:js-repl-read-node-version-execute-error-message
+    "No such file or directory")
+  "failed to execute Node: No such file or directory")
+
+!(assertEqual
+  (codex:js-repl-read-node-version-status-error-message
+    "exit status: 1"
+    ""
+    "")
+  "failed to read Node version (status exit status: 1)")
+
+!(assertEqual
+  (codex:js-repl-read-node-version-status-error-message
+    "exit status: 1"
+    " v18.19.0\n"
+    " bad\n")
+  "failed to read Node version (status exit status: 1) ( stdout: v18.19.0 stderr: bad)")
+
+!(assertEqual
+  (codex:js-repl-read-node-version-parse-output " v22.22.0\n")
+  (CodexJsReplNodeVersionParseOk
+    (CodexJsReplNodeVersion 22 22 0)))
+
+!(assertEqual
+  (codex:js-repl-node-version-parse-result-error
+    (codex:js-repl-read-node-version-parse-output "bogus"))
+  "failed to parse Node version output `bogus`: invalid major version: invalid digit found in string")
+
+!(assertEqual
   (codex:js-repl-node-version-too-old-message
     "/usr/bin/node"
     (CodexJsReplNodeVersion 18 19 0)
     (CodexJsReplNodeVersion 20 11 1))
   "Node runtime too old for js_repl (resolved /usr/bin/node): found v18.19.0, requires >= v20.11.1. Install/update Node or set js_repl_node_path to a newer runtime.")
+
+!(assertEqual
+  (codex:js-repl-node-version-check-error-message
+    (codex:js-repl-ensure-node-version
+      "/usr/bin/node"
+      (CodexJsReplNodeVersion 18 19 0)
+      (CodexJsReplNodeVersion 20 11 1)))
+  "Node runtime too old for js_repl (resolved /usr/bin/node): found v18.19.0, requires >= v20.11.1. Install/update Node or set js_repl_node_path to a newer runtime.")
+
+!(assertEqual
+  (codex:js-repl-ensure-node-version
+    "/usr/bin/node"
+    (CodexJsReplNodeVersion 22 22 0)
+    (CodexJsReplNodeVersion 22 22 0))
+  (CodexJsReplNodeVersionCheckOk))
