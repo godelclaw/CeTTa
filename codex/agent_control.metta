@@ -13,6 +13,9 @@
 ; - get_agent_metadata registry forwarding
 ; - live_thread_spawn_children/open_thread_spawn_children over thread snapshots
 ; - live_thread_spawn_descendants/list_live_agent_subtree_thread_ids
+; - handle_thread_request_result
+; - send_input/send_inter_agent_communication last_task_message update
+; - interrupt_agent result pass-through
 ; - resolve_agent_reference path resolution and error mapping
 ; - format_environment_context_subagents formatting over materialized children
 ; - agent_matches_prefix
@@ -49,6 +52,11 @@
 ;   config snapshot asynchronously, and skips threads that disappear. This pure
 ;   slice receives the still-live materialized thread snapshots at that async
 ;   boundary and keeps the same parent grouping, metadata fallback, and sorting.
+; - Rust send_input/send_inter_agent_communication call ThreadManager::send_op
+;   asynchronously and handle InternalAgentDied by removing the thread plus
+;   releasing registry metadata. This pure slice receives the materialized
+;   send result at that boundary, applies the same registry transition, and
+;   returns the same result for the outer thread-manager side effect layer.
 
 !(import! &self agent_path)
 !(import! &self agent_registry)
@@ -126,6 +134,25 @@
         $parent-thread-id
         $children))
    $children)
+
+(= (codex:agent-control-thread-request-outcome
+      $registry-state
+      $result)
+   (CodexAgentControlThreadRequestOutcome
+     $registry-state
+     $result))
+
+(= (codex:agent-control-thread-request-outcome-registry-state
+      (CodexAgentControlThreadRequestOutcome
+        $registry-state
+        $result))
+   $registry-state)
+
+(= (codex:agent-control-thread-request-outcome-result
+      (CodexAgentControlThreadRequestOutcome
+        $registry-state
+        $result))
+   $result)
 
 (= (codex:agent-control-listed-agent
       $agent-name
@@ -959,6 +986,97 @@
        $agent-id)
      (($descendants
        (cons-atom $agent-id $descendants)))))
+
+(= (codex:agent-control-handle-thread-request-result
+      $registry-state
+      $agent-id
+      $result)
+   (case $result
+     (((CodexAgentControlErr (CodexErrInternalAgentDied))
+       (codex:agent-control-thread-request-outcome
+         (codex:agent-registry-release-spawned-thread
+           $registry-state
+           $agent-id)
+         (codex:agent-control-err (codex:error-internal-agent-died))))
+      ($other
+       (codex:agent-control-thread-request-outcome
+         $registry-state
+         $other)))))
+
+(= (codex:agent-control-update-last-task-message-on-ok
+      $outcome
+      $agent-id
+      $last-task-message)
+   (case $outcome
+     (((CodexAgentControlThreadRequestOutcome
+         $registry-state
+         (CodexAgentControlOk $value))
+       (codex:agent-control-thread-request-outcome
+         (codex:agent-registry-update-last-task-message
+           $registry-state
+           $agent-id
+           $last-task-message)
+         (codex:agent-control-ok $value)))
+      ((CodexAgentControlThreadRequestOutcome
+         $registry-state
+         $result)
+       (codex:agent-control-thread-request-outcome
+         $registry-state
+         $result)))))
+
+(= (codex:agent-control-send-input-result
+      $registry-state
+      $agent-id
+      $initial-operation
+      $send-result)
+   (let $last-task-message
+     (codex:agent-control-render-input-preview $initial-operation)
+     (case
+       (codex:agent-control-handle-thread-request-result
+         $registry-state
+         $agent-id
+         $send-result)
+       (($handled
+         (codex:agent-control-update-last-task-message-on-ok
+           $handled
+           $agent-id
+           $last-task-message))))))
+
+(= (codex:agent-control-inter-agent-communication-content
+      (CodexInterAgentCommunication
+        $author
+        $recipient
+        $other-recipients
+        $content
+        $trigger-turn))
+   $content)
+
+(= (codex:agent-control-send-inter-agent-communication-result
+      $registry-state
+      $agent-id
+      $communication
+      $send-result)
+   (let $last-task-message
+     (codex:agent-control-inter-agent-communication-content
+       $communication)
+     (case
+       (codex:agent-control-handle-thread-request-result
+         $registry-state
+         $agent-id
+         $send-result)
+       (($handled
+         (codex:agent-control-update-last-task-message-on-ok
+           $handled
+           $agent-id
+           $last-task-message))))))
+
+(= (codex:agent-control-interrupt-agent-result
+      $registry-state
+      $agent-id
+      $send-result)
+   (codex:agent-control-thread-request-outcome
+     $registry-state
+     $send-result))
 
 (= (codex:agent-control-current-agent-path $session-source)
    (case (codex:session-source-get-agent-path $session-source)

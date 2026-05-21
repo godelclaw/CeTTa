@@ -56,6 +56,22 @@
      $session-source
      $metadata))
 
+(= (test:request-outcome-check
+      $last-task-message
+      $result)
+   (CodexAgentControlRequestOutcomeCheck
+     $last-task-message
+     $result))
+
+(= (test:request-release-check
+      $metadata
+      $total-count
+      $result)
+   (CodexAgentControlRequestReleaseCheck
+     $metadata
+     $total-count
+     $result))
+
 (= (test:root-metadata)
    (codex:agent-registry-metadata
      (test:root-thread)
@@ -185,6 +201,18 @@
     (codex:agent-control-thread-snapshot-entry
       (test:exec-thread)
       (codex:session-source-exec))))
+
+(= (test:send-input-operation)
+   (codex:user-input-op
+     ((codex:user-input-text "Review src/lib.rs" ()))))
+
+(= (test:inter-agent-communication)
+   (codex:inter-agent-communication
+     (test:root-thread)
+     (test:tester-thread)
+     ()
+     "child update"
+     True))
 
 (= (test:fork-user $text)
    (codex:rollout-response-item
@@ -628,6 +656,115 @@
     (test:scout-thread))
   ((test:scout-thread)
    (test:tester-thread)))
+
+!(assertEqual
+  (case
+    (codex:agent-control-send-input-result
+      (test:registry-state)
+      (test:scout-thread)
+      (test:send-input-operation)
+      (codex:agent-control-ok "turn-1"))
+    (((CodexAgentControlThreadRequestOutcome $state $result)
+      (case
+        (codex:agent-control-agent-metadata-for-thread
+          $state
+          (test:scout-thread))
+        (($metadata
+          (test:request-outcome-check
+            (codex:agent-registry-metadata-last-task-message $metadata)
+            $result)))))))
+  (test:request-outcome-check
+    "Review src/lib.rs"
+    (codex:agent-control-ok "turn-1")))
+
+!(assertEqual
+  (case
+    (codex:agent-control-send-input-result
+      (test:registry-state)
+      (test:scout-thread)
+      (test:send-input-operation)
+      (codex:agent-control-err
+        (codex:error-unsupported-operation "busy")))
+    (((CodexAgentControlThreadRequestOutcome $state $result)
+      (case
+        (codex:agent-control-agent-metadata-for-thread
+          $state
+          (test:scout-thread))
+        (($metadata
+          (test:request-outcome-check
+            (codex:agent-registry-metadata-last-task-message $metadata)
+            $result)))))))
+  (test:request-outcome-check
+    "Scan repository"
+    (codex:agent-control-err
+      (codex:error-unsupported-operation "busy"))))
+
+!(assertEqual
+  (case
+    (codex:agent-control-send-input-result
+      (test:registry-state)
+      (test:scout-thread)
+      (test:send-input-operation)
+      (codex:agent-control-err
+        (codex:error-internal-agent-died)))
+    (((CodexAgentControlThreadRequestOutcome $state $result)
+      (case
+        (codex:agent-control-agent-metadata-for-thread
+          $state
+          (test:scout-thread))
+        (($metadata
+          (test:request-release-check
+            $metadata
+            (codex:agent-registry-state-total-count $state)
+            $result)))))))
+  (test:request-release-check
+    CodexAbsent
+    3
+    (codex:agent-control-err
+      (codex:error-internal-agent-died))))
+
+!(assertEqual
+  (case
+    (codex:agent-control-send-inter-agent-communication-result
+      (test:registry-state)
+      (test:tester-thread)
+      (test:inter-agent-communication)
+      (codex:agent-control-ok "turn-2"))
+    (((CodexAgentControlThreadRequestOutcome $state $result)
+      (case
+        (codex:agent-control-agent-metadata-for-thread
+          $state
+          (test:tester-thread))
+        (($metadata
+          (test:request-outcome-check
+            (codex:agent-registry-metadata-last-task-message $metadata)
+            $result)))))))
+  (test:request-outcome-check
+    "child update"
+    (codex:agent-control-ok "turn-2")))
+
+!(assertEqual
+  (case
+    (codex:agent-control-interrupt-agent-result
+      (test:registry-state)
+      (test:scout-thread)
+      (codex:agent-control-err
+        (codex:error-internal-agent-died)))
+    (((CodexAgentControlThreadRequestOutcome $state $result)
+      (case
+        (codex:agent-control-agent-metadata-for-thread
+          $state
+          (test:scout-thread))
+        (($metadata
+          (test:request-release-check
+            $metadata
+            (codex:agent-registry-state-total-count $state)
+            $result)))))))
+  (test:request-release-check
+    (test:scout-metadata)
+    4
+    (codex:agent-control-err
+      (codex:error-internal-agent-died))))
 
 !(assertEqual
   (codex:agent-control-resolve-agent-reference

@@ -599,14 +599,17 @@
                $metadata
                $last-task-message)
              $metadata)
-         (cons-atom
-           (codex:agent-registry-entry
-             (codex:agent-registry-entry-key $head)
-             $new-metadata)
+         (case
            (codex:agent-registry-update-last-task-message-from
              $tail
              $thread-id
-             $last-task-message))))))
+             $last-task-message)
+           (($updated-tail
+             (cons-atom
+               (codex:agent-registry-entry
+                 (codex:agent-registry-entry-key $head)
+                 $new-metadata)
+               $updated-tail))))))))
 
 (= (codex:agent-registry-update-last-task-message
       $state
@@ -678,16 +681,14 @@
      (let $metadata (codex:agent-registry-entry-metadata $head)
        (if (== (codex:agent-registry-metadata-agent-id $metadata) $thread-id)
            (codex:agent-registry-release-scan $tail $metadata)
-           (let $tail-scan
+           (case
              (codex:agent-registry-release-spawned-thread-from
                $tail
                $thread-id)
-             (codex:agent-registry-release-scan
-               (cons-atom
-                 $head
-                 (codex:agent-registry-release-scan-entries $tail-scan))
-               (codex:agent-registry-release-scan-removed-metadata
-                 $tail-scan)))))))
+             (((CodexAgentRegistryReleaseScan $tail-entries $removed-metadata)
+               (codex:agent-registry-release-scan
+                 (cons-atom $head $tail-entries)
+                 $removed-metadata))))))))
 
 (= (codex:is-agent-registry-removed-counted-agent $metadata)
    (case $metadata
