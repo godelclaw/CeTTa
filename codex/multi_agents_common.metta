@@ -2,10 +2,12 @@
 ;
 ; This ports deterministic helper behavior from:
 ; - openai-codex/codex-rs/core/src/tools/handlers/multi_agents_common.rs
+; - openai-codex/codex-rs/core/src/tools/handlers/multi_agents.rs
 ;
 ; Covered in this increment:
 ; - wait timeout constants
 ; - wait timeout normalization
+; - parse_agent_id_target / parse_agent_id_targets
 ; - function_arguments
 ; - build_wait_agent_statuses ordering
 ; - collab_spawn_error / collab_agent_error display mapping
@@ -25,6 +27,10 @@
 ; - Rust mutates `Config` for runtime/model overrides. Those side-effecting
 ;   helpers remain with a later config/session port; this slice covers the
 ;   pure validation helpers those branches call.
+; - CeTTa currently does not reliably reduce the separate `thread_id` helper
+;   after the large protocol surface is imported into the same space. The
+;   parse_agent_id_target helpers therefore repeat the same deterministic
+;   ThreadId parser-form logic locally instead of delegating across modules.
 
 !(import! &self agent_path)
 !(import! &self context)
@@ -66,6 +72,400 @@
 
 (= (codex:multi-agent-common-err $error)
    (CodexMultiAgentCommonErr $error))
+
+(= (codex:multi-agent-thread-id-ascii-lower-char $char)
+   (case $char
+     (("A" "a")
+      ("B" "b")
+      ("C" "c")
+      ("D" "d")
+      ("E" "e")
+      ("F" "f")
+      ("G" "g")
+      ("H" "h")
+      ("I" "i")
+      ("J" "j")
+      ("K" "k")
+      ("L" "l")
+      ("M" "m")
+      ("N" "n")
+      ("O" "o")
+      ("P" "p")
+      ("Q" "q")
+      ("R" "r")
+      ("S" "s")
+      ("T" "t")
+      ("U" "u")
+      ("V" "v")
+      ("W" "w")
+      ("X" "x")
+      ("Y" "y")
+      ("Z" "z")
+      ($other $other))))
+
+(= (codex:multi-agent-thread-id-is-ascii-hex-char $char)
+   (let $found (str-find "0123456789abcdefABCDEF" $char)
+     (if (== $found Empty) False True)))
+
+(= (codex:multi-agent-thread-id-are-ascii-hex-chars $text)
+   (if (== (str-length $text) 32)
+       (codex:multi-agent-thread-id-are-hex4-groups-from $text 0)
+       False))
+
+(= (codex:multi-agent-thread-id-are-hex4-groups-from $text $start)
+   (if (== $start 32)
+       True
+       (case (codex:multi-agent-thread-id-is-hex4-at $text $start)
+         ((False False)
+          (True
+           (codex:multi-agent-thread-id-are-hex4-groups-from
+             $text
+             (+ $start 4)))))))
+
+(= (codex:multi-agent-thread-id-is-hex4-at $text $start)
+   (let $c0
+     (codex:multi-agent-thread-id-is-ascii-hex-char
+       (str-slice $text $start (+ $start 1)))
+     (if $c0
+         (let $c1
+           (codex:multi-agent-thread-id-is-ascii-hex-char
+             (str-slice $text (+ $start 1) (+ $start 2)))
+           (if $c1
+               (let $c2
+                 (codex:multi-agent-thread-id-is-ascii-hex-char
+                   (str-slice $text (+ $start 2) (+ $start 3)))
+                 (if $c2
+                     (codex:multi-agent-thread-id-is-ascii-hex-char
+                       (str-slice $text (+ $start 3) (+ $start 4)))
+                     False))
+               False))
+         False)))
+
+(= (codex:multi-agent-thread-id-lower-char-at $text $index)
+   (codex:multi-agent-thread-id-ascii-lower-char
+     (str-slice $text $index (+ $index 1))))
+
+(= (codex:multi-agent-thread-id-lower4-at $text $start)
+   (let $c0 (codex:multi-agent-thread-id-lower-char-at $text $start)
+     (let $c1
+       (codex:multi-agent-thread-id-lower-char-at $text (+ $start 1))
+       (let $c2
+         (codex:multi-agent-thread-id-lower-char-at $text (+ $start 2))
+         (let $c3
+           (codex:multi-agent-thread-id-lower-char-at $text (+ $start 3))
+           (str-concat
+             $c0
+             (str-concat $c1 (str-concat $c2 $c3))))))))
+
+(= (codex:multi-agent-thread-id-lower8-at $text $start)
+   (case (codex:multi-agent-thread-id-lower4-at $text $start)
+     (($left
+       (case (codex:multi-agent-thread-id-lower4-at $text (+ $start 4))
+         (($right (str-concat $left $right))))))))
+
+(= (codex:multi-agent-thread-id-simple-to-hyphenated $simple)
+   (case (codex:multi-agent-thread-id-lower8-at $simple 0)
+     (($g0
+       (case (codex:multi-agent-thread-id-lower4-at $simple 8)
+         (($g1
+           (case (codex:multi-agent-thread-id-lower4-at $simple 12)
+             (($g2
+               (case (codex:multi-agent-thread-id-lower4-at $simple 16)
+                 (($g3
+                   (case (codex:multi-agent-thread-id-lower4-at $simple 20)
+                     (($g4a
+                       (case
+                         (codex:multi-agent-thread-id-lower8-at $simple 24)
+                         (($g4b
+                           (format-args
+                             "{}-{}-{}-{}-{}{}"
+                             ($g0 $g1 $g2 $g3 $g4a $g4b)))))))))))))))))))))
+
+(= (codex:multi-agent-thread-id-hyphenated-to-simple $text)
+   (str-concat
+     (str-slice $text 0 8)
+     (str-concat
+       (str-slice $text 9 13)
+       (str-concat
+         (str-slice $text 14 18)
+         (str-concat
+           (str-slice $text 19 23)
+           (str-slice $text 24 36))))))
+
+(= (codex:multi-agent-thread-id-is-hyphenated-shape $text)
+   (if (== (str-length $text) 36)
+       (and
+         (== (str-slice $text 8 9) "-")
+         (and
+           (== (str-slice $text 13 14) "-")
+           (and
+             (== (str-slice $text 18 19) "-")
+             (== (str-slice $text 23 24) "-"))))
+       False))
+
+(= (codex:multi-agent-thread-id-canonicalize-simple $text)
+   (if (and
+         (== (str-length $text) 32)
+         (codex:multi-agent-thread-id-are-ascii-hex-chars $text))
+       (codex:multi-agent-thread-id-simple-to-hyphenated
+         $text)
+       CodexAbsent))
+
+(= (codex:multi-agent-thread-id-canonicalize-hyphenated $text)
+   (if (codex:multi-agent-thread-id-is-hyphenated-shape $text)
+       (codex:multi-agent-thread-id-canonicalize-simple
+         (codex:multi-agent-thread-id-hyphenated-to-simple $text))
+       CodexAbsent))
+
+(= (codex:multi-agent-thread-id-canonicalize-braced $text)
+   (if (and
+         (== (str-length $text) 38)
+         (and
+           (== (str-slice $text 0 1) "{")
+           (== (str-slice $text 37 38) "}")))
+       (codex:multi-agent-thread-id-canonicalize-hyphenated
+         (str-slice $text 1 37))
+       CodexAbsent))
+
+(= (codex:multi-agent-thread-id-canonicalize-urn $text)
+   (if (and
+         (== (str-length $text) 45)
+         (str-starts-with? $text "urn:uuid:"))
+       (codex:multi-agent-thread-id-canonicalize-hyphenated
+         (str-slice $text 9 45))
+       CodexAbsent))
+
+(= (codex:multi-agent-thread-id-canonicalize-uuid $text)
+   (let $len (str-length $text)
+     (if (== $len 32)
+         (codex:multi-agent-thread-id-canonicalize-simple $text)
+         (if (== $len 36)
+             (codex:multi-agent-thread-id-canonicalize-hyphenated $text)
+             (if (== $len 38)
+                 (codex:multi-agent-thread-id-canonicalize-braced $text)
+                 (if (== $len 45)
+                     (codex:multi-agent-thread-id-canonicalize-urn $text)
+                     CodexAbsent))))))
+
+(= (codex:multi-agent-thread-id-parse-subject $text)
+   (let $len (str-length $text)
+     (if (and
+           (== $len 38)
+           (and
+             (== (str-slice $text 0 1) "{")
+             (== (str-slice $text 37 38) "}")))
+         (CodexMultiAgentThreadIdParseSubject (str-slice $text 1 37) 1 False)
+         (if (and
+               (== $len 45)
+               (str-starts-with? $text "urn:uuid:"))
+             (CodexMultiAgentThreadIdParseSubject
+               (str-slice $text 9 45)
+               9
+               False)
+             (CodexMultiAgentThreadIdParseSubject $text 0 True)))))
+
+(= (codex:multi-agent-thread-id-is-error-scan-char $char)
+   (if (== $char "-")
+       True
+       (codex:multi-agent-thread-id-is-ascii-hex-char $char)))
+
+(= (codex:multi-agent-thread-id-first-invalid-char-from $text $offset $index)
+   (if (== $index (str-length $text))
+       CodexAbsent
+       (let $char (str-slice $text $index (+ $index 1))
+         (if (codex:multi-agent-thread-id-is-error-scan-char $char)
+             (case
+               (codex:multi-agent-thread-id-first-invalid-char-from
+                 $text
+                 $offset
+                 (+ $index 1))
+               (($result $result)))
+             (CodexMultiAgentThreadIdInvalidChar
+               $char
+               (+ (+ $offset $index) 1))))))
+
+(= (codex:multi-agent-thread-id-hyphen-count-from $text $index)
+   (if (== $index (str-length $text))
+       0
+       (case
+         (codex:multi-agent-thread-id-hyphen-count-from $text (+ $index 1))
+         (($tail-count
+           (if (== (str-slice $text $index (+ $index 1)) "-")
+               (+ 1 $tail-count)
+               $tail-count))))))
+
+(= (codex:multi-agent-thread-id-hyphen-index-at
+      $text
+      $target-count
+      $index
+      $seen)
+   (if (== $index (str-length $text))
+       CodexAbsent
+       (if (== (str-slice $text $index (+ $index 1)) "-")
+           (if (== $seen $target-count)
+               $index
+               (case
+                 (codex:multi-agent-thread-id-hyphen-index-at
+                   $text
+                   $target-count
+                   (+ $index 1)
+                   (+ $seen 1))
+                 (($result $result))))
+           (case
+             (codex:multi-agent-thread-id-hyphen-index-at
+               $text
+               $target-count
+               (+ $index 1)
+               $seen)
+             (($result $result))))))
+
+(= (codex:multi-agent-thread-id-parse-char-debug $char $index)
+   (str-concat
+     "Error(ParseChar { character: '"
+     (str-concat
+       $char
+       (str-concat
+         "', index: "
+         (str-concat (format-args "{}" ($index)) " })")))))
+
+(= (codex:multi-agent-thread-id-parse-simple-length-debug $len)
+   (str-concat
+     "Error(ParseSimpleLength { len: "
+     (str-concat (format-args "{}" ($len)) " })")))
+
+(= (codex:multi-agent-thread-id-parse-group-count-debug $count)
+   (str-concat
+     "Error(ParseGroupCount { count: "
+     (str-concat (format-args "{}" ($count)) " })")))
+
+(= (codex:multi-agent-thread-id-parse-group-length-debug $group $len $index)
+   (str-concat
+     "Error(ParseGroupLength { group: "
+     (str-concat
+       (format-args "{}" ($group))
+       (str-concat
+         ", len: "
+         (str-concat
+           (format-args "{}" ($len))
+           (str-concat
+             ", index: "
+             (str-concat (format-args "{}" ($index)) " })")))))))
+
+(= (codex:multi-agent-thread-id-parse-group-length-check
+      $text
+      $offset
+      $group
+      $block-start
+      $expected-hyphen-index)
+   (let $hyphen-index
+     (codex:multi-agent-thread-id-hyphen-index-at $text $group 0 0)
+     (if (== $hyphen-index $expected-hyphen-index)
+         CodexAbsent
+         (codex:multi-agent-thread-id-parse-group-length-debug
+           $group
+           (- $hyphen-index $block-start)
+           (+ $offset (+ $block-start 1))))))
+
+(= (codex:multi-agent-thread-id-parse-group-length-debug-for $text $offset)
+   (let $group-0
+     (codex:multi-agent-thread-id-parse-group-length-check $text $offset 0 0 8)
+     (if (not (== $group-0 CodexAbsent))
+         $group-0
+         (let $group-1
+           (codex:multi-agent-thread-id-parse-group-length-check
+             $text
+             $offset
+             1
+             9
+             13)
+           (if (not (== $group-1 CodexAbsent))
+               $group-1
+               (let $group-2
+                 (codex:multi-agent-thread-id-parse-group-length-check
+                   $text
+                   $offset
+                   2
+                   14
+                   18)
+                 (if (not (== $group-2 CodexAbsent))
+                     $group-2
+                     (let $group-3
+                       (codex:multi-agent-thread-id-parse-group-length-check
+                         $text
+                         $offset
+                         3
+                         19
+                         23)
+                       (if (not (== $group-3 CodexAbsent))
+                           $group-3
+                           (codex:multi-agent-thread-id-parse-group-length-debug
+                             4
+                             (- (str-length $text) 24)
+                             (+ $offset 25)))))))))))
+
+(= (codex:multi-agent-thread-id-parse-error-debug-from-subject
+      (CodexMultiAgentThreadIdParseSubject $text $offset $simple)
+      $original-len)
+   (case
+     (codex:multi-agent-thread-id-first-invalid-char-from $text $offset 0)
+     (((CodexMultiAgentThreadIdInvalidChar $char $index)
+       (codex:multi-agent-thread-id-parse-char-debug $char $index))
+      (CodexAbsent
+       (let $hyphen-count
+         (codex:multi-agent-thread-id-hyphen-count-from $text 0)
+         (if (and (== $hyphen-count 0) $simple)
+             (codex:multi-agent-thread-id-parse-simple-length-debug
+               $original-len)
+             (if (not (== $hyphen-count 4))
+                 (codex:multi-agent-thread-id-parse-group-count-debug
+                   (+ $hyphen-count 1))
+                 (codex:multi-agent-thread-id-parse-group-length-debug-for
+                   $text
+                   $offset))))))))
+
+(= (codex:multi-agent-thread-id-parse-error-debug $text)
+   (codex:multi-agent-thread-id-parse-error-debug-from-subject
+     (codex:multi-agent-thread-id-parse-subject $text)
+     (str-length $text)))
+
+(= (codex:multi-agent-parse-agent-id-target $target)
+   (case (codex:multi-agent-thread-id-canonicalize-uuid $target)
+     ((CodexAbsent
+       (codex:multi-agent-common-err
+         (codex:function-call-error-respond-to-model
+           (str-concat
+             "invalid agent id "
+             (str-concat
+               $target
+               (str-concat
+                 ": "
+                 (codex:multi-agent-thread-id-parse-error-debug
+                   $target)))))))
+      ($thread-id
+       (codex:multi-agent-common-ok $thread-id)))))
+
+(= (codex:multi-agent-parse-agent-id-targets-rest ())
+   (codex:multi-agent-common-ok ()))
+
+(= (codex:multi-agent-parse-agent-id-targets-rest $targets)
+   (let ($head $tail) (decons-atom $targets)
+     (case (codex:multi-agent-parse-agent-id-target $head)
+       (((CodexMultiAgentCommonErr $error)
+         (codex:multi-agent-common-err $error))
+        ((CodexMultiAgentCommonOk $thread-id)
+         (case (codex:multi-agent-parse-agent-id-targets-rest $tail)
+           (((CodexMultiAgentCommonErr $error)
+             (codex:multi-agent-common-err $error))
+            ((CodexMultiAgentCommonOk $thread-ids)
+             (codex:multi-agent-common-ok
+               (cons-atom $thread-id $thread-ids))))))))))
+
+(= (codex:multi-agent-parse-agent-id-targets $targets)
+   (if (== $targets ())
+       (codex:multi-agent-common-err
+         (codex:function-call-error-respond-to-model
+           "agent ids must be non-empty"))
+       (codex:multi-agent-parse-agent-id-targets-rest $targets)))
 
 (= (codex:multi-agent-function-arguments $payload)
    (case $payload

@@ -35,6 +35,57 @@
   (codex:multi-agent-common-ok 3600000))
 
 !(assertEqual
+  (codex:multi-agent-parse-agent-id-target
+    "67E55044-10B1-426F-9247-BB680E5FE0C8")
+  (codex:multi-agent-common-ok
+    "67e55044-10b1-426f-9247-bb680e5fe0c8"))
+
+!(assertEqual
+  (codex:multi-agent-parse-agent-id-target
+    "{67E55044-10B1-426F-9247-BB680E5FE0C8}")
+  (codex:multi-agent-common-ok
+    "67e55044-10b1-426f-9247-bb680e5fe0c8"))
+
+!(assertEqual
+  (codex:multi-agent-parse-agent-id-target
+    "urn:uuid:67E55044-10B1-426F-9247-BB680E5FE0C8")
+  (codex:multi-agent-common-ok
+    "67e55044-10b1-426f-9247-bb680e5fe0c8"))
+
+!(assertEqual
+  (codex:multi-agent-parse-agent-id-target "not-a-uuid")
+  (codex:multi-agent-common-err
+    (codex:function-call-error-respond-to-model
+      "invalid agent id not-a-uuid: Error(ParseChar { character: 'n', index: 1 })")))
+
+!(assertEqual
+  (codex:multi-agent-parse-agent-id-target "12345678-1234")
+  (codex:multi-agent-common-err
+    (codex:function-call-error-respond-to-model
+      "invalid agent id 12345678-1234: Error(ParseGroupCount { count: 2 })")))
+
+!(assertEqual
+  (codex:multi-agent-parse-agent-id-targets
+    ("67E55044-10B1-426F-9247-BB680E5FE0C8"
+     "67e5504410b1426f9247bb680e5fe0c8"))
+  (codex:multi-agent-common-ok
+    ("67e55044-10b1-426f-9247-bb680e5fe0c8"
+     "67e55044-10b1-426f-9247-bb680e5fe0c8")))
+
+!(assertEqual
+  (codex:multi-agent-parse-agent-id-targets ())
+  (codex:multi-agent-common-err
+    (codex:function-call-error-respond-to-model
+      "agent ids must be non-empty")))
+
+!(assertEqual
+  (codex:multi-agent-parse-agent-id-targets
+    ("67E55044-10B1-426F-9247-BB680E5FE0C8" "not-a-uuid"))
+  (codex:multi-agent-common-err
+    (codex:function-call-error-respond-to-model
+      "invalid agent id not-a-uuid: Error(ParseChar { character: 'n', index: 1 })")))
+
+!(assertEqual
   (codex:multi-agent-function-arguments
     (codex:function-payload "{\"message\":\"hi\"}"))
   (codex:multi-agent-common-ok "{\"message\":\"hi\"}"))
