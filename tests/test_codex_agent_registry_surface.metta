@@ -61,6 +61,66 @@
      (test:path-reservation)
      (test:scout-metadata)))
 
+(= (test:nickname-metadata $thread-id $nickname)
+   (codex:agent-registry-metadata
+     $thread-id
+     CodexAbsent
+     $nickname
+     CodexAbsent
+     CodexAbsent))
+
+(= (test:reserve-nickname $state $names $preferred $choice-index)
+   (case (codex:agent-registry-reserve-spawn-slot
+           (eval $state)
+           CodexAbsent)
+     (((CodexAgentRegistryReserveOk $slot-state $reservation)
+       (codex:agent-registry-reserve-agent-nickname-with-preference
+         $slot-state
+         $reservation
+         $names
+         $preferred
+         $choice-index)))))
+
+(= (test:nickname-reserve-nickname $result)
+   (case $result
+     (((CodexAgentRegistryReserveOk $state $reservation)
+       (codex:agent-registry-spawn-reservation-reserved-agent-nickname
+         $reservation)))))
+
+(= (test:drop-nickname-reserve $result)
+   (case $result
+     (((CodexAgentRegistryReserveOk $state $reservation)
+       (codex:agent-registry-drop-reservation $state $reservation)))))
+
+(= (test:commit-nickname-reserve $result $metadata)
+   (case $result
+     (((CodexAgentRegistryReserveOk $state $reservation)
+       (codex:agent-registry-commit-reservation
+         $state
+         $reservation
+         $metadata)))))
+
+(= (test:first-alpha-nickname-reserve)
+   (test:reserve-nickname
+     (codex:agent-registry-state-empty)
+     ("alpha")
+     CodexAbsent
+     0))
+
+(= (test:after-failed-alpha-nickname)
+   (test:drop-nickname-reserve
+     (test:first-alpha-nickname-reserve)))
+
+(= (test:after-committed-alpha-nickname)
+   (test:commit-nickname-reserve
+     (test:first-alpha-nickname-reserve)
+     (test:nickname-metadata (test:thread-a) "alpha")))
+
+(= (test:after-released-alpha-nickname)
+   (codex:agent-registry-release-spawned-thread
+     (test:after-committed-alpha-nickname)
+     (test:thread-a)))
+
 !(assertEqual
   (codex:agent-registry-format-agent-nickname "Plato" 0)
   "Plato")
@@ -139,6 +199,92 @@
       (codex:agent-registry-state-empty)
       (test:scout-metadata)))
   ("Scout"))
+
+!(assertEqual
+  (test:nickname-reserve-nickname
+    (test:first-alpha-nickname-reserve))
+  "alpha")
+
+!(assertEqual
+  (codex:agent-registry-state-total-count
+    (test:after-failed-alpha-nickname))
+  0)
+
+!(assertEqual
+  (codex:agent-registry-state-used-agent-nicknames
+    (test:after-failed-alpha-nickname))
+  ("alpha"))
+
+!(assertEqual
+  (case
+    (test:reserve-nickname
+      (test:after-failed-alpha-nickname)
+      ("alpha" "beta")
+      CodexAbsent
+      0)
+    (((CodexAgentRegistryReserveOk $state $reservation)
+      (codex:agent-registry-spawn-reservation-reserved-agent-nickname
+        $reservation))))
+  "beta")
+
+!(assertEqual
+  (case
+    (test:reserve-nickname
+      (codex:agent-registry-state-empty)
+      ()
+      CodexAbsent
+      0)
+    (((CodexAgentRegistryReserveErr $error)
+      $error)))
+  (codex:error-unsupported-operation
+    "no available agent nicknames"))
+
+!(assertEqual
+  (case
+    (test:reserve-nickname
+      (test:after-failed-alpha-nickname)
+      ()
+      "alpha"
+      0)
+    (((CodexAgentRegistryReserveOk $state $reservation)
+      (codex:agent-registry-spawn-reservation-reserved-agent-nickname
+        $reservation))))
+  "alpha")
+
+!(assertEqual
+  (case
+    (test:reserve-nickname
+      (test:after-committed-alpha-nickname)
+      ("alpha")
+      CodexAbsent
+      0)
+    (((CodexAgentRegistryReserveOk $state $reservation)
+      (codex:agent-registry-spawn-reservation-reserved-agent-nickname
+        $reservation))))
+  "alpha the 2nd")
+
+!(assertEqual
+  (case
+    (test:reserve-nickname
+      (test:after-committed-alpha-nickname)
+      ("alpha")
+      CodexAbsent
+      0)
+    (((CodexAgentRegistryReserveOk $state $reservation)
+      (codex:agent-registry-state-nickname-reset-count $state))))
+  1)
+
+!(assertEqual
+  (case
+    (test:reserve-nickname
+      (test:after-released-alpha-nickname)
+      ("alpha" "beta")
+      CodexAbsent
+      0)
+    (((CodexAgentRegistryReserveOk $state $reservation)
+      (codex:agent-registry-spawn-reservation-reserved-agent-nickname
+        $reservation))))
+  "beta")
 
 !(assertEqual
   (codex:agent-registry-live-agents

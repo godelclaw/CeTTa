@@ -13,6 +13,7 @@
 ; - live_agents filtering
 ; - update_last_task_message
 ; - register_spawned_thread key selection and used-nickname marking
+; - reserve_agent_nickname_with_preference with injected RNG choice index
 ; - reserve/release agent path placeholders
 ; - reserve_spawn_slot, drop, commit, release_spawned_thread bookkeeping
 ;
@@ -22,17 +23,17 @@
 ;   the same key and membership semantics. HashMap iteration order is not part
 ;   of the Rust contract; list order is therefore only a deterministic test
 ;   representation for otherwise unordered results.
-; - Rust reserve_agent_nickname randomly chooses from available names and clears
-;   the used pool when exhausted. This slice ports only the pure ordinal
-;   formatter and deterministic used-nickname state updates performed when a
-;   spawned thread is registered. Random name selection will need an injected
-;   randomness boundary rather than a deterministic imitation.
+; - Rust reserve_agent_nickname uses rand::choose. This pure slice receives an
+;   in-bounds choice index from the caller at that randomness boundary, then
+;   applies the same candidate filtering, preferred-name bypass, used-pool
+;   reset, ordinal formatting, and used-nickname insertion as Rust.
 ; - Rust AtomicUsize increments/decrements are represented as explicit state
 ;   transitions. The pure helpers assume the same valid call sequences as Rust
 ;   Drop/commit/release, so underflow is not introduced as a separate branch.
 
 !(import! &self agent_path)
 !(import! &self error)
+!(import! &self list)
 !(import! &self protocol)
 !(import! &self str)
 
@@ -211,6 +212,19 @@
      $nickname-reset-count
      $total-count))
 
+(= (codex:agent-registry-state-with-nickname-reset-count
+      (CodexAgentRegistryState
+        $agent-tree
+        $used-agent-nicknames
+        $nickname-reset-count
+        $total-count)
+      $new-nickname-reset-count)
+   (CodexAgentRegistryState
+     $agent-tree
+     $used-agent-nicknames
+     $new-nickname-reset-count
+     $total-count))
+
 (= (codex:agent-registry-spawn-reservation
       $active
       $reserved-agent-nickname
@@ -234,6 +248,24 @@
         $reserved-agent-path))
    $reserved-agent-path)
 
+(= (codex:agent-registry-spawn-reservation-reserved-agent-nickname
+      (CodexAgentRegistrySpawnReservation
+        $active
+        $reserved-agent-nickname
+        $reserved-agent-path))
+   $reserved-agent-nickname)
+
+(= (codex:agent-registry-spawn-reservation-with-nickname
+      (CodexAgentRegistrySpawnReservation
+        $active
+        $reserved-agent-nickname
+        $reserved-agent-path)
+      $new-reserved-agent-nickname)
+   (CodexAgentRegistrySpawnReservation
+     $active
+     $new-reserved-agent-nickname
+     $reserved-agent-path))
+
 (= (codex:agent-registry-spawn-reservation-with-path
       (CodexAgentRegistrySpawnReservation
         $active
@@ -250,6 +282,9 @@
 
 (= (codex:agent-registry-reserve-err $error)
    (CodexAgentRegistryReserveErr $error))
+
+(= (codex:agent-registry-nickname-selection $state $nickname)
+   (CodexAgentRegistryNicknameSelection $state $nickname))
 
 (= (codex:agent-registry-ordinal-suffix $value)
    (let $mod-100 (% $value 100)
@@ -314,6 +349,121 @@
    (if (codex:agent-registry-list-contains $items $value)
        $items
        (cons-atom $value $items)))
+
+(= (codex:agent-registry-available-agent-nicknames
+      ()
+      $used-agent-nicknames
+      $nickname-reset-count)
+   ())
+
+(= (codex:agent-registry-available-agent-nicknames
+      $names
+      $used-agent-nicknames
+      $nickname-reset-count)
+   (let ($head $tail) (decons-atom $names)
+     (let $candidate
+       (codex:agent-registry-format-agent-nickname
+         $head
+         $nickname-reset-count)
+       (case
+         (codex:agent-registry-available-agent-nicknames
+           $tail
+           $used-agent-nicknames
+           $nickname-reset-count)
+         (($tail-available
+           (if (codex:agent-registry-list-contains
+                 $used-agent-nicknames
+                 $candidate)
+               $tail-available
+               (cons-atom $candidate $tail-available))))))))
+
+(= (codex:agent-registry-state-after-reserved-nickname
+      $state
+      $nickname)
+   (codex:agent-registry-state-with-used-agent-nicknames
+     $state
+     (codex:agent-registry-set-insert
+       (codex:agent-registry-state-used-agent-nicknames $state)
+       $nickname)))
+
+(= (codex:agent-registry-state-after-nickname-pool-reset
+      $state
+      $nickname
+      $new-nickname-reset-count)
+   (codex:agent-registry-state-with-used-agent-nicknames
+     (codex:agent-registry-state-with-nickname-reset-count
+       $state
+       $new-nickname-reset-count)
+     ($nickname)))
+
+(= (codex:agent-registry-reserve-agent-nickname-selection
+      $state
+      $names
+      $preferred
+      $choice-index)
+   (case $preferred
+     ((CodexAbsent
+       (case $names
+         ((() CodexAbsent)
+          ($non-empty-names
+           (let $nickname-reset-count
+             (codex:agent-registry-state-nickname-reset-count $state)
+             (let $available-names
+               (codex:agent-registry-available-agent-nicknames
+                 $non-empty-names
+                 (codex:agent-registry-state-used-agent-nicknames $state)
+                 $nickname-reset-count)
+               (case $available-names
+                 ((()
+                   (let $new-nickname-reset-count
+                     (+ $nickname-reset-count 1)
+                     (let $nickname
+                       (codex:agent-registry-format-agent-nickname
+                         (list:at $non-empty-names $choice-index)
+                         $new-nickname-reset-count)
+                       (codex:agent-registry-nickname-selection
+                         (codex:agent-registry-state-after-nickname-pool-reset
+                           $state
+                           $nickname
+                           $new-nickname-reset-count)
+                         $nickname))))
+                  ($non-empty-available-names
+                   (let $nickname
+                     (list:at $non-empty-available-names $choice-index)
+                     (codex:agent-registry-nickname-selection
+                       (codex:agent-registry-state-after-reserved-nickname
+                         $state
+                         $nickname)
+                       $nickname)))))))))))
+      ($preferred-name
+       (codex:agent-registry-nickname-selection
+         (codex:agent-registry-state-after-reserved-nickname
+           $state
+           $preferred-name)
+         $preferred-name)))))
+
+(= (codex:agent-registry-reserve-agent-nickname-with-preference
+      $state
+      $reservation
+      $names
+      $preferred
+      $choice-index)
+   (case
+     (codex:agent-registry-reserve-agent-nickname-selection
+       $state
+       $names
+       $preferred
+       $choice-index)
+     ((CodexAbsent
+       (codex:agent-registry-reserve-err
+         (codex:error-unsupported-operation
+           "no available agent nicknames")))
+      ((CodexAgentRegistryNicknameSelection $reserved-state $nickname)
+       (codex:agent-registry-reserve-ok
+         $reserved-state
+         (codex:agent-registry-spawn-reservation-with-nickname
+           $reservation
+           $nickname))))))
 
 (= (codex:agent-registry-entry-list-has-key () $key)
    False)
