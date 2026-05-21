@@ -1,0 +1,335 @@
+!(register-module! ../codex)
+!(import! &self codex:agent_control)
+!(import! &self codex:agent_path)
+!(import! &self codex:agent_registry)
+!(import! &self codex:error)
+!(import! &self codex:protocol)
+
+(= (test:root-thread)
+   "00000000-0000-0000-0000-000000000001")
+
+(= (test:scout-thread)
+   "00000000-0000-0000-0000-000000000002")
+
+(= (test:tester-thread)
+   "00000000-0000-0000-0000-000000000003")
+
+(= (test:alpha-thread)
+   "00000000-0000-0000-0000-000000000004")
+
+(= (test:missing-thread)
+   "00000000-0000-0000-0000-000000000005")
+
+(= (test:scout-path)
+   (codex:agent-path "/root/scout"))
+
+(= (test:tester-path)
+   (codex:agent-path "/root/scout/tester"))
+
+(= (test:alpha-path)
+   (codex:agent-path "/root/alpha"))
+
+(= (test:root-metadata)
+   (codex:agent-registry-metadata
+     (test:root-thread)
+     (codex:agent-path-root)
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent))
+
+(= (test:scout-metadata)
+   (codex:agent-registry-metadata
+     (test:scout-thread)
+     (test:scout-path)
+     "Scout"
+     "explorer"
+     "Scan repository"))
+
+(= (test:tester-metadata)
+   (codex:agent-registry-metadata
+     (test:tester-thread)
+     (test:tester-path)
+     CodexAbsent
+     "worker"
+     CodexAbsent))
+
+(= (test:alpha-metadata)
+   (codex:agent-registry-metadata
+     (test:alpha-thread)
+     (test:alpha-path)
+     "Alpha"
+     "reviewer"
+     "Review changes"))
+
+(= (test:missing-status-metadata)
+   (codex:agent-registry-metadata
+     (test:missing-thread)
+     (codex:agent-path "/root/no_status")
+     "NoStatus"
+     CodexAbsent
+     CodexAbsent))
+
+(= (test:registry-state)
+   (codex:agent-registry-state
+     ((codex:agent-registry-entry
+        "/root/scout/tester"
+        (test:tester-metadata))
+      (codex:agent-registry-entry
+        "/root"
+        (test:root-metadata))
+      (codex:agent-registry-entry
+        "/root/no_status"
+        (test:missing-status-metadata))
+      (codex:agent-registry-entry
+        "/root/scout"
+        (test:scout-metadata))
+      (codex:agent-registry-entry
+        "/root/alpha"
+        (test:alpha-metadata)))
+     ()
+     0
+     4))
+
+(= (test:status-entries)
+   ((codex:agent-control-status-entry
+      (test:scout-thread)
+      (codex:protocol-agent-status-completed "done"))
+    (codex:agent-control-status-entry
+      (test:root-thread)
+      (codex:protocol-agent-status-running))
+    (codex:agent-control-status-entry
+      (test:tester-thread)
+      (codex:protocol-agent-status-errored "failed"))
+    (codex:agent-control-status-entry
+      (test:alpha-thread)
+      (codex:protocol-agent-status-running))))
+
+(= (test:scout-session-source)
+   (codex:session-source-subagent
+     (codex:subagent-source-thread-spawn
+       (test:root-thread)
+       1
+       (test:scout-path)
+       "Scout"
+       "explorer")))
+
+!(assertEqual
+  (codex:agent-control-agent-id-for-path
+    (codex:agent-control-register-session-root
+      (codex:agent-registry-state-empty)
+      (test:root-thread)
+      (codex:session-source-cli))
+    (codex:agent-path-root))
+  (test:root-thread))
+
+!(assertEqual
+  (codex:agent-control-agent-id-for-path
+    (codex:agent-control-register-session-root
+      (codex:agent-registry-state-empty)
+      (test:scout-thread)
+      (test:scout-session-source))
+    (codex:agent-path-root))
+  CodexAbsent)
+
+!(assertEqual
+  (codex:agent-control-thread-spawn-parent-thread-id
+    (test:scout-session-source))
+  (test:root-thread))
+
+!(assertEqual
+  (codex:agent-control-thread-spawn-parent-thread-id
+    (codex:session-source-exec))
+  CodexAbsent)
+
+!(assertEqual
+  (codex:agent-control-thread-spawn-depth
+    (test:scout-session-source))
+  1)
+
+!(assertEqual
+  (codex:agent-control-thread-spawn-depth
+    (codex:session-source-cli))
+  CodexAbsent)
+
+!(assertEqual
+  (codex:agent-control-get-agent-metadata
+    (test:registry-state)
+    (test:scout-thread))
+  (test:scout-metadata))
+
+!(assertEqual
+  (codex:agent-control-resolve-agent-reference
+    (test:registry-state)
+    (test:root-thread)
+    (codex:session-source-cli)
+    "scout")
+  (codex:agent-control-ok (test:scout-thread)))
+
+!(assertEqual
+  (codex:agent-control-resolve-agent-reference
+    (test:registry-state)
+    (test:scout-thread)
+    (test:scout-session-source)
+    "tester")
+  (codex:agent-control-ok (test:tester-thread)))
+
+!(assertEqual
+  (codex:agent-control-resolve-agent-reference
+    (test:registry-state)
+    (test:root-thread)
+    (codex:session-source-cli)
+    "../bad")
+  (codex:agent-control-err
+    (codex:error-unsupported-operation
+      "agent_name `..` is reserved")))
+
+!(assertEqual
+  (codex:agent-control-resolve-agent-reference
+    (test:registry-state)
+    (test:root-thread)
+    (codex:session-source-cli)
+    "/root/missing")
+  (codex:agent-control-err
+    (codex:error-unsupported-operation
+      "live agent path `/root/missing` not found")))
+
+!(assertEqualToResult
+  (codex:agent-control-format-environment-context-subagents
+    (codex:agent-control-ok
+      ((codex:agent-control-thread-metadata-entry
+         (test:scout-thread)
+         (test:scout-metadata))
+       (codex:agent-control-thread-metadata-entry
+         (test:tester-thread)
+         (codex:agent-registry-metadata
+           (test:tester-thread)
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent)))))
+  ("- scout: Scout\n- 00000000-0000-0000-0000-000000000003"))
+
+!(assertEqual
+  (codex:agent-control-format-environment-context-subagents
+    (codex:agent-control-err
+      (codex:error-unsupported-operation "thread manager dropped")))
+  "")
+
+!(assertEqual
+  (codex:agent-control-agent-matches-prefix
+    CodexAbsent
+    (codex:agent-path-root))
+  True)
+
+!(assertEqual
+  (codex:agent-control-agent-matches-prefix
+    (test:tester-path)
+    (test:scout-path))
+  True)
+
+!(assertEqual
+  (codex:agent-control-agent-matches-prefix
+    (test:scout-path)
+    (test:scout-path))
+  True)
+
+!(assertEqual
+  (codex:agent-control-agent-matches-prefix
+    (codex:agent-path "/root/scouting")
+    (test:scout-path))
+  False)
+
+!(assertEqual
+  (codex:agent-control-agent-matches-prefix
+    CodexAbsent
+    (test:scout-path))
+  False)
+
+!(assertEqual
+  (codex:agent-control-list-agents
+    (test:registry-state)
+    (test:status-entries)
+    (codex:session-source-cli)
+    CodexAbsent)
+  (codex:agent-control-ok
+    ((codex:agent-control-listed-agent
+       "/root"
+       (codex:protocol-agent-status-running)
+       "Main thread")
+     (codex:agent-control-listed-agent
+       "/root/alpha"
+       (codex:protocol-agent-status-running)
+       "Review changes")
+     (codex:agent-control-listed-agent
+       "/root/scout"
+       (codex:protocol-agent-status-completed "done")
+       "Scan repository")
+     (codex:agent-control-listed-agent
+       "/root/scout/tester"
+       (codex:protocol-agent-status-errored "failed")
+       CodexAbsent))))
+
+!(assertEqual
+  (codex:agent-control-list-agents
+    (test:registry-state)
+    (test:status-entries)
+    (codex:session-source-cli)
+    "scout")
+  (codex:agent-control-ok
+    ((codex:agent-control-listed-agent
+       "/root/scout"
+       (codex:protocol-agent-status-completed "done")
+       "Scan repository")
+     (codex:agent-control-listed-agent
+       "/root/scout/tester"
+       (codex:protocol-agent-status-errored "failed")
+       CodexAbsent))))
+
+!(assertEqual
+  (codex:agent-control-list-agents
+    (test:registry-state)
+    (test:status-entries)
+    (test:scout-session-source)
+    "tester")
+  (codex:agent-control-ok
+    ((codex:agent-control-listed-agent
+       "/root/scout/tester"
+       (codex:protocol-agent-status-errored "failed")
+       CodexAbsent))))
+
+!(assertEqual
+  (codex:agent-control-list-agents
+    (test:registry-state)
+    (test:status-entries)
+    (codex:session-source-cli)
+    "")
+  (codex:agent-control-err
+    (codex:error-unsupported-operation
+      "agent path must not be empty")))
+
+!(assertEqual
+  (codex:agent-control-render-input-preview
+    (codex:user-input-op
+      ((codex:user-input-text "hello" ())
+       (codex:user-input-image "data:image/png;base64,abc")
+       (codex:user-input-local-image "/tmp/screenshot.png")
+       (codex:user-input-skill "planner" "/repo/SKILL.md")
+       (codex:user-input-mention "calendar" "app://calendar")
+       (CodexUserInputFuture "payload"))))
+  "hello\n[image]\n[local_image:/tmp/screenshot.png]\n[skill:$planner](/repo/SKILL.md)\n[mention:$calendar](app://calendar)\n[input]")
+
+!(assertEqual
+  (codex:agent-control-render-input-preview
+    (codex:inter-agent-communication-op
+      (codex:inter-agent-communication
+        (test:root-thread)
+        (test:scout-thread)
+        ()
+        "child update"
+        CodexAbsent)))
+  "child update")
+
+!(assertEqual
+  (codex:agent-control-render-input-preview
+    (codex:interrupt-op))
+  "")
