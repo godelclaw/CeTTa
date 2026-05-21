@@ -13,7 +13,7 @@
 ; - ToolHandler kind/matches_kind and feature/payload guard behavior
 ; - function-payload JsReplArgs decoding before the async runtime boundary
 ; - js_repl exec begin/end event payload construction
-; - nested tool-call response summary for message/function/custom/tool_search
+; - nested tool-call response summary for message/function/custom/mcp/tool_search
 ;   responses plus handler errors
 ; - small exec-output aggregation helper used by js_repl events
 ;
@@ -31,6 +31,12 @@
 ;   This slice preserves the same accepted fields and failure classes with
 ;   reconstructed messages because the current CeTTa JSON helper does not
 ;   expose serde-style typed errors.
+; - Rust's MCP `structured_content.is_some()` distinguishes an absent field
+;   from a present JSON null. The current CeTTa `json-object-get` maps both to
+;   `JsonNull`, so this slice scans object pairs directly for that summary
+;   field. MCP summary also uses `once` at materialization boundaries where the
+;   CeTTa evaluator can surface duplicate identical reductions; Rust has one
+;   deterministic struct conversion there.
 
 !(import! &self json)
 !(import! &self list)
@@ -530,6 +536,12 @@
 (= (codex:js-repl-tool-call-payload-kind-custom-content-items)
    (CodexJsReplToolCallPayloadKindCustomContentItems))
 
+(= (codex:js-repl-tool-call-payload-kind-mcp-result)
+   (CodexJsReplToolCallPayloadKindMcpResult))
+
+(= (codex:js-repl-tool-call-payload-kind-mcp-error-result)
+   (CodexJsReplToolCallPayloadKindMcpErrorResult))
+
 (= (codex:js-repl-tool-call-payload-kind-error)
    (CodexJsReplToolCallPayloadKindError))
 
@@ -644,6 +656,32 @@
         $structured-content-present
         $result-is-error))
    $image-item-count)
+
+(= (codex:js-repl-tool-call-response-summary-structured-content-present
+      (CodexJsReplToolCallResponseSummary
+        $response-type
+        $payload-kind
+        $payload-text-preview
+        $payload-text-length
+        $payload-item-count
+        $text-item-count
+        $image-item-count
+        $structured-content-present
+        $result-is-error))
+   $structured-content-present)
+
+(= (codex:js-repl-tool-call-response-summary-result-is-error
+      (CodexJsReplToolCallResponseSummary
+        $response-type
+        $payload-kind
+        $payload-text-preview
+        $payload-text-length
+        $payload-item-count
+        $text-item-count
+        $image-item-count
+        $structured-content-present
+        $result-is-error))
+   $result-is-error)
 
 (= (codex:js-repl-preview-text $text)
    (if (== $text "")
@@ -790,6 +828,268 @@
          CodexAbsent
          CodexAbsent))))
 
+(= (codex:js-repl-summary-with-mcp-metadata
+      (CodexJsReplToolCallResponseSummary
+        $response-type
+        $payload-kind
+        $payload-text-preview
+        $payload-text-length
+        $payload-item-count
+        $text-item-count
+        $image-item-count
+        $structured-content-present
+        $result-is-error)
+      $mcp-content-count
+      $mcp-structured-content-present
+      $mcp-result-is-error)
+   (codex:js-repl-tool-call-response-summary
+     $response-type
+     $payload-kind
+     $payload-text-preview
+     $payload-text-length
+     $mcp-content-count
+     $text-item-count
+     $image-item-count
+     $mcp-structured-content-present
+     $mcp-result-is-error))
+
+(= (codex:js-repl-append-items () $rhs)
+   $rhs)
+
+(= (codex:js-repl-append-items $lhs $rhs)
+   (let ($head $tail) (decons-atom $lhs)
+     (case (codex:js-repl-append-items $tail $rhs)
+       (($rest
+          (cons-atom $head $rest))))))
+
+(= (codex:js-repl-append-item $items $item)
+   (codex:js-repl-append-items $items ($item)))
+
+(= (codex:js-repl-append-optional-json-value-pair
+      $pairs
+      $key
+      CodexAbsent)
+   $pairs)
+
+(= (codex:js-repl-append-optional-json-value-pair $pairs $key $value)
+   (codex:js-repl-append-item $pairs (JsonPair $key $value)))
+
+(= (codex:js-repl-json-object-optional-value $object $key)
+   (case (json-object-get $object $key)
+     ((Empty CodexAbsent)
+      (JsonNull CodexAbsent)
+      ($value $value))))
+
+(= (codex:js-repl-json-object-pairs-have-key () $key)
+   False)
+
+(= (codex:js-repl-json-object-pairs-have-key $pairs $key)
+   (let ($head $tail) (decons-atom $pairs)
+     (case $head
+       (((JsonPair $candidate $value)
+         (if (== $candidate $key)
+             True
+             (codex:js-repl-json-object-pairs-have-key $tail $key)))))))
+
+(= (codex:js-repl-json-object-field-present (JsonObject $pairs) $key)
+   (codex:js-repl-json-object-pairs-have-key $pairs $key))
+
+(= (codex:js-repl-json-object-optional-string $object $key)
+   (case (codex:js-repl-json-object-optional-value $object $key)
+     ((CodexAbsent CodexAbsent)
+      ((JsonString $text) $text))))
+
+(= (codex:js-repl-json-object-optional-bool $object $key)
+   (case (codex:js-repl-json-object-optional-value $object $key)
+     ((CodexAbsent CodexAbsent)
+      ((JsonBool $value) $value))))
+
+(= (codex:js-repl-json-object-optional-object $object $key)
+   (case (codex:js-repl-json-object-optional-value $object $key)
+     ((CodexAbsent CodexAbsent)
+      ((JsonObject $pairs) (JsonObject $pairs)))))
+
+(= (codex:js-repl-json-object-optional-array $object $key)
+   (case (codex:js-repl-json-object-optional-value $object $key)
+     ((CodexAbsent CodexAbsent)
+      ((JsonArray $items) $items))))
+
+(= (codex:js-repl-mcp-image-detail-meta-key)
+   "codex/imageDetail")
+
+(= (codex:js-repl-default-image-detail)
+   "high")
+
+(= (codex:js-repl-mcp-call-tool-result-json
+      (CodexMcpCallToolResult
+        $content
+        $structured-content
+        $is-error
+        $meta))
+   (let $pairs-1
+     ((JsonPair "content" (JsonArray $content)))
+     (let $pairs-2
+       (codex:js-repl-append-optional-json-value-pair
+         $pairs-1
+         "structuredContent"
+         $structured-content)
+       (let $pairs-3
+         (codex:js-repl-append-optional-json-value-pair
+           $pairs-2
+           "isError"
+           (if (== $is-error CodexAbsent)
+               CodexAbsent
+               (JsonBool $is-error)))
+         (JsonObject
+           (codex:js-repl-append-optional-json-value-pair
+             $pairs-3
+             "_meta"
+             $meta))))))
+
+(= (codex:js-repl-mcp-result-json $output)
+   (case (once (eval $output))
+     (((CodexMcpCallToolResult
+         $content
+         $structured-content
+         $is-error
+         $meta)
+       (codex:js-repl-mcp-call-tool-result-json
+         (CodexMcpCallToolResult
+           $content
+           $structured-content
+           $is-error
+           $meta)))
+      ($json $json))))
+
+(= (codex:js-repl-mcp-result-success $result)
+   (case (codex:js-repl-json-object-optional-bool $result "isError")
+     ((True False)
+      ($_ True))))
+
+(= (codex:js-repl-mcp-result-structured-content-present $result)
+   (codex:js-repl-json-object-field-present $result "structuredContent"))
+
+(= (codex:js-repl-mcp-result-is-error $result)
+   (not (codex:js-repl-mcp-result-success $result)))
+
+(= (codex:is-js-repl-function-output-image-item $item)
+   (case $item
+     (((CodexInputImage $image-url $detail) True)
+      ($other False))))
+
+(= (codex:js-repl-mcp-content-image-url $data $mime-type)
+   (if (str-starts-with? $data "data:")
+       $data
+       (str-concat
+         "data:"
+         (str-concat
+           $mime-type
+           (str-concat ";base64," $data)))))
+
+(= (codex:js-repl-mcp-content-image-mime-type $object)
+   (case (codex:js-repl-json-object-optional-string $object "mimeType")
+     ((CodexAbsent
+       (case (codex:js-repl-json-object-optional-string $object "mime_type")
+         ((CodexAbsent "application/octet-stream")
+          ($mime-type-alt $mime-type-alt))))
+      ($mime-type-main $mime-type-main))))
+
+(= (codex:js-repl-mcp-content-image-detail $object)
+   (let $detail
+     (case (codex:js-repl-json-object-optional-object $object "_meta")
+       ((CodexAbsent CodexAbsent)
+        ($meta
+         (codex:js-repl-json-object-optional-string
+           $meta
+           (codex:js-repl-mcp-image-detail-meta-key)))))
+     (case $detail
+       (("auto" "auto")
+        ("low" "low")
+        ("high" "high")
+        ("original" "original")
+        ($_
+         (codex:js-repl-default-image-detail))))))
+
+(= (codex:js-repl-mcp-content-image-item-or-text $object)
+   (case (codex:js-repl-json-object-optional-string $object "data")
+     ((CodexAbsent
+       (CodexInputText (json-stringify $object)))
+      ($data
+       (CodexInputImage
+         (codex:js-repl-mcp-content-image-url
+           $data
+           (codex:js-repl-mcp-content-image-mime-type $object))
+         (codex:js-repl-mcp-content-image-detail $object))))))
+
+(= (codex:js-repl-mcp-content-item-to-function-output-item $content)
+   (case $content
+     (((JsonObject $pairs)
+       (let $object (JsonObject $pairs)
+         (case (codex:js-repl-json-object-optional-string $object "type")
+           (("text"
+             (case (codex:js-repl-json-object-optional-string $object "text")
+               ((CodexAbsent
+                 (CodexInputText (json-stringify $object)))
+                ($text
+                 (CodexInputText $text)))))
+            ("image"
+             (codex:js-repl-mcp-content-image-item-or-text $object))
+            ($_
+             (CodexInputText (json-stringify $object)))))))
+      ($other
+       (CodexInputText (json-stringify $other))))))
+
+(= (codex:js-repl-convert-mcp-content-to-items ())
+   CodexAbsent)
+
+(= (codex:js-repl-convert-mcp-content-to-items $content)
+   (codex:js-repl-convert-mcp-content-to-items-acc $content False ()))
+
+(= (codex:js-repl-convert-mcp-content-to-items-acc () False $acc)
+   CodexAbsent)
+
+(= (codex:js-repl-convert-mcp-content-to-items-acc () True $acc)
+   $acc)
+
+(= (codex:js-repl-convert-mcp-content-to-items-acc $content $saw-image $acc)
+   (let ($head $tail) (decons-atom $content)
+     (let $converted
+       (codex:js-repl-mcp-content-item-to-function-output-item $head)
+       (codex:js-repl-convert-mcp-content-to-items-acc
+         $tail
+         (if (codex:is-js-repl-function-output-image-item $converted)
+             True
+             $saw-image)
+         (codex:js-repl-append-item $acc $converted)))))
+
+(= (codex:js-repl-mcp-call-tool-result-content-fallback-output $result)
+   (case (codex:js-repl-json-object-optional-array $result "content")
+     ((CodexAbsent
+       (CodexFunctionCallOutputText
+         (json-stringify (JsonArray ()))))
+      ($content
+       (case (codex:js-repl-convert-mcp-content-to-items $content)
+         ((CodexAbsent
+           (CodexFunctionCallOutputText
+             (json-stringify (JsonArray $content))))
+          ($items
+           (CodexFunctionCallOutputContentItems $items))))))))
+
+(= (codex:js-repl-mcp-call-tool-result-as-function-call-output $result)
+   (case (codex:js-repl-json-object-optional-value
+           $result
+           "structuredContent")
+     ((CodexAbsent
+       (codex:js-repl-mcp-call-tool-result-content-fallback-output $result))
+      ($structured-content
+       (CodexFunctionCallOutputText
+         (json-stringify $structured-content))))))
+
+(= (codex:js-repl-mcp-result-content-count $result)
+   (case (codex:js-repl-json-object-optional-array $result "content")
+     ((CodexAbsent 0)
+      ($content (list:len $content)))))
+
 (= (codex:js-repl-summarize-tool-call-response
       (CodexResponseItemMessage $role $content $phase))
    (codex:js-repl-summarize-message-payload $content))
@@ -825,6 +1125,25 @@
          "custom_tool_call_output"
          (codex:js-repl-tool-call-payload-kind-custom-text)
          $output)))))
+
+(= (codex:js-repl-summarize-tool-call-response
+      (CodexResponseItemMcpToolCallOutput $call-id $output))
+   (let $result (once (codex:js-repl-mcp-result-json $output))
+     (let $function-output
+       (once (codex:js-repl-mcp-call-tool-result-as-function-call-output $result))
+       (let $summary
+         (once
+           (codex:js-repl-summarize-function-output-payload
+             "mcp_tool_call_output"
+             (if (codex:js-repl-mcp-result-success $result)
+                 (codex:js-repl-tool-call-payload-kind-mcp-result)
+                 (codex:js-repl-tool-call-payload-kind-mcp-error-result))
+             $function-output))
+         (codex:js-repl-summary-with-mcp-metadata
+           $summary
+           (codex:js-repl-mcp-result-content-count $result)
+           (codex:js-repl-mcp-result-structured-content-present $result)
+           (codex:js-repl-mcp-result-is-error $result))))))
 
 (= (codex:js-repl-summarize-tool-call-response
       (CodexResponseItemToolSearchOutput $call-id $status $execution $tools))

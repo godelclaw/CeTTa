@@ -120,6 +120,99 @@
 
 !(assertEqual
   (codex:js-repl-summarize-tool-call-response
+    (CodexResponseItemMcpToolCallOutput
+      "mcp-call"
+      (CodexMcpCallToolResult
+        ((JsonObject
+           ((JsonPair "type" (JsonString "text"))
+            (JsonPair "text" (JsonString "ignored")))))
+        (JsonObject ((JsonPair "ok" (JsonBool True))))
+        False
+        CodexAbsent)))
+  (CodexJsReplToolCallResponseSummary
+    "mcp_tool_call_output"
+    (CodexJsReplToolCallPayloadKindMcpResult)
+    "{\"ok\":true}"
+    11
+    1
+    CodexAbsent
+    CodexAbsent
+    True
+    False))
+
+!(assertEqual
+  (codex:js-repl-summarize-tool-call-response
+    (CodexResponseItemMcpToolCallOutput
+      "mcp-call"
+      (JsonObject
+        ((JsonPair "content"
+           (JsonArray
+             ((JsonObject
+                ((JsonPair "type" (JsonString "text"))
+                 (JsonPair "text" (JsonString "bad")))))))
+         (JsonPair "isError" (JsonBool True))))))
+  (CodexJsReplToolCallResponseSummary
+    "mcp_tool_call_output"
+    (CodexJsReplToolCallPayloadKindMcpErrorResult)
+    "[{\"type\":\"text\",\"text\":\"bad\"}]"
+    30
+    1
+    CodexAbsent
+    CodexAbsent
+    False
+    True))
+
+!(assertEqual
+  (codex:js-repl-summarize-tool-call-response
+    (CodexResponseItemMcpToolCallOutput
+      "mcp-call"
+      (JsonObject
+        ((JsonPair "content"
+           (JsonArray
+             ((JsonObject
+                ((JsonPair "type" (JsonString "text"))
+                 (JsonPair "text" (JsonString "hello"))))
+              (JsonObject
+                ((JsonPair "type" (JsonString "image"))
+                 (JsonPair "data" (JsonString "AAA"))
+                 (JsonPair "mimeType" (JsonString "image/png"))
+                 (JsonPair "_meta"
+                   (JsonObject
+                     ((JsonPair
+                        "codex/imageDetail"
+                        (JsonString "low"))))))))))
+         (JsonPair "isError" (JsonBool False))))))
+  (CodexJsReplToolCallResponseSummary
+    "mcp_tool_call_output"
+    (CodexJsReplToolCallPayloadKindMcpResult)
+    "hello"
+    5
+    2
+    1
+    1
+    False
+    False))
+
+!(assertEqual
+  (codex:js-repl-summarize-tool-call-response
+    (CodexResponseItemMcpToolCallOutput
+      "mcp-call"
+      (JsonObject
+        ((JsonPair "content" (JsonArray ()))
+         (JsonPair "structuredContent" JsonNull)))))
+  (CodexJsReplToolCallResponseSummary
+    "mcp_tool_call_output"
+    (CodexJsReplToolCallPayloadKindMcpResult)
+    "[]"
+    2
+    0
+    CodexAbsent
+    CodexAbsent
+    True
+    False))
+
+!(assertEqual
+  (codex:js-repl-summarize-tool-call-response
     (CodexResponseItemToolSearchOutput
       "search-call"
       "completed"
