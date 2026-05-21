@@ -202,12 +202,98 @@
       (codex:filesystem-permissions-toml $glob-scan-max-depth $entries))
    (CodexFilesystemPermissionsToml $glob-scan-max-depth $entries))
 
+(= (codex:config-permissions-value-or $value $fallback)
+   (case $value
+     ((CodexAbsent $fallback)
+      ($present $present))))
+
+; Rust's `NetworkToml::apply_to_network_proxy_config` applies scalar profile
+; fields over the default proxy config before optional domain/unix overlays.
+; Re-materialize the scalar-only path here because repeated calls through the
+; larger loader surface can collapse later config-permission assertions in
+; CeTTa; domain and unix-socket overlays still delegate to the loader.
 (= (codex:config-permissions-network-proxy-config-from-profile-network
-      $network)
-   (if (== $network CodexAbsent)
-       (codex:network-proxy-config-default)
+      CodexAbsent)
+   (codex:network-proxy-config-default))
+
+(= (codex:config-permissions-network-proxy-config-from-profile-network
+      (CodexNetworkToml
+        $enabled
+        $proxy-url
+        $enable-socks5
+        $socks-url
+        $enable-socks5-udp
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $mode
+        $domains
+        $unix-sockets
+        $allow-local-binding))
+   (if (and (== $domains CodexAbsent) (== $unix-sockets CodexAbsent))
+       (case (codex:network-proxy-config-default)
+         (((CodexNetworkProxyConfig
+             (CodexNetworkProxySettings
+               $default-enabled
+               $default-proxy-url
+               $default-enable-socks5
+               $default-socks-url
+               $default-enable-socks5-udp
+               $default-allow-upstream-proxy
+               $default-dangerously-allow-non-loopback-proxy
+               $default-dangerously-allow-all-unix-sockets
+               $default-mode
+               $default-domains
+               $default-unix-sockets
+               $default-allow-local-binding
+               $default-mitm))
+           (CodexNetworkProxyConfig
+             (CodexNetworkProxySettings
+               (codex:config-permissions-value-or
+                 $enabled
+                 $default-enabled)
+               (codex:config-permissions-value-or
+                 $proxy-url
+                 $default-proxy-url)
+               (codex:config-permissions-value-or
+                 $enable-socks5
+                 $default-enable-socks5)
+               (codex:config-permissions-value-or
+                 $socks-url
+                 $default-socks-url)
+               (codex:config-permissions-value-or
+                 $enable-socks5-udp
+                 $default-enable-socks5-udp)
+               (codex:config-permissions-value-or
+                 $allow-upstream-proxy
+                 $default-allow-upstream-proxy)
+               (codex:config-permissions-value-or
+                 $dangerously-allow-non-loopback-proxy
+                 $default-dangerously-allow-non-loopback-proxy)
+               (codex:config-permissions-value-or
+                 $dangerously-allow-all-unix-sockets
+                 $default-dangerously-allow-all-unix-sockets)
+               (codex:config-permissions-value-or $mode $default-mode)
+               $default-domains
+               $default-unix-sockets
+               (codex:config-permissions-value-or
+                 $allow-local-binding
+                 $default-allow-local-binding)
+               $default-mitm)))))
        (codex:network-toml-apply-to-network-proxy-config
-         $network
+         (CodexNetworkToml
+           $enabled
+           $proxy-url
+           $enable-socks5
+           $socks-url
+           $enable-socks5-udp
+           $allow-upstream-proxy
+           $dangerously-allow-non-loopback-proxy
+           $dangerously-allow-all-unix-sockets
+           $mode
+           $domains
+           $unix-sockets
+           $allow-local-binding)
          (codex:network-proxy-config-default))))
 
 (= (codex:config-permissions-compile-network-sandbox-policy $network)
@@ -246,23 +332,132 @@
      $entries
      $profile-name))
 
+; Same lexical normalization as `path-normalize`, kept local because importing
+; this large config surface can make the shared `path-reverse-atom-expr` helper
+; collapse to no result under some import orders. The algorithm remains the
+; Rust-equivalent lexical normalization already provided by `lib/path.metta`.
+(= (codex:config-permissions-path-reverse-acc () $acc)
+   $acc)
+
+(= (codex:config-permissions-path-reverse-acc $items $acc)
+   (let ($head $tail) (decons-atom $items)
+     (case (codex:config-permissions-path-reverse-acc
+             $tail
+             (cons-atom $head $acc))
+       (($reversed $reversed)))))
+
+(= (codex:config-permissions-path-reverse $items)
+   (codex:config-permissions-path-reverse-acc $items ()))
+
+(= (codex:config-permissions-path-drop-last ())
+   ())
+
+(= (codex:config-permissions-path-drop-last $parts)
+   (let ($head $tail) (decons-atom $parts)
+     (if (== $tail ())
+         ()
+         (case (codex:config-permissions-path-drop-last $tail)
+           (($rest
+             (cons-atom $head $rest)))))))
+
+(= (codex:config-permissions-normalize-path-parts
+      $path
+      $absolute)
+   (case (str-split "/" $path)
+     (($raw-parts
+       (case (path-normalize-parts $raw-parts () $absolute)
+         (($reversed-parts
+           (codex:config-permissions-path-reverse
+             $reversed-parts))))))))
+
+(= (codex:config-permissions-normalize-path $path)
+   (case (path-is-absolute? $path)
+     ((True
+       (case
+         (codex:config-permissions-normalize-path-parts $path True)
+         (($parts
+           (path-build-from-parts $parts True)))))
+      (False
+       (case
+         (codex:config-permissions-normalize-path-parts $path False)
+         (($parts
+           (path-build-from-parts $parts False))))))))
+
+(= (codex:config-permissions-join-path-text $base $relative)
+   (if (== $base "/")
+       (str-concat "/" $relative)
+       (if (str-ends-with? $base "/")
+           (str-concat $base $relative)
+           (str-concat (str-concat $base "/") $relative))))
+
+(= (codex:config-permissions-join-path $base $relative)
+   (if (path-is-absolute? $relative)
+       (codex:config-permissions-normalize-path $relative)
+       (if (or (== $base "") (== $base "."))
+           (codex:config-permissions-normalize-path $relative)
+           (codex:config-permissions-normalize-path
+             (codex:config-permissions-join-path-text
+               $base
+               $relative)))))
+
+(= (codex:config-permissions-trim-trailing-slash-unless-root "/")
+   "/")
+
+(= (codex:config-permissions-trim-trailing-slash-unless-root $text)
+   (if (str-ends-with? $text "/")
+       (codex:config-permissions-trim-trailing-slash-unless-root
+         (str-slice $text 0 (- (str-length $text) 1)))
+       $text))
+
+(= (codex:config-permissions-path-starts-with-path $path $prefix)
+   (case (codex:config-permissions-normalize-path $path)
+     (($normalized-path-raw
+       (case (codex:config-permissions-normalize-path $prefix)
+         (($normalized-prefix-raw
+           (let $normalized-path
+             (codex:config-permissions-trim-trailing-slash-unless-root
+               $normalized-path-raw)
+             (let $normalized-prefix
+               (codex:config-permissions-trim-trailing-slash-unless-root
+                 $normalized-prefix-raw)
+               (if (== (path-is-absolute? $normalized-path)
+                       (path-is-absolute? $normalized-prefix))
+                   (if (== $normalized-prefix "/")
+                       True
+                       (if (== $normalized-path $normalized-prefix)
+                           True
+                           (str-starts-with?
+                             $normalized-path
+                             (str-concat $normalized-prefix "/"))))
+                   False))))))))))
+
+(= (codex:config-permissions-runtime-absolute-path-list CodexAbsent)
+   ())
+
 (= (codex:config-permissions-runtime-absolute-path-list $path)
-   (case $path
-     ((CodexAbsent ())
-      ($value
-       (if (path-is-absolute? $value)
-           ((path-normalize $value))
-           ())))))
+   (if (path-is-absolute? $path)
+       ((codex:config-permissions-normalize-path $path))
+       ()))
 
 (= (codex:config-permissions-runtime-arg0-root $codex-home)
    (if (path-is-absolute? $codex-home)
-       (path-join $codex-home "tmp/arg0")
+       (codex:config-permissions-join-path $codex-home "tmp/arg0")
        CodexAbsent))
 
 (= (codex:config-permissions-runtime-parent-path $path)
-   (path-build-from-parts
-     (path-drop-last (path-parts $path))
-     (path-is-absolute? $path)))
+   (case (path-is-absolute? $path)
+     ((True
+       (case (codex:config-permissions-normalize-path-parts $path True)
+         (($parts
+           (path-build-from-parts
+             (codex:config-permissions-path-drop-last $parts)
+             True)))))
+      (False
+       (case (codex:config-permissions-normalize-path-parts $path False)
+         (($parts
+           (path-build-from-parts
+             (codex:config-permissions-path-drop-last $parts)
+             False))))))))
 
 (= (codex:config-permissions-runtime-execve-wrapper-root
       $codex-home
@@ -271,13 +466,14 @@
      ((CodexAbsent ())
       ($path
        (if (path-is-absolute? $path)
-           (let $absolute-path (eval (path-normalize $path))
+           (let $absolute-path
+             (eval (codex:config-permissions-normalize-path $path))
              (let $arg0-root
                (eval
                  (codex:config-permissions-runtime-arg0-root $codex-home))
                (if (and
                      (not (== $arg0-root CodexAbsent))
-                     (codex:permissions-path-starts-with-path
+                     (codex:config-permissions-path-starts-with-path
                        $absolute-path
                        $arg0-root))
                    ((codex:config-permissions-runtime-parent-path
@@ -333,18 +529,14 @@
       ("]" True)
       ($other False))))
 
-(= (codex:config-permissions-has-glob-chars-at $text $index)
-   (if (>= $index (str-length $text))
-       False
-       (if (codex:config-permissions-is-glob-char
-             (str-slice $text $index (+ $index 1)))
-           True
-           (codex:config-permissions-has-glob-chars-at
-             $text
-             (+ $index 1)))))
-
 (= (codex:config-permissions-has-glob-chars $path)
-   (codex:config-permissions-has-glob-chars-at $path 0))
+   (if (codex:config-permissions-text-contains $path "*")
+       True
+       (if (codex:config-permissions-text-contains $path "?")
+           True
+           (if (codex:config-permissions-text-contains $path "[")
+               True
+               (codex:config-permissions-text-contains $path "]")))))
 
 (= (codex:config-permissions-remove-trailing-glob-suffix $path)
    (if (str-ends-with? $path "/**")
@@ -352,7 +544,9 @@
        $path))
 
 (= (codex:config-permissions-text-contains $text $needle)
-   (not (== (str-find $text $needle) Empty)))
+   (case (str-find $text $needle)
+     ((Empty False)
+      ($index True))))
 
 (= (codex:config-permissions-compile-read-write-glob-error
       $path
@@ -689,7 +883,8 @@
          (codex:config-permissions-result-ok
            (if $is-windows
                $normalized-path
-               (path-normalize $normalized-path))))))
+               (codex:config-permissions-normalize-path
+                 $normalized-path))))))
 
 (= (codex:config-permissions-parse-absolute-path $path)
    (codex:config-permissions-parse-absolute-path-for-platform
@@ -805,7 +1000,9 @@
                    (((CodexConfigPermissionsOk $base)
                      (codex:config-permissions-result-ok
                        (codex:file-system-path-path
-                         (path-join $base $relative-subpath))))
+                         (codex:config-permissions-join-path
+                           $base
+                           $relative-subpath))))
                     ((CodexConfigPermissionsError $message)
                      (codex:config-permissions-result-error $message)))))
                 ((CodexConfigPermissionsError $message)
@@ -850,13 +1047,17 @@
                  (case (codex:config-permissions-parse-absolute-path $path)
                    (((CodexConfigPermissionsOk $base)
                      (codex:config-permissions-result-ok
-                       (path-join $base $relative-subpath)))
+                       (codex:config-permissions-join-path
+                         $base
+                         $relative-subpath)))
                     ((CodexConfigPermissionsError $message)
                      (codex:config-permissions-result-error $message))))
                  (if (codex:config-permissions-special-path-supports-scoped-pattern
                        $special)
                      (codex:config-permissions-result-ok
-                       (path-join $policy-cwd $relative-subpath))
+                       (codex:config-permissions-join-path
+                         $policy-cwd
+                         $relative-subpath))
                      (codex:config-permissions-result-error
                        (codex:config-permissions-nested-path-error $path))))))
           ((CodexConfigPermissionsError $message)
@@ -1087,13 +1288,15 @@
 (= (codex:config-permissions-warning-list-from-unsupported-paths-inner
       $paths)
    (let ($head $tail) (decons-atom $paths)
-     (let $warning
+     (case
        (codex:config-permissions-unsupported-read-write-glob-warning
          $head)
-       (let $tail-warnings
-         (codex:config-permissions-warning-list-from-unsupported-paths-inner
-           $tail)
-         (cons-atom $warning $tail-warnings)))))
+       (($warning
+         (case
+           (codex:config-permissions-warning-list-from-unsupported-paths-inner
+             $tail)
+           (($tail-warnings
+             (cons-atom $warning $tail-warnings)))))))))
 
 (= (codex:config-permissions-warning-list-from-unbounded-paths
       $paths)
@@ -1108,13 +1311,15 @@
 (= (codex:config-permissions-warning-list-from-unbounded-paths-inner
       $paths)
    (let ($head $tail) (decons-atom $paths)
-     (let $warning
+     (case
        (codex:config-permissions-unbounded-unreadable-globstar-warning
          $head)
-       (let $tail-warnings
-         (codex:config-permissions-warning-list-from-unbounded-paths-inner
-           $tail)
-         (cons-atom $warning $tail-warnings)))))
+       (($warning
+         (case
+           (codex:config-permissions-warning-list-from-unbounded-paths-inner
+             $tail)
+           (($tail-warnings
+             (cons-atom $warning $tail-warnings)))))))))
 
 (= (codex:config-permissions-compiled-filesystem-path-warnings
       $path)
