@@ -138,6 +138,17 @@
         $stream-response))
    $request-id)
 
+(= (codex:exec-server-http-request-params-stream-response
+      (CodexExecServerHttpRequestParams
+        $method
+        $url
+        $headers
+        $body
+        $timeout-ms
+        $request-id
+        $stream-response))
+   $stream-response)
+
 (= (codex:exec-server-http-request-params-json
       (CodexExecServerHttpRequestParams
         $method
