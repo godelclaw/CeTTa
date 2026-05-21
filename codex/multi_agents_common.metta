@@ -5,6 +5,7 @@
 ;
 ; Covered in this increment:
 ; - wait timeout constants
+; - wait timeout normalization
 ; - function_arguments
 ; - build_wait_agent_statuses ordering
 ; - collab_spawn_error / collab_agent_error display mapping
@@ -41,6 +42,24 @@
 
 (= (codex:multi-agent-max-wait-timeout-ms)
    3600000)
+
+(= (codex:multi-agent-normalize-wait-timeout-ms $timeout-ms)
+   (case $timeout-ms
+     ((CodexAbsent
+       (codex:multi-agent-common-ok
+         (codex:multi-agent-default-wait-timeout-ms)))
+      ($ms
+       (if (< $ms 1)
+           (codex:multi-agent-common-err
+             (codex:function-call-error-respond-to-model
+               "timeout_ms must be greater than zero"))
+           (if (< $ms (codex:multi-agent-min-wait-timeout-ms))
+               (codex:multi-agent-common-ok
+                 (codex:multi-agent-min-wait-timeout-ms))
+               (if (> $ms (codex:multi-agent-max-wait-timeout-ms))
+                   (codex:multi-agent-common-ok
+                     (codex:multi-agent-max-wait-timeout-ms))
+                   (codex:multi-agent-common-ok $ms))))))))
 
 (= (codex:multi-agent-common-ok $value)
    (CodexMultiAgentCommonOk $value))

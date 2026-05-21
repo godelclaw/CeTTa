@@ -17,6 +17,24 @@
   3600000)
 
 !(assertEqual
+  (codex:multi-agent-normalize-wait-timeout-ms CodexAbsent)
+  (codex:multi-agent-common-ok 30000))
+
+!(assertEqual
+  (codex:multi-agent-normalize-wait-timeout-ms 0)
+  (codex:multi-agent-common-err
+    (codex:function-call-error-respond-to-model
+      "timeout_ms must be greater than zero")))
+
+!(assertEqual
+  (codex:multi-agent-normalize-wait-timeout-ms 10)
+  (codex:multi-agent-common-ok 10000))
+
+!(assertEqual
+  (codex:multi-agent-normalize-wait-timeout-ms 3600001)
+  (codex:multi-agent-common-ok 3600000))
+
+!(assertEqual
   (codex:multi-agent-function-arguments
     (codex:function-payload "{\"message\":\"hi\"}"))
   (codex:multi-agent-common-ok "{\"message\":\"hi\"}"))
