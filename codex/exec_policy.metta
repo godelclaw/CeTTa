@@ -9,6 +9,8 @@
 ; - HeuristicsRuleMatch fallback shape
 ; - network-rule protocol parsing, host normalization, and compiled domains
 ; - strictest-decision aggregation across one or more commands
+; - child_uses_parent_exec_policy comparison over the three ConfigLayerStack
+;   values used by Rust
 ;
 ; This increment intentionally starts from already-parsed rule constructors
 ; rather than Starlark policy-file parsing. That parser and its validation
@@ -18,6 +20,35 @@
 !(import! &self json)
 !(import! &self list)
 !(import! &self str)
+
+; Rust receives full Config values and derives these fields from
+; ConfigLayerStack. The CeTTa port keeps the exact comparison boundary explicit
+; until ConfigLayerStack itself is ported.
+(= (codex:exec-policy-config-summary
+      $enabled-config-folders
+      $ignore-user-and-project-exec-policy-rules
+      $requirements-exec-policy)
+   (CodexExecPolicyConfigSummary
+     $enabled-config-folders
+     $ignore-user-and-project-exec-policy-rules
+     $requirements-exec-policy))
+
+(= (codex:child-uses-parent-exec-policy $parent-config $child-config)
+   (case (once (eval $parent-config))
+     (((CodexExecPolicyConfigSummary
+          $parent-folders
+          $parent-ignore-rules
+          $parent-requirements-policy)
+       (case (once (eval $child-config))
+         (((CodexExecPolicyConfigSummary
+              $child-folders
+              $child-ignore-rules
+              $child-requirements-policy)
+           (and
+             (== $parent-folders $child-folders)
+             (and
+               (== $parent-ignore-rules $child-ignore-rules)
+               (== $parent-requirements-policy $child-requirements-policy))))))))))
 
 (= (codex:decision-allow)
    "allow")

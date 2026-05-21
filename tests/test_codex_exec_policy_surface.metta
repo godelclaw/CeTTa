@@ -3,6 +3,66 @@
 !(import! &self codex:exec_policy)
 
 !(assertEqualToResult
+  (codex:child-uses-parent-exec-policy
+    (codex:exec-policy-config-summary
+      ("/etc/codex" "/home/z/.codex" "/repo/.codex")
+      False
+      "required")
+    (codex:exec-policy-config-summary
+      ("/etc/codex" "/home/z/.codex" "/repo/.codex")
+      False
+      "required"))
+  (True))
+
+!(assertEqualToResult
+  (codex:child-uses-parent-exec-policy
+    (codex:exec-policy-config-summary
+      ("/etc/codex" "/home/z/.codex" "/repo/.codex")
+      False
+      "required")
+    (codex:exec-policy-config-summary
+      ("/home/z/.codex" "/etc/codex" "/repo/.codex")
+      False
+      "required"))
+  (False))
+
+!(assertEqualToResult
+  (codex:child-uses-parent-exec-policy
+    (codex:exec-policy-config-summary
+      ("/etc/codex" "/home/z/.codex" "/repo/.codex")
+      False
+      "required")
+    (codex:exec-policy-config-summary
+      ("/etc/codex" "/home/z/.codex")
+      False
+      "required"))
+  (False))
+
+!(assertEqualToResult
+  (codex:child-uses-parent-exec-policy
+    (codex:exec-policy-config-summary
+      ("/etc/codex" "/home/z/.codex" "/repo/.codex")
+      False
+      "required")
+    (codex:exec-policy-config-summary
+      ("/etc/codex" "/home/z/.codex" "/repo/.codex")
+      True
+      "required"))
+  (False))
+
+!(assertEqualToResult
+  (codex:child-uses-parent-exec-policy
+    (codex:exec-policy-config-summary
+      ("/etc/codex" "/home/z/.codex" "/repo/.codex")
+      False
+      "required")
+    (codex:exec-policy-config-summary
+      ("/etc/codex" "/home/z/.codex" "/repo/.codex")
+      False
+      CodexAbsent))
+  (False))
+
+!(assertEqualToResult
   (json-stringify
     (codex:check-output-json
       (codex:check-policy
