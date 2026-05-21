@@ -28,9 +28,9 @@
 ;   CeTTa does not reliably reduce integer comparisons beyond the host integer
 ;   range, so this slice exposes that overflow branch as an explicit symbolic
 ;   time outcome.
-; - Rust `Path::join` appends directory-entry file names. This slice uses
-;   CeTTa `path-join` for symbolic child paths; directory entry file names
-;   cannot be parent components in the real filesystem iterator.
+; - Rust `Path::join` appends directory-entry file names. This slice uses the
+;   local lexical join helper for symbolic child paths; directory entry file
+;   names cannot be parent components in the real filesystem iterator.
 
 !(import! &self list)
 !(import! &self path)
@@ -560,50 +560,113 @@
      (CodexExecServerLocalFsErrorKindOther)
      (format-args "filesystem task failed: {}" ($message))))
 
+; Rust has one `spawn_blocking` copy body with ordered file-type branches.
+; CeTTa equations are relational, so this single dispatcher avoids overlapping
+; branch equations while preserving that Rust branch order.
 (= (codex:exec-server-local-fs-direct-copy
       $source-path
       $destination-path
       $options
       $sandbox
-      (CodexExecServerLocalFsCopyTaskJoinErr $message))
+      $copy-task)
    (case (codex:exec-server-local-fs-reject-sandbox-context
            $sandbox)
      (((CodexExecServerLocalFsResultErr $error)
        (CodexExecServerLocalFsResultErr $error))
       ((CodexExecServerLocalFsResultOk $unit)
-       (CodexExecServerLocalFsResultErr
-         (codex:exec-server-local-fs-copy-task-join-error
-           $message))))))
-
-(= (codex:exec-server-local-fs-direct-copy
-      $source-path
-      $destination-path
-      $options
-      $sandbox
-      (CodexExecServerLocalFsCopyTaskOk
-        $source-metadata-outcome
-        $descendant-check-outcome
-        $operation-outcome))
-   (case (codex:exec-server-local-fs-reject-sandbox-context
-           $sandbox)
-     (((CodexExecServerLocalFsResultErr $error)
-       (CodexExecServerLocalFsResultErr $error))
-      ((CodexExecServerLocalFsResultOk $unit)
-       (case
-         (codex:exec-server-local-fs-copy-plan
-           $options
-           $source-metadata-outcome
-           $descendant-check-outcome)
-         (((CodexExecServerLocalFsResultErr $error)
-           (CodexExecServerLocalFsResultErr $error))
-          ((CodexExecServerLocalFsResultOk $plan)
-           (codex:exec-server-local-fs-unit-result
-             $operation-outcome))))))))
+       (let $copy-task-results (collapse $copy-task)
+         (case (list:first $copy-task-results)
+           (((CodexExecServerLocalFsCopyTaskJoinErr $message)
+             (CodexExecServerLocalFsResultErr
+               (codex:exec-server-local-fs-copy-task-join-error
+                 $message)))
+            ((CodexExecServerLocalFsCopyTaskOk
+               (CodexExecServerLocalFsResultErr $error)
+               $descendant-check-outcome
+               $operation-outcome)
+             (CodexExecServerLocalFsResultErr $error))
+            ((CodexExecServerLocalFsCopyTaskOk
+               (CodexExecServerLocalFsResultOk
+                 (CodexExecServerLocalFsSymlinkMetadataSnapshot
+                   (CodexExecServerLocalFsFileTypeDirectory)))
+               $descendant-check-outcome
+               $operation-outcome)
+             (if (not (codex:exec-server-copy-options-recursive $options))
+                 (CodexExecServerLocalFsResultErr
+                   (codex:exec-server-local-fs-copy-requires-recursive-error))
+                 (case $descendant-check-outcome
+                   (((CodexExecServerLocalFsResultErr $error)
+                     (CodexExecServerLocalFsResultErr $error))
+                    ((CodexExecServerLocalFsResultOk $is-descendant)
+                     (if $is-descendant
+                         (CodexExecServerLocalFsResultErr
+                           (codex:exec-server-local-fs-copy-descendant-error))
+                         (case $operation-outcome
+                           (((CodexExecServerLocalFsResultErr $error)
+                             (CodexExecServerLocalFsResultErr $error))
+                            ((CodexExecServerLocalFsResultOk $value)
+                             (CodexExecServerLocalFsResultOk
+                               (CodexExecServerLocalFsUnit)))))))))))
+            ((CodexExecServerLocalFsCopyTaskOk
+               (CodexExecServerLocalFsResultOk
+                 (CodexExecServerLocalFsSymlinkMetadataSnapshot
+                   (CodexExecServerLocalFsFileTypeSymlink)))
+               $descendant-check-outcome
+               $operation-outcome)
+             (case $operation-outcome
+               (((CodexExecServerLocalFsResultErr $error)
+                 (CodexExecServerLocalFsResultErr $error))
+                ((CodexExecServerLocalFsResultOk $value)
+                 (CodexExecServerLocalFsResultOk
+                   (CodexExecServerLocalFsUnit))))))
+            ((CodexExecServerLocalFsCopyTaskOk
+               (CodexExecServerLocalFsResultOk
+                 (CodexExecServerLocalFsSymlinkMetadataSnapshot
+                   (CodexExecServerLocalFsFileTypeFile)))
+               $descendant-check-outcome
+               $operation-outcome)
+             (case $operation-outcome
+               (((CodexExecServerLocalFsResultErr $error)
+                 (CodexExecServerLocalFsResultErr $error))
+                ((CodexExecServerLocalFsResultOk $value)
+                 (CodexExecServerLocalFsResultOk
+                   (CodexExecServerLocalFsUnit))))))
+            ((CodexExecServerLocalFsCopyTaskOk
+               (CodexExecServerLocalFsResultOk
+                 (CodexExecServerLocalFsSymlinkMetadataSnapshot
+                   (CodexExecServerLocalFsFileTypeOther)))
+               $descendant-check-outcome
+               $operation-outcome)
+             (CodexExecServerLocalFsResultErr
+               (codex:exec-server-local-fs-copy-unsupported-file-type-error))))))))))
 
 (= (codex:exec-server-local-fs-copy-dir-entry
       $file-name
       $file-type)
    (CodexExecServerLocalFsCopyDirEntry $file-name $file-type))
+
+(= (codex:exec-server-local-fs-join-path-text $base $relative)
+   (if (== $base "/")
+       (str-concat "/" $relative)
+       (if (str-ends-with? $base "/")
+           (str-concat $base $relative)
+           (str-concat (str-concat $base "/") $relative))))
+
+; Same lexical behavior as `path-join`, staged locally because the shared
+; helper can collapse in this large exec-server filesystem import set.
+(= (codex:exec-server-local-fs-join-path $base $relative)
+   (case (path-is-absolute? $relative)
+     ((True
+       (path-normalize $relative))
+      (False
+       (if (== $base "")
+           (path-normalize $relative)
+           (if (== $base ".")
+               (path-normalize $relative)
+               (path-normalize
+                 (codex:exec-server-local-fs-join-path-text
+                   $base
+                   $relative))))))))
 
 (= (codex:exec-server-local-fs-copy-dir-action-create-dir-all
       $target)
@@ -627,23 +690,40 @@
 (= (codex:exec-server-local-fs-copy-dir-entry-action
       $source
       $target
-      (CodexExecServerLocalFsCopyDirEntry $file-name $file-type))
-   (let $source-path (path-join $source $file-name)
-     (let $target-path (path-join $target $file-name)
-       (if (codex:exec-server-local-fs-file-type-is-directory $file-type)
-           (CodexExecServerLocalFsCopyDirActionRecurse
-             $source-path
-             $target-path)
-           (if (codex:exec-server-local-fs-file-type-is-file $file-type)
-               (CodexExecServerLocalFsCopyDirActionCopyFile
-                 $source-path
-                 $target-path)
-               (if (codex:exec-server-local-fs-file-type-is-symlink
-                     $file-type)
-                   (CodexExecServerLocalFsCopyDirActionCopySymlink
-                     $source-path
-                     $target-path)
-                   CodexAbsent))))))
+      $entry)
+   (let $entry-results (collapse $entry)
+     (case (list:first $entry-results)
+       (((CodexExecServerLocalFsCopyDirEntry
+           $file-name
+           (CodexExecServerLocalFsFileTypeDirectory))
+         (case (codex:exec-server-local-fs-join-path-text $source $file-name)
+           (($source-path
+             (case (codex:exec-server-local-fs-join-path-text $target $file-name)
+               (($target-path
+                 (CodexExecServerLocalFsCopyDirActionRecurse
+                   $source-path
+                   $target-path))))))))
+        ((CodexExecServerLocalFsCopyDirEntry
+           $file-name
+           (CodexExecServerLocalFsFileTypeFile))
+         (case (codex:exec-server-local-fs-join-path-text $source $file-name)
+           (($source-path
+             (case (codex:exec-server-local-fs-join-path-text $target $file-name)
+               (($target-path
+                 (CodexExecServerLocalFsCopyDirActionCopyFile
+                   $source-path
+                   $target-path))))))))
+        ((CodexExecServerLocalFsCopyDirEntry
+           $file-name
+           (CodexExecServerLocalFsFileTypeSymlink))
+         (case (codex:exec-server-local-fs-join-path-text $source $file-name)
+           (($source-path
+             (case (codex:exec-server-local-fs-join-path-text $target $file-name)
+               (($target-path
+                 (CodexExecServerLocalFsCopyDirActionCopySymlink
+                   $source-path
+                   $target-path))))))))
+        ($other CodexAbsent)))))
 
 (= (codex:exec-server-local-fs-str-starts-with $text $prefix)
    (let $text-len (str-length $text)
@@ -672,10 +752,10 @@
 (= (codex:exec-server-local-fs-path-relative-suffix $path $prefix)
    (let $normalized-path
      (codex:exec-server-local-fs-trim-trailing-slash-unless-root
-       (path-normalize $path))
+       $path)
      (let $normalized-prefix
        (codex:exec-server-local-fs-trim-trailing-slash-unless-root
-         (path-normalize $prefix))
+         $prefix)
        (if (== $normalized-path $normalized-prefix)
            ""
            (if (== $normalized-prefix "/")
@@ -714,11 +794,34 @@
          (CodexExecServerLocalFsResultOk
            (if (== $suffix "")
                (path-normalize $canonical-existing-path)
-               (path-join $canonical-existing-path $suffix))))))
+               (codex:exec-server-local-fs-join-path-text
+                 $canonical-existing-path
+                 $suffix))))))
+
+(= (codex:exec-server-local-fs-is-unix-absolute-path $path)
+   (codex:exec-server-local-fs-str-starts-with $path "/"))
+
+(= (codex:exec-server-local-fs-path-starts-with-path $path $prefix)
+   (let $normalized-path
+     (codex:exec-server-local-fs-trim-trailing-slash-unless-root $path)
+     (let $normalized-prefix
+       (codex:exec-server-local-fs-trim-trailing-slash-unless-root $prefix)
+       (if (== (codex:exec-server-local-fs-is-unix-absolute-path
+                 $normalized-path)
+               (codex:exec-server-local-fs-is-unix-absolute-path
+                 $normalized-prefix))
+           (if (== $normalized-prefix "/")
+               True
+               (if (== $normalized-path $normalized-prefix)
+                   True
+                   (codex:exec-server-local-fs-str-starts-with
+                     $normalized-path
+                     (str-concat $normalized-prefix "/"))))
+           False))))
 
 (= (codex:exec-server-local-fs-destination-is-same-or-descendant
       $canonical-source
       $resolved-destination)
-   (codex:permissions-path-starts-with-path
+   (codex:exec-server-local-fs-path-starts-with-path
      $resolved-destination
      $canonical-source))
