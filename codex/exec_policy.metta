@@ -12,6 +12,7 @@
 ; - child_uses_parent_exec_policy comparison over the three ConfigLayerStack
 ;   values used by Rust
 ; - format_exec_policy_error_with_source parse-error display selection
+; - load_exec_policy layer ordering and load_exec_policy_with_warning downgrade
 ;
 ; This increment intentionally starts from already-parsed rule constructors
 ; rather than Starlark policy-file parsing. That parser and its validation
@@ -66,6 +67,174 @@
 
 (= (codex:exec-policy-error-other $message)
    (CodexExecPolicyErrorOther $message))
+
+(= (codex:exec-policy-error-read-file $path $message)
+   (CodexExecPolicyErrorReadFile $path $message))
+
+(= (codex:exec-policy-load-ok $policy)
+   (CodexExecPolicyLoadOk $policy))
+
+(= (codex:exec-policy-load-error $error)
+   (CodexExecPolicyLoadError $error))
+
+(= (codex:exec-policy-load-value
+      (CodexExecPolicyLoadOk $policy))
+   $policy)
+
+(= (codex:exec-policy-load-error-value
+      (CodexExecPolicyLoadError $error))
+   $error)
+
+(= (codex:exec-policy-load-with-warning-ok $policy $warning)
+   (CodexExecPolicyLoadWithWarningOk $policy $warning))
+
+(= (codex:exec-policy-load-with-warning-policy
+      (CodexExecPolicyLoadWithWarningOk $policy $warning))
+   $policy)
+
+(= (codex:exec-policy-load-with-warning-warning
+      (CodexExecPolicyLoadWithWarningOk $policy $warning))
+   $warning)
+
+(= (codex:exec-policy-layer-source-system)
+   CodexExecPolicyLayerSourceSystem)
+
+(= (codex:exec-policy-layer-source-user)
+   CodexExecPolicyLayerSourceUser)
+
+(= (codex:exec-policy-layer-source-project)
+   CodexExecPolicyLayerSourceProject)
+
+(= (codex:exec-policy-layer-source-other)
+   CodexExecPolicyLayerSourceOther)
+
+; Rust reads each enabled layer's `.codex/rules/*.rules` files here. Until the
+; Starlark parser/file loader lands, this pure boundary receives the equivalent
+; already-parsed policy for each layer and preserves the same ordering/skipping
+; and requirements-overlay semantics.
+(= (codex:exec-policy-load-layer $source $policy)
+   (codex:exec-policy-load-layer $source $policy True))
+
+(= (codex:exec-policy-load-layer $source $policy $enabled)
+   (CodexExecPolicyLoadLayer $source $policy $enabled))
+
+(= (codex:exec-policy-load-layer-source
+      (CodexExecPolicyLoadLayer $source $policy $enabled))
+   $source)
+
+(= (codex:exec-policy-load-layer-policy
+      (CodexExecPolicyLoadLayer $source $policy $enabled))
+   $policy)
+
+(= (codex:exec-policy-load-layer-enabled
+      (CodexExecPolicyLoadLayer $source $policy $enabled))
+   $enabled)
+
+(= (codex:exec-policy-load-config-stack
+      $layers
+      $ignore-user-and-project-exec-policy-rules
+      $requirements-exec-policy)
+   (CodexExecPolicyLoadConfigStack
+     $layers
+     $ignore-user-and-project-exec-policy-rules
+     $requirements-exec-policy))
+
+(= (codex:is-exec-policy-load-layer-skipped-by-ignore
+      CodexExecPolicyLayerSourceSystem)
+   False)
+
+(= (codex:is-exec-policy-load-layer-skipped-by-ignore
+      CodexExecPolicyLayerSourceUser)
+   True)
+
+(= (codex:is-exec-policy-load-layer-skipped-by-ignore
+      CodexExecPolicyLayerSourceProject)
+   True)
+
+(= (codex:is-exec-policy-load-layer-skipped-by-ignore
+      CodexExecPolicyLayerSourceOther)
+   False)
+
+(= (codex:load-exec-policy-merge-layers
+      ()
+      $ignore-user-and-project-exec-policy-rules
+      $policy)
+   $policy)
+
+(= (codex:load-exec-policy-merge-layers
+      $layers
+      $ignore-user-and-project-exec-policy-rules
+      $policy)
+   (let $head (list:first $layers)
+     (let $tail (list:rest $layers)
+       (let $source (codex:exec-policy-load-layer-source $head)
+         (let $enabled (codex:exec-policy-load-layer-enabled $head)
+           (if (or
+                 (not $enabled)
+                 (and
+                   $ignore-user-and-project-exec-policy-rules
+                   (codex:is-exec-policy-load-layer-skipped-by-ignore
+                     $source)))
+               (codex:load-exec-policy-merge-layers
+                 $tail
+                 $ignore-user-and-project-exec-policy-rules
+                 $policy)
+               (codex:load-exec-policy-merge-layers
+                 $tail
+                 $ignore-user-and-project-exec-policy-rules
+                 (codex:policy-merge-overlay
+                   $policy
+                   (codex:exec-policy-load-layer-policy $head)))))))))
+
+(= (codex:exec-policy-requirements-overlay-policy CodexAbsent)
+   CodexAbsent)
+
+(= (codex:exec-policy-requirements-overlay-policy
+      (CodexRequirementsExecPolicy $policy))
+   $policy)
+
+(= (codex:load-exec-policy-from-config-stack
+      (CodexExecPolicyLoadConfigStack
+        $layers
+        $ignore-user-and-project-exec-policy-rules
+        $requirements-exec-policy))
+   (let $policy
+     (codex:load-exec-policy-merge-layers
+       $layers
+       $ignore-user-and-project-exec-policy-rules
+       (codex:policy ()))
+     (let $requirements-policy
+       (codex:exec-policy-requirements-overlay-policy
+         $requirements-exec-policy)
+       (if (== $requirements-policy CodexAbsent)
+           (codex:exec-policy-load-ok $policy)
+           (codex:exec-policy-load-ok
+             (codex:policy-merge-overlay
+               $policy
+               $requirements-policy))))))
+
+(= (codex:load-exec-policy-with-warning-from-result
+      (CodexExecPolicyLoadOk $policy))
+   (codex:exec-policy-load-with-warning-ok $policy CodexAbsent))
+
+(= (codex:load-exec-policy-with-warning-from-result
+      (CodexExecPolicyLoadError
+        (CodexExecPolicyErrorParsePolicy $path $source)))
+   (codex:exec-policy-load-with-warning-ok
+     (codex:policy ())
+     (CodexExecPolicyErrorParsePolicy $path $source)))
+
+(= (codex:load-exec-policy-with-warning-from-result
+      (CodexExecPolicyLoadError
+        (CodexExecPolicyErrorReadFile $path $message)))
+   (codex:exec-policy-load-error
+     (CodexExecPolicyErrorReadFile $path $message)))
+
+(= (codex:load-exec-policy-with-warning-from-result
+      (CodexExecPolicyLoadError
+        (CodexExecPolicyErrorOther $message)))
+   (codex:exec-policy-load-error
+     (CodexExecPolicyErrorOther $message)))
 
 (= (codex:exec-policy-source-error-message
       (CodexExecPolicyParseSourceError $message $structured-location))

@@ -1,6 +1,7 @@
 !(register-module! ../codex)
 !(import! &self json)
 !(import! &self codex:exec_policy)
+!(import! &self codex:requirements_exec_policy)
 
 !(assertEqualToResult
   (codex:child-uses-parent-exec-policy
@@ -502,3 +503,146 @@
                (codex:network-rule-protocol-https)
                (codex:decision-forbidden))))))))
   ("{\"allowed\":[],\"denied\":[\"api.github.com\"]}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:check-output-json
+      (codex:check-policy-multiple
+        (codex:exec-policy-load-value
+          (codex:load-exec-policy-from-config-stack
+            (codex:exec-policy-load-config-stack
+              ((codex:exec-policy-load-layer
+                 (codex:exec-policy-layer-source-user)
+                 (codex:policy
+                   ((codex:prefix-rule
+                      ((codex:pattern-token "rm"))
+                      (codex:decision-forbidden)))))
+               (codex:exec-policy-load-layer
+                 (codex:exec-policy-layer-source-project)
+                 (codex:policy
+                   ((codex:prefix-rule
+                      ((codex:pattern-token "ls"))
+                      (codex:decision-prompt))))))
+              False
+              CodexAbsent)))
+        (("rm" "-rf" "/tmp/demo")
+         ("ls" "-la")))))
+  ("{\"matchedRules\":[{\"prefixRuleMatch\":{\"matchedPrefix\":[\"rm\"],\"decision\":\"forbidden\"}},{\"prefixRuleMatch\":{\"matchedPrefix\":[\"ls\"],\"decision\":\"prompt\"}}],\"decision\":\"forbidden\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:check-output-json
+      (codex:check-policy
+        (codex:exec-policy-load-value
+          (codex:load-exec-policy-from-config-stack
+            (codex:exec-policy-load-config-stack
+              ((codex:exec-policy-load-layer
+                 (codex:exec-policy-layer-source-system)
+                 (codex:policy
+                   ((codex:prefix-rule
+                      ((codex:pattern-token "curl"))
+                      (codex:decision-allow)))))
+               (codex:exec-policy-load-layer
+                 (codex:exec-policy-layer-source-user)
+                 (codex:policy
+                   ((codex:prefix-rule
+                      ((codex:pattern-token "curl"))
+                      (codex:decision-forbidden)))))
+               (codex:exec-policy-load-layer
+                 (codex:exec-policy-layer-source-project)
+                 (codex:policy
+                   ((codex:prefix-rule
+                      ((codex:pattern-token "ls"))
+                      (codex:decision-forbidden))))
+                 False))
+              True
+              CodexAbsent)))
+        ("curl" "https://example.com"))))
+  ("{\"matchedRules\":[{\"prefixRuleMatch\":{\"matchedPrefix\":[\"curl\"],\"decision\":\"allow\"}}],\"decision\":\"allow\"}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:compiled-network-domains-json
+      (codex:compiled-network-domains
+        (codex:exec-policy-load-value
+          (codex:load-exec-policy-from-config-stack
+            (codex:exec-policy-load-config-stack
+              ((codex:exec-policy-load-layer
+                 (codex:exec-policy-layer-source-system)
+                 (codex:policy-with-host-executables
+                   ((codex:prefix-rule
+                      ((codex:pattern-token "git"))
+                      (codex:decision-allow)))
+                   ((codex:host-executable "git" ("/usr/bin/git"))))))
+              False
+              (codex:requirements-exec-policy
+                (codex:policy-with-network-rules
+                  ()
+                  ((codex:network-rule
+                     "blocked.example.com"
+                     (codex:network-rule-protocol-https)
+                     (codex:decision-forbidden)))))))))))
+  ("{\"allowed\":[],\"denied\":[\"blocked.example.com\"]}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:check-output-json
+      (codex:check-policy-with-options
+        (codex:exec-policy-load-value
+          (codex:load-exec-policy-from-config-stack
+            (codex:exec-policy-load-config-stack
+              ((codex:exec-policy-load-layer
+                 (codex:exec-policy-layer-source-system)
+                 (codex:policy-with-host-executables
+                   ((codex:prefix-rule
+                      ((codex:pattern-token "git"))
+                      (codex:decision-allow)))
+                   ((codex:host-executable "git" ("/usr/bin/git"))))))
+              False
+              (codex:requirements-exec-policy
+                (codex:policy-with-network-rules
+                  ()
+                  ((codex:network-rule
+                     "blocked.example.com"
+                     (codex:network-rule-protocol-https)
+                     (codex:decision-forbidden))))))))
+        ("/usr/bin/git" "status")
+        (codex:match-options True))))
+  ("{\"matchedRules\":[{\"prefixRuleMatch\":{\"matchedPrefix\":[\"git\"],\"decision\":\"allow\",\"resolvedProgram\":\"/usr/bin/git\"}}],\"decision\":\"allow\"}"))
+
+!(assertEqual
+  (codex:exec-policy-load-with-warning-warning
+    (codex:load-exec-policy-with-warning-from-result
+      (codex:exec-policy-load-error
+        (codex:exec-policy-error-parse-policy
+          "broken.rules"
+          (codex:exec-policy-parse-source-error
+            "plain parser failure"
+            CodexAbsent)))))
+  (codex:exec-policy-error-parse-policy
+    "broken.rules"
+    (codex:exec-policy-parse-source-error
+      "plain parser failure"
+      CodexAbsent)))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:check-output-json
+      (codex:check-policy
+        (codex:exec-policy-load-with-warning-policy
+          (codex:load-exec-policy-with-warning-from-result
+            (codex:exec-policy-load-error
+              (codex:exec-policy-error-parse-policy
+                "broken.rules"
+                (codex:exec-policy-parse-source-error
+                  "plain parser failure"
+                  CodexAbsent)))))
+        ("rm" "-rf" "/tmp/demo"))))
+  ("{\"matchedRules\":[]}"))
+
+!(assertEqual
+  (codex:load-exec-policy-with-warning-from-result
+    (codex:exec-policy-load-error
+      (codex:exec-policy-error-read-file "deny.rules" "permission denied")))
+  (codex:exec-policy-load-error
+    (codex:exec-policy-error-read-file "deny.rules" "permission denied")))
