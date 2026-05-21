@@ -222,5 +222,6 @@
              (codex:agent-job-loop-finished-actions $job-id $tail))))))))
 
 (= (codex:agent-job-loop-finished-plan $job-id $finished)
-   (codex:agent-job-loop-finished-plan-value
-     (codex:agent-job-loop-finished-actions $job-id $finished)))
+   (case (codex:agent-job-loop-finished-actions $job-id $finished)
+     (($actions
+       (CodexAgentJobLoopFinishedPlan $actions)))))

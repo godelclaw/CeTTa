@@ -21,9 +21,8 @@
 ;   negative wall-clock age is treated as non-stale, matching Rust's `to_std`
 ;   failure branch.
 ; - Rust stores active `started_at` as an `Instant` reconstructed from the item
-;   update age. This pure recovery action carries `updated_at_seconds` so the
-;   runtime bridge can perform that `Instant` reconstruction at subscription
-;   time.
+;   update age. This slice receives wall-clock and monotonic-clock seconds
+;   explicitly and emits the reconstructed `started_at_seconds`.
 
 !(import! &self agent_status)
 !(import! &self function_tool)
@@ -75,11 +74,11 @@
 (= (codex:agent-job-recovery-activate
       $item-id
       $thread-id
-      $updated-at-seconds)
+      $started-at-seconds)
    (CodexAgentJobRecoveryActivate
      $item-id
      $thread-id
-     $updated-at-seconds))
+     $started-at-seconds))
 
 (= (codex:agent-job-is-item-stale
       $now-seconds
@@ -89,6 +88,17 @@
      (if (< $age-seconds 0)
          False
          (>= $age-seconds $runtime-timeout-seconds))))
+
+(= (codex:agent-job-started-at-from-item
+      $wall-now-seconds
+      $updated-at-seconds
+      $instant-now-seconds)
+   (let $age-seconds (- $wall-now-seconds $updated-at-seconds)
+     (if (< $age-seconds 0)
+         $instant-now-seconds
+         (if (> $age-seconds $instant-now-seconds)
+             $instant-now-seconds
+             (- $instant-now-seconds $age-seconds)))))
 
 (= (codex:agent-job-duration-debug-seconds $seconds)
    (format-args "{}s" ($seconds)))
@@ -131,8 +141,21 @@
       $now-seconds
       $runtime-timeout-seconds
       $thread-status)
+   (codex:agent-job-recover-running-item-with-clock
+     $item
+     $now-seconds
+     $runtime-timeout-seconds
+     $thread-status
+     $now-seconds))
+
+(= (codex:agent-job-recover-running-item-with-clock
+      $item
+      $wall-now-seconds
+      $runtime-timeout-seconds
+      $thread-status
+      $instant-now-seconds)
    (if (codex:agent-job-is-item-stale
-         $now-seconds
+         $wall-now-seconds
          (codex:agent-job-recovery-item-updated-at-seconds $item)
          $runtime-timeout-seconds)
        (codex:agent-job-recover-stale-running-item
@@ -160,5 +183,8 @@
                (codex:agent-job-recovery-activate
                  (codex:agent-job-recovery-item-id $item)
                  $thread-id
-                 (codex:agent-job-recovery-item-updated-at-seconds
-                   $item))))))))
+                 (codex:agent-job-started-at-from-item
+                   $wall-now-seconds
+                   (codex:agent-job-recovery-item-updated-at-seconds
+                     $item)
+                   $instant-now-seconds))))))))
