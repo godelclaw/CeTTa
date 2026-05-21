@@ -16,6 +16,7 @@
 ; - handle_thread_request_result
 ; - send_input/send_inter_agent_communication last_task_message update
 ; - interrupt_agent result pass-through
+; - shutdown_live_agent result/release boundary
 ; - resolve_agent_reference path resolution and error mapping
 ; - format_environment_context_subagents formatting over materialized children
 ; - agent_matches_prefix
@@ -57,6 +58,10 @@
 ;   releasing registry metadata. This pure slice receives the materialized
 ;   send result at that boundary, applies the same registry transition, and
 ;   returns the same result for the outer thread-manager side effect layer.
+; - Rust shutdown_live_agent materializes and flushes rollout before status
+;   checks, and `?` returns immediately on flush failure before remove/release.
+;   This pure slice receives the materialized thread-load/flush/status/send
+;   result at that boundary and preserves the same registry release behavior.
 
 !(import! &self agent_path)
 !(import! &self agent_registry)
@@ -153,6 +158,15 @@
         $registry-state
         $result))
    $result)
+
+(= (codex:agent-control-shutdown-live-thread
+      $flush-result
+      $status
+      $send-result)
+   (CodexAgentControlShutdownLiveThread
+     $flush-result
+     $status
+     $send-result))
 
 (= (codex:agent-control-listed-agent
       $agent-name
@@ -1077,6 +1091,58 @@
    (codex:agent-control-thread-request-outcome
      $registry-state
      $send-result))
+
+(= (codex:agent-control-shutdown-live-agent-released-outcome
+      $registry-state
+      $agent-id
+      $result)
+   (codex:agent-control-thread-request-outcome
+     (codex:agent-registry-release-spawned-thread
+       $registry-state
+       $agent-id)
+     $result))
+
+(= (codex:agent-control-shutdown-live-agent-result
+      $registry-state
+      $agent-id
+      CodexAbsent
+      $send-result)
+   (codex:agent-control-shutdown-live-agent-released-outcome
+     $registry-state
+     $agent-id
+     $send-result))
+
+(= (codex:agent-control-shutdown-live-agent-result
+      $registry-state
+      $agent-id
+      (CodexAgentControlShutdownLiveThread
+        (CodexAgentControlErr $flush-error)
+        $status
+        $send-result)
+      $missing-thread-send-result)
+   (codex:agent-control-thread-request-outcome
+     $registry-state
+     (codex:agent-control-err $flush-error)))
+
+(= (codex:agent-control-shutdown-live-agent-result
+      $registry-state
+      $agent-id
+      (CodexAgentControlShutdownLiveThread
+        (CodexAgentControlOk $flush-value)
+        $status
+        $send-result)
+      $missing-thread-send-result)
+   (case (eval $status)
+     (((CodexProtocolAgentStatusShutdown)
+       (codex:agent-control-shutdown-live-agent-released-outcome
+         $registry-state
+         $agent-id
+         (codex:agent-control-ok "")))
+      ($other
+       (codex:agent-control-shutdown-live-agent-released-outcome
+         $registry-state
+         $agent-id
+         $send-result)))))
 
 (= (codex:agent-control-current-agent-path $session-source)
    (case (codex:session-source-get-agent-path $session-source)

@@ -767,6 +767,111 @@
       (codex:error-internal-agent-died))))
 
 !(assertEqual
+  (case
+    (codex:agent-control-shutdown-live-agent-result
+      (test:registry-state)
+      (test:scout-thread)
+      (codex:agent-control-shutdown-live-thread
+        (codex:agent-control-ok ())
+        (codex:protocol-agent-status-running)
+        (codex:agent-control-ok "shutdown-turn"))
+      (codex:agent-control-err
+        (codex:error-thread-not-found (test:scout-thread))))
+    (((CodexAgentControlThreadRequestOutcome $state $result)
+      (case
+        (codex:agent-control-agent-metadata-for-thread
+          $state
+          (test:scout-thread))
+        (($metadata
+          (test:request-release-check
+            $metadata
+            (codex:agent-registry-state-total-count $state)
+            $result)))))))
+  (test:request-release-check
+    CodexAbsent
+    3
+    (codex:agent-control-ok "shutdown-turn")))
+
+!(assertEqual
+  (case
+    (codex:agent-control-shutdown-live-agent-result
+      (test:registry-state)
+      (test:scout-thread)
+      (codex:agent-control-shutdown-live-thread
+        (codex:agent-control-ok ())
+        (codex:protocol-agent-status-shutdown)
+        (codex:agent-control-err
+          (codex:error-unsupported-operation "send should be skipped")))
+      (codex:agent-control-err
+        (codex:error-thread-not-found (test:scout-thread))))
+    (((CodexAgentControlThreadRequestOutcome $state $result)
+      (case
+        (codex:agent-control-agent-metadata-for-thread
+          $state
+          (test:scout-thread))
+        (($metadata
+          (test:request-release-check
+            $metadata
+            (codex:agent-registry-state-total-count $state)
+            $result)))))))
+  (test:request-release-check
+    CodexAbsent
+    3
+    (codex:agent-control-ok "")))
+
+!(assertEqual
+  (case
+    (codex:agent-control-shutdown-live-agent-result
+      (test:registry-state)
+      (test:scout-thread)
+      (codex:agent-control-shutdown-live-thread
+        (codex:agent-control-err
+          (codex:error-fatal "flush failed"))
+        (codex:protocol-agent-status-running)
+        (codex:agent-control-ok "shutdown-turn"))
+      (codex:agent-control-err
+        (codex:error-thread-not-found (test:scout-thread))))
+    (((CodexAgentControlThreadRequestOutcome $state $result)
+      (case
+        (codex:agent-control-agent-metadata-for-thread
+          $state
+          (test:scout-thread))
+        (($metadata
+          (test:request-release-check
+            $metadata
+            (codex:agent-registry-state-total-count $state)
+            $result)))))))
+  (test:request-release-check
+    (test:scout-metadata)
+    4
+    (codex:agent-control-err
+      (codex:error-fatal "flush failed"))))
+
+!(assertEqual
+  (case
+    (codex:agent-control-shutdown-live-agent-result
+      (test:registry-state)
+      (test:scout-thread)
+      CodexAbsent
+      (codex:agent-control-err
+        (codex:error-thread-not-found (test:scout-thread))))
+    (((CodexAgentControlThreadRequestOutcome $state $result)
+      (case
+        (codex:agent-control-agent-metadata-for-thread
+          $state
+          (test:scout-thread))
+        (($metadata
+          (test:request-release-check
+            $metadata
+            (codex:agent-registry-state-total-count $state)
+            $result)))))))
+  (test:request-release-check
+    CodexAbsent
+    3
+    (codex:agent-control-err
+      (codex:error-thread-not-found (test:scout-thread)))))
+
+!(assertEqual
   (codex:agent-control-resolve-agent-reference
     (test:registry-state)
     (test:root-thread)
