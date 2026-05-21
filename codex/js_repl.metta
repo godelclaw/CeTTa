@@ -13,6 +13,8 @@
 ; - ToolHandler kind/matches_kind and feature/payload guard behavior
 ; - function-payload JsReplArgs decoding before the async runtime boundary
 ; - js_repl exec begin/end event payload construction
+; - top-level exec-state transition helpers
+; - kernel stderr-tail and model-facing diagnostic helpers
 ; - nested tool-call response summary for message/function/custom/mcp/tool_search
 ;   responses plus handler errors
 ; - small exec-output aggregation helper used by js_repl events
@@ -37,6 +39,13 @@
 ;   field. MCP summary also uses `once` at materialization boundaries where the
 ;   CeTTa evaluator can surface duplicate identical reductions; Rust has one
 ;   deterministic struct conversion there.
+; - Rust mutates `VecDeque<String>` for recent stderr and returns only the
+;   bounded line from `push_stderr_tail_line`. This pure slice returns
+;   `CodexJsReplStderrTailPushResult` with the updated tail plus that same
+;   bounded line so tests can pin the mutation boundary.
+; - Some parser/runtime-boundary helpers bind intermediate results with `let`
+;   where Rust would call a helper inline. This only materializes the same value
+;   in CeTTa's evaluator and does not change the branch order or accepted cases.
 
 !(import! &self json)
 !(import! &self list)
@@ -69,6 +78,27 @@
 
 (= (codex:js-repl-tool-response-text-preview-max-bytes)
    512)
+
+(= (codex:js-repl-stderr-tail-line-limit)
+   20)
+
+(= (codex:js-repl-stderr-tail-line-max-bytes)
+   512)
+
+(= (codex:js-repl-stderr-tail-max-bytes)
+   4096)
+
+(= (codex:js-repl-stderr-tail-separator)
+   " | ")
+
+(= (codex:js-repl-exec-id-log-limit)
+   8)
+
+(= (codex:js-repl-model-diag-stderr-max-bytes)
+   1024)
+
+(= (codex:js-repl-model-diag-error-max-bytes)
+   256)
 
 (= (codex:js-repl-empty-input-message)
    "js_repl expects raw JavaScript tool input (non-empty). Provide JS source text, optionally with first-line `// codex-js-repl: ...`.")
@@ -377,9 +407,8 @@
 (= (codex:parse-js-repl-freeform-args $input)
    (if (== (str-trim $input) "")
        (codex:js-repl-parse-error (codex:js-repl-empty-input-message))
-       (codex:js-repl-freeform-args-from-split
-         $input
-         (codex:js-repl-split-first-line $input))))
+       (let $split (codex:js-repl-split-first-line $input)
+         (codex:js-repl-freeform-args-from-split $input $split))))
 
 (= (codex:is-js-repl-function-args-known-key $key)
    (or (== $key "code") (== $key "timeout_ms")))
@@ -520,6 +549,346 @@
            ((CodexInputText (codex:js-repl-reset-output-text)))
            True
            CodexAbsent))))
+
+(= (codex:js-repl-top-level-exec-state-idle)
+   (CodexJsReplTopLevelExecStateIdle))
+
+(= (codex:js-repl-top-level-exec-state-fresh-kernel
+      $turn-id
+      $exec-id)
+   (CodexJsReplTopLevelExecStateFreshKernel $turn-id $exec-id))
+
+(= (codex:js-repl-top-level-exec-state-reused-kernel-pending
+      $turn-id
+      $exec-id)
+   (CodexJsReplTopLevelExecStateReusedKernelPending $turn-id $exec-id))
+
+(= (codex:js-repl-top-level-exec-state-submitted $turn-id $exec-id)
+   (CodexJsReplTopLevelExecStateSubmitted $turn-id $exec-id))
+
+(= (codex:js-repl-top-level-exec-state-registered-exec-id
+      (CodexJsReplTopLevelExecStateIdle))
+   CodexAbsent)
+
+(= (codex:js-repl-top-level-exec-state-registered-exec-id
+      (CodexJsReplTopLevelExecStateFreshKernel $turn-id $exec-id))
+   $exec-id)
+
+(= (codex:js-repl-top-level-exec-state-registered-exec-id
+      (CodexJsReplTopLevelExecStateReusedKernelPending $turn-id $exec-id))
+   $exec-id)
+
+(= (codex:js-repl-top-level-exec-state-registered-exec-id
+      (CodexJsReplTopLevelExecStateSubmitted $turn-id $exec-id))
+   $exec-id)
+
+(= (codex:js-repl-top-level-exec-state-should-reset-for-interrupt
+      (CodexJsReplTopLevelExecStateIdle)
+      $turn-id)
+   False)
+
+(= (codex:js-repl-top-level-exec-state-should-reset-for-interrupt
+      (CodexJsReplTopLevelExecStateFreshKernel $active-turn-id $exec-id)
+      $turn-id)
+   (== $active-turn-id $turn-id))
+
+(= (codex:js-repl-top-level-exec-state-should-reset-for-interrupt
+      (CodexJsReplTopLevelExecStateReusedKernelPending $active-turn-id $exec-id)
+      $turn-id)
+   False)
+
+(= (codex:js-repl-top-level-exec-state-should-reset-for-interrupt
+      (CodexJsReplTopLevelExecStateSubmitted $active-turn-id $exec-id)
+      $turn-id)
+   (== $active-turn-id $turn-id))
+
+(= (codex:js-repl-register-top-level-exec-state $state $exec-id $turn-id)
+   (case $state
+     (((CodexJsReplTopLevelExecStateFreshKernel
+         $active-turn-id
+         $active-exec-id)
+       (if (== $active-turn-id $turn-id)
+           (CodexJsReplTopLevelExecStateFreshKernel $turn-id $exec-id)
+           (CodexJsReplTopLevelExecStateReusedKernelPending
+             $turn-id
+             $exec-id)))
+      ($other
+       (CodexJsReplTopLevelExecStateReusedKernelPending
+         $turn-id
+         $exec-id)))))
+
+(= (codex:js-repl-mark-top-level-exec-submitted-state
+      $state
+      $target-exec-id)
+   (case $state
+     (((CodexJsReplTopLevelExecStateFreshKernel $turn-id $exec-id)
+       (if (== $exec-id $target-exec-id)
+           (CodexJsReplTopLevelExecStateSubmitted $turn-id $exec-id)
+           $state))
+      ((CodexJsReplTopLevelExecStateReusedKernelPending $turn-id $exec-id)
+       (if (== $exec-id $target-exec-id)
+           (CodexJsReplTopLevelExecStateSubmitted $turn-id $exec-id)
+           $state))
+      ($other $state))))
+
+(= (codex:js-repl-clear-top-level-exec-if-matches-state
+      $state
+      $exec-id)
+   (if (== (codex:js-repl-top-level-exec-state-registered-exec-id $state)
+           $exec-id)
+       (CodexJsReplTopLevelExecStateIdle)
+       $state))
+
+(= (codex:js-repl-list-contains () $item)
+   False)
+
+(= (codex:js-repl-list-contains $items $item)
+   (let ($head $tail) (decons-atom $items)
+     (if (== $head $item)
+         True
+         (codex:js-repl-list-contains $tail $item))))
+
+(= (codex:js-repl-clear-top-level-exec-if-matches-any-state
+      $state
+      $exec-ids)
+   (if (codex:js-repl-list-contains
+         $exec-ids
+         (codex:js-repl-top-level-exec-state-registered-exec-id $state))
+       (CodexJsReplTopLevelExecStateIdle)
+       $state))
+
+(= (codex:js-repl-kernel-stream-end-shutdown)
+   (CodexJsReplKernelStreamEndShutdown))
+
+(= (codex:js-repl-kernel-stream-end-stdout-eof)
+   (CodexJsReplKernelStreamEndStdoutEof))
+
+(= (codex:js-repl-kernel-stream-end-stdout-read-error $error)
+   (CodexJsReplKernelStreamEndStdoutReadError $error))
+
+(= (codex:js-repl-kernel-stream-end-reason
+      (CodexJsReplKernelStreamEndShutdown))
+   "shutdown")
+
+(= (codex:js-repl-kernel-stream-end-reason
+      (CodexJsReplKernelStreamEndStdoutEof))
+   "stdout_eof")
+
+(= (codex:js-repl-kernel-stream-end-reason
+      (CodexJsReplKernelStreamEndStdoutReadError $error))
+   "stdout_read_error")
+
+(= (codex:js-repl-kernel-stream-end-error $end)
+   (case $end
+     (((CodexJsReplKernelStreamEndStdoutReadError $error) $error)
+      ($other CodexAbsent))))
+
+(= (codex:js-repl-kernel-debug-snapshot $pid $status $stderr-tail)
+   (CodexJsReplKernelDebugSnapshot $pid $status $stderr-tail))
+
+(= (codex:js-repl-kernel-debug-snapshot-pid
+      (CodexJsReplKernelDebugSnapshot $pid $status $stderr-tail))
+   $pid)
+
+(= (codex:js-repl-kernel-debug-snapshot-status
+      (CodexJsReplKernelDebugSnapshot $pid $status $stderr-tail))
+   $status)
+
+(= (codex:js-repl-kernel-debug-snapshot-stderr-tail
+      (CodexJsReplKernelDebugSnapshot $pid $status $stderr-tail))
+   $stderr-tail)
+
+(= (codex:js-repl-truncate-utf8-prefix-by-bytes $input $max-bytes)
+   (if (<= (str-length $input) $max-bytes)
+       $input
+       (if (== $max-bytes 0)
+           ""
+           (case (codex:string-truncate-split-string $input $max-bytes 0)
+             (((StrMiddleSplit $removed-chars $prefix $suffix)
+               $prefix))))))
+
+(= (codex:js-repl-format-stderr-tail $lines)
+   (case $lines
+     ((() "<empty>")
+      ($items (str-join (codex:js-repl-stderr-tail-separator) $items)))))
+
+(= (codex:js-repl-string-list-byte-sum ())
+   0)
+
+(= (codex:js-repl-string-list-byte-sum $lines)
+   (let ($head $tail) (decons-atom $lines)
+     (+ (str-length $head)
+        (codex:js-repl-string-list-byte-sum $tail))))
+
+(= (codex:js-repl-stderr-tail-formatted-bytes $lines)
+   (case $lines
+     ((() 0)
+      ($items
+       (+ (codex:js-repl-string-list-byte-sum $items)
+          (* (str-length (codex:js-repl-stderr-tail-separator))
+             (- (list:len $items) 1)))))))
+
+(= (codex:js-repl-stderr-tail-bytes-with-candidate $lines $line)
+   (case $lines
+     ((() (str-length $line))
+      ($items
+       (+ (codex:js-repl-stderr-tail-formatted-bytes $items)
+          (+ (str-length (codex:js-repl-stderr-tail-separator))
+             (str-length $line)))))))
+
+(= (codex:js-repl-min-number $lhs $rhs)
+   (if (< $lhs $rhs) $lhs $rhs))
+
+(= (codex:js-repl-prune-stderr-tail-for-candidate $lines $line)
+   (if (== $lines ())
+       ()
+       (if (or
+             (>= (list:len $lines)
+                 (codex:js-repl-stderr-tail-line-limit))
+             (> (codex:js-repl-stderr-tail-bytes-with-candidate
+                  $lines
+                  $line)
+                (codex:js-repl-stderr-tail-max-bytes)))
+           (codex:js-repl-prune-stderr-tail-for-candidate
+             (list:rest $lines)
+             $line)
+           $lines)))
+
+(= (codex:js-repl-stderr-tail-push-result $tail $bounded-line)
+   (CodexJsReplStderrTailPushResult $tail $bounded-line))
+
+(= (codex:js-repl-stderr-tail-push-result-tail
+      (CodexJsReplStderrTailPushResult $tail $bounded-line))
+   $tail)
+
+(= (codex:js-repl-stderr-tail-push-result-bounded-line
+      (CodexJsReplStderrTailPushResult $tail $bounded-line))
+   $bounded-line)
+
+(= (codex:js-repl-push-stderr-tail-line $lines $line)
+   (let $max-line-bytes
+     (codex:js-repl-min-number
+       (codex:js-repl-stderr-tail-line-max-bytes)
+       (codex:js-repl-stderr-tail-max-bytes))
+     (let $bounded-line
+       (codex:js-repl-truncate-utf8-prefix-by-bytes
+         $line
+         $max-line-bytes)
+       (if (== $bounded-line "")
+           (codex:js-repl-stderr-tail-push-result $lines $bounded-line)
+           (codex:js-repl-stderr-tail-push-result
+             (codex:js-repl-append-item
+               (codex:js-repl-prune-stderr-tail-for-candidate
+                 $lines
+                 $bounded-line)
+               $bounded-line)
+             $bounded-line)))))
+
+(= (codex:js-repl-is-kernel-status-exited $status)
+   (str-starts-with? $status "exited("))
+
+(= (codex:js-repl-ascii-lower-char $char)
+   (case $char
+     (("A" "a")
+      ("B" "b")
+      ("C" "c")
+      ("D" "d")
+      ("E" "e")
+      ("F" "f")
+      ("G" "g")
+      ("H" "h")
+      ("I" "i")
+      ("J" "j")
+      ("K" "k")
+      ("L" "l")
+      ("M" "m")
+      ("N" "n")
+      ("O" "o")
+      ("P" "p")
+      ("Q" "q")
+      ("R" "r")
+      ("S" "s")
+      ("T" "t")
+      ("U" "u")
+      ("V" "v")
+      ("W" "w")
+      ("X" "x")
+      ("Y" "y")
+      ("Z" "z")
+      ($other $other))))
+
+(= (codex:js-repl-ascii-lower-text $text)
+   (if (== $text "")
+       ""
+       (str-concat
+         (codex:js-repl-ascii-lower-char (str-slice $text 0 1))
+         (codex:js-repl-ascii-lower-text
+           (str-slice $text 1 (str-length $text))))))
+
+(= (codex:js-repl-string-contains $text $needle)
+   (case (str-find $text $needle)
+     ((Empty False)
+      ($index True))))
+
+(= (codex:js-repl-should-include-model-diagnostics-for-write-error
+      $err-message
+      $snapshot)
+   (or
+     (codex:js-repl-is-kernel-status-exited
+       (codex:js-repl-kernel-debug-snapshot-status $snapshot))
+     (codex:js-repl-string-contains
+       (codex:js-repl-ascii-lower-text $err-message)
+       "broken pipe")))
+
+(= (codex:js-repl-optional-json-string $text)
+   (case $text
+     ((CodexAbsent JsonNull)
+      ($value (JsonString $value)))))
+
+(= (codex:js-repl-optional-json-number $number)
+   (case $number
+     ((CodexAbsent JsonNull)
+      ($value (JsonNumber $value)))))
+
+(= (codex:js-repl-format-model-kernel-failure-details
+      $reason
+      $stream-error
+      (CodexJsReplKernelDebugSnapshot $pid $status $stderr-tail))
+   (str-concat
+     "js_repl diagnostics: "
+     (json-stringify
+       (JsonObject
+         ((JsonPair "reason" (JsonString $reason))
+          (JsonPair
+            "stream_error"
+            (if (== $stream-error CodexAbsent)
+                JsonNull
+                (JsonString
+                  (codex:js-repl-truncate-utf8-prefix-by-bytes
+                    $stream-error
+                    (codex:js-repl-model-diag-error-max-bytes)))))
+          (JsonPair "kernel_pid" (codex:js-repl-optional-json-number $pid))
+          (JsonPair "kernel_status" (JsonString $status))
+          (JsonPair
+            "kernel_stderr_tail"
+            (JsonString
+              (codex:js-repl-truncate-utf8-prefix-by-bytes
+                $stderr-tail
+                (codex:js-repl-model-diag-stderr-max-bytes)))))))))
+
+(= (codex:js-repl-with-model-kernel-failure-message
+      $base-message
+      $reason
+      $stream-error
+      $snapshot)
+   (str-concat
+     $base-message
+     (str-concat
+       "\n\n"
+       (codex:js-repl-format-model-kernel-failure-details
+         $reason
+         $stream-error
+         $snapshot))))
 
 (= (codex:js-repl-tool-call-payload-kind-message-content)
    (CodexJsReplToolCallPayloadKindMessageContent))
@@ -865,14 +1234,12 @@
 (= (codex:js-repl-append-item $items $item)
    (codex:js-repl-append-items $items ($item)))
 
-(= (codex:js-repl-append-optional-json-value-pair
-      $pairs
-      $key
-      CodexAbsent)
-   $pairs)
-
 (= (codex:js-repl-append-optional-json-value-pair $pairs $key $value)
-   (codex:js-repl-append-item $pairs (JsonPair $key $value)))
+   (case $value
+     ((CodexAbsent $pairs)
+      ($present (codex:js-repl-append-item
+                  $pairs
+                  (JsonPair $key $present))))))
 
 (= (codex:js-repl-json-object-optional-value $object $key)
    (case (json-object-get $object $key)
