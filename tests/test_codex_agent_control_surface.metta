@@ -2,6 +2,7 @@
 !(import! &self codex:agent_control)
 !(import! &self codex:agent_path)
 !(import! &self codex:agent_registry)
+!(import! &self codex:agent_role)
 !(import! &self codex:error)
 !(import! &self codex:protocol)
 !(import! &self codex:thread_rollout_truncation)
@@ -29,6 +30,25 @@
 
 (= (test:alpha-path)
    (codex:agent-path "/root/alpha"))
+
+(= (test:research-role-entry)
+   (codex:agent-role-entry
+     "researcher"
+     (codex:agent-role-config
+       "Research role"
+       CodexAbsent
+       ("Atlas"))))
+
+(= (test:prepared-spawn-check
+      $reserved-agent-path
+      $reserved-agent-nickname
+      $session-source
+      $metadata)
+   (CodexAgentControlPreparedSpawnCheck
+     $reserved-agent-path
+     $reserved-agent-nickname
+     $session-source
+     $metadata))
 
 (= (test:root-metadata)
    (codex:agent-registry-metadata
@@ -193,6 +213,180 @@
   (codex:agent-control-thread-spawn-depth
     (codex:session-source-cli))
   CodexAbsent)
+
+!(assertEqual
+  (case
+    (codex:agent-registry-reserve-spawn-slot
+      (codex:agent-registry-state-empty)
+      CodexAbsent)
+    (((CodexAgentRegistryReserveOk $slot-state $reservation)
+      (case
+        (codex:agent-control-prepare-thread-spawn
+          $slot-state
+          $reservation
+          ((test:research-role-entry))
+          (test:root-thread)
+          1
+          (test:scout-path)
+          "researcher"
+          CodexAbsent
+          0)
+        (((CodexAgentControlPrepareThreadSpawnOk
+            $prepared-state
+            $prepared-reservation
+            $session-source
+            $metadata)
+          (test:prepared-spawn-check
+            (codex:agent-registry-spawn-reservation-reserved-agent-path
+              $prepared-reservation)
+            (codex:agent-registry-spawn-reservation-reserved-agent-nickname
+              $prepared-reservation)
+            $session-source
+            $metadata))
+         ($other $other))))
+     ($other $other)))
+  (test:prepared-spawn-check
+    (test:scout-path)
+    "Atlas"
+    (codex:session-source-subagent
+      (codex:subagent-source-thread-spawn
+        (test:root-thread)
+        1
+        (test:scout-path)
+        "Atlas"
+        "researcher"))
+    (codex:agent-registry-metadata
+      CodexAbsent
+      (test:scout-path)
+      "Atlas"
+      "researcher"
+      CodexAbsent)))
+
+!(assertEqual
+  (case
+    (codex:agent-registry-reserve-spawn-slot
+      (codex:agent-registry-state-empty)
+      CodexAbsent)
+    (((CodexAgentRegistryReserveOk $slot-state $reservation)
+      (case
+        (codex:agent-control-prepare-thread-spawn
+          $slot-state
+          $reservation
+          ((test:research-role-entry))
+          (test:root-thread)
+          1
+          (test:scout-path)
+          "researcher"
+          CodexAbsent
+          0)
+        (((CodexAgentControlPrepareThreadSpawnOk
+            $prepared-state
+            $prepared-reservation
+            $session-source
+            $metadata)
+          (codex:agent-control-agent-id-for-path
+            $prepared-state
+            (codex:agent-path-root)))
+         ($other $other))))
+     ($other $other)))
+  (test:root-thread))
+
+!(assertEqual
+  (case
+    (codex:agent-registry-reserve-spawn-slot
+      (codex:agent-registry-state-empty)
+      CodexAbsent)
+    (((CodexAgentRegistryReserveOk $slot-state $reservation)
+      (case
+        (codex:agent-control-prepare-thread-spawn
+          $slot-state
+          $reservation
+          ()
+          (test:root-thread)
+          2
+          CodexAbsent
+          CodexAbsent
+          "Stored"
+          0)
+        (((CodexAgentControlPrepareThreadSpawnOk
+            $prepared-state
+            $prepared-reservation
+            $session-source
+            $metadata)
+          (test:prepared-spawn-check
+            (codex:agent-registry-spawn-reservation-reserved-agent-path
+              $prepared-reservation)
+            (codex:agent-registry-spawn-reservation-reserved-agent-nickname
+              $prepared-reservation)
+            $session-source
+            $metadata))
+         ($other $other))))
+     ($other $other)))
+  (test:prepared-spawn-check
+    CodexAbsent
+    "Stored"
+    (codex:session-source-subagent
+      (codex:subagent-source-thread-spawn
+        (test:root-thread)
+        2
+        CodexAbsent
+        "Stored"
+        CodexAbsent))
+    (codex:agent-registry-metadata
+      CodexAbsent
+      CodexAbsent
+      "Stored"
+      CodexAbsent
+      CodexAbsent)))
+
+!(assertEqual
+  (case
+    (codex:agent-registry-reserve-spawn-slot
+      (codex:agent-registry-state-empty)
+      CodexAbsent)
+    (((CodexAgentRegistryReserveOk $slot-state $reservation)
+      (case
+        (codex:agent-control-prepare-thread-spawn
+          $slot-state
+          $reservation
+          ()
+          (test:root-thread)
+          2
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent
+          0)
+        (((CodexAgentControlPrepareThreadSpawnOk
+            $prepared-state
+            $prepared-reservation
+            $session-source
+            $metadata)
+          (codex:agent-registry-spawn-reservation-reserved-agent-nickname
+            $prepared-reservation))
+         ($other $other))))
+     ($other $other)))
+  "Euclid")
+
+!(assertEqual
+  (case
+    (codex:agent-registry-reserve-spawn-slot
+      (test:registry-state)
+      CodexAbsent)
+    (((CodexAgentRegistryReserveOk $slot-state $reservation)
+      (codex:agent-control-prepare-thread-spawn
+        $slot-state
+        $reservation
+        ()
+        (test:root-thread)
+        1
+        (test:scout-path)
+        CodexAbsent
+        CodexAbsent
+        0))
+     ($other $other)))
+  (codex:agent-control-prepare-thread-spawn-err
+    (codex:error-unsupported-operation
+      "agent path `/root/scout` already exists")))
 
 !(assertEqual
   (codex:agent-control-keep-forked-rollout-item

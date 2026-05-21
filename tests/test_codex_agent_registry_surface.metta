@@ -55,6 +55,40 @@
      0
      0))
 
+(= (test:root-state-a-not-first)
+   (codex:agent-registry-state
+     ((codex:agent-registry-entry
+        "/root/scout"
+        (test:scout-metadata))
+      (codex:agent-registry-entry
+        "/root"
+        (codex:agent-registry-metadata
+          (test:thread-a)
+          (codex:agent-path-root)
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent)))
+     ()
+     0
+     1))
+
+(= (test:scout-path-not-first-state)
+   (codex:agent-registry-state
+     ((codex:agent-registry-entry
+        "/root"
+        (codex:agent-registry-metadata
+          (test:thread-a)
+          (codex:agent-path-root)
+          CodexAbsent
+          CodexAbsent
+          CodexAbsent))
+      (codex:agent-registry-entry
+        "/root/scout"
+        (test:scout-metadata)))
+     ()
+     0
+     1))
+
 (= (test:scout-committed-state)
    (codex:agent-registry-commit-reservation
      (test:reserved-path-state)
@@ -182,6 +216,14 @@
   (codex:agent-registry-agent-id-for-path
     (codex:agent-registry-register-root-thread
       (test:root-state-a)
+      (test:thread-b))
+    (codex:agent-path-root))
+  (test:thread-a))
+
+!(assertEqual
+  (codex:agent-registry-agent-id-for-path
+    (codex:agent-registry-register-root-thread
+      (test:root-state-a-not-first)
       (test:thread-b))
     (codex:agent-path-root))
   (test:thread-a))
@@ -350,6 +392,16 @@
 !(assertEqual
   (case (codex:agent-registry-reserve-agent-path-for-reservation
           (test:reserved-path-state)
+          (test:path-reservation)
+          (test:scout-path))
+    (((CodexAgentRegistryReserveErr $error)
+      $error)))
+  (codex:error-unsupported-operation
+    "agent path `/root/scout` already exists"))
+
+!(assertEqual
+  (case (codex:agent-registry-reserve-agent-path-for-reservation
+          (test:scout-path-not-first-state)
           (test:path-reservation)
           (test:scout-path))
     (((CodexAgentRegistryReserveErr $error)

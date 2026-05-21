@@ -470,18 +470,21 @@
 
 (= (codex:agent-registry-entry-list-has-key $entries $key)
    (let ($head $tail) (decons-atom $entries)
-     (if (== (codex:agent-registry-entry-key $head) $key)
-         True
-         (codex:agent-registry-entry-list-has-key $tail $key))))
+     (case (== (codex:agent-registry-entry-key $head) $key)
+       ((True True)
+        (False
+         (codex:agent-registry-entry-list-has-key $tail $key))))))
 
 (= (codex:agent-registry-entry-list-get () $key)
    CodexAbsent)
 
 (= (codex:agent-registry-entry-list-get $entries $key)
    (let ($head $tail) (decons-atom $entries)
-     (if (== (codex:agent-registry-entry-key $head) $key)
-         (codex:agent-registry-entry-metadata $head)
-         (codex:agent-registry-entry-list-get $tail $key))))
+     (case (== (codex:agent-registry-entry-key $head) $key)
+       ((True
+         (codex:agent-registry-entry-metadata $head))
+        (False
+         (codex:agent-registry-entry-list-get $tail $key))))))
 
 (= (codex:agent-registry-entry-list-put () $entry)
    ($entry))
@@ -497,10 +500,13 @@
 
 (= (codex:agent-registry-register-root-thread $state $thread-id)
    (let $agent-tree (codex:agent-registry-state-agent-tree $state)
-     (if (codex:agent-registry-entry-list-has-key
-           $agent-tree
-           (codex:agent-path-as-str (codex:agent-path-root)))
-         $state
+     (case
+       (codex:agent-registry-entry-list-has-key
+         $agent-tree
+         (codex:agent-path-as-str (codex:agent-path-root)))
+       ((True
+         $state)
+        (False
          (codex:agent-registry-state-with-agent-tree
            $state
            (cons-atom
@@ -512,16 +518,17 @@
                  CodexAbsent
                  CodexAbsent
                  CodexAbsent))
-             $agent-tree)))))
+             $agent-tree)))))))
 
 (= (codex:agent-registry-agent-id-for-path $state $agent-path)
-   (let $metadata
+   (case
      (codex:agent-registry-entry-list-get
        (codex:agent-registry-state-agent-tree $state)
        (codex:agent-path-as-str $agent-path))
-     (if (== $metadata CodexAbsent)
-         CodexAbsent
-         (codex:agent-registry-metadata-agent-id $metadata))))
+     ((CodexAbsent
+       CodexAbsent)
+      ($metadata
+       (codex:agent-registry-metadata-agent-id $metadata)))))
 
 (= (codex:agent-registry-agent-metadata-for-thread-from
       ()
@@ -709,10 +716,13 @@
 (= (codex:agent-registry-reserve-agent-path $state $agent-path)
    (let $key (codex:agent-path-as-str $agent-path)
      (let $agent-tree (codex:agent-registry-state-agent-tree $state)
-       (if (codex:agent-registry-entry-list-has-key $agent-tree $key)
+       (case
+         (codex:agent-registry-entry-list-has-key $agent-tree $key)
+         ((True
            (codex:agent-registry-err
              (codex:error-unsupported-operation
-               (format-args "agent path `{}` already exists" ($key))))
+               (format-args "agent path `{}` already exists" ($key)))))
+          (False
            (codex:agent-registry-ok
              (codex:agent-registry-state-with-agent-tree
                $state
@@ -725,7 +735,7 @@
                      CodexAbsent
                      CodexAbsent
                      CodexAbsent))
-                 $agent-tree)))))))
+                 $agent-tree)))))))))
 
 (= (codex:agent-registry-release-reserved-agent-path-from
       ()

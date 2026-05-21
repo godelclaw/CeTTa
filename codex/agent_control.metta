@@ -9,6 +9,7 @@
 ; - keep_forked_rollout_item
 ; - spawn_forked_thread rollout-history truncation/retention preparation
 ; - register_session_root
+; - prepare_thread_spawn pure registry/session-source preparation
 ; - get_agent_metadata registry forwarding
 ; - resolve_agent_reference path resolution and error mapping
 ; - format_environment_context_subagents formatting over materialized children
@@ -38,9 +39,14 @@
 ; - CeTTa callers often pass registry metadata through local helper equations.
 ;   Rust stores concrete structs, so this boundary forces metadata evaluation
 ;   while scanning registry entries before applying the same field tests.
+; - Rust prepare_thread_spawn reads Config and calls rand::choose through the
+;   registry reservation. This pure boundary receives ordered user role configs
+;   plus an in-bounds nickname choice index, preserving the same role candidate
+;   selection and registry state transitions at deterministic boundaries.
 
 !(import! &self agent_path)
 !(import! &self agent_registry)
+!(import! &self agent_role)
 !(import! &self error)
 !(import! &self list)
 !(import! &self protocol)
@@ -114,6 +120,142 @@
         $agent-status
         $last-task-message))
    $last-task-message)
+
+(= (codex:agent-control-prepare-thread-spawn-ok
+      $registry-state
+      $reservation
+      $session-source
+      $metadata)
+   (CodexAgentControlPrepareThreadSpawnOk
+     $registry-state
+     $reservation
+     $session-source
+     $metadata))
+
+(= (codex:agent-control-prepare-thread-spawn-err $error)
+   (CodexAgentControlPrepareThreadSpawnErr $error))
+
+(= (codex:agent-control-default-agent-nickname-list)
+   ("Euclid"
+    "Archimedes"
+    "Ptolemy"
+    "Hypatia"
+    "Avicenna"
+    "Averroes"
+    "Aquinas"
+    "Copernicus"
+    "Kepler"
+    "Galileo"
+    "Bacon"
+    "Descartes"
+    "Pascal"
+    "Fermat"
+    "Huygens"
+    "Leibniz"
+    "Newton"
+    "Halley"
+    "Euler"
+    "Lagrange"
+    "Laplace"
+    "Volta"
+    "Gauss"
+    "Ampere"
+    "Faraday"
+    "Darwin"
+    "Lovelace"
+    "Boole"
+    "Pasteur"
+    "Maxwell"
+    "Mendel"
+    "Curie"
+    "Planck"
+    "Tesla"
+    "Poincare"
+    "Noether"
+    "Hilbert"
+    "Einstein"
+    "Raman"
+    "Bohr"
+    "Turing"
+    "Hubble"
+    "Feynman"
+    "Franklin"
+    "McClintock"
+    "Meitner"
+    "Herschel"
+    "Linnaeus"
+    "Wegener"
+    "Chandrasekhar"
+    "Sagan"
+    "Goodall"
+    "Carson"
+    "Carver"
+    "Socrates"
+    "Plato"
+    "Aristotle"
+    "Epicurus"
+    "Cicero"
+    "Confucius"
+    "Mencius"
+    "Zeno"
+    "Locke"
+    "Hume"
+    "Kant"
+    "Hegel"
+    "Kierkegaard"
+    "Mill"
+    "Nietzsche"
+    "Peirce"
+    "James"
+    "Dewey"
+    "Russell"
+    "Popper"
+    "Sartre"
+    "Beauvoir"
+    "Arendt"
+    "Rawls"
+    "Singer"
+    "Anscombe"
+    "Parfit"
+    "Kuhn"
+    "Boyle"
+    "Hooke"
+    "Harvey"
+    "Dalton"
+    "Ohm"
+    "Helmholtz"
+    "Gibbs"
+    "Lorentz"
+    "Schrodinger"
+    "Heisenberg"
+    "Pauli"
+    "Dirac"
+    "Bernoulli"
+    "Godel"
+    "Nash"
+    "Banach"
+    "Ramanujan"
+    "Erdos"
+    "Jason"))
+
+(= (codex:agent-control-agent-nickname-candidates
+      $user-defined-roles
+      $agent-role)
+   (let $role-name
+     (codex:agent-role-select-role-name $agent-role)
+     (let $role-config
+       (codex:agent-role-resolve-role-config-with-built-ins
+         $user-defined-roles
+         $role-name)
+       (case $role-config
+         ((CodexAbsent
+           (codex:agent-control-default-agent-nickname-list))
+          ($config
+           (case (codex:agent-role-config-nickname-candidates $config)
+             ((CodexAbsent
+               (codex:agent-control-default-agent-nickname-list))
+              ($candidates
+               $candidates)))))))))
 
 (= (codex:agent-control-thread-spawn-parent-thread-id $session-source)
    (case (eval $session-source)
@@ -354,6 +496,108 @@
          $current-thread-id))
       ($parent-thread-id
        $registry-state))))
+
+(= (codex:agent-control-prepare-thread-spawn-root-state
+      $registry-state
+      $parent-thread-id
+      $depth)
+   (if (== $depth 1)
+       (codex:agent-registry-register-root-thread
+         $registry-state
+         $parent-thread-id)
+       $registry-state))
+
+(= (codex:agent-control-prepare-thread-spawn-reserve-path
+      $registry-state
+      $reservation
+      $agent-path)
+   (case $agent-path
+     ((CodexAbsent
+       (codex:agent-registry-reserve-ok $registry-state $reservation))
+      ($path
+       (codex:agent-registry-reserve-agent-path-for-reservation
+         $registry-state
+         $reservation
+         $path)))))
+
+(= (codex:agent-control-thread-spawn-session-source
+      $parent-thread-id
+      $depth
+      $agent-path
+      $agent-nickname
+      $agent-role)
+   (codex:session-source-subagent
+     (codex:subagent-source-thread-spawn
+       $parent-thread-id
+       $depth
+       $agent-path
+       $agent-nickname
+       $agent-role)))
+
+(= (codex:agent-control-thread-spawn-metadata
+      $agent-path
+      $agent-nickname
+      $agent-role)
+   (codex:agent-registry-metadata
+     CodexAbsent
+     $agent-path
+     $agent-nickname
+     $agent-role
+     CodexAbsent))
+
+(= (codex:agent-control-prepare-thread-spawn
+      $registry-state
+      $reservation
+      $user-defined-roles
+      $parent-thread-id
+      $depth
+      $agent-path
+      $agent-role
+      $preferred-agent-nickname
+      $choice-index)
+   (let $root-state
+     (codex:agent-control-prepare-thread-spawn-root-state
+       $registry-state
+       $parent-thread-id
+       $depth)
+     (case
+       (codex:agent-control-prepare-thread-spawn-reserve-path
+         $root-state
+         $reservation
+         $agent-path)
+       (((CodexAgentRegistryReserveErr $error)
+         (codex:agent-control-prepare-thread-spawn-err $error))
+        ((CodexAgentRegistryReserveOk $path-state $path-reservation)
+         (case
+           (codex:agent-registry-reserve-agent-nickname-with-preference
+             $path-state
+             $path-reservation
+             (codex:agent-control-agent-nickname-candidates
+               $user-defined-roles
+               $agent-role)
+             $preferred-agent-nickname
+             $choice-index)
+           (((CodexAgentRegistryReserveErr $error)
+             (codex:agent-control-prepare-thread-spawn-err $error))
+            ((CodexAgentRegistryReserveOk
+               $nickname-state
+               $nickname-reservation)
+             (let $agent-nickname
+               (codex:agent-registry-spawn-reservation-reserved-agent-nickname
+                 $nickname-reservation)
+               (codex:agent-control-prepare-thread-spawn-ok
+                 $nickname-state
+                 $nickname-reservation
+                 (codex:agent-control-thread-spawn-session-source
+                   $parent-thread-id
+                   $depth
+                   $agent-path
+                   $agent-nickname
+                   $agent-role)
+                 (codex:agent-control-thread-spawn-metadata
+                   $agent-path
+                   $agent-nickname
+                   $agent-role)))))))))))
 
 (= (codex:agent-control-get-agent-metadata $registry-state $agent-id)
    (codex:agent-control-agent-metadata-for-thread
