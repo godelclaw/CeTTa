@@ -46,6 +46,8 @@
 !(import! &self unified_exec_core)
 !(import! &self unified_exec_open_session)
 !(import! &self unified_exec_prepared_process)
+!(import! &self codex:output_truncation)
+!(import! &self codex:string_truncate)
 
 (= (codex:unified-exec-early-exit-grace-period-ms)
    150)
@@ -1061,81 +1063,38 @@
      (format-args "{}" ($value))))
 
 (= (codex:unified-exec-process-approx-bytes-for-tokens $tokens)
-   (* $tokens 4))
+   (codex:output-truncation-approx-bytes-for-tokens $tokens))
 
 (= (codex:unified-exec-process-approx-tokens-from-byte-count $bytes)
-   (trunc-math (ceil-math (/ $bytes 4))))
+   (codex:output-truncation-approx-tokens-from-byte-count $bytes))
 
 (= (codex:unified-exec-process-count-lines $text)
-   (if (== $text "")
-       0
-       (let $parts (str-split "\n" $text)
-         (if (str-ends-with? $text "\n")
-             (- (list:len $parts) 1)
-             (list:len $parts)))))
+   (codex:output-truncation-count-lines $text))
 
 (= (codex:unified-exec-process-token-truncation-marker $removed-bytes)
-   (str-concat
-     "…"
-     (str-concat
-       (codex:unified-exec-process-number-text
-         (codex:unified-exec-process-approx-tokens-from-byte-count
-           $removed-bytes))
-       " tokens truncated…")))
+   (codex:string-truncate-format-truncation-marker
+     True
+     (codex:unified-exec-process-approx-tokens-from-byte-count
+       $removed-bytes)))
 
 (= (codex:unified-exec-process-truncate-middle-with-token-budget
       $text
       $max-tokens)
-   (let $max-bytes
-     (codex:unified-exec-process-approx-bytes-for-tokens
-       $max-tokens)
-     (codex:unified-exec-process-truncate-middle-with-token-budget-bytes
-       $text
-       $max-bytes)))
+   (let $policy
+     (codex:output-truncation-policy-tokens $max-tokens)
+     (codex:output-truncation-truncate-text $text $policy)))
 
 (= (codex:unified-exec-process-truncate-middle-with-token-budget-bytes
       $text
       $max-bytes)
-   (if (== $text "")
-       ""
-       (if (<= (str-length $text) $max-bytes)
-           $text
-           (if (== $max-bytes 0)
-               (codex:unified-exec-process-token-truncation-marker
-                 (str-length $text))
-               (let $text-len (str-length $text)
-                 (let $left-budget (trunc-math (/ $max-bytes 2))
-                   (let $right-budget (- $max-bytes $left-budget)
-                     (case (str-split-middle-bytes
-                             $text
-                             $left-budget
-                             $right-budget)
-                       (((StrMiddleSplit
-                           $removed-chars
-                           $prefix
-                           $suffix)
-                         (str-concat
-                           $prefix
-                           (str-concat
-                             (codex:unified-exec-process-token-truncation-marker
-                               (- $text-len $max-bytes))
-                             $suffix))))))))))))
+   (codex:string-truncate-with-byte-estimate $text $max-bytes True))
 
 (= (codex:unified-exec-process-formatted-truncate-text
       $text
       $max-tokens)
-   (let $max-bytes
-     (codex:unified-exec-process-approx-bytes-for-tokens
-       $max-tokens)
-     (if (<= (str-length $text) $max-bytes)
-         $text
-         (str-concat
-           (format-args
-             "Total output lines: {}\n\n"
-             ((codex:unified-exec-process-count-lines $text)))
-           (codex:unified-exec-process-truncate-middle-with-token-budget
-             $text
-             $max-tokens)))))
+   (let $policy
+     (codex:output-truncation-policy-tokens $max-tokens)
+     (codex:output-truncation-formatted-truncate-text $text $policy)))
 
 (= (codex:unified-exec-process-exit-code-or-default $exit-code)
    (if (== $exit-code CodexAbsent)

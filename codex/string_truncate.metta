@@ -101,6 +101,10 @@
    (codex:string-truncate-decimal-string-to-number
      (codex:string-truncate-number-text $value)))
 
+(= (codex:string-truncate-floor-div $numerator $denominator)
+   (let $remainder (% $numerator $denominator)
+     (/ (- $numerator $remainder) $denominator)))
+
 (= (codex:string-truncate-approx-token-count $text)
    (codex:string-truncate-approx-tokens-from-byte-count
      (str-length $text)))
@@ -109,17 +113,14 @@
    (* $tokens (codex:string-truncate-approx-bytes-per-token)))
 
 (= (codex:string-truncate-approx-tokens-from-byte-count $bytes)
-   (codex:string-truncate-normalize-whole-number
-     (trunc-math
-       (/
-         (+ $bytes
-            (- (codex:string-truncate-approx-bytes-per-token) 1))
-         (codex:string-truncate-approx-bytes-per-token)))))
+   (codex:string-truncate-floor-div
+     (+ $bytes
+        (- (codex:string-truncate-approx-bytes-per-token) 1))
+     (codex:string-truncate-approx-bytes-per-token)))
 
 (= (codex:string-truncate-split-budget $budget)
    (let $left
-     (codex:string-truncate-normalize-whole-number
-       (trunc-math (/ $budget 2)))
+     (codex:string-truncate-floor-div $budget 2)
      (CodexStringTruncateSplitBudget $left (- $budget $left))))
 
 (= (codex:string-truncate-split-string

@@ -72,6 +72,8 @@
 !(import! &self str)
 !(import! &self str_middle)
 !(import! &self system)
+!(import! &self codex:output_truncation)
+!(import! &self codex:string_truncate)
 
 ; `tools` only needs a tiny protocol value subset here. Importing the full
 ; protocol surface in this module perturbs path normalization through the
@@ -1223,15 +1225,13 @@
    (codex:decimal-string-to-number (codex:number-text $value)))
 
 (= (codex:approx-token-count $text)
-   (codex:normalize-whole-number
-     (ceil-math (/ (str-length $text) 4))))
+   (codex:output-truncation-approx-token-count $text))
 
 (= (codex:approx-bytes-for-tokens $tokens)
-   (* $tokens 4))
+   (codex:output-truncation-approx-bytes-for-tokens $tokens))
 
 (= (codex:approx-tokens-from-byte-count $bytes)
-   (codex:normalize-whole-number
-     (ceil-math (/ $bytes 4))))
+   (codex:output-truncation-approx-tokens-from-byte-count $bytes))
 
 (= (codex:is-string-contains $text $needle)
    (case (str-find $text $needle)
@@ -1239,51 +1239,27 @@
       ($index True))))
 
 (= (codex:count-lines $text)
-   (if (== $text "")
-       0
-       (let $parts (str-split "\n" $text)
-         (if (str-ends-with? $text "\n")
-             (- (list:len $parts) 1)
-             (list:len $parts)))))
+   (codex:output-truncation-count-lines $text))
 
 (= (codex:token-truncation-marker $removed-bytes)
-   (str-concat
-     "…"
-     (str-concat
-       (codex:number-text
-         (codex:approx-tokens-from-byte-count $removed-bytes))
-       " tokens truncated…")))
+   (codex:string-truncate-format-truncation-marker
+     True
+     (codex:approx-tokens-from-byte-count $removed-bytes)))
 
 (= (codex:truncate-middle-with-token-budget $text $max-tokens)
-   (let $max-bytes (codex:approx-bytes-for-tokens $max-tokens)
-     (codex:truncate-middle-with-token-budget-bytes $text $max-bytes)))
+   (let $policy
+     (codex:output-truncation-policy-tokens $max-tokens)
+     (codex:output-truncation-truncate-text $text $policy)))
 
 (= (codex:truncate-middle-with-token-budget-bytes $text $max-bytes)
-   (if (== $text "")
-       ""
-       (if (<= (str-length $text) $max-bytes)
-           $text
-           (if (== $max-bytes 0)
-               (codex:token-truncation-marker (str-length $text))
-               (let $text-len (str-length $text)
-                 (let $left-budget (trunc-math (/ $max-bytes 2))
-                   (let $right-budget (- $max-bytes $left-budget)
-                     (case (str-split-middle-bytes $text $left-budget $right-budget)
-                       (((StrMiddleSplit $removed-chars $prefix $suffix)
-                         (str-concat
-                           $prefix
-                           (str-concat
-                             (codex:token-truncation-marker
-                               (- $text-len $max-bytes))
-                             $suffix))))))))))))
+   (codex:string-truncate-with-byte-estimate $text $max-bytes True))
 
 (= (codex:format-truncated-output $text $max-output-tokens)
-   (let $max-bytes (codex:approx-bytes-for-tokens $max-output-tokens)
-     (if (<= (str-length $text) $max-bytes)
-         $text
-         (str-concat
-           (format-args "Total output lines: {}\n\n" ((codex:count-lines $text)))
-           (codex:truncate-middle-with-token-budget $text $max-output-tokens)))))
+   (let $policy
+     (codex:output-truncation-policy-tokens $max-output-tokens)
+     (codex:output-truncation-formatted-truncate-text
+       $text
+       $policy)))
 
 (= (codex:pad-left-3 $text)
    (if (== (str-length $text) 0)
