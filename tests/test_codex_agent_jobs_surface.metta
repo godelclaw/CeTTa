@@ -99,6 +99,131 @@
   (codex:agent-job-ok 60))
 
 !(assertEqual
+  (codex:parse-spawn-agents-on-csv-args
+    "{\"csv_path\":\"input.csv\",\"instruction\":\"Review {name}\",\"id_column\":\"id\",\"output_csv_path\":\"out.csv\",\"output_schema\":{\"type\":\"object\"},\"max_concurrency\":4,\"max_workers\":2,\"max_runtime_seconds\":90}")
+  (codex:agent-job-ok
+    (codex:spawn-agents-on-csv-args
+      "input.csv"
+      "Review {name}"
+      "id"
+      "out.csv"
+      (JsonObject ((JsonPair "type" (JsonString "object"))))
+      4
+      2
+      90)))
+
+!(assertEqual
+  (codex:parse-spawn-agents-on-csv-args
+    "{\"csv_path\":\"input.csv\",\"instruction\":\"Review\",\"id_column\":null,\"output_schema\":null}")
+  (codex:agent-job-ok
+    (codex:spawn-agents-on-csv-args
+      "input.csv"
+      "Review"
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent)))
+
+!(assertEqual
+  (case (codex:parse-spawn-agents-on-csv-args
+          "{\"csv_path\":\"input.csv\",\"instruction\":\"Review\",\"max_concurrency\":4,\"max_workers\":2}")
+    (((CodexAgentJobOk $args)
+      (codex:spawn-agents-on-csv-args-requested-concurrency $args))))
+  4)
+
+!(assertEqual
+  (case (codex:parse-spawn-agents-on-csv-args
+          "{\"csv_path\":\"input.csv\",\"instruction\":\"Review\",\"max_workers\":2}")
+    (((CodexAgentJobOk $args)
+      (codex:spawn-agents-on-csv-args-requested-concurrency $args))))
+  2)
+
+!(assertEqual
+  (codex:parse-spawn-agents-on-csv-args "{\"instruction\":\"Review\"}")
+  (codex:agent-job-err "missing field `csv_path`"))
+
+!(assertEqual
+  (codex:parse-spawn-agents-on-csv-args "\"oops\"")
+  (codex:agent-job-err "invalid type: expected object"))
+
+!(assertEqual
+  (codex:parse-spawn-agents-on-csv-args
+    "{\"csv_path\":\"input.csv\",\"instruction\":\"Review\",\"max_concurrency\":-1}")
+  (codex:agent-job-err
+    "invalid type for `max_concurrency`; expected unsigned integer"))
+
+!(assertEqual
+  (codex:parse-spawn-agents-on-csv-args
+    "{\"csv_path\":\"input.csv\",\"instruction\":\"Review\",\"max_runtime_seconds\":18446744073709551616}")
+  (codex:agent-job-err
+    "invalid type for `max_runtime_seconds`; expected unsigned integer"))
+
+!(assertEqual
+  (codex:parse-spawn-agents-on-csv-args
+    "{\"csv_path\":\"input.csv\",\"csv_path\":\"again.csv\",\"instruction\":\"Review\"}")
+  (codex:agent-job-err "duplicate field `csv_path`"))
+
+!(assertEqual
+  (case (codex:parse-spawn-agents-on-csv-args
+          "{\"csv_path\":\"input.csv\",\"instruction\":\"   \"}")
+    (((CodexAgentJobOk $args)
+      (codex:validate-spawn-agents-on-csv-args $args))))
+  (codex:agent-job-err
+    (codex:function-call-error-respond-to-model
+      "instruction must be non-empty")))
+
+!(assertEqual
+  (codex:agent-job-function-arguments-error "missing field `csv_path`")
+  (codex:function-call-error-respond-to-model
+    "failed to parse function arguments: missing field `csv_path`"))
+
+!(assertEqual
+  (codex:parse-report-agent-job-result-args
+    "{\"job_id\":\"job-1\",\"item_id\":\"item-1\",\"result\":{\"answer\":42},\"stop\":true}")
+  (codex:agent-job-ok
+    (codex:report-agent-job-result-args
+      "job-1"
+      "item-1"
+      (JsonObject ((JsonPair "answer" (JsonNumber "42"))))
+      True)))
+
+!(assertEqual
+  (codex:parse-report-agent-job-result-args
+    "{\"job_id\":\"job-1\",\"item_id\":\"item-1\",\"result\":{\"answer\":42},\"stop\":null}")
+  (codex:agent-job-ok
+    (codex:report-agent-job-result-args
+      "job-1"
+      "item-1"
+      (JsonObject ((JsonPair "answer" (JsonNumber "42"))))
+      CodexAbsent)))
+
+!(assertEqual
+  (codex:parse-report-agent-job-result-args
+    "{\"job_id\":\"job-1\",\"item_id\":\"item-1\"}")
+  (codex:agent-job-err "missing field `result`"))
+
+!(assertEqual
+  (codex:parse-report-agent-job-result-args
+    "{\"job_id\":\"job-1\",\"item_id\":\"item-1\",\"result\":null}")
+  (codex:agent-job-ok
+    (codex:report-agent-job-result-args
+      "job-1"
+      "item-1"
+      JsonNull
+      CodexAbsent)))
+
+!(assertEqual
+  (case (codex:parse-report-agent-job-result-args
+          "{\"job_id\":\"job-1\",\"item_id\":\"item-1\",\"result\":\"bad\"}")
+    (((CodexAgentJobOk $args)
+      (codex:validate-report-agent-job-result-args $args))))
+  (codex:agent-job-err
+    (codex:function-call-error-respond-to-model
+      "result must be a JSON object")))
+
+!(assertEqual
   (codex:agent-job-render-instruction-template
     "Hello {name}; raw {{keep}}; score {score}; nested {payload}"
     (JsonObject

@@ -15,6 +15,8 @@
 ; - default_output_csv_path
 ; - parse_csv
 ; - CSV row to AgentJobItemCreateParams conversion
+; - SpawnAgentsOnCsvArgs / ReportAgentJobResultArgs parsing and immediate
+;   handler validation
 ; - AgentJob result/progress JSON projections
 ; - build_worker_prompt
 ; - value_to_csv_string / csv_escape / render_job_csv
@@ -47,18 +49,521 @@
 ;   CeTTa numbers are unbounded here, so `(+)` matches Rust until the practical
 ;   `usize` saturation boundary and avoids introducing an artificial machine
 ;   integer limit in the pure helper.
+; - Rust `parse_arguments<T>` reports exact `serde_json` diagnostics for every
+;   target type. This slice keeps the same required/optional/null/value
+;   acceptance rules for the two agent-job structs, but uses explicit
+;   field-local diagnostic strings so the pure CeTTa decoder remains auditable.
 
 !(import! &self function_tool)
 !(import! &self json)
 !(import! &self list)
 !(import! &self path)
 !(import! &self str)
+!(import! &self codex:tool_handler_common)
 
 (= (codex:agent-job-ok $value)
    (CodexAgentJobOk $value))
 
 (= (codex:agent-job-err $error)
    (CodexAgentJobErr $error))
+
+(= (codex:spawn-agents-on-csv-args
+      $csv-path
+      $instruction
+      $id-column
+      $output-csv-path
+      $output-schema
+      $max-concurrency
+      $max-workers
+      $max-runtime-seconds)
+   (CodexSpawnAgentsOnCsvArgs
+     $csv-path
+     $instruction
+     $id-column
+     $output-csv-path
+     $output-schema
+     $max-concurrency
+     $max-workers
+     $max-runtime-seconds))
+
+(= (codex:spawn-agents-on-csv-args-csv-path
+      (CodexSpawnAgentsOnCsvArgs
+        $csv-path
+        $instruction
+        $id-column
+        $output-csv-path
+        $output-schema
+        $max-concurrency
+        $max-workers
+        $max-runtime-seconds))
+   $csv-path)
+
+(= (codex:spawn-agents-on-csv-args-instruction
+      (CodexSpawnAgentsOnCsvArgs
+        $csv-path
+        $instruction
+        $id-column
+        $output-csv-path
+        $output-schema
+        $max-concurrency
+        $max-workers
+        $max-runtime-seconds))
+   $instruction)
+
+(= (codex:spawn-agents-on-csv-args-id-column
+      (CodexSpawnAgentsOnCsvArgs
+        $csv-path
+        $instruction
+        $id-column
+        $output-csv-path
+        $output-schema
+        $max-concurrency
+        $max-workers
+        $max-runtime-seconds))
+   $id-column)
+
+(= (codex:spawn-agents-on-csv-args-output-csv-path
+      (CodexSpawnAgentsOnCsvArgs
+        $csv-path
+        $instruction
+        $id-column
+        $output-csv-path
+        $output-schema
+        $max-concurrency
+        $max-workers
+        $max-runtime-seconds))
+   $output-csv-path)
+
+(= (codex:spawn-agents-on-csv-args-output-schema
+      (CodexSpawnAgentsOnCsvArgs
+        $csv-path
+        $instruction
+        $id-column
+        $output-csv-path
+        $output-schema
+        $max-concurrency
+        $max-workers
+        $max-runtime-seconds))
+   $output-schema)
+
+(= (codex:spawn-agents-on-csv-args-max-concurrency
+      (CodexSpawnAgentsOnCsvArgs
+        $csv-path
+        $instruction
+        $id-column
+        $output-csv-path
+        $output-schema
+        $max-concurrency
+        $max-workers
+        $max-runtime-seconds))
+   $max-concurrency)
+
+(= (codex:spawn-agents-on-csv-args-max-workers
+      (CodexSpawnAgentsOnCsvArgs
+        $csv-path
+        $instruction
+        $id-column
+        $output-csv-path
+        $output-schema
+        $max-concurrency
+        $max-workers
+        $max-runtime-seconds))
+   $max-workers)
+
+(= (codex:spawn-agents-on-csv-args-max-runtime-seconds
+      (CodexSpawnAgentsOnCsvArgs
+        $csv-path
+        $instruction
+        $id-column
+        $output-csv-path
+        $output-schema
+        $max-concurrency
+        $max-workers
+        $max-runtime-seconds))
+   $max-runtime-seconds)
+
+(= (codex:spawn-agents-on-csv-args-requested-concurrency
+      (CodexSpawnAgentsOnCsvArgs
+        $csv-path
+        $instruction
+        $id-column
+        $output-csv-path
+        $output-schema
+        $max-concurrency
+        $max-workers
+        $max-runtime-seconds))
+   (if (== $max-concurrency CodexAbsent)
+       $max-workers
+       $max-concurrency))
+
+(= (codex:report-agent-job-result-args $job-id $item-id $result $stop)
+   (CodexReportAgentJobResultArgs $job-id $item-id $result $stop))
+
+(= (codex:report-agent-job-result-args-job-id
+      (CodexReportAgentJobResultArgs $job-id $item-id $result $stop))
+   $job-id)
+
+(= (codex:report-agent-job-result-args-item-id
+      (CodexReportAgentJobResultArgs $job-id $item-id $result $stop))
+   $item-id)
+
+(= (codex:report-agent-job-result-args-result
+      (CodexReportAgentJobResultArgs $job-id $item-id $result $stop))
+   $result)
+
+(= (codex:report-agent-job-result-args-stop
+      (CodexReportAgentJobResultArgs $job-id $item-id $result $stop))
+   $stop)
+
+(= (codex:agent-job-function-arguments-error $message)
+   (codex:function-call-error-respond-to-model
+     (codex:function-arguments-parse-error-message $message)))
+
+(= (codex:agent-job-json-field-missing-error $key)
+   (format-args "missing field `{}`" ($key)))
+
+(= (codex:agent-job-json-field-type-error $key $expected)
+   (format-args "invalid type for `{}`; expected {}" ($key $expected)))
+
+(= (codex:agent-job-json-field-missing)
+   (CodexAgentJobJsonFieldMissing))
+
+(= (codex:agent-job-json-field-value $value)
+   (CodexAgentJobJsonFieldValue $value))
+
+(= (codex:agent-job-json-field-duplicate $key)
+   (CodexAgentJobJsonFieldDuplicate $key))
+
+(= (codex:agent-job-json-field-duplicate-error $key)
+   (format-args "duplicate field `{}`" ($key)))
+
+(= (codex:agent-job-json-object-field-from $pairs $key)
+   (codex:agent-job-json-object-field-from-with-found
+     $pairs
+     $key
+     (codex:agent-job-json-field-missing)))
+
+(= (codex:agent-job-json-object-field-from-with-found $pairs $key $found)
+   (if (== $pairs ())
+       $found
+       (let ($head $tail) (decons-atom $pairs)
+         (case $head
+           (((JsonPair $candidate $value)
+             (if (== $candidate $key)
+                 (case $found
+                   (((CodexAgentJobJsonFieldMissing)
+                     (codex:agent-job-json-object-field-from-with-found
+                       $tail
+                       $key
+                       (codex:agent-job-json-field-value
+                         (json-materialize-value $value))))
+                    ((CodexAgentJobJsonFieldValue $old-value)
+                     (codex:agent-job-json-field-duplicate $key))
+                    ((CodexAgentJobJsonFieldDuplicate $dup-key)
+                     (codex:agent-job-json-field-duplicate $dup-key))))
+                 (codex:agent-job-json-object-field-from-with-found
+                   $tail
+                   $key
+                   $found))))))))
+
+(= (codex:agent-job-json-object-field (JsonObject $pairs) $key)
+   (codex:agent-job-json-object-field-from $pairs $key))
+
+(= (codex:agent-job-json-object-required-string-result $object $key)
+   (case (codex:agent-job-json-object-field $object $key)
+     (((CodexAgentJobJsonFieldMissing)
+       (codex:agent-job-err
+         (codex:agent-job-json-field-missing-error $key)))
+      ((CodexAgentJobJsonFieldDuplicate $dup-key)
+       (codex:agent-job-err
+         (codex:agent-job-json-field-duplicate-error $dup-key)))
+      ((CodexAgentJobJsonFieldValue (JsonString $text))
+       (codex:agent-job-ok $text))
+      ((CodexAgentJobJsonFieldValue $other)
+       (codex:agent-job-err
+         (codex:agent-job-json-field-type-error $key "string"))))))
+
+(= (codex:agent-job-json-object-required-value-result $object $key)
+   (case (codex:agent-job-json-object-field $object $key)
+     (((CodexAgentJobJsonFieldMissing)
+       (codex:agent-job-err
+         (codex:agent-job-json-field-missing-error $key)))
+      ((CodexAgentJobJsonFieldDuplicate $dup-key)
+       (codex:agent-job-err
+         (codex:agent-job-json-field-duplicate-error $dup-key)))
+      ((CodexAgentJobJsonFieldValue $value)
+       (codex:agent-job-ok $value)))))
+
+(= (codex:agent-job-json-object-optional-value-result $object $key)
+   (case (codex:agent-job-json-object-field $object $key)
+     (((CodexAgentJobJsonFieldMissing)
+       (codex:agent-job-ok CodexAbsent))
+      ((CodexAgentJobJsonFieldDuplicate $dup-key)
+       (codex:agent-job-err
+         (codex:agent-job-json-field-duplicate-error $dup-key)))
+      ((CodexAgentJobJsonFieldValue JsonNull)
+       (codex:agent-job-ok CodexAbsent))
+      ((CodexAgentJobJsonFieldValue $value)
+       (codex:agent-job-ok $value)))))
+
+(= (codex:agent-job-json-object-optional-string-result $object $key)
+   (case (codex:agent-job-json-object-field $object $key)
+     (((CodexAgentJobJsonFieldMissing)
+       (codex:agent-job-ok CodexAbsent))
+      ((CodexAgentJobJsonFieldDuplicate $dup-key)
+       (codex:agent-job-err
+         (codex:agent-job-json-field-duplicate-error $dup-key)))
+      ((CodexAgentJobJsonFieldValue JsonNull)
+       (codex:agent-job-ok CodexAbsent))
+      ((CodexAgentJobJsonFieldValue (JsonString $text))
+       (codex:agent-job-ok $text))
+      ((CodexAgentJobJsonFieldValue $other)
+       (codex:agent-job-err
+         (codex:agent-job-json-field-type-error $key "string"))))))
+
+(= (codex:agent-job-json-object-optional-bool-result $object $key)
+   (case (codex:agent-job-json-object-field $object $key)
+     (((CodexAgentJobJsonFieldMissing)
+       (codex:agent-job-ok CodexAbsent))
+      ((CodexAgentJobJsonFieldDuplicate $dup-key)
+       (codex:agent-job-err
+         (codex:agent-job-json-field-duplicate-error $dup-key)))
+      ((CodexAgentJobJsonFieldValue JsonNull)
+       (codex:agent-job-ok CodexAbsent))
+      ((CodexAgentJobJsonFieldValue (JsonBool $value))
+       (codex:agent-job-ok $value))
+      ((CodexAgentJobJsonFieldValue $other)
+       (codex:agent-job-err
+         (codex:agent-job-json-field-type-error $key "bool"))))))
+
+(= (codex:agent-job-decimal-digit-value-result $char)
+   (case $char
+     (("0" (codex:agent-job-ok 0))
+      ("1" (codex:agent-job-ok 1))
+      ("2" (codex:agent-job-ok 2))
+      ("3" (codex:agent-job-ok 3))
+      ("4" (codex:agent-job-ok 4))
+      ("5" (codex:agent-job-ok 5))
+      ("6" (codex:agent-job-ok 6))
+      ("7" (codex:agent-job-ok 7))
+      ("8" (codex:agent-job-ok 8))
+      ("9" (codex:agent-job-ok 9))
+      ($other
+       (codex:agent-job-err $other)))))
+
+(= (codex:agent-job-parse-unsigned-integer-text-from $key $text $index $acc)
+   (if (== $index (str-length $text))
+       (codex:agent-job-ok $acc)
+       (let $char (str-slice $text $index (+ $index 1))
+         (case (codex:agent-job-decimal-digit-value-result $char)
+           (((CodexAgentJobOk $digit)
+             (codex:agent-job-parse-unsigned-integer-text-from
+               $key
+               $text
+               (+ $index 1)
+               (+ (* $acc 10) $digit)))
+            ((CodexAgentJobErr $bad-char)
+             (codex:agent-job-err
+               (codex:agent-job-json-field-type-error
+                 $key
+                 "unsigned integer"))))))))
+
+(= (codex:agent-job-parse-unsigned-integer-text $key $text)
+   (let $number-text (format-args "{}" ($text))
+     (if (== $number-text "")
+         (codex:agent-job-err
+           (codex:agent-job-json-field-type-error $key "unsigned integer"))
+         (case (codex:agent-job-parse-unsigned-integer-text-from
+                 $key
+                 $number-text
+                 0
+                 0)
+           (((CodexAgentJobErr $message)
+             (codex:agent-job-err $message))
+            ((CodexAgentJobOk $value)
+             (if (codex:agent-job-unsigned-integer-text-exceeds-uint64
+                   $number-text)
+                 (codex:agent-job-err
+                   (codex:agent-job-json-field-type-error
+                     $key
+                     "unsigned integer"))
+                 (codex:agent-job-ok $value))))))))
+
+(= (codex:agent-job-uint64-max-text)
+   "18446744073709551615")
+
+(= (codex:agent-job-unsigned-integer-text-exceeds-uint64 $text)
+   (let $text-length (str-length $text)
+     (let $max-text (codex:agent-job-uint64-max-text)
+       (let $max-length (str-length $max-text)
+         (if (> $text-length $max-length)
+             True
+             (if (< $text-length $max-length)
+                 False
+                 (codex:agent-job-decimal-text-greater-than
+                   $text
+                   $max-text
+                   0)))))))
+
+(= (codex:agent-job-decimal-text-greater-than $left $right $index)
+   (if (== $index (str-length $left))
+       False
+       (let $left-char (str-slice $left $index (+ $index 1))
+         (let $right-char (str-slice $right $index (+ $index 1))
+           (case (codex:agent-job-decimal-digit-value-result $left-char)
+             (((CodexAgentJobOk $left-digit)
+               (case (codex:agent-job-decimal-digit-value-result $right-char)
+                 (((CodexAgentJobOk $right-digit)
+                   (if (> $left-digit $right-digit)
+                       True
+                       (if (< $left-digit $right-digit)
+                           False
+                           (codex:agent-job-decimal-text-greater-than
+                             $left
+                             $right
+                             (+ $index 1))))))))))))))
+
+(= (codex:agent-job-json-object-optional-unsigned-integer-result $object $key)
+   (case (codex:agent-job-json-object-field $object $key)
+     (((CodexAgentJobJsonFieldMissing)
+       (codex:agent-job-ok CodexAbsent))
+      ((CodexAgentJobJsonFieldDuplicate $dup-key)
+       (codex:agent-job-err
+         (codex:agent-job-json-field-duplicate-error $dup-key)))
+      ((CodexAgentJobJsonFieldValue JsonNull)
+       (codex:agent-job-ok CodexAbsent))
+      ((CodexAgentJobJsonFieldValue (JsonNumber $text))
+       (codex:agent-job-parse-unsigned-integer-text $key $text))
+      ((CodexAgentJobJsonFieldValue $other)
+       (codex:agent-job-err
+         (codex:agent-job-json-field-type-error
+           $key
+           "unsigned integer"))))))
+
+(= (codex:parse-spawn-agents-on-csv-args-object $object)
+   (case (codex:agent-job-json-object-required-string-result
+           $object
+           "csv_path")
+     (((CodexAgentJobErr $message)
+       (codex:agent-job-err $message))
+      ((CodexAgentJobOk $csv-path)
+       (case (codex:agent-job-json-object-required-string-result
+               $object
+               "instruction")
+         (((CodexAgentJobErr $message)
+           (codex:agent-job-err $message))
+          ((CodexAgentJobOk $instruction)
+           (case (codex:agent-job-json-object-optional-string-result
+                   $object
+                   "id_column")
+             (((CodexAgentJobErr $message)
+               (codex:agent-job-err $message))
+              ((CodexAgentJobOk $id-column)
+               (case (codex:agent-job-json-object-optional-string-result
+                       $object
+                       "output_csv_path")
+                 (((CodexAgentJobErr $message)
+                   (codex:agent-job-err $message))
+                  ((CodexAgentJobOk $output-csv-path)
+                   (case (codex:agent-job-json-object-optional-value-result
+                           $object
+                           "output_schema")
+                     (((CodexAgentJobErr $message)
+                       (codex:agent-job-err $message))
+                      ((CodexAgentJobOk $output-schema)
+                       (case (codex:agent-job-json-object-optional-unsigned-integer-result
+                               $object
+                               "max_concurrency")
+                         (((CodexAgentJobErr $message)
+                           (codex:agent-job-err $message))
+                          ((CodexAgentJobOk $max-concurrency)
+                           (case (codex:agent-job-json-object-optional-unsigned-integer-result
+                                   $object
+                                   "max_workers")
+                             (((CodexAgentJobErr $message)
+                               (codex:agent-job-err $message))
+                              ((CodexAgentJobOk $max-workers)
+                               (case (codex:agent-job-json-object-optional-unsigned-integer-result
+                                       $object
+                                       "max_runtime_seconds")
+                                 (((CodexAgentJobErr $message)
+                                   (codex:agent-job-err $message))
+                                  ((CodexAgentJobOk $max-runtime-seconds)
+                                   (codex:agent-job-ok
+                                     (codex:spawn-agents-on-csv-args
+                                       $csv-path
+                                       $instruction
+                                       $id-column
+                                       $output-csv-path
+                                       $output-schema
+                                       $max-concurrency
+                                       $max-workers
+                                       $max-runtime-seconds)))))))))))))))))))))))))))
+
+(= (codex:parse-spawn-agents-on-csv-args $input)
+   (case (codex:parse-function-arguments-object $input)
+     (((CodexParseFunctionArgumentsObjectOk $object)
+       (codex:parse-spawn-agents-on-csv-args-object $object))
+      ((CodexParseFunctionArgumentsObjectError $message)
+       (codex:agent-job-err $message)))))
+
+(= (codex:validate-spawn-agents-on-csv-args $args)
+   (if (==
+         (str-trim
+           (codex:spawn-agents-on-csv-args-instruction $args))
+         "")
+       (codex:agent-job-err
+         (codex:function-call-error-respond-to-model
+           "instruction must be non-empty"))
+       (codex:agent-job-ok $args)))
+
+(= (codex:parse-report-agent-job-result-args-object $object)
+   (case (codex:agent-job-json-object-required-string-result
+           $object
+           "job_id")
+     (((CodexAgentJobErr $message)
+       (codex:agent-job-err $message))
+      ((CodexAgentJobOk $job-id)
+       (case (codex:agent-job-json-object-required-string-result
+               $object
+               "item_id")
+         (((CodexAgentJobErr $message)
+           (codex:agent-job-err $message))
+          ((CodexAgentJobOk $item-id)
+           (case (codex:agent-job-json-object-required-value-result
+                   $object
+                   "result")
+             (((CodexAgentJobErr $message)
+               (codex:agent-job-err $message))
+              ((CodexAgentJobOk $result)
+               (case (codex:agent-job-json-object-optional-bool-result
+                       $object
+                       "stop")
+                 (((CodexAgentJobErr $message)
+                   (codex:agent-job-err $message))
+                  ((CodexAgentJobOk $stop)
+                   (codex:agent-job-ok
+                     (codex:report-agent-job-result-args
+                       $job-id
+                       $item-id
+                       $result
+                       $stop)))))))))))))))
+
+(= (codex:parse-report-agent-job-result-args $input)
+   (case (codex:parse-function-arguments-object $input)
+     (((CodexParseFunctionArgumentsObjectOk $object)
+       (codex:parse-report-agent-job-result-args-object $object))
+      ((CodexParseFunctionArgumentsObjectError $message)
+       (codex:agent-job-err $message)))))
+
+(= (codex:validate-report-agent-job-result-args $args)
+   (case (once (eval (codex:report-agent-job-result-args-result $args)))
+     (((JsonObject $pairs)
+       (codex:agent-job-ok $args))
+      ($other
+       (codex:agent-job-err
+         (codex:function-call-error-respond-to-model
+           "result must be a JSON object"))))))
 
 (= (codex:agent-job-default-concurrency)
    16)
