@@ -22,6 +22,7 @@
 ;   This helper names that bound explicitly and implements the same saturation.
 
 !(import! &self agent_jobs)
+!(import! &self agent_registry)
 !(import! &self function_tool)
 !(import! &self protocol)
 
@@ -44,31 +45,21 @@
        (codex:agent-job-ok $state-db)))
 
 (= (codex:agent-job-session-depth $session-source)
-   (case $session-source
-     (((CodexSessionSourceSubAgent
-         (CodexSubAgentSourceThreadSpawn
-           $parent-thread-id
-           $depth
-           $agent-path
-           $agent-nickname
-           $agent-role))
-       $depth)
-      ($other 0))))
+   (codex:agent-registry-session-depth $session-source))
 
 (= (codex:agent-job-i32-max)
-   2147483647)
+   (codex:agent-registry-i32-max))
 
 (= (codex:agent-job-saturating-add-one-i32 $value)
-   (if (>= $value (codex:agent-job-i32-max))
-       (codex:agent-job-i32-max)
-       (+ $value 1)))
+   (codex:agent-registry-saturating-add-one-i32 $value))
 
 (= (codex:agent-job-next-thread-spawn-depth $session-source)
-   (codex:agent-job-saturating-add-one-i32
-     (codex:agent-job-session-depth $session-source)))
+   (codex:agent-registry-next-thread-spawn-depth $session-source))
 
 (= (codex:agent-job-exceeds-thread-spawn-depth-limit $depth $max-depth)
-   (> $depth $max-depth))
+   (codex:agent-registry-exceeds-thread-spawn-depth-limit
+     $depth
+     $max-depth))
 
 (= (codex:agent-job-depth-limit-error)
    (codex:function-call-error-respond-to-model

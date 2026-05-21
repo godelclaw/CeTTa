@@ -6,8 +6,12 @@
 ; Covered in this increment:
 ; - CodexErr::Fatal
 ; - CodexErr::InvalidRequest
+; - CodexErr::ThreadNotFound
+; - CodexErr::AgentLimitReached
+; - CodexErr::InternalAgentDied
+; - CodexErr::UnsupportedOperation
 ; - EnvVarError / CodexErr::EnvVar display surface
-; - display formatting for the Fatal variant
+; - display formatting for the ported variants
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust exposes a full enum with `thiserror` display impls. The current CeTTa
@@ -25,6 +29,30 @@
    (CodexErrInvalidRequest $message))
 
 (= (codex:error-invalid-request-message (CodexErrInvalidRequest $message))
+   $message)
+
+(= (codex:error-thread-not-found $thread-id)
+   (CodexErrThreadNotFound $thread-id))
+
+(= (codex:error-thread-not-found-thread-id
+      (CodexErrThreadNotFound $thread-id))
+   $thread-id)
+
+(= (codex:error-agent-limit-reached $max-threads)
+   (CodexErrAgentLimitReached $max-threads))
+
+(= (codex:error-agent-limit-reached-max-threads
+      (CodexErrAgentLimitReached $max-threads))
+   $max-threads)
+
+(= (codex:error-internal-agent-died)
+   (CodexErrInternalAgentDied))
+
+(= (codex:error-unsupported-operation $message)
+   (CodexErrUnsupportedOperation $message))
+
+(= (codex:error-unsupported-operation-message
+      (CodexErrUnsupportedOperation $message))
    $message)
 
 (= (codex:env-var-error $var $instructions)
@@ -46,6 +74,20 @@
 
 (= (codex:error-display (CodexErrInvalidRequest $message))
    $message)
+
+(= (codex:error-display (CodexErrThreadNotFound $thread-id))
+   (format-args "no thread with id: {}" ($thread-id)))
+
+(= (codex:error-display (CodexErrAgentLimitReached $max-threads))
+   (format-args
+     "agent thread limit reached (max {})"
+     ($max-threads)))
+
+(= (codex:error-display (CodexErrInternalAgentDied))
+   "internal error; agent loop died unexpectedly")
+
+(= (codex:error-display (CodexErrUnsupportedOperation $message))
+   (str-concat "unsupported operation: " $message))
 
 (= (codex:env-var-error-display (CodexEnvVarError $var $instructions))
    (if (== $instructions CodexAbsent)
