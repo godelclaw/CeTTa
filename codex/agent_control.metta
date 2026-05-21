@@ -7,6 +7,7 @@
 ; - thread_spawn_parent_thread_id
 ; - thread_spawn_depth
 ; - keep_forked_rollout_item
+; - spawn_forked_thread rollout-history truncation/retention preparation
 ; - register_session_root
 ; - get_agent_metadata registry forwarding
 ; - resolve_agent_reference path resolution and error mapping
@@ -31,6 +32,9 @@
 ;   current CeTTa fork-history surface exposes those constructors through the
 ;   thread_rollout_truncation slice, and this helper matches that same local
 ;   representation at the AgentControl boundary.
+; - Rust SpawnAgentForkMode is private to AgentControl. This slice exposes a
+;   local constructor pair with the same variants so the pure fork-history
+;   preparation branch can be tested without the async ThreadManager boundary.
 ; - CeTTa callers often pass registry metadata through local helper equations.
 ;   Rust stores concrete structs, so this boundary forces metadata evaluation
 ;   while scanning registry entries before applying the same field tests.
@@ -52,6 +56,12 @@
 
 (= (codex:agent-control-root-last-task-message)
    "Main thread")
+
+(= (codex:agent-control-spawn-agent-fork-mode-full-history)
+   (CodexSpawnAgentForkModeFullHistory))
+
+(= (codex:agent-control-spawn-agent-fork-mode-last-n-turns $last-n-turns)
+   (CodexSpawnAgentForkModeLastNTurns $last-n-turns))
 
 (= (codex:agent-control-thread-metadata-entry $thread-id $metadata)
    (CodexAgentControlThreadMetadataEntry $thread-id $metadata))
@@ -206,6 +216,52 @@
       ((CodexRolloutItemSessionMeta $meta)
        True)
       ($other False))))
+
+(= (codex:agent-control-retain-forked-rollout-items $items)
+   (case $items
+     ((() ())
+      ($non-empty-items
+       (let $head (list:first $non-empty-items)
+         (let $tail (list:rest $non-empty-items)
+           (case (codex:agent-control-retain-forked-rollout-items $tail)
+             (($tail-retained
+               (case (codex:agent-control-keep-forked-rollout-item $head)
+                 ((True
+                   (cons-atom $head $tail-retained))
+                  (False
+                   $tail-retained))))))))))))
+
+(= (codex:agent-control-fork-mode-truncated-rollout-items
+      $rollout-items
+      $fork-mode)
+   (case (eval $fork-mode)
+     (((CodexSpawnAgentForkModeFullHistory)
+       $rollout-items)
+      ((CodexSpawnAgentForkModeLastNTurns $last-n-turns)
+       (codex:truncate-rollout-to-last-n-fork-turns
+         $rollout-items
+         $last-n-turns)))))
+
+(= (codex:agent-control-prepare-forked-rollout-items
+      $rollout-items
+      $fork-mode)
+   (case
+     (codex:agent-control-fork-mode-truncated-rollout-items
+       $rollout-items
+       $fork-mode)
+     (($truncated-rollout-items
+       (codex:agent-control-retain-forked-rollout-items
+         $truncated-rollout-items)))))
+
+(= (codex:agent-control-prepare-forked-initial-history
+      $rollout-items
+      $fork-mode)
+   (case
+     (codex:agent-control-prepare-forked-rollout-items
+       $rollout-items
+       $fork-mode)
+     (($forked-rollout-items
+       (codex:initial-history-forked $forked-rollout-items)))))
 
 (= (codex:agent-control-registry-entry-metadata $entry)
    (eval (codex:agent-registry-entry-metadata $entry)))

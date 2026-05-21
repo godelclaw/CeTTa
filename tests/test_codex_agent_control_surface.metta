@@ -114,6 +114,48 @@
        "Scout"
        "explorer")))
 
+(= (test:fork-user $text)
+   (codex:rollout-response-item
+     (CodexResponseItemMessage "user" ((CodexInputText $text)) CodexAbsent)))
+
+(= (test:fork-assistant-final $text)
+   (codex:rollout-response-item
+     (CodexResponseItemMessage "assistant" ((CodexOutputText $text)) "final_answer")))
+
+(= (test:fork-assistant-commentary $text)
+   (codex:rollout-response-item
+     (CodexResponseItemMessage "assistant" ((CodexOutputText $text)) "commentary")))
+
+(= (test:fork-function-call $call-id)
+   (codex:rollout-response-item
+     (CodexResponseItemFunctionCall CodexAbsent "shell" CodexAbsent "{}" $call-id)))
+
+(= (test:fork-inter-agent $text $trigger-turn)
+   (codex:rollout-response-item
+     (codex:thread-rollout-inter-agent-response-message
+       (codex:agent-path-root)
+       (test:scout-path)
+       ()
+       $text
+       $trigger-turn)))
+
+(= (test:fork-history-full)
+   ((test:fork-user "u1")
+    (test:fork-assistant-commentary "working")
+    (test:fork-function-call "call-1")
+    (test:fork-assistant-final "done")
+    (codex:rollout-compacted "compact")
+    (codex:rollout-turn-context "context")
+    (codex:rollout-event-msg "event")
+    (codex:rollout-session-meta "meta")))
+
+(= (test:fork-history-last-n)
+   ((test:fork-user "old parent context")
+    (test:fork-inter-agent "triggered context" True)
+    (test:fork-assistant-final "kept final")
+    (test:fork-user "current parent task")
+    (test:fork-assistant-commentary "drop commentary")))
+
 !(assertEqual
   (codex:agent-control-agent-id-for-path
     (codex:agent-control-register-session-root
@@ -256,6 +298,35 @@
   (codex:agent-control-keep-forked-rollout-item
     (codex:rollout-session-meta "meta"))
   True)
+
+!(assertEqual
+  (codex:agent-control-prepare-forked-rollout-items
+    (test:fork-history-full)
+    (codex:agent-control-spawn-agent-fork-mode-full-history))
+  ((test:fork-user "u1")
+   (test:fork-assistant-final "done")
+   (codex:rollout-compacted "compact")
+   (codex:rollout-event-msg "event")
+   (codex:rollout-session-meta "meta")))
+
+!(assertEqual
+  (codex:agent-control-prepare-forked-rollout-items
+    (test:fork-history-last-n)
+    (codex:agent-control-spawn-agent-fork-mode-last-n-turns 2))
+  ((test:fork-assistant-final "kept final")
+   (test:fork-user "current parent task")))
+
+!(assertEqual
+  (codex:agent-control-prepare-forked-rollout-items
+    (test:fork-history-last-n)
+    (codex:agent-control-spawn-agent-fork-mode-last-n-turns 0))
+  ())
+
+!(assertEqual
+  (codex:agent-control-prepare-forked-initial-history
+    ((test:fork-user "u"))
+    (codex:agent-control-spawn-agent-fork-mode-full-history))
+  (codex:initial-history-forked ((test:fork-user "u"))))
 
 !(assertEqual
   (codex:agent-control-get-agent-metadata
