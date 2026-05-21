@@ -202,3 +202,117 @@
     "Broken pipe"
     (codex:js-repl-kernel-debug-snapshot 123 "exited(code=1)" "stderr"))
   "failed to write to kernel\n\njs_repl diagnostics: {\"reason\":\"write_failed\",\"stream_error\":\"Broken pipe\",\"kernel_pid\":123,\"kernel_status\":\"exited(code=1)\",\"kernel_stderr_tail\":\"stderr\"}")
+
+!(assertEqual
+  (codex:js-repl-validate-emitted-image-url
+    "DATA:IMAGE/PNG;base64,AAA")
+  (CodexJsReplValidationOk))
+
+!(assertEqual
+  (codex:js-repl-validation-error-message
+    (codex:js-repl-validate-emitted-image-url
+      "http://example.invalid/image.png"))
+  "codex.emitImage only accepts data URLs")
+
+!(assertEqual
+  (codex:js-repl-validation-error-message
+    (codex:js-repl-validate-emitted-image-url "data:,AAA"))
+  "codex.emitImage expected a valid image data URL")
+
+!(assertEqual
+  (codex:js-repl-validation-error-message
+    (codex:js-repl-validate-emitted-image-url
+      "data:image/svg+xml;base64,AAA"))
+  "codex.emitImage only supports image/png, image/jpeg, image/webp, or image/gif")
+
+!(assertEqual
+  (codex:js-repl-build-exec-result-content-items
+    "stdout"
+    ((CodexInputImage "data:image/png;base64,AAA" "high")))
+  ((CodexInputText "stdout")
+   (CodexInputImage "data:image/png;base64,AAA" "high")))
+
+!(assertEqual
+  (codex:js-repl-split-exec-result-content-items
+    ((CodexInputText "stdout")
+     (CodexInputImage "data:image/png;base64,AAA" "high")))
+  (CodexJsReplExecResultContentSplit
+    "stdout"
+    ((CodexInputImage "data:image/png;base64,AAA" "high"))))
+
+!(assertEqual
+  (codex:js-repl-split-exec-result-content-items
+    ((CodexInputImage "data:image/png;base64,AAA" "high")))
+  (CodexJsReplExecResultContentSplit
+    ""
+    ((CodexInputImage "data:image/png;base64,AAA" "high"))))
+
+!(assertEqual
+  (codex:js-repl-split-exec-result-content-items ())
+  (CodexJsReplExecResultContentSplit "" ()))
+
+!(assertEqual
+  (codex:is-js-repl-internal-tool "js_repl")
+  True)
+
+!(assertEqual
+  (codex:is-js-repl-internal-tool "js_repl_reset")
+  True)
+
+!(assertEqual
+  (codex:is-js-repl-internal-tool "python")
+  False)
+
+!(assertEqual
+  (codex:js-repl-node-version-parse " v20.11.1\n")
+  (CodexJsReplNodeVersionParseOk
+    (CodexJsReplNodeVersion 20 11 1)))
+
+!(assertEqual
+  (codex:js-repl-node-version-parse "vv22.3.4-nightly+meta")
+  (CodexJsReplNodeVersionParseOk
+    (CodexJsReplNodeVersion 22 3 4)))
+
+!(assertEqual
+  (codex:js-repl-node-version-parse-result-error
+    (codex:js-repl-node-version-parse "20"))
+  "missing minor version")
+
+!(assertEqual
+  (codex:js-repl-node-version-parse-result-error
+    (codex:js-repl-node-version-parse "20.1"))
+  "missing patch version")
+
+!(assertEqual
+  (codex:js-repl-node-version-parse-result-error
+    (codex:js-repl-node-version-parse "node.1.0"))
+  "invalid major version: invalid digit found in string")
+
+!(assertEqual
+  (codex:js-repl-node-version-parse-result-error
+    (codex:js-repl-node-version-parse "v"))
+  "invalid major version: cannot parse integer from empty string")
+
+!(assertEqual
+  (codex:js-repl-node-version-display
+    (CodexJsReplNodeVersion 20 11 1))
+  "20.11.1")
+
+!(assertEqual
+  (codex:js-repl-node-version-less-than
+    (CodexJsReplNodeVersion 20 11 0)
+    (CodexJsReplNodeVersion 20 11 1))
+  True)
+
+!(assertEqual
+  (codex:js-repl-node-version-at-least
+    (CodexJsReplNodeVersion 21 0 0)
+    (CodexJsReplNodeVersion 20 11 1))
+  True)
+
+!(assertEqual
+  (codex:js-repl-node-version-too-old-message
+    "/usr/bin/node"
+    (CodexJsReplNodeVersion 18 19 0)
+    (CodexJsReplNodeVersion 20 11 1))
+  "Node runtime too old for js_repl (resolved /usr/bin/node): found v18.19.0, requires >= v20.11.1. Install/update Node or set js_repl_node_path to a newer runtime.")

@@ -15,6 +15,8 @@
 ; - js_repl exec begin/end event payload construction
 ; - top-level exec-state transition helpers
 ; - kernel stderr-tail and model-facing diagnostic helpers
+; - emitted-image URL validation, exec-result content item build/split, internal
+;   tool predicate, and Node version parse/ordering helpers
 ; - nested tool-call response summary for message/function/custom/mcp/tool_search
 ;   responses plus handler errors
 ; - small exec-output aggregation helper used by js_repl events
@@ -28,7 +30,8 @@
 ;   would be awaited.
 ; - Rust parses timeout_ms as u64. CeTTa integers are not currently bounded to
 ;   Rust integer widths, so this slice validates the same non-empty decimal
-;   syntax but does not reject values above u64::MAX.
+;   syntax for timeout_ms and Node version components but does not reject values
+;   above u64::MAX.
 ; - Rust gets serde's exact parse diagnostics for function-payload JsReplArgs.
 ;   This slice preserves the same accepted fields and failure classes with
 ;   reconstructed messages because the current CeTTa JSON helper does not
@@ -639,14 +642,14 @@
        (CodexJsReplTopLevelExecStateIdle)
        $state))
 
-(= (codex:js-repl-list-contains () $item)
-   False)
-
 (= (codex:js-repl-list-contains $items $item)
-   (let ($head $tail) (decons-atom $items)
-     (if (== $head $item)
-         True
-         (codex:js-repl-list-contains $tail $item))))
+   (case $items
+     ((() False)
+      ($entries
+       (let ($head $tail) (decons-atom $entries)
+         (if (== $head $item)
+             True
+             (codex:js-repl-list-contains $tail $item)))))))
 
 (= (codex:js-repl-clear-top-level-exec-if-matches-any-state
       $state
@@ -712,13 +715,13 @@
      ((() "<empty>")
       ($items (str-join (codex:js-repl-stderr-tail-separator) $items)))))
 
-(= (codex:js-repl-string-list-byte-sum ())
-   0)
-
 (= (codex:js-repl-string-list-byte-sum $lines)
-   (let ($head $tail) (decons-atom $lines)
-     (+ (str-length $head)
-        (codex:js-repl-string-list-byte-sum $tail))))
+   (case $lines
+     ((() 0)
+      ($items
+       (let ($head $tail) (decons-atom $items)
+         (+ (str-length $head)
+            (codex:js-repl-string-list-byte-sum $tail)))))))
 
 (= (codex:js-repl-stderr-tail-formatted-bytes $lines)
    (case $lines
@@ -889,6 +892,263 @@
          $reason
          $stream-error
          $snapshot))))
+
+(= (codex:js-repl-validation-ok)
+   (CodexJsReplValidationOk))
+
+(= (codex:js-repl-validation-error $message)
+   (CodexJsReplValidationError $message))
+
+(= (codex:js-repl-validation-error-message
+      (CodexJsReplValidationError $message))
+   $message)
+
+(= (codex:js-repl-split-once-result $left $right)
+   (CodexJsReplSplitOnceResult $left $right))
+
+(= (codex:js-repl-split-once-result-left
+      (CodexJsReplSplitOnceResult $left $right))
+   $left)
+
+(= (codex:js-repl-split-once-result-right
+      (CodexJsReplSplitOnceResult $left $right))
+   $right)
+
+(= (codex:js-repl-split-once $delimiter $text)
+   (let $parts (str-split $delimiter $text)
+     (if (== (list:len $parts) 1)
+         CodexAbsent
+         (codex:js-repl-split-once-result
+           (list:first $parts)
+           (str-join $delimiter (list:rest $parts))))))
+
+(= (codex:js-repl-emitted-image-url-media-type $image-url)
+   (case (codex:js-repl-split-once "," $image-url)
+     ((CodexAbsent CodexAbsent)
+      ((CodexJsReplSplitOnceResult $header $payload)
+       (let $after-scheme (str-slice $header 5 (str-length $header))
+         (let $media-type
+           (list:first (str-split ";" $after-scheme))
+           (if (== $media-type "")
+               CodexAbsent
+               $media-type)))))))
+
+(= (codex:js-repl-emitted-image-media-type-supported $media-type)
+   (let $lower (codex:js-repl-ascii-lower-text $media-type)
+     (or
+       (== $lower "image/png")
+       (or
+         (== $lower "image/jpeg")
+         (or
+           (== $lower "image/webp")
+           (== $lower "image/gif"))))))
+
+(= (codex:js-repl-validate-emitted-image-url $image-url)
+   (if (or
+         (< (str-length $image-url) 5)
+         (not
+           (==
+             (codex:js-repl-ascii-lower-text
+               (str-slice $image-url 0 5))
+             "data:")))
+       (codex:js-repl-validation-error
+         "codex.emitImage only accepts data URLs")
+       (case (codex:js-repl-emitted-image-url-media-type $image-url)
+         ((CodexAbsent
+           (codex:js-repl-validation-error
+             "codex.emitImage expected a valid image data URL"))
+          ($media-type
+           (if (codex:js-repl-emitted-image-media-type-supported
+                 $media-type)
+               (codex:js-repl-validation-ok)
+               (codex:js-repl-validation-error
+                 "codex.emitImage only supports image/png, image/jpeg, image/webp, or image/gif")))))))
+
+(= (codex:js-repl-build-exec-result-content-items $output $content-items)
+   (cons-atom (CodexInputText $output) $content-items))
+
+(= (codex:js-repl-exec-result-content-split $output $content-items)
+   (CodexJsReplExecResultContentSplit $output $content-items))
+
+(= (codex:js-repl-exec-result-content-split-output
+      (CodexJsReplExecResultContentSplit $output $content-items))
+   $output)
+
+(= (codex:js-repl-exec-result-content-split-content-items
+      (CodexJsReplExecResultContentSplit $output $content-items))
+   $content-items)
+
+(= (codex:js-repl-split-exec-result-content-items $content-items)
+   (case $content-items
+     ((() (codex:js-repl-exec-result-content-split "" ()))
+      ($items
+       (let ($head $tail) (decons-atom $items)
+         (case $head
+           (((CodexInputText $text)
+            (codex:js-repl-exec-result-content-split $text $tail))
+           ($other
+             (codex:js-repl-exec-result-content-split "" $content-items)))))))))
+
+(= (codex:is-js-repl-internal-tool $name)
+   (or (== $name (codex:js-repl-tool-name))
+       (== $name (codex:js-repl-reset-tool-name))))
+
+(= (codex:js-repl-node-version $major $minor $patch)
+   (CodexJsReplNodeVersion $major $minor $patch))
+
+(= (codex:js-repl-node-version-major
+      (CodexJsReplNodeVersion $major $minor $patch))
+   $major)
+
+(= (codex:js-repl-node-version-minor
+      (CodexJsReplNodeVersion $major $minor $patch))
+   $minor)
+
+(= (codex:js-repl-node-version-patch
+      (CodexJsReplNodeVersion $major $minor $patch))
+   $patch)
+
+(= (codex:js-repl-node-version-display
+      (CodexJsReplNodeVersion $major $minor $patch))
+   (str-concat
+     (format-args "{}" ($major))
+     (str-concat
+       "."
+       (str-concat
+         (format-args "{}" ($minor))
+         (str-concat "." (format-args "{}" ($patch)))))))
+
+(= (codex:js-repl-node-version-parse-ok $version)
+   (CodexJsReplNodeVersionParseOk $version))
+
+(= (codex:js-repl-node-version-parse-error $message)
+   (CodexJsReplNodeVersionParseError $message))
+
+(= (codex:js-repl-node-version-parse-result-value
+      (CodexJsReplNodeVersionParseOk $version))
+   $version)
+
+(= (codex:js-repl-node-version-parse-result-error
+      (CodexJsReplNodeVersionParseError $message))
+   $message)
+
+(= (codex:js-repl-trim-start-v $text)
+   (if (str-starts-with? $text "v")
+       (codex:js-repl-trim-start-v
+         (str-slice $text 1 (str-length $text)))
+       $text))
+
+(= (codex:js-repl-normalize-node-version-delimiters $text)
+   (str-join
+     "."
+     (str-split
+       "+"
+       (str-join "." (str-split "-" $text)))))
+
+(= (codex:js-repl-node-version-parse-int-error-text $text)
+   (if (== $text "")
+       "cannot parse integer from empty string"
+       "invalid digit found in string"))
+
+(= (codex:js-repl-node-version-parse-component $label $text)
+   (if (codex:is-js-repl-decimal-string $text)
+       (codex:js-repl-node-version-parse-ok
+         (codex:js-repl-decimal-string-to-number $text))
+       (codex:js-repl-node-version-parse-error
+         (str-concat
+           "invalid "
+           (str-concat
+             $label
+             (str-concat
+               " version: "
+               (codex:js-repl-node-version-parse-int-error-text
+                 $text)))))))
+
+(= (codex:js-repl-node-version-parse-patch
+      $major
+      $minor
+      $parts)
+   (case (codex:js-repl-node-version-parse-component
+           "patch"
+           (list:at $parts 2))
+     (((CodexJsReplNodeVersionParseError $message)
+       (codex:js-repl-node-version-parse-error $message))
+      ((CodexJsReplNodeVersionParseOk $patch)
+       (codex:js-repl-node-version-parse-ok
+         (codex:js-repl-node-version $major $minor $patch))))))
+
+(= (codex:js-repl-node-version-parse-minor-after-major
+      $major
+      $parts)
+   (if (< (list:len $parts) 3)
+       (codex:js-repl-node-version-parse-error "missing patch version")
+       (case (codex:js-repl-node-version-parse-component
+               "minor"
+               (list:at $parts 1))
+         (((CodexJsReplNodeVersionParseError $message)
+           (codex:js-repl-node-version-parse-error $message))
+          ((CodexJsReplNodeVersionParseOk $minor)
+           (codex:js-repl-node-version-parse-patch
+             $major
+             $minor
+             $parts))))))
+
+(= (codex:js-repl-node-version-parse-parts $parts)
+   (if (== (list:len $parts) 0)
+       (codex:js-repl-node-version-parse-error "missing major version")
+       (case (codex:js-repl-node-version-parse-component
+               "major"
+               (list:at $parts 0))
+         (((CodexJsReplNodeVersionParseError $message)
+           (codex:js-repl-node-version-parse-error $message))
+          ((CodexJsReplNodeVersionParseOk $major)
+           (if (< (list:len $parts) 2)
+               (codex:js-repl-node-version-parse-error
+                 "missing minor version")
+               (codex:js-repl-node-version-parse-minor-after-major
+                 $major
+                 $parts)))))))
+
+(= (codex:js-repl-node-version-parse $input)
+   (let $trimmed (codex:js-repl-trim-start-v (str-trim $input))
+     (let $normalized
+       (codex:js-repl-normalize-node-version-delimiters $trimmed)
+       (codex:js-repl-node-version-parse-parts
+         (str-split "." $normalized)))))
+
+(= (codex:js-repl-node-version-less-than
+      (CodexJsReplNodeVersion $lhs-major $lhs-minor $lhs-patch)
+      (CodexJsReplNodeVersion $rhs-major $rhs-minor $rhs-patch))
+   (if (< $lhs-major $rhs-major)
+       True
+       (if (> $lhs-major $rhs-major)
+           False
+           (if (< $lhs-minor $rhs-minor)
+               True
+               (if (> $lhs-minor $rhs-minor)
+                   False
+                   (< $lhs-patch $rhs-patch))))))
+
+(= (codex:js-repl-node-version-at-least $found $required)
+   (not (codex:js-repl-node-version-less-than $found $required)))
+
+(= (codex:js-repl-node-version-too-old-message
+      $node-path
+      $found
+      $required)
+   (str-concat
+     "Node runtime too old for js_repl (resolved "
+     (str-concat
+       $node-path
+       (str-concat
+         "): found v"
+         (str-concat
+           (codex:js-repl-node-version-display $found)
+           (str-concat
+             ", requires >= v"
+             (str-concat
+               (codex:js-repl-node-version-display $required)
+               ". Install/update Node or set js_repl_node_path to a newer runtime.")))))))
 
 (= (codex:js-repl-tool-call-payload-kind-message-content)
    (CodexJsReplToolCallPayloadKindMessageContent))
@@ -1088,21 +1348,22 @@
       ((CodexOutputText $text) True)
       ($other False))))
 
-(= (codex:js-repl-count-matching-items () $predicate)
-   0)
-
 (= (codex:js-repl-count-matching-items $items $predicate)
-   (let ($head $tail) (decons-atom $items)
-     (let $tail-count (codex:js-repl-count-matching-items $tail $predicate)
-       (case $predicate
-         ((FunctionOutputText
-           (if (codex:is-js-repl-function-output-text-item $head)
-               (+ $tail-count 1)
-               $tail-count))
-          (MessageText
-           (if (codex:is-js-repl-message-text-item $head)
-               (+ $tail-count 1)
-               $tail-count)))))))
+   (case $items
+     ((() 0)
+      ($entries
+       (let ($head $tail) (decons-atom $entries)
+         (let $tail-count
+           (codex:js-repl-count-matching-items $tail $predicate)
+           (case $predicate
+             ((FunctionOutputText
+               (if (codex:is-js-repl-function-output-text-item $head)
+                   (+ $tail-count 1)
+                   $tail-count))
+              (MessageText
+               (if (codex:is-js-repl-message-text-item $head)
+                   (+ $tail-count 1)
+                   $tail-count))))))))))
 
 (= (codex:js-repl-text-segment-from-function-output-item $item)
    (case $item
@@ -1118,22 +1379,22 @@
        (if (== (str-trim $text) "") CodexAbsent $text))
       ($other CodexAbsent))))
 
-(= (codex:js-repl-content-text-segments () $mode)
-   ())
-
 (= (codex:js-repl-content-text-segments $items $mode)
-   (let ($head $tail) (decons-atom $items)
-     (let $segment
-       (case $mode
-         ((FunctionOutput
-           (codex:js-repl-text-segment-from-function-output-item $head))
-          (Message
-           (codex:js-repl-text-segment-from-message-item $head))))
-       (let $tail-segments
-         (codex:js-repl-content-text-segments $tail $mode)
-         (if (== $segment CodexAbsent)
-             $tail-segments
-             (cons-atom $segment $tail-segments))))))
+   (case $items
+     ((() ())
+      ($entries
+       (let ($head $tail) (decons-atom $entries)
+         (let $segment
+           (case $mode
+             ((FunctionOutput
+               (codex:js-repl-text-segment-from-function-output-item $head))
+              (Message
+               (codex:js-repl-text-segment-from-message-item $head))))
+           (let $tail-segments
+             (codex:js-repl-content-text-segments $tail $mode)
+             (if (== $segment CodexAbsent)
+                 $tail-segments
+                 (cons-atom $segment $tail-segments)))))))))
 
 (= (codex:js-repl-content-text $items $mode)
    (let $segments (codex:js-repl-content-text-segments $items $mode)
@@ -1222,14 +1483,14 @@
      $mcp-structured-content-present
      $mcp-result-is-error))
 
-(= (codex:js-repl-append-items () $rhs)
-   $rhs)
-
 (= (codex:js-repl-append-items $lhs $rhs)
-   (let ($head $tail) (decons-atom $lhs)
-     (case (codex:js-repl-append-items $tail $rhs)
-       (($rest
-          (cons-atom $head $rest))))))
+   (case $lhs
+     ((() $rhs)
+      ($items
+       (let ($head $tail) (decons-atom $items)
+         (case (codex:js-repl-append-items $tail $rhs)
+           (($rest
+              (cons-atom $head $rest)))))))))
 
 (= (codex:js-repl-append-item $items $item)
    (codex:js-repl-append-items $items ($item)))
@@ -1457,74 +1718,67 @@
      ((CodexAbsent 0)
       ($content (list:len $content)))))
 
-(= (codex:js-repl-summarize-tool-call-response
-      (CodexResponseItemMessage $role $content $phase))
-   (codex:js-repl-summarize-message-payload $content))
-
-(= (codex:js-repl-summarize-tool-call-response
-      (CodexResponseItemMessageWithId $id $role $content $phase))
-   (codex:js-repl-summarize-message-payload $content))
-
-(= (codex:js-repl-summarize-tool-call-response
-      (CodexResponseItemFunctionCallOutput $call-id $output))
-   (case $output
-     (((CodexFunctionCallOutputContentItems $items)
-       (codex:js-repl-summarize-function-output-payload
-         "function_call_output"
-         (codex:js-repl-tool-call-payload-kind-function-content-items)
-         $output))
-      ($other
-       (codex:js-repl-summarize-function-output-payload
-         "function_call_output"
-         (codex:js-repl-tool-call-payload-kind-function-text)
-         $output)))))
-
-(= (codex:js-repl-summarize-tool-call-response
-      (CodexResponseItemCustomToolCallOutput $call-id $name $output))
-   (case $output
-     (((CodexFunctionCallOutputContentItems $items)
-       (codex:js-repl-summarize-function-output-payload
-         "custom_tool_call_output"
-         (codex:js-repl-tool-call-payload-kind-custom-content-items)
-         $output))
-      ($other
-       (codex:js-repl-summarize-function-output-payload
-         "custom_tool_call_output"
-         (codex:js-repl-tool-call-payload-kind-custom-text)
-         $output)))))
-
-(= (codex:js-repl-summarize-tool-call-response
-      (CodexResponseItemMcpToolCallOutput $call-id $output))
-   (let $result (once (codex:js-repl-mcp-result-json $output))
-     (let $function-output
-       (once (codex:js-repl-mcp-call-tool-result-as-function-call-output $result))
-       (let $summary
-         (once
+(= (codex:js-repl-summarize-tool-call-response $response)
+   (case $response
+     (((CodexResponseItemMessage $role $content $phase)
+       (codex:js-repl-summarize-message-payload $content))
+      ((CodexResponseItemMessageWithId $id $role $content $phase)
+       (codex:js-repl-summarize-message-payload $content))
+      ((CodexResponseItemFunctionCallOutput $call-id $output)
+       (case $output
+         (((CodexFunctionCallOutputContentItems $items)
            (codex:js-repl-summarize-function-output-payload
-             "mcp_tool_call_output"
-             (if (codex:js-repl-mcp-result-success $result)
-                 (codex:js-repl-tool-call-payload-kind-mcp-result)
-                 (codex:js-repl-tool-call-payload-kind-mcp-error-result))
-             $function-output))
-         (codex:js-repl-summary-with-mcp-metadata
-           $summary
-           (codex:js-repl-mcp-result-content-count $result)
-           (codex:js-repl-mcp-result-structured-content-present $result)
-           (codex:js-repl-mcp-result-is-error $result))))))
-
-(= (codex:js-repl-summarize-tool-call-response
-      (CodexResponseItemToolSearchOutput $call-id $status $execution $tools))
-   (let $payload-text (json-stringify (JsonArray $tools))
-     (codex:js-repl-tool-call-response-summary
-       "tool_search_output"
-       (codex:js-repl-tool-call-payload-kind-function-text)
-       $payload-text
-       (str-length $payload-text)
-       (list:len $tools)
-       CodexAbsent
-       CodexAbsent
-       CodexAbsent
-       CodexAbsent)))
+             "function_call_output"
+             (codex:js-repl-tool-call-payload-kind-function-content-items)
+             $output))
+          ($other
+           (codex:js-repl-summarize-function-output-payload
+             "function_call_output"
+             (codex:js-repl-tool-call-payload-kind-function-text)
+             $output)))))
+      ((CodexResponseItemCustomToolCallOutput $call-id $name $output)
+       (case $output
+         (((CodexFunctionCallOutputContentItems $items)
+           (codex:js-repl-summarize-function-output-payload
+             "custom_tool_call_output"
+             (codex:js-repl-tool-call-payload-kind-custom-content-items)
+             $output))
+          ($other
+           (codex:js-repl-summarize-function-output-payload
+             "custom_tool_call_output"
+             (codex:js-repl-tool-call-payload-kind-custom-text)
+             $output)))))
+      ((CodexResponseItemMcpToolCallOutput $call-id $output)
+       (let $result (once (codex:js-repl-mcp-result-json $output))
+         (let $function-output
+           (once
+             (codex:js-repl-mcp-call-tool-result-as-function-call-output
+               $result))
+           (let $summary
+             (once
+               (codex:js-repl-summarize-function-output-payload
+                 "mcp_tool_call_output"
+                 (if (codex:js-repl-mcp-result-success $result)
+                     (codex:js-repl-tool-call-payload-kind-mcp-result)
+                     (codex:js-repl-tool-call-payload-kind-mcp-error-result))
+                 $function-output))
+             (codex:js-repl-summary-with-mcp-metadata
+               $summary
+               (codex:js-repl-mcp-result-content-count $result)
+               (codex:js-repl-mcp-result-structured-content-present $result)
+               (codex:js-repl-mcp-result-is-error $result))))))
+      ((CodexResponseItemToolSearchOutput $call-id $status $execution $tools)
+       (let $payload-text (json-stringify (JsonArray $tools))
+         (codex:js-repl-tool-call-response-summary
+           "tool_search_output"
+           (codex:js-repl-tool-call-payload-kind-function-text)
+           $payload-text
+           (str-length $payload-text)
+           (list:len $tools)
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent
+           CodexAbsent))))))
 
 (= (codex:js-repl-summarize-tool-call-error $error)
    (codex:js-repl-summarize-text-payload

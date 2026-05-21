@@ -1,6 +1,7 @@
 # Codex Known Red Surfaces
 
-Last updated: 2026-05-21 on branch `exp/codex` at `7fe3ab6`.
+Last updated: 2026-05-21 on branch `exp/codex` after the js_repl
+runtime-helper pass.
 
 This file records Codex-in-CeTTa surfaces that are known red while the core
 validation baseline remains green. They should not block unrelated slice work,
@@ -10,11 +11,21 @@ but they must be checked with output-aware validation because `./cetta` exits
 ## Current Baseline
 
 - `make -s` passes.
-- Four cross-module repair surfaces are green at `7fe3ab6`:
+- `scripts/check_codex_surfaces.sh` exits nonzero only for the two deferred
+  surfaces documented below.
+- Four cross-module repair surfaces remain green:
   - `tests/test_codex_approval_surface.metta`
   - `tests/test_codex_config_permissions_warnings_surface.metta`
   - `tests/test_codex_permissions_instructions_prefix_surface.metta`
   - `tests/test_codex_unified_exec_sandbox_session_surface.metta`
+- The js_repl surface group is green, including:
+  - `tests/test_codex_js_repl_surface.metta`
+  - `tests/test_codex_js_repl_handler_surface.metta`
+  - `tests/test_codex_js_repl_events_surface.metta`
+  - `tests/test_codex_js_repl_summary_surface.metta`
+  - `tests/test_codex_js_repl_summary_tail_surface.metta`
+  - `tests/test_codex_js_repl_kernel_surface.metta`
+  - `examples/codex_js_repl_demo.metta`
 
 ## `tests/test_codex_models_endpoint_surface.metta`
 
