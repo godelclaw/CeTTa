@@ -21,3 +21,46 @@
   (codex:parse-function-arguments-object "\"oops\"")
   ((CodexParseFunctionArgumentsObjectError
      "invalid type: expected object")))
+
+!(assertEqualToResult
+  (codex:resolve-workdir-base-path
+    "{\"cmd\":\"pwd\"}"
+    "/repo/project")
+  ((CodexParseFunctionArgumentsObjectOk "/repo/project")))
+
+!(assertEqualToResult
+  (codex:resolve-workdir-base-path
+    "{\"workdir\":\"\"}"
+    "/repo/project")
+  ((CodexParseFunctionArgumentsObjectOk "/repo/project")))
+
+!(assertEqualToResult
+  (codex:resolve-workdir-base-path
+    "{\"workdir\":null}"
+    "/repo/project")
+  ((CodexParseFunctionArgumentsObjectOk "/repo/project")))
+
+!(assertEqualToResult
+  (codex:resolve-workdir-base-path
+    "{\"workdir\":false}"
+    "/repo/project")
+  ((CodexParseFunctionArgumentsObjectOk "/repo/project")))
+
+!(assertEqualToResult
+  (codex:resolve-workdir-base-path
+    "{\"workdir\":\"sub/../crate\"}"
+    "/repo/project")
+  ((CodexParseFunctionArgumentsObjectOk "/repo/project/crate")))
+
+!(assertEqualToResult
+  (codex:resolve-workdir-base-path
+    "{\"workdir\":\"/tmp/work\"}"
+    "/repo/project")
+  ((CodexParseFunctionArgumentsObjectOk "/tmp/work")))
+
+!(assertEqualToResult
+  (codex:resolve-workdir-base-path
+    "\"oops\""
+    "/repo/project")
+  ((CodexParseFunctionArgumentsObjectError
+     "invalid type: expected object")))
