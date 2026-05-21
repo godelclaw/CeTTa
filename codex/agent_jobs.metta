@@ -18,6 +18,7 @@
 ; - SpawnAgentsOnCsvArgs / ReportAgentJobResultArgs parsing and immediate
 ;   handler validation
 ; - spawn_agents_on_csv preparation up to AgentJobCreateParams / item params
+; - report_agent_job_result preparation and accepted/stop completion planning
 ; - AgentJob result/progress JSON projections
 ; - build_worker_prompt
 ; - value_to_csv_string / csv_escape / render_job_csv
@@ -62,6 +63,10 @@
 ; - Rust's `JobProgressEmitter` uses `Instant::now()` internally. This pure
 ;   port takes monotonic milliseconds as an explicit argument so tests and the
 ;   later runtime bridge can supply the same elapsed-time facts deterministically.
+; - Rust `report_agent_job_result::handle` records item results and optionally
+;   marks the job cancelled through `StateRuntime`. This pure slice emits the
+;   exact record/cancel/output plan around that side-effect boundary; the async
+;   DB bridge must execute those plans without changing their conditions.
 
 !(import! &self function_tool)
 !(import! &self json)
@@ -223,6 +228,75 @@
 (= (codex:report-agent-job-result-args-stop
       (CodexReportAgentJobResultArgs $job-id $item-id $result $stop))
    $stop)
+
+(= (codex:report-agent-job-result-record-params
+      $job-id
+      $item-id
+      $reporting-thread-id
+      $result)
+   (CodexReportAgentJobResultRecordParams
+     $job-id
+     $item-id
+     $reporting-thread-id
+     $result))
+
+(= (codex:report-agent-job-result-record-params-job-id
+      (CodexReportAgentJobResultRecordParams
+        $job-id
+        $item-id
+        $reporting-thread-id
+        $result))
+   $job-id)
+
+(= (codex:report-agent-job-result-record-params-item-id
+      (CodexReportAgentJobResultRecordParams
+        $job-id
+        $item-id
+        $reporting-thread-id
+        $result))
+   $item-id)
+
+(= (codex:report-agent-job-result-record-params-reporting-thread-id
+      (CodexReportAgentJobResultRecordParams
+        $job-id
+        $item-id
+        $reporting-thread-id
+        $result))
+   $reporting-thread-id)
+
+(= (codex:report-agent-job-result-record-params-result
+      (CodexReportAgentJobResultRecordParams
+        $job-id
+        $item-id
+        $reporting-thread-id
+        $result))
+   $result)
+
+(= (codex:prepared-report-agent-job-result $record-params $stop)
+   (CodexPreparedReportAgentJobResult $record-params $stop))
+
+(= (codex:prepared-report-agent-job-result-record-params
+      (CodexPreparedReportAgentJobResult $record-params $stop))
+   $record-params)
+
+(= (codex:prepared-report-agent-job-result-stop
+      (CodexPreparedReportAgentJobResult $record-params $stop))
+   $stop)
+
+(= (codex:completed-report-agent-job-result
+      $output
+      $cancel-message)
+   (CodexCompletedReportAgentJobResult
+     $output
+     $cancel-message))
+
+(= (codex:completed-report-agent-job-result-output
+      (CodexCompletedReportAgentJobResult $output $cancel-message))
+   $output)
+
+(= (codex:completed-report-agent-job-result-cancel-message
+      (CodexCompletedReportAgentJobResult $output $cancel-message))
+   $cancel-message)
 
 (= (codex:agent-job-function-arguments-error $message)
    (codex:function-call-error-respond-to-model
@@ -573,6 +647,67 @@
        (codex:agent-job-err
          (codex:function-call-error-respond-to-model
            "result must be a JSON object"))))))
+
+(= (codex:prepare-report-agent-job-result-from-args
+      $args
+      $reporting-thread-id)
+   (case (codex:validate-report-agent-job-result-args $args)
+     (((CodexAgentJobErr $error)
+       (codex:agent-job-err $error))
+      ((CodexAgentJobOk $valid-args)
+       (codex:agent-job-ok
+         (codex:prepared-report-agent-job-result
+           (codex:report-agent-job-result-record-params
+             (codex:report-agent-job-result-args-job-id $valid-args)
+             (codex:report-agent-job-result-args-item-id $valid-args)
+             $reporting-thread-id
+             (codex:report-agent-job-result-args-result $valid-args))
+           (codex:report-agent-job-result-args-stop $valid-args)))))))
+
+(= (codex:prepare-report-agent-job-result $arguments $reporting-thread-id)
+   (case (codex:parse-report-agent-job-result-args $arguments)
+     (((CodexAgentJobErr $message)
+       (codex:agent-job-err
+         (codex:agent-job-function-arguments-error $message)))
+      ((CodexAgentJobOk $args)
+       (codex:prepare-report-agent-job-result-from-args
+         $args
+         $reporting-thread-id)))))
+
+(= (codex:report-agent-job-result-stop-requested $stop)
+   (if (== $stop True)
+       True
+       False))
+
+(= (codex:report-agent-job-result-should-cancel $accepted $stop)
+   (and $accepted (codex:report-agent-job-result-stop-requested $stop)))
+
+(= (codex:report-agent-job-result-cancel-message)
+   "cancelled by worker request")
+
+(= (codex:report-agent-job-result-record-error
+      $job-id
+      $item-id
+      $error)
+   (codex:function-call-error-respond-to-model
+     (format-args
+       "failed to record agent job result for {} / {}: {}"
+       ($job-id $item-id $error))))
+
+(= (codex:report-agent-job-result-output-json $accepted)
+   (json-stringify
+     (codex:report-agent-job-result-tool-result-json
+       (codex:report-agent-job-result-tool-result $accepted))))
+
+(= (codex:finish-report-agent-job-result $accepted $stop)
+   (codex:completed-report-agent-job-result
+     (CodexToolOutputFunction
+       ((CodexInputText (codex:report-agent-job-result-output-json $accepted)))
+       True
+       CodexAbsent)
+     (if (codex:report-agent-job-result-should-cancel $accepted $stop)
+         (codex:report-agent-job-result-cancel-message)
+         CodexAbsent)))
 
 (= (codex:agent-job-default-concurrency)
    16)
