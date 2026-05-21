@@ -28,6 +28,7 @@
 !(import! &self agent_path)
 !(import! &self context)
 !(import! &self function_tool)
+!(import! &self json)
 !(import! &self list)
 !(import! &self protocol)
 !(import! &self str)
@@ -55,6 +56,32 @@
        (codex:multi-agent-common-err
          (codex:function-call-error-respond-to-model
            "collab handler received unsupported payload"))))))
+
+(= (codex:multi-agent-tool-output-json-text $json $tool-name)
+   ; Rust's generic helper serializes `T: Serialize` and falls back to a JSON
+   ; string containing `failed to serialize {tool_name} result: ...`. This
+   ; CeTTa layer receives already-projected JSON atoms, so `json-stringify`
+   ; has no equivalent serde failure branch.
+   (json-stringify $json))
+
+(= (codex:multi-agent-tool-output-response-item
+      $call-id
+      $payload
+      $json
+      $success
+      $tool-name)
+   (codex:tool-output-to-response-item
+     (codex:function-tool-output-from-text
+       (codex:multi-agent-tool-output-json-text $json $tool-name)
+       $success)
+     $call-id
+     $payload))
+
+(= (codex:multi-agent-tool-output-code-mode-result $json $tool-name)
+   ; Same representation note as `multi-agent-tool-output-json-text`: callers
+   ; pass the projected JsonValue directly, matching Rust's `serde_json::to_value`
+   ; success path.
+   $json)
 
 (= (codex:multi-agent-status-map-entry $thread-id $status)
    (CodexMultiAgentStatusEntry $thread-id $status))
