@@ -8,14 +8,14 @@
 ; - Rust returns `io::Result<SandboxPolicy>`. This restart slice exposes an
 ;   explicit tagged sum because CeTTa does not yet have a dedicated
 ;   `io::Result` carrier with the same ergonomics.
-; - This slice lives outside `codex:permissions` because importing the large
-;   `codex:protocol` module directly into that foundational permissions module
+; - This slice lives outside `codex:permissions` and emits the same
+;   `CodexSession...` constructors directly because importing the large
+;   `codex:protocol` module next to the foundational permissions reducers
 ;   destabilizes already-green resolver helpers under the current evaluator.
-;   Keeping the bridge in a narrow side module preserves the Rust-visible
-;   behavior without changing the base permissions surfaces.
+;   Protocol JSON/projector helpers can still consume these constructors when
+;   callers import `codex:protocol` separately.
 
 !(import! &self permissions)
-!(import! &self protocol)
 
 (= (codex:file-system-sandbox-policy-to-legacy-result-ok $policy)
    (CodexFileSystemSandboxPolicyToLegacyResultOk $policy))
@@ -89,11 +89,11 @@
 
 (= (codex:file-system-sandbox-policy-to-legacy-network-access
       (CodexNetworkSandboxPolicyEnabled))
-   (codex:session-network-access-enabled))
+   (CodexSessionNetworkAccessEnabled))
 
 (= (codex:file-system-sandbox-policy-to-legacy-network-access
       (CodexNetworkSandboxPolicyRestricted))
-   (codex:session-network-access-restricted))
+   (CodexSessionNetworkAccessRestricted))
 
 (= (codex:file-system-sandbox-policy-to-legacy-special-state
       $value
@@ -570,7 +570,7 @@
       $network-policy
       $cwd)
    (codex:file-system-sandbox-policy-to-legacy-result-ok
-     (codex:session-sandbox-policy-external-sandbox
+     (CodexSessionSandboxPolicyExternalSandbox
        (codex:file-system-sandbox-policy-to-legacy-network-access
          $network-policy))))
 
@@ -583,10 +583,10 @@
       $cwd)
    (if (codex:network-sandbox-policy-is-enabled $network-policy)
        (codex:file-system-sandbox-policy-to-legacy-result-ok
-         (codex:session-sandbox-policy-danger-full-access))
+         (CodexSessionSandboxPolicyDangerFullAccess))
        (codex:file-system-sandbox-policy-to-legacy-result-ok
-         (codex:session-sandbox-policy-external-sandbox
-           (codex:session-network-access-restricted)))))
+         (CodexSessionSandboxPolicyExternalSandbox
+           (CodexSessionNetworkAccessRestricted)))))
 
 (= (codex:file-system-sandbox-policy-to-legacy-sandbox-policy
       (CodexFileSystemSandboxPolicy
@@ -629,14 +629,14 @@
              (if $has-full-disk-write-access
                  (if (codex:network-sandbox-policy-is-enabled $network-policy)
                      (codex:file-system-sandbox-policy-to-legacy-result-ok
-                       (codex:session-sandbox-policy-danger-full-access))
+                       (CodexSessionSandboxPolicyDangerFullAccess))
                      (codex:file-system-sandbox-policy-to-legacy-result-ok
-                       (codex:session-sandbox-policy-external-sandbox
-                         (codex:session-network-access-restricted))))
+                       (CodexSessionSandboxPolicyExternalSandbox
+                         (CodexSessionNetworkAccessRestricted))))
                  (let $read-only-access
                    (if $has-full-disk-read-access
-                       (codex:session-read-only-access-full)
-                       (codex:session-read-only-access-restricted
+                       (CodexSessionReadOnlyAccessFull)
+                       (CodexSessionReadOnlyAccessRestricted
                          (codex:file-system-sandbox-policy-legacy-collect-state-include-platform-defaults
                            $state)
                          (codex:permissions-dedup-absolute-paths
@@ -646,7 +646,7 @@
                    (if (codex:file-system-sandbox-policy-legacy-collect-state-workspace-root-writable
                          $state)
                        (codex:file-system-sandbox-policy-to-legacy-result-ok
-                         (codex:session-sandbox-policy-workspace-write
+                         (CodexSessionSandboxPolicyWorkspaceWrite
                            (codex:permissions-dedup-absolute-paths
                              (codex:file-system-sandbox-policy-legacy-collect-state-writable-roots
                                $state)
@@ -674,7 +674,7 @@
                            (codex:file-system-sandbox-policy-to-legacy-result-error
                              (codex:file-system-sandbox-policy-to-legacy-error-message))
                            (codex:file-system-sandbox-policy-to-legacy-result-ok
-                             (codex:session-sandbox-policy-read-only
+                             (CodexSessionSandboxPolicyReadOnly
                                $read-only-access
                                (codex:network-sandbox-policy-is-enabled
                                  $network-policy)))))))))))))
