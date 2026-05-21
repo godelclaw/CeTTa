@@ -21,6 +21,7 @@
 ; - AgentJob result/progress JSON projections
 ; - build_worker_prompt
 ; - value_to_csv_string / csv_escape / render_job_csv
+; - JobProgressEmitter emission gate and progress event payload construction
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust's CSV input parser uses `csv::ReaderBuilder` with headers and flexible
@@ -58,6 +59,9 @@
 ;   building `AgentJobCreateParams`. The pure preparation helper below expects
 ;   that path to already be turn-resolved when present; the default output path
 ;   branch is still computed locally from the resolved input path and job id.
+; - Rust's `JobProgressEmitter` uses `Instant::now()` internally. This pure
+;   port takes monotonic milliseconds as an explicit argument so tests and the
+;   later runtime bridge can supply the same elapsed-time facts deterministically.
 
 !(import! &self function_tool)
 !(import! &self json)
@@ -1952,6 +1956,250 @@
         (case $eta-seconds
           ((CodexAbsent JsonNull)
            ($value (codex:agent-job-json-number $value))))))))
+
+(= (codex:agent-job-progress
+      $total-items
+      $pending-items
+      $running-items
+      $completed-items
+      $failed-items)
+   (CodexAgentJobProgress
+     $total-items
+     $pending-items
+     $running-items
+     $completed-items
+     $failed-items))
+
+(= (codex:agent-job-progress-total-items
+      (CodexAgentJobProgress
+        $total-items
+        $pending-items
+        $running-items
+        $completed-items
+        $failed-items))
+   $total-items)
+
+(= (codex:agent-job-progress-pending-items
+      (CodexAgentJobProgress
+        $total-items
+        $pending-items
+        $running-items
+        $completed-items
+        $failed-items))
+   $pending-items)
+
+(= (codex:agent-job-progress-running-items
+      (CodexAgentJobProgress
+        $total-items
+        $pending-items
+        $running-items
+        $completed-items
+        $failed-items))
+   $running-items)
+
+(= (codex:agent-job-progress-completed-items
+      (CodexAgentJobProgress
+        $total-items
+        $pending-items
+        $running-items
+        $completed-items
+        $failed-items))
+   $completed-items)
+
+(= (codex:agent-job-progress-failed-items
+      (CodexAgentJobProgress
+        $total-items
+        $pending-items
+        $running-items
+        $completed-items
+        $failed-items))
+   $failed-items)
+
+(= (codex:agent-job-progress-processed $progress)
+   (+
+     (codex:agent-job-progress-completed-items $progress)
+     (codex:agent-job-progress-failed-items $progress)))
+
+(= (codex:agent-job-saturating-sub $lhs $rhs)
+   (if (< $lhs $rhs)
+       0
+       (- $lhs $rhs)))
+
+(= (codex:agent-job-progress-emitter
+      $started-at-ms
+      $last-emit-at-ms
+      $last-processed
+      $last-failed)
+   (CodexAgentJobProgressEmitter
+     $started-at-ms
+     $last-emit-at-ms
+     $last-processed
+     $last-failed))
+
+(= (codex:agent-job-progress-emitter-started-at-ms
+      (CodexAgentJobProgressEmitter
+        $started-at-ms
+        $last-emit-at-ms
+        $last-processed
+        $last-failed))
+   $started-at-ms)
+
+(= (codex:agent-job-progress-emitter-last-emit-at-ms
+      (CodexAgentJobProgressEmitter
+        $started-at-ms
+        $last-emit-at-ms
+        $last-processed
+        $last-failed))
+   $last-emit-at-ms)
+
+(= (codex:agent-job-progress-emitter-last-processed
+      (CodexAgentJobProgressEmitter
+        $started-at-ms
+        $last-emit-at-ms
+        $last-processed
+        $last-failed))
+   $last-processed)
+
+(= (codex:agent-job-progress-emitter-last-failed
+      (CodexAgentJobProgressEmitter
+        $started-at-ms
+        $last-emit-at-ms
+        $last-processed
+        $last-failed))
+   $last-failed)
+
+(= (codex:agent-job-progress-emitter-new $now-ms)
+   (codex:agent-job-progress-emitter
+     $now-ms
+     (if (< $now-ms (codex:agent-job-progress-emit-interval-ms))
+         $now-ms
+         (- $now-ms (codex:agent-job-progress-emit-interval-ms)))
+     0
+     0))
+
+(= (codex:agent-job-progress-emitter-result $emitter $event)
+   (CodexAgentJobProgressEmitterResult $emitter $event))
+
+(= (codex:agent-job-progress-emitter-result-emitter
+      (CodexAgentJobProgressEmitterResult $emitter $event))
+   $emitter)
+
+(= (codex:agent-job-progress-emitter-result-event
+      (CodexAgentJobProgressEmitterResult $emitter $event))
+   $event)
+
+(= (codex:agent-job-progress-emitter-elapsed-since-emit-ms
+      $emitter
+      $now-ms)
+   (codex:agent-job-saturating-sub
+     $now-ms
+     (codex:agent-job-progress-emitter-last-emit-at-ms $emitter)))
+
+(= (codex:agent-job-progress-emitter-should-emit
+      $emitter
+      $progress
+      $now-ms
+      $force)
+   (let $processed (codex:agent-job-progress-processed $progress)
+     (or
+       $force
+       (or
+         (not (== $processed
+                 (codex:agent-job-progress-emitter-last-processed $emitter)))
+         (or
+           (not (== (codex:agent-job-progress-failed-items $progress)
+                    (codex:agent-job-progress-emitter-last-failed $emitter)))
+           (>=
+             (codex:agent-job-progress-emitter-elapsed-since-emit-ms
+               $emitter
+               $now-ms)
+             (codex:agent-job-progress-emit-interval-ms)))))))
+
+(= (codex:agent-job-strip-trailing-dot-zero $text)
+   (if (and
+         (> (str-length $text) 2)
+         (str-ends-with? $text ".0"))
+       (str-slice $text 0 (- (str-length $text) 2))
+       $text))
+
+(= (codex:agent-job-normalize-whole-number $value)
+   (let $text
+     (codex:agent-job-strip-trailing-dot-zero
+       (format-args "{}" ($value)))
+     (if (codex:agent-job-unsigned-integer-text-exceeds-uint64 $text)
+         (codex:agent-job-uint64-max-text)
+         (if (== $text (codex:agent-job-uint64-max-text))
+             (codex:agent-job-uint64-max-text)
+             (case (codex:agent-job-parse-unsigned-integer-text "number" $text)
+               (((CodexAgentJobOk $number) $number)))))))
+
+(= (codex:agent-job-progress-emitter-eta-seconds
+      $emitter
+      $progress
+      $now-ms)
+   (let $processed (codex:agent-job-progress-processed $progress)
+     (let $elapsed-ms
+       (codex:agent-job-saturating-sub
+         $now-ms
+         (codex:agent-job-progress-emitter-started-at-ms $emitter))
+       (if (and (> $processed 0) (> $elapsed-ms 0))
+           (let $remaining
+             (codex:agent-job-saturating-sub
+               (codex:agent-job-progress-total-items $progress)
+               $processed)
+             (codex:agent-job-normalize-whole-number
+               (trunc-math
+                 (round-math
+                   (/ (* $remaining $elapsed-ms)
+                      (* $processed 1000))))))
+           CodexAbsent))))
+
+(= (codex:agent-job-progress-emitter-event
+      $job-id
+      $progress
+      $eta-seconds)
+   (let $update
+     (codex:agent-job-progress-update
+       $job-id
+       (codex:agent-job-progress-total-items $progress)
+       (codex:agent-job-progress-pending-items $progress)
+       (codex:agent-job-progress-running-items $progress)
+       (codex:agent-job-progress-completed-items $progress)
+       (codex:agent-job-progress-failed-items $progress)
+       $eta-seconds)
+     (str-concat
+       "agent_job_progress:"
+       (json-stringify (codex:agent-job-progress-update-json $update)))))
+
+(= (codex:agent-job-progress-emitter-maybe-emit
+      $emitter
+      $job-id
+      $progress
+      $now-ms
+      $force)
+   (if (codex:agent-job-progress-emitter-should-emit
+         $emitter
+         $progress
+         $now-ms
+         $force)
+       (let $processed (codex:agent-job-progress-processed $progress)
+         (let $failed (codex:agent-job-progress-failed-items $progress)
+           (let $eta
+             (codex:agent-job-progress-emitter-eta-seconds
+               $emitter
+               $progress
+               $now-ms)
+             (codex:agent-job-progress-emitter-result
+               (codex:agent-job-progress-emitter
+                 (codex:agent-job-progress-emitter-started-at-ms $emitter)
+                 $now-ms
+                 $processed
+                 $failed)
+               (codex:agent-job-progress-emitter-event
+                 $job-id
+                 $progress
+                 $eta)))))
+       (codex:agent-job-progress-emitter-result $emitter CodexAbsent)))
 
 (= (codex:report-agent-job-result-tool-result $accepted)
    (CodexReportAgentJobResultToolResult $accepted))
