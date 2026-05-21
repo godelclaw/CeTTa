@@ -62,6 +62,66 @@
       CodexAbsent))
   (False))
 
+!(assertEqual
+  (codex:exec-policy-parse-starlark-line-from-message
+    "/tmp/default.rules:7:11: starlark error: unexpected token")
+  (codex:exec-policy-source-location "/tmp/default.rules" 7))
+
+!(assertEqual
+  (codex:exec-policy-parse-starlark-line-from-message
+    "/tmp/default.rules:0:11: starlark error: unexpected token")
+  CodexAbsent)
+
+!(assertEqual
+  (codex:exec-policy-message-for-display
+    (codex:exec-policy-parse-source-error
+      "note\n  error: expected list\nhelp"
+      CodexAbsent))
+  "  error: expected list")
+
+!(assertEqual
+  (codex:exec-policy-message-for-display
+    (codex:exec-policy-parse-source-error
+      "/tmp/default.rules:7:11: starlark error: unexpected token"
+      CodexAbsent))
+  "unexpected token")
+
+!(assertEqual
+  (codex:format-exec-policy-error-with-source
+    (codex:exec-policy-error-parse-policy
+      "configured-path.rules"
+      (codex:exec-policy-parse-source-error
+        "/tmp/default.rules:7:11: starlark error: unexpected token"
+        CodexAbsent)))
+  "/tmp/default.rules:7: unexpected token (problem is on or around line 7)")
+
+!(assertEqual
+  (codex:format-exec-policy-error-with-source
+    (codex:exec-policy-error-parse-policy
+      "configured-path.rules"
+      (codex:exec-policy-parse-source-error
+        "/tmp/default.rules:7:11: starlark error: unexpected token"
+        (codex:exec-policy-source-location "/structured.rules" 4))))
+  "/structured.rules:4: unexpected token (problem is on or around line 4)")
+
+!(assertEqual
+  (codex:format-exec-policy-error-with-source
+    (codex:exec-policy-error-parse-policy
+      "configured-path.rules"
+      (codex:exec-policy-parse-source-error
+        "/tmp/default.rules:7:11: starlark error: unexpected token"
+        (codex:exec-policy-source-location "/structured.rules" 1))))
+  "/tmp/default.rules:7: unexpected token (problem is on or around line 7)")
+
+!(assertEqual
+  (codex:format-exec-policy-error-with-source
+    (codex:exec-policy-error-parse-policy
+      "configured-path.rules"
+      (codex:exec-policy-parse-source-error
+        "plain parser failure"
+        CodexAbsent)))
+  "configured-path.rules: plain parser failure")
+
 !(assertEqualToResult
   (json-stringify
     (codex:check-output-json

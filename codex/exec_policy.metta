@@ -11,6 +11,7 @@
 ; - strictest-decision aggregation across one or more commands
 ; - child_uses_parent_exec_policy comparison over the three ConfigLayerStack
 ;   values used by Rust
+; - format_exec_policy_error_with_source parse-error display selection
 ;
 ; This increment intentionally starts from already-parsed rule constructors
 ; rather than Starlark policy-file parsing. That parser and its validation
@@ -49,6 +50,227 @@
              (and
                (== $parent-ignore-rules $child-ignore-rules)
                (== $parent-requirements-policy $child-requirements-policy))))))))))
+
+(= (codex:exec-policy-source-location $path $line)
+   (CodexExecPolicySourceLocation $path $line))
+
+(= (codex:exec-policy-parse-source-error
+      $message
+      $structured-location)
+   (CodexExecPolicyParseSourceError
+     $message
+     $structured-location))
+
+(= (codex:exec-policy-error-parse-policy $path $source)
+   (CodexExecPolicyErrorParsePolicy $path $source))
+
+(= (codex:exec-policy-error-other $message)
+   (CodexExecPolicyErrorOther $message))
+
+(= (codex:exec-policy-source-error-message
+      (CodexExecPolicyParseSourceError $message $structured-location))
+   $message)
+
+(= (codex:exec-policy-source-error-structured-location
+      (CodexExecPolicyParseSourceError $message $structured-location))
+   $structured-location)
+
+(= (codex:exec-policy-error-message
+      (CodexExecPolicyErrorOther $message))
+   $message)
+
+(= (codex:exec-policy-error-message
+      (CodexExecPolicyErrorParsePolicy $path $source))
+   (codex:format-exec-policy-error-with-source
+     (CodexExecPolicyErrorParsePolicy $path $source)))
+
+(= (codex:exec-policy-trim-start $text)
+   (codex:exec-policy-trim-start-from $text 0))
+
+(= (codex:exec-policy-trim-start-from $text $index)
+   (if (>= $index (str-length $text))
+       ""
+       (let $char (str-slice $text $index (+ $index 1))
+         (if (or (== $char " ") (or (== $char "\t") (== $char "\r")))
+             (codex:exec-policy-trim-start-from $text (+ $index 1))
+             (str-slice $text $index (str-length $text))))))
+
+(= (codex:exec-policy-first-line $message)
+   (let $lines (str-split "\n" $message)
+     (if (== $lines ())
+         ""
+         (str-trim (list:first $lines)))))
+
+(= (codex:exec-policy-first-error-line $lines)
+   (if (== $lines ())
+       CodexAbsent
+       (let $head (list:first $lines)
+         (let $tail (list:rest $lines)
+           (if (str-starts-with?
+                 (codex:exec-policy-trim-start $head)
+                 "error: ")
+               $head
+               (codex:exec-policy-first-error-line $tail))))))
+
+(= (codex:exec-policy-drop-last-list-item $items)
+   (if (== $items ())
+       ()
+       (let $head (list:first $items)
+         (let $tail (list:rest $items)
+           (if (== $tail ())
+               ()
+               (let $rest
+                 (eval (codex:exec-policy-drop-last-list-item $tail))
+                 (cons-atom $head $rest)))))))
+
+(= (codex:exec-policy-last-list-item $items $fallback)
+   (if (== $items ())
+       $fallback
+       (let $head (list:first $items)
+         (let $tail (list:rest $items)
+           (if (== $tail ())
+               $head
+               (codex:exec-policy-last-list-item $tail $head))))))
+
+(= (codex:exec-policy-rsplit-once $delimiter $text)
+   (let $parts (str-split $delimiter $text)
+     (if (== (list:len $parts) 1)
+         CodexAbsent
+         (CodexExecPolicySplitOnce
+           (str-join
+             $delimiter
+             (codex:exec-policy-drop-last-list-item $parts))
+           (codex:exec-policy-last-list-item $parts "")))))
+
+(= (codex:exec-policy-digit-value $char)
+   (if (== $char "0")
+       0
+       (if (== $char "1")
+           1
+           (if (== $char "2")
+               2
+               (if (== $char "3")
+                   3
+                   (if (== $char "4")
+                       4
+                       (if (== $char "5")
+                           5
+                           (if (== $char "6")
+                               6
+                               (if (== $char "7")
+                                   7
+                                   (if (== $char "8")
+                                       8
+                                       (if (== $char "9")
+                                           9
+                                           CodexAbsent)))))))))))
+
+(= (codex:exec-policy-parse-usize $text)
+   (if (== (str-length $text) 0)
+       CodexAbsent
+       (codex:exec-policy-parse-usize-from $text 0 0)))
+
+(= (codex:exec-policy-parse-usize-from $text $index $acc)
+   (if (>= $index (str-length $text))
+       $acc
+       (let $digit
+         (codex:exec-policy-digit-value
+           (str-slice $text $index (+ $index 1)))
+         (if (== $digit CodexAbsent)
+             CodexAbsent
+             (codex:exec-policy-parse-usize-from
+               $text
+               (+ $index 1)
+               (+ (* $acc 10) $digit))))))
+
+(= (codex:exec-policy-parse-starlark-line-from-message $message)
+   (let $first-line (str-trim (codex:exec-policy-first-line $message))
+     (case
+       (codex:exec-policy-rsplit-once ": starlark error:" $first-line)
+       ((CodexAbsent CodexAbsent)
+        ((CodexExecPolicySplitOnce $path-and-position $detail)
+         (let $parts (str-split ":" $path-and-position)
+           (if (< (list:len $parts) 3)
+               CodexAbsent
+               (let $column
+                 (codex:exec-policy-parse-usize
+                   (codex:exec-policy-last-list-item $parts ""))
+                 (if (== $column CodexAbsent)
+                     CodexAbsent
+                     (let $without-column
+                       (codex:exec-policy-drop-last-list-item $parts)
+                       (let $line
+                         (codex:exec-policy-parse-usize
+                           (codex:exec-policy-last-list-item
+                             $without-column
+                             ""))
+                         (if (or (== $line CodexAbsent) (== $line 0))
+                             CodexAbsent
+                             (codex:exec-policy-source-location
+                               (str-join
+                                 ":"
+                                 (codex:exec-policy-drop-last-list-item
+                                   $without-column))
+                               $line)))))))))))))
+
+(= (codex:exec-policy-message-for-display $source)
+   (let $message (codex:exec-policy-source-error-message $source)
+     (let $error-line
+       (codex:exec-policy-first-error-line
+         (str-split "\n" $message))
+       (if (== $error-line CodexAbsent)
+         (let $first-line (codex:exec-policy-first-line $message)
+           (case
+             (codex:exec-policy-rsplit-once
+               ": starlark error: "
+               $first-line)
+             ((CodexAbsent $first-line)
+              ((CodexExecPolicySplitOnce $before $detail)
+               (str-trim $detail)))))
+         $error-line))))
+
+(= (codex:exec-policy-select-error-location
+      $structured-location
+      $parsed-location)
+   (if (== $structured-location CodexAbsent)
+       $parsed-location
+       (case $structured-location
+         (((CodexExecPolicySourceLocation $structured-path $structured-line)
+           (if (and (== $structured-line 1)
+                    (not (== $parsed-location CodexAbsent)))
+               (case $parsed-location
+                 (((CodexExecPolicySourceLocation $parsed-path $parsed-line)
+                   (if (> $parsed-line 1)
+                       $parsed-location
+                       $structured-location))))
+               $structured-location))))))
+
+(= (codex:format-exec-policy-error-location
+      (CodexExecPolicySourceLocation $path $line)
+      $message)
+   (format-args
+     "{}:{}: {} (problem is on or around line {})"
+     ($path $line $message $line)))
+
+(= (codex:format-exec-policy-error-with-source
+      (CodexExecPolicyErrorParsePolicy $path $source))
+   (let $rendered-source
+     (codex:exec-policy-source-error-message $source)
+     (let $location
+       (codex:exec-policy-select-error-location
+         (codex:exec-policy-source-error-structured-location $source)
+         (codex:exec-policy-parse-starlark-line-from-message
+           $rendered-source))
+       (let $message (codex:exec-policy-message-for-display $source)
+         (if (== $location CodexAbsent)
+             (format-args "{}: {}" ($path $message))
+             (codex:format-exec-policy-error-location
+               $location
+               $message))))))
+
+(= (codex:format-exec-policy-error-with-source
+      (CodexExecPolicyErrorOther $message))
+   $message)
 
 (= (codex:decision-allow)
    "allow")
