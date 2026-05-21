@@ -1075,32 +1075,44 @@
       ($other ()))))
 
 (= (codex:config-permissions-warning-list-from-unsupported-paths
+      $paths)
+   (eval
+     (codex:config-permissions-warning-list-from-unsupported-paths-inner
+       $paths)))
+
+(= (codex:config-permissions-warning-list-from-unsupported-paths-inner
       ())
    ())
 
-(= (codex:config-permissions-warning-list-from-unsupported-paths
+(= (codex:config-permissions-warning-list-from-unsupported-paths-inner
       $paths)
    (let ($head $tail) (decons-atom $paths)
      (let $warning
        (codex:config-permissions-unsupported-read-write-glob-warning
          $head)
        (let $tail-warnings
-         (codex:config-permissions-warning-list-from-unsupported-paths
+         (codex:config-permissions-warning-list-from-unsupported-paths-inner
            $tail)
          (cons-atom $warning $tail-warnings)))))
 
 (= (codex:config-permissions-warning-list-from-unbounded-paths
+      $paths)
+   (eval
+     (codex:config-permissions-warning-list-from-unbounded-paths-inner
+       $paths)))
+
+(= (codex:config-permissions-warning-list-from-unbounded-paths-inner
       ())
    ())
 
-(= (codex:config-permissions-warning-list-from-unbounded-paths
+(= (codex:config-permissions-warning-list-from-unbounded-paths-inner
       $paths)
    (let ($head $tail) (decons-atom $paths)
      (let $warning
        (codex:config-permissions-unbounded-unreadable-globstar-warning
          $head)
        (let $tail-warnings
-         (codex:config-permissions-warning-list-from-unbounded-paths
+         (codex:config-permissions-warning-list-from-unbounded-paths-inner
            $tail)
          (cons-atom $warning $tail-warnings)))))
 

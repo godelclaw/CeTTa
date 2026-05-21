@@ -265,12 +265,13 @@
 
 (= (codex:unified-exec-open-session-approval-sandbox-permissions
       $request)
-   (if (== (codex:unified-exec-exec-command-request-additional-permissions-preapproved
-             $request)
-           True)
-       (codex:approval-sandbox-permissions-use-default)
-       (codex:unified-exec-exec-command-request-sandbox-permissions
-         $request)))
+   (let $materialized-request (once (eval $request))
+     (if (== (codex:unified-exec-exec-command-request-additional-permissions-preapproved
+               $materialized-request)
+             True)
+         (codex:approval-sandbox-permissions-use-default)
+         (codex:unified-exec-exec-command-request-sandbox-permissions
+           $materialized-request))))
 
 (= (codex:unified-exec-tool-request
       $command
@@ -843,69 +844,84 @@
       $cwd
       $context
       $inputs)
-   (let $local-policy-env
-     (codex:unified-exec-open-session-sandbox-inputs-local-policy-env
-       $inputs)
-     (let $env
-       (codex:unified-exec-apply-env-defaults
-         (codex:unified-exec-env-insert
-           $local-policy-env
-           "CODEX_THREAD_ID"
-           (codex:unified-exec-open-session-sandbox-inputs-conversation-id
-             $inputs)))
-       (let $exec-server-env-config
-         (codex:unified-exec-server-env-config
-           (codex:unified-exec-open-session-sandbox-inputs-exec-env-policy
-             $inputs)
-           $local-policy-env)
-         (let $approval-request
-           (codex:unified-exec-exec-approval-request
-             (codex:unified-exec-exec-command-request-command $request)
-             (codex:unified-exec-open-session-sandbox-inputs-approval-policy
-               $inputs)
-             (codex:unified-exec-open-session-sandbox-inputs-sandbox-policy
-               $inputs)
-             (codex:unified-exec-open-session-sandbox-inputs-file-system-sandbox-policy
-               $inputs)
-             (codex:unified-exec-open-session-approval-sandbox-permissions
-               $request)
-             (codex:unified-exec-exec-command-request-prefix-rule
-               $request))
-           (let $tool-request
-             (codex:unified-exec-tool-request
-               (codex:unified-exec-exec-command-request-command $request)
-               (codex:unified-exec-exec-command-request-hook-command
-                 $request)
-               (codex:unified-exec-exec-command-request-process-id
-                 $request)
-               $cwd
-               $env
-               $exec-server-env-config
-               (codex:unified-exec-open-session-sandbox-inputs-explicit-env-overrides
-                 $inputs)
-               (codex:unified-exec-exec-command-request-network $request)
-               (codex:unified-exec-exec-command-request-tty $request)
-               (codex:unified-exec-exec-command-request-sandbox-permissions
-                 $request)
-               (codex:unified-exec-exec-command-request-additional-permissions
-                 $request)
-               (codex:unified-exec-exec-command-request-additional-permissions-preapproved
-                 $request)
-               (codex:unified-exec-exec-command-request-justification
-                 $request)
-               (codex:unified-exec-open-session-sandbox-inputs-exec-approval-requirement
-                 $inputs))
-             (let $tool-ctx
-               (codex:unified-exec-tool-ctx
-                 (codex:unified-exec-context-session $context)
-                 (codex:unified-exec-context-turn $context)
-                 (codex:unified-exec-context-call-id $context)
-                 "exec_command")
-               (codex:unified-exec-open-session-with-sandbox-from-orchestrator
-                 $tool-request
-                 $tool-ctx
-                 $approval-request
-                 (codex:unified-exec-open-session-sandbox-inputs-runtime-shell-mode
-                   $inputs)
-                 (codex:unified-exec-open-session-sandbox-inputs-orchestrator-result
-                   $inputs)))))))))
+   (let $materialized-request (once (eval $request))
+     (let $materialized-context (once (eval $context))
+       (let $materialized-inputs (once (eval $inputs))
+         (let $local-policy-env
+           (codex:unified-exec-open-session-sandbox-inputs-local-policy-env
+             $materialized-inputs)
+           (case
+             (codex:unified-exec-apply-env-defaults
+               (codex:unified-exec-env-insert
+                 $local-policy-env
+                 "CODEX_THREAD_ID"
+                 (codex:unified-exec-open-session-sandbox-inputs-conversation-id
+                   $materialized-inputs)))
+             (($env
+             (let $exec-server-env-config
+               (eval
+                 (codex:unified-exec-server-env-config
+                   (codex:unified-exec-open-session-sandbox-inputs-exec-env-policy
+                     $materialized-inputs)
+                   $local-policy-env))
+               (let $approval-request
+                 (eval
+                   (codex:unified-exec-exec-approval-request
+                     (codex:unified-exec-exec-command-request-command
+                       $materialized-request)
+                     (codex:unified-exec-open-session-sandbox-inputs-approval-policy
+                       $materialized-inputs)
+                     (codex:unified-exec-open-session-sandbox-inputs-sandbox-policy
+                       $materialized-inputs)
+                     (codex:unified-exec-open-session-sandbox-inputs-file-system-sandbox-policy
+                       $materialized-inputs)
+                     (codex:unified-exec-open-session-approval-sandbox-permissions
+                       $materialized-request)
+                     (codex:unified-exec-exec-command-request-prefix-rule
+                       $materialized-request)))
+                 (let $tool-request
+                   (eval
+                     (codex:unified-exec-tool-request
+                       (codex:unified-exec-exec-command-request-command
+                         $materialized-request)
+                       (codex:unified-exec-exec-command-request-hook-command
+                         $materialized-request)
+                       (codex:unified-exec-exec-command-request-process-id
+                         $materialized-request)
+                       $cwd
+                       $env
+                       $exec-server-env-config
+                       (codex:unified-exec-open-session-sandbox-inputs-explicit-env-overrides
+                         $materialized-inputs)
+                       (codex:unified-exec-exec-command-request-network
+                         $materialized-request)
+                       (codex:unified-exec-exec-command-request-tty
+                         $materialized-request)
+                       (codex:unified-exec-exec-command-request-sandbox-permissions
+                         $materialized-request)
+                       (codex:unified-exec-exec-command-request-additional-permissions
+                         $materialized-request)
+                       (codex:unified-exec-exec-command-request-additional-permissions-preapproved
+                         $materialized-request)
+                       (codex:unified-exec-exec-command-request-justification
+                         $materialized-request)
+                       (codex:unified-exec-open-session-sandbox-inputs-exec-approval-requirement
+                         $materialized-inputs)))
+                   (let $tool-ctx
+                     (eval
+                       (codex:unified-exec-tool-ctx
+                         (codex:unified-exec-context-session
+                           $materialized-context)
+                         (codex:unified-exec-context-turn
+                           $materialized-context)
+                         (codex:unified-exec-context-call-id
+                           $materialized-context)
+                         "exec_command"))
+                     (codex:unified-exec-open-session-with-sandbox-from-orchestrator
+                       $tool-request
+                       $tool-ctx
+                       $approval-request
+                       (codex:unified-exec-open-session-sandbox-inputs-runtime-shell-mode
+                         $materialized-inputs)
+                       (codex:unified-exec-open-session-sandbox-inputs-orchestrator-result
+                         $materialized-inputs))))))))))))))

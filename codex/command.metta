@@ -356,11 +356,13 @@
 
 (= (codex:parse-token-groups $commands)
    (let ($head $tail) (decons-atom $commands)
-     (case (codex:parse-token-groups $tail)
-       (($parsed-tail
-         (cons-atom
-           (codex:summarize-main-tokens $head)
-           $parsed-tail))))))
+     (case (eval (codex:summarize-main-tokens $head))
+       (($parsed-head
+         (case (eval (codex:parse-token-groups $tail))
+           (($parsed-tail
+             (cons-atom
+               $parsed-head
+               $parsed-tail)))))))))
 
 (= (codex:parse-command-token-groups $commands)
    (let $filtered (codex:drop-small-formatting-commands $commands)

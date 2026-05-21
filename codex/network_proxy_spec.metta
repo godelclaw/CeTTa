@@ -153,9 +153,10 @@
                $tail)
              (cons-atom
                $head
-               (codex:network-domain-permissions-upsert-effective-entry
-                 $tail
-                 $entry))))))
+               (eval
+                 (codex:network-domain-permissions-upsert-effective-entry
+                   $tail
+                   $entry)))))))
 
 (= (codex:network-domain-permissions-effective-entries-acc
       $entries
@@ -163,11 +164,14 @@
    (if (== $entries ())
        $acc
        (let ($head $tail) (decons-atom $entries)
-         (codex:network-domain-permissions-effective-entries-acc
-           $tail
-           (codex:network-domain-permissions-upsert-effective-entry
-             $acc
-             $head)))))
+         (let $next-acc
+           (eval
+             (codex:network-domain-permissions-upsert-effective-entry
+               $acc
+               $head))
+           (codex:network-domain-permissions-effective-entries-acc
+             $tail
+             $next-acc)))))
 
 (= (codex:network-domain-permissions-effective-entries
       CodexAbsent)
@@ -175,9 +179,10 @@
 
 (= (codex:network-domain-permissions-effective-entries
       (CodexNetworkDomainPermissions $entries))
-   (codex:network-domain-permissions-effective-entries-acc
-     $entries
-     ()))
+   (eval
+     (codex:network-domain-permissions-effective-entries-acc
+       $entries
+       ())))
 
 (= (codex:network-domain-permissions-filter-patterns
       $entries
@@ -186,9 +191,10 @@
        ()
        (let ($head $tail) (decons-atom $entries)
          (let $rest
-           (codex:network-domain-permissions-filter-patterns
-             $tail
-             $permission)
+           (eval
+             (codex:network-domain-permissions-filter-patterns
+               $tail
+               $permission))
            (if (==
                  (codex:network-domain-permission-entry-permission $head)
                  $permission)
@@ -249,9 +255,10 @@
        ()
        (let ($head $tail) (decons-atom $entries)
          (let $rest
-           (codex:network-unix-socket-permissions-filter-paths
-             $tail
-             $permission)
+           (eval
+             (codex:network-unix-socket-permissions-filter-paths
+               $tail
+               $permission))
            (if (==
                  (codex:network-unix-socket-permission-entry-permission
                    $head)
@@ -278,9 +285,10 @@
        ()
        (let ($head $tail) (decons-atom $entries)
          (let $rest
-           (codex:network-unix-socket-remove-permission
-             $tail
-             $permission)
+           (eval
+             (codex:network-unix-socket-remove-permission
+               $tail
+               $permission))
            (if (==
                  (codex:network-unix-socket-permission-entry-permission
                    $head)
@@ -295,14 +303,17 @@
    (if (== $paths ())
        $entries
        (let ($head $tail) (decons-atom $paths)
-         (codex:network-unix-socket-add-paths
-           (list:push
-             $entries
-             (codex:network-unix-socket-permission-entry
-               $head
-               $permission))
-           $tail
-           $permission))))
+         (let $next-entries
+           (eval
+             (list:push
+               $entries
+               (codex:network-unix-socket-permission-entry
+                 $head
+                 $permission)))
+           (codex:network-unix-socket-add-paths
+             $next-entries
+             $tail
+             $permission)))))
 
 (= (codex:network-unix-socket-permissions-set-entries
       CodexAbsent
@@ -318,14 +329,16 @@
       $paths
       $permission)
    (let $retained
-     (codex:network-unix-socket-remove-permission
-       $entries
-       $permission)
+     (eval
+       (codex:network-unix-socket-remove-permission
+         $entries
+         $permission))
      (let $updated
-       (codex:network-unix-socket-add-paths
-         $retained
-         $paths
-         $permission)
+       (eval
+         (codex:network-unix-socket-add-paths
+           $retained
+           $paths
+           $permission))
        (if (== $updated ())
            CodexAbsent
            (codex:network-unix-socket-permissions $updated)))))
@@ -357,7 +370,8 @@
        ()
        (let ($head $tail) (decons-atom $entries)
          (let $rest
-           (codex:network-domain-remove-permission $tail $permission)
+           (eval
+             (codex:network-domain-remove-permission $tail $permission))
            (if (==
                  (codex:network-domain-permission-entry-permission $head)
                  $permission)
@@ -377,11 +391,12 @@
                  $head
                  $permission)
                $entries
-               (list:push
-                 $entries
-                 (codex:network-domain-permission-entry
-                   $head
-                   $permission)))
+               (eval
+                 (list:push
+                   $entries
+                   (codex:network-domain-permission-entry
+                     $head
+                     $permission))))
            (codex:network-domain-add-patterns
              $next
              $tail
@@ -401,14 +416,16 @@
       $patterns
       $permission)
    (let $retained
-     (codex:network-domain-remove-permission
-       $entries
-       $permission)
+     (eval
+       (codex:network-domain-remove-permission
+         $entries
+         $permission))
      (let $updated
-       (codex:network-domain-add-patterns
-         $retained
-         $patterns
-         $permission)
+       (eval
+         (codex:network-domain-add-patterns
+           $retained
+           $patterns
+           $permission))
        (if (== $updated ())
            CodexAbsent
            (codex:network-domain-permissions $updated)))))
@@ -420,9 +437,10 @@
        ()
        (let ($head $tail) (decons-atom $entries)
          (let $rest
-           (codex:network-domain-remove-normalized-host
-             $tail
-             $normalized-host)
+           (eval
+             (codex:network-domain-remove-normalized-host
+               $tail
+               $normalized-host))
            (if (==
                  (codex:network-proxy-normalize-host
                    (codex:network-domain-permission-entry-pattern $head))
@@ -443,15 +461,17 @@
       $permission)
    (let $normalized-host (codex:network-proxy-normalize-host $host)
      (let $retained
-       (codex:network-domain-remove-normalized-host
-         $entries
-         $normalized-host)
+       (eval
+         (codex:network-domain-remove-normalized-host
+           $entries
+           $normalized-host))
        (codex:network-domain-permissions
-         (list:push
-           $retained
-           (codex:network-domain-permission-entry
-             $host
-             $permission))))))
+         (eval
+           (list:push
+             $retained
+             (codex:network-domain-permission-entry
+               $host
+               $permission)))))))
 
 (= (codex:network-proxy-settings
       $enabled
@@ -792,20 +812,22 @@
       $allowed-domains)
    (codex:network-proxy-settings-set-domains
      $settings
-     (codex:network-domain-permissions-set-domain-entries
-       (codex:network-proxy-settings-domains $settings)
-       $allowed-domains
-       (codex:network-domain-permission-allow))))
+     (eval
+       (codex:network-domain-permissions-set-domain-entries
+         (codex:network-proxy-settings-domains $settings)
+         $allowed-domains
+         (codex:network-domain-permission-allow)))))
 
 (= (codex:network-proxy-settings-set-denied-domains
       $settings
       $denied-domains)
    (codex:network-proxy-settings-set-domains
      $settings
-     (codex:network-domain-permissions-set-domain-entries
-       (codex:network-proxy-settings-domains $settings)
-       $denied-domains
-       (codex:network-domain-permission-deny))))
+     (eval
+       (codex:network-domain-permissions-set-domain-entries
+         (codex:network-proxy-settings-domains $settings)
+         $denied-domains
+         (codex:network-domain-permission-deny)))))
 
 (= (codex:network-proxy-settings-set-allow-unix-sockets
       (CodexNetworkProxySettings
@@ -847,10 +869,11 @@
       $permission)
    (codex:network-proxy-settings-set-domains
      $settings
-     (codex:network-domain-permissions-upsert-domain-permission
-       (codex:network-proxy-settings-domains $settings)
-       $host
-       $permission)))
+     (eval
+       (codex:network-domain-permissions-upsert-domain-permission
+         (codex:network-proxy-settings-domains $settings)
+         $host
+         $permission))))
 
 (= (codex:network-proxy-config-set-network
       (CodexNetworkProxyConfig $network)
@@ -860,65 +883,74 @@
 (= (codex:network-proxy-config-set-allowed-domains
       $config
       $allowed-domains)
-   (codex:network-proxy-config-set-network
-     $config
-     (codex:network-proxy-settings-set-allowed-domains
-       (codex:network-proxy-config-network $config)
-       $allowed-domains)))
+   (let $materialized-config (once (eval $config))
+     (codex:network-proxy-config-set-network
+       $materialized-config
+       (codex:network-proxy-settings-set-allowed-domains
+         (codex:network-proxy-config-network $materialized-config)
+         $allowed-domains))))
 
 (= (codex:network-proxy-config-set-denied-domains
       $config
       $denied-domains)
-   (codex:network-proxy-config-set-network
-     $config
-     (codex:network-proxy-settings-set-denied-domains
-       (codex:network-proxy-config-network $config)
-       $denied-domains)))
+   (let $materialized-config (once (eval $config))
+     (codex:network-proxy-config-set-network
+       $materialized-config
+       (codex:network-proxy-settings-set-denied-domains
+         (codex:network-proxy-config-network $materialized-config)
+         $denied-domains))))
 
 (= (codex:network-proxy-config-upsert-domain-permission
       $config
       $host
       $permission)
-   (codex:network-proxy-config-set-network
-     $config
-     (codex:network-proxy-settings-upsert-domain-permission
-       (codex:network-proxy-config-network $config)
-       $host
-       $permission)))
+   (let $materialized-config (once (eval $config))
+     (codex:network-proxy-config-set-network
+       $materialized-config
+       (codex:network-proxy-settings-upsert-domain-permission
+         (codex:network-proxy-config-network $materialized-config)
+         $host
+         $permission))))
 
 (= (codex:network-proxy-config-set-allow-unix-sockets
       $config
       $allow-unix-sockets)
-   (codex:network-proxy-config-set-network
-     $config
-     (codex:network-proxy-settings-set-allow-unix-sockets
-       (codex:network-proxy-config-network $config)
-       $allow-unix-sockets)))
+   (let $materialized-config (once (eval $config))
+     (codex:network-proxy-config-set-network
+       $materialized-config
+       (codex:network-proxy-settings-set-allow-unix-sockets
+         (codex:network-proxy-config-network $materialized-config)
+         $allow-unix-sockets))))
 
 (= (codex:network-proxy-config-set-unix-sockets
       $config
       $unix-sockets)
-   (codex:network-proxy-config-set-network
-     $config
-     (codex:network-proxy-settings-set-unix-sockets
-       (codex:network-proxy-config-network $config)
-       $unix-sockets)))
+   (let $materialized-config (once (eval $config))
+     (codex:network-proxy-config-set-network
+       $materialized-config
+       (codex:network-proxy-settings-set-unix-sockets
+         (codex:network-proxy-config-network $materialized-config)
+         $unix-sockets))))
 
 (= (codex:network-proxy-config-allowed-domains $config)
-   (codex:network-proxy-settings-allowed-domains
-     (codex:network-proxy-config-network $config)))
+   (case (collapse $config)
+     ((((CodexNetworkProxyConfig $network))
+       (codex:network-proxy-settings-allowed-domains $network)))))
 
 (= (codex:network-proxy-config-denied-domains $config)
-   (codex:network-proxy-settings-denied-domains
-     (codex:network-proxy-config-network $config)))
+   (case (collapse $config)
+     ((((CodexNetworkProxyConfig $network))
+       (codex:network-proxy-settings-denied-domains $network)))))
 
 (= (codex:network-proxy-config-allow-unix-sockets $config)
-   (codex:network-proxy-settings-allow-unix-sockets
-     (codex:network-proxy-config-network $config)))
+   (case (collapse $config)
+     ((((CodexNetworkProxyConfig $network))
+       (codex:network-proxy-settings-allow-unix-sockets $network)))))
 
 (= (codex:network-proxy-config-unix-sockets $config)
-   (codex:network-proxy-settings-unix-sockets
-     (codex:network-proxy-config-network $config)))
+   (case (collapse $config)
+     ((((CodexNetworkProxyConfig $network))
+       (codex:network-proxy-settings-unix-sockets $network)))))
 
 (= (codex:network-proxy-config-set-enabled
       (CodexNetworkProxyConfig

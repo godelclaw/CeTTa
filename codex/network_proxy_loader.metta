@@ -405,12 +405,15 @@
        $config
        (let $head (list:first $entries)
          (let $tail (list:rest $entries)
-           (codex:network-proxy-loader-overlay-domain-permission-entries
-             (codex:network-proxy-config-upsert-domain-permission
-               $config
-               (codex:network-domain-permission-entry-pattern $head)
-               (codex:network-domain-permission-entry-permission $head))
-             $tail)))))
+           (let $next-config
+             (eval
+               (codex:network-proxy-config-upsert-domain-permission
+                 $config
+                 (codex:network-domain-permission-entry-pattern $head)
+                 (codex:network-domain-permission-entry-permission $head)))
+             (codex:network-proxy-loader-overlay-domain-permission-entries
+               $next-config
+               $tail))))))
 
 (= (codex:network-proxy-loader-overlay-network-domain-permissions
       $config
@@ -569,16 +572,18 @@
 (= (codex:network-proxy-loader-apply-network-tables
       $config
       $tables)
-   (case (codex:network-proxy-loader-selected-network-from-tables $tables)
-     (((CodexNetworkProxyLoaderOk $network)
-       (if (== $network CodexAbsent)
-           (codex:network-proxy-loader-result-ok $config)
-           (codex:network-proxy-loader-result-ok
-             (codex:network-toml-apply-to-network-proxy-config
-               $network
-               $config))))
-      ((CodexNetworkProxyLoaderError $message)
-       (codex:network-proxy-loader-result-error $message)))))
+   (case (collapse $config)
+     ((($materialized-config)
+       (case (codex:network-proxy-loader-selected-network-from-tables $tables)
+         (((CodexNetworkProxyLoaderOk $network)
+           (if (== $network CodexAbsent)
+               (codex:network-proxy-loader-result-ok $materialized-config)
+               (codex:network-proxy-loader-result-ok
+                 (codex:network-toml-apply-to-network-proxy-config
+                   $network
+                   $materialized-config))))
+          ((CodexNetworkProxyLoaderError $message)
+           (codex:network-proxy-loader-result-error $message))))))))
 
 (= (codex:network-proxy-loader-config-from-layers
       $layers
@@ -625,13 +630,16 @@
        $config
        (let $head (list:first $domains)
          (let $tail (list:rest $domains)
-           (codex:network-proxy-loader-upsert-network-domains
-             (codex:network-proxy-config-upsert-domain-permission
-               $config
-               $head
-               $permission)
-             $tail
-             $permission)))))
+           (let $next-config
+             (eval
+               (codex:network-proxy-config-upsert-domain-permission
+                 $config
+                 $head
+                 $permission))
+             (codex:network-proxy-loader-upsert-network-domains
+               $next-config
+               $tail
+               $permission))))))
 
 (= (codex:network-proxy-loader-apply-exec-policy-network-rules
       $config

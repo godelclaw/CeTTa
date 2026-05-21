@@ -1109,7 +1109,7 @@
    (if (== $headers ())
        ()
        (let ($head $tail) (decons-atom $headers)
-         (case (codex:model-provider-headers-remove $tail $name)
+         (case (eval (codex:model-provider-headers-remove $tail $name))
            (($rest
              (if (codex:model-provider-header-name-eq
                    (codex:model-provider-header-name $head)
@@ -1119,9 +1119,11 @@
 
 (= (codex:model-provider-headers-insert $headers $name $value)
    (if (codex:model-provider-header-valid $name $value)
-       (cons-atom
-         (codex:model-provider-header $name $value)
-         (codex:model-provider-headers-remove $headers $name))
+       (let $rest
+         (eval (codex:model-provider-headers-remove $headers $name))
+         (cons-atom
+           (codex:model-provider-header $name $value)
+           $rest))
        $headers))
 
 (= (codex:model-provider-headers-get $headers $name)
@@ -1164,12 +1166,12 @@
       (() $headers)
       ($materialized-entries
        (let ($entry $tail) (decons-atom $materialized-entries)
-         (case (codex:model-provider-info-fold-static-headers
+         (case (eval (codex:model-provider-info-fold-static-headers
                  $tail
                  (codex:model-provider-headers-insert
                    $headers
                    (codex:model-provider-header-name $entry)
-                   (codex:model-provider-header-value $entry)))
+                   (codex:model-provider-header-value $entry))))
            (($next-headers $next-headers))))))))
 
 (= (codex:model-provider-info-fold-env-headers-from-values
@@ -1185,13 +1187,13 @@
            (codex:model-provider-env-values-get
              $env-values
              (codex:model-provider-header-value $entry))
-           (case (codex:model-provider-info-fold-env-headers-from-values
+           (case (eval (codex:model-provider-info-fold-env-headers-from-values
                    $tail
                    $env-values
                    (codex:model-provider-info-insert-env-header
                      $headers
                      (codex:model-provider-header-name $entry)
-                     $env-value))
+                     $env-value)))
              (($next-headers $next-headers)))))))))
 
 (= (codex:model-provider-info-fold-env-headers-from-system
@@ -1206,12 +1208,12 @@
                  (codex:model-provider-header-value $entry)
                  CodexAbsent)
            (($env-value
-             (case (codex:model-provider-info-fold-env-headers-from-system
+             (case (eval (codex:model-provider-info-fold-env-headers-from-system
                      $tail
                      (codex:model-provider-info-insert-env-header
                        $headers
                        (codex:model-provider-header-name $entry)
-                       $env-value))
+                       $env-value)))
                (($next-headers $next-headers)))))))))))
 
 (= (codex:model-provider-info-build-header-map-from-env-values

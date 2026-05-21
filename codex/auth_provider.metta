@@ -70,7 +70,7 @@
    (if (== $headers ())
        ()
        (let ($head $tail) (decons-atom $headers)
-         (case (codex:headers-remove $tail $name)
+         (case (eval (codex:headers-remove $tail $name))
            (($rest
              (if (codex:header-name-eq (codex:header-name $head) $name)
                  $rest
@@ -78,9 +78,11 @@
 
 (= (codex:headers-insert $headers $name $value)
    (if (codex:header-value-valid $value)
-       (cons-atom
-         (codex:header $name $value)
-         (codex:headers-remove $headers $name))
+       (let $rest
+         (eval (codex:headers-remove $headers $name))
+         (cons-atom
+           (codex:header $name $value)
+           $rest))
        $headers))
 
 (= (codex:headers-get $headers $name)

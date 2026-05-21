@@ -46,42 +46,74 @@
     (codex:unified-exec-env-var "GH_PAGER" "cat")
     (codex:unified-exec-env-var "CODEX_CI" "1")))
 
-(= (codex:unified-exec-env-get $env $name)
+(= (codex:unified-exec-env-get-inner $env $name)
    (if (== $env ())
        CodexAbsent
        (let $head (list:first $env)
          (let $tail (list:rest $env)
            (if (== (codex:unified-exec-env-var-name $head) $name)
                (codex:unified-exec-env-var-value $head)
-               (codex:unified-exec-env-get $tail $name))))))
+               (codex:unified-exec-env-get-inner $tail $name))))))
+
+(= (codex:unified-exec-env-get $env $name)
+   (case (once (eval $env))
+     ((() CodexAbsent)
+      ($materialized-env
+       (let $head (list:first $materialized-env)
+         (let $tail (list:rest $materialized-env)
+           (if (== (codex:unified-exec-env-var-name $head) $name)
+               (codex:unified-exec-env-var-value $head)
+               (case (codex:unified-exec-env-get $tail $name)
+                 (($found $found))))))))))
 
 (= (codex:unified-exec-env-contains-key $env $name)
    (if (== (codex:unified-exec-env-get $env $name) CodexAbsent)
        False
        True))
 
-(= (codex:unified-exec-env-remove $env $name)
+(= (codex:unified-exec-env-remove-inner $env $name)
    (if (== $env ())
        ()
        (let $head (list:first $env)
          (let $tail (list:rest $env)
            (let $rest
-             (eval (codex:unified-exec-env-remove $tail $name))
+             (eval (codex:unified-exec-env-remove-inner $tail $name))
              (if (== (codex:unified-exec-env-var-name $head) $name)
                  $rest
                  (cons-atom $head $rest)))))))
 
+(= (codex:unified-exec-env-remove $env $name)
+   (case (once (eval $env))
+     ((() ())
+      ($materialized-env
+       (let $head (list:first $materialized-env)
+         (let $tail (list:rest $materialized-env)
+           (let $rest
+             (case (codex:unified-exec-env-remove $tail $name)
+               (($materialized-rest $materialized-rest)))
+             (if (== (codex:unified-exec-env-var-name $head) $name)
+                 $rest
+                 (cons-atom $head $rest)))))))))
+
 (= (codex:unified-exec-env-insert $env $name $value)
-   (cons-atom
-     (codex:unified-exec-env-var $name $value)
-     (codex:unified-exec-env-remove $env $name)))
+   (let $materialized-name (once (eval $name))
+     (let $materialized-value (once (eval $value))
+       (let $rest
+         (eval
+           (codex:unified-exec-env-remove $env $materialized-name))
+         (let $entry
+           (eval
+             (codex:unified-exec-env-var
+               $materialized-name
+               $materialized-value))
+           (cons-atom $entry $rest))))))
 
 (= (codex:unified-exec-apply-env-defaults $env)
    (codex:unified-exec-apply-env-defaults-from
      $env
      (codex:unified-exec-env-defaults)))
 
-(= (codex:unified-exec-apply-env-defaults-from $env $defaults)
+(= (codex:unified-exec-apply-env-defaults-from-inner $env $defaults)
    (if (== $defaults ())
        $env
        (let $head (list:first $defaults)
@@ -92,9 +124,25 @@
                  $env
                  (codex:unified-exec-env-var-name $head)
                  (codex:unified-exec-env-var-value $head)))
-             (codex:unified-exec-apply-env-defaults-from
+             (codex:unified-exec-apply-env-defaults-from-inner
                $updated
                $tail))))))
+
+(= (codex:unified-exec-apply-env-defaults-from $env $defaults)
+   (case (once (eval $defaults))
+     ((() (once (eval $env)))
+      ($materialized-defaults
+       (let $head (list:first $materialized-defaults)
+         (let $tail (list:rest $materialized-defaults)
+           (let $updated
+             (eval
+               (codex:unified-exec-env-insert
+                 $env
+                 (codex:unified-exec-env-var-name $head)
+                 (codex:unified-exec-env-var-value $head)))
+             (codex:unified-exec-apply-env-defaults-from
+               $updated
+               $tail))))))))
 
 (= (codex:unified-exec-env-overlay-for-exec-server
       $request-env

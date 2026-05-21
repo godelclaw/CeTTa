@@ -218,13 +218,17 @@
                $refresh-token-url-override-present)))))))
 
 (= (codex:openai-models-endpoint-auth-env-from-env-values
-      (CodexOpenAiModelsEndpoint $provider-info $auth-manager)
+      $endpoint
       $codex-api-key-env-enabled
       $env-values)
-   (codex:collect-auth-env-telemetry-from-env-values
-     $provider-info
-     $codex-api-key-env-enabled
-     $env-values))
+   (case (once (eval $endpoint))
+     (((CodexOpenAiModelsEndpoint $provider-info $auth-manager)
+       (let $materialized-provider-info (once (eval $provider-info))
+         (let $materialized-env-values (once (eval $env-values))
+           (codex:collect-auth-env-telemetry-from-env-values
+             $materialized-provider-info
+             $codex-api-key-env-enabled
+             $materialized-env-values)))))))
 
 (= (codex:models-request-telemetry
       $auth-mode
@@ -351,67 +355,77 @@
    (CodexOpenAiModelsEndpointRequestPlanErr $error))
 
 (= (codex:openai-models-endpoint-request-plan-value
-      (CodexOpenAiModelsEndpointRequestPlanOk $plan))
-   $plan)
+      $result)
+   (case (once (eval $result))
+     (((CodexOpenAiModelsEndpointRequestPlanOk $plan)
+       $plan))))
 
 (= (codex:openai-models-endpoint-request-plan-error
-      (CodexOpenAiModelsEndpointRequestPlanErr $error))
-   $error)
+      $result)
+   (case (once (eval $result))
+     (((CodexOpenAiModelsEndpointRequestPlanErr $error)
+       $error))))
 
 (= (codex:openai-models-endpoint-request-plan-from-env-values
-      (CodexOpenAiModelsEndpoint $provider-info $auth-manager)
+      $endpoint
       $client-version
       $provider-env-value
       $env-values
       $codex-api-key-env-enabled)
-   (let $auth
-     (codex:openai-models-endpoint-auth
-       (CodexOpenAiModelsEndpoint $provider-info $auth-manager))
-     (let $auth-mode
-       (case $auth
-         ((CodexAbsent CodexAbsent)
-          ($materialized-auth
-           (codex:codex-auth-auth-mode $materialized-auth))))
-       (case (codex:model-provider-info-to-api-provider-from-env-values
-               $provider-info
-               $auth-mode
-               $env-values)
-         (((CodexModelProviderToApiProviderErr $error)
-           (codex:openai-models-endpoint-request-plan-err $error))
-          ((CodexModelProviderToApiProviderOk $api-provider)
-           (case (codex:resolve-provider-auth-from-env-value
-                   $auth
-                   $provider-info
-                   $provider-env-value)
-             (((CodexModelProviderAuthResolveErr $error)
-               (codex:openai-models-endpoint-request-plan-err $error))
-              ((CodexModelProviderAuthResolveOk $api-auth)
-               (let $auth-header-telemetry
-                 (codex:auth-header-telemetry $api-auth)
-                 (let $auth-header-attached
-                   (codex:auth-header-telemetry-attached
-                     $auth-header-telemetry)
-                   (let $auth-header-name
-                     (codex:auth-header-telemetry-name
-                       $auth-header-telemetry)
-                     (let $auth-env
-                       (codex:collect-auth-env-telemetry-from-env-values
-                         $provider-info
-                         $codex-api-key-env-enabled
-                         $env-values)
-                       (let $request-telemetry
-                         (codex:models-request-telemetry
-                           $auth-mode
-                           $auth-header-attached
-                           $auth-header-name
-                           $auth-env)
-                         (let $endpoint (codex:models-endpoint-path)
-                           (let $timeout-ms (codex:models-refresh-timeout-ms)
-                             (codex:openai-models-endpoint-request-plan-ok
-                               (codex:openai-models-endpoint-request-plan
-                                 $client-version
-                                 $endpoint
-                                 $timeout-ms
-                                 $api-provider
-                                 $api-auth
-                                 $request-telemetry))))))))))))))))))
+   (case (once (eval $endpoint))
+     (((CodexOpenAiModelsEndpoint $provider-info $auth-manager)
+       (let $materialized-provider-info (once (eval $provider-info))
+         (let $materialized-env-values (once (eval $env-values))
+           (let $auth
+             (codex:openai-models-endpoint-auth
+               (CodexOpenAiModelsEndpoint
+                 $materialized-provider-info
+                 $auth-manager))
+             (let $auth-mode
+               (case $auth
+                 ((CodexAbsent CodexAbsent)
+                  ($materialized-auth
+                   (codex:codex-auth-auth-mode $materialized-auth))))
+               (case (codex:model-provider-info-to-api-provider-from-env-values
+                       $materialized-provider-info
+                       $auth-mode
+                       $materialized-env-values)
+                 (((CodexModelProviderToApiProviderErr $error)
+                   (codex:openai-models-endpoint-request-plan-err $error))
+                  ((CodexModelProviderToApiProviderOk $api-provider)
+                   (case (codex:resolve-provider-auth-from-env-value
+                           $auth
+                           $materialized-provider-info
+                           $provider-env-value)
+                     (((CodexModelProviderAuthResolveErr $error)
+                       (codex:openai-models-endpoint-request-plan-err $error))
+                      ((CodexModelProviderAuthResolveOk $api-auth)
+                       (let $auth-header-telemetry
+                         (codex:auth-header-telemetry $api-auth)
+                         (let $auth-header-attached
+                           (codex:auth-header-telemetry-attached
+                             $auth-header-telemetry)
+                           (let $auth-header-name
+                             (codex:auth-header-telemetry-name
+                               $auth-header-telemetry)
+                             (let $auth-env
+                               (codex:collect-auth-env-telemetry-from-env-values
+                                 $materialized-provider-info
+                                 $codex-api-key-env-enabled
+                                 $materialized-env-values)
+                               (let $request-telemetry
+                                 (codex:models-request-telemetry
+                                   $auth-mode
+                                   $auth-header-attached
+                                   $auth-header-name
+                                   $auth-env)
+                                 (let $endpoint-path (codex:models-endpoint-path)
+                                   (let $timeout-ms (codex:models-refresh-timeout-ms)
+                                     (codex:openai-models-endpoint-request-plan-ok
+                                       (codex:openai-models-endpoint-request-plan
+                                         $client-version
+                                         $endpoint-path
+                                         $timeout-ms
+                                         $api-provider
+                                         $api-auth
+                                         $request-telemetry)))))))))))))))))))))))

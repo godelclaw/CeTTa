@@ -473,7 +473,7 @@ Approval policy is `granular`. Categories set to `false` are automatically rejec
    (if (== $rules ())
        ()
        (let ($head $tail) (decons-atom $rules)
-         (case (codex:permissions-collect-allowed-prefixes-rules $tail)
+         (case (eval (codex:permissions-collect-allowed-prefixes-rules $tail))
            (($rest-prefixes
              (if (== (codex:prefix-rule-decision $head) "allow")
                  (case (codex:permissions-rule-prefix $head)
@@ -527,16 +527,21 @@ Approval policy is `granular`. Categories set to `false` are automatically rejec
                              $text))))))))
 
 (= (codex:permissions-prefix-sort-record $prefix)
-   (str-concat
-     (codex:permissions-pad-natural-six-text (size-atom $prefix))
-     (str-concat
-       "|"
+   (case $prefix
+     (($materialized-prefix
        (str-concat
          (codex:permissions-pad-natural-six-text
-           (codex:permissions-prefix-combined-str-len $prefix))
+           (size-atom $materialized-prefix))
          (str-concat
            "|"
-           (codex:permissions-render-command-prefix $prefix))))))
+           (str-concat
+             (codex:permissions-pad-natural-six-text
+               (codex:permissions-prefix-combined-str-len
+                 $materialized-prefix))
+             (str-concat
+               "|"
+               (codex:permissions-render-command-prefix
+                 $materialized-prefix)))))))))
 
 (= (codex:permissions-sort-prefix-records $prefixes)
    (let $materialized-prefixes (eval $prefixes)
@@ -571,12 +576,15 @@ Approval policy is `granular`. Categories set to `false` are automatically rejec
          (cons-atom $value $rest)))))
 
 (= (codex:permissions-sorted-rendered-prefixes $policy)
-   (let $sorted-records
-     (codex:permissions-dedup-sorted-strings
-       (codex:permissions-sort-prefix-records
-         (codex:permissions-collect-allowed-prefixes-rules
-           (codex:policy-rules $policy))))
-     (eval (codex:permissions-strip-prefix-sort-keys $sorted-records))))
+   (let $materialized-policy (once (eval $policy))
+     (let $materialized-rules
+       (once (eval (codex:policy-rules $materialized-policy)))
+       (let $sorted-records
+         (codex:permissions-dedup-sorted-strings
+           (codex:permissions-sort-prefix-records
+             (codex:permissions-collect-allowed-prefixes-rules
+               $materialized-rules)))
+         (eval (codex:permissions-strip-prefix-sort-keys $sorted-records))))))
 
 (= (codex:permissions-take-first-n $items $count)
    (if (<= $count 0)

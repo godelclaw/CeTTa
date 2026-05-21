@@ -196,10 +196,36 @@
          False)))
 
 (= (codex:is-known-safe-command? $tokens)
-   (let $parsed (once (eval (codex:parse-command $tokens)))
-     (if (== $parsed ())
+   (let $groups
+     (codex:approval-command-groups-for-safe-check $tokens)
+     (if (== $groups ())
          False
-         (codex:all-safe-parsed-commands? $parsed))))
+         (codex:approval-all-command-groups-safe? $groups))))
+
+(= (codex:approval-command-groups-for-safe-check $tokens)
+   (let $groups (codex:split-on-connectors $tokens)
+     (let $filtered (codex:drop-small-formatting-commands $groups)
+       (if (== $filtered ())
+           $groups
+           $filtered))))
+
+(= (codex:approval-all-command-groups-safe? ())
+   True)
+
+(= (codex:approval-all-command-groups-safe? $groups)
+   (let $head (list:first $groups)
+     (let $tail (list:rest $groups)
+       (if (codex:approval-command-group-safe? $head)
+           (codex:approval-all-command-groups-safe? $tail)
+           False))))
+
+(= (codex:approval-command-group-safe? $tokens)
+   (case (eval (codex:summarize-main-tokens $tokens))
+     (((CodexParsedCommandUnknown $cmd)
+       False)
+      ($parsed
+       (codex:is-safe-parsed-command-type?
+         (codex:parsed-command-type $parsed))))))
 
 (= (codex:commands-for-exec-policy $tokens)
    (if (== (list:len $tokens) 3)
@@ -937,16 +963,86 @@
       $sandbox_permissions
       $commands
       $used_complex_parsing)
-   (codex:check-policy-multiple-with-options-and-heuristics
-     $policy
-     $commands
-     (codex:approval-heuristics-fallback-with-sandbox
-       $approval_policy
-       $sandbox_policy
-       $file_system_sandbox_kind
-       $sandbox_permissions
-       $used_complex_parsing)
-     (codex:match-options True)))
+   (let $matched_rules
+     (list:first
+       (collapse
+         (codex:approval-matches-for-commands-with-sandbox
+           $policy
+           $approval_policy
+           $sandbox_policy
+           $file_system_sandbox_kind
+           $sandbox_permissions
+           $commands
+           $used_complex_parsing)))
+     (CodexExecPolicyCheckOutput
+       $matched_rules
+       (codex:decision-from-matched-rules $matched_rules))))
+
+(= (codex:approval-matches-for-commands-with-sandbox
+      $policy
+      $approval_policy
+      $sandbox_policy
+      $file_system_sandbox_kind
+      $sandbox_permissions
+      ()
+      $used_complex_parsing)
+   ())
+
+(= (codex:approval-matches-for-commands-with-sandbox
+      $policy
+      $approval_policy
+      $sandbox_policy
+      $file_system_sandbox_kind
+      $sandbox_permissions
+      $commands
+      $used_complex_parsing)
+   (let $head (list:first $commands)
+     (let $tail (list:rest $commands)
+       (let $head_matches
+         (codex:approval-matches-for-command-with-sandbox
+           $policy
+           $approval_policy
+           $sandbox_policy
+           $file_system_sandbox_kind
+           $sandbox_permissions
+           $head
+           $used_complex_parsing)
+         (let $tail_matches
+           (eval
+             (codex:approval-matches-for-commands-with-sandbox
+               $policy
+               $approval_policy
+               $sandbox_policy
+               $file_system_sandbox_kind
+               $sandbox_permissions
+               $tail
+               $used_complex_parsing))
+           (list:append $head_matches $tail_matches))))))
+
+(= (codex:approval-matches-for-command-with-sandbox
+      $policy
+      $approval_policy
+      $sandbox_policy
+      $file_system_sandbox_kind
+      $sandbox_permissions
+      $command
+      $used_complex_parsing)
+   (let $matches
+     (codex:matches-for-command-with-options
+       $policy
+       $command
+       (codex:match-options True))
+     (if (== $matches ())
+         ((CodexExecPolicyHeuristicsRuleMatch
+            $command
+            (codex:render-decision-for-unmatched-command-with-sandbox
+              $approval_policy
+              $sandbox_policy
+              $file_system_sandbox_kind
+              $sandbox_permissions
+              $command
+              $used_complex_parsing)))
+         $matches)))
 
 (= (codex:approval-for-command
       $approval_policy
@@ -1004,38 +1100,61 @@
      (let $commands (codex:exec-policy-command-list $policy_commands)
        (let $used_complex_parsing
          (codex:exec-policy-used-complex-parsing $policy_commands)
-         (let $evaluation
-           (codex:approval-evaluation-with-sandbox
+         (codex:approval-for-command-with-sandbox-matches
+           $approval_policy
+           $sandbox_policy
+           $file_system_sandbox_kind
+           $sandbox_permissions
+           $policy
+           $commands
+           $command
+           $prefix_rule
+           $used_complex_parsing
+           (codex:approval-matches-for-commands-with-sandbox
              $policy
              $approval_policy
              $sandbox_policy
              $file_system_sandbox_kind
              $sandbox_permissions
              $commands
-             $used_complex_parsing)
-           (let $matched_rules
-             (once (eval (codex:check-output-matched-rules $evaluation)))
-             (let $requested_amendment
-               (once
-                 (eval
-                   (codex:derive-requested-execpolicy-amendment-from-prefix-rule-with-sandbox
-                     $prefix_rule
-                     $matched_rules
-                     $policy
-                     $approval_policy
-                     $sandbox_policy
-                     $file_system_sandbox_kind
-                     $sandbox_permissions
-                     $commands
-                     $used_complex_parsing)))
-               (codex:approval-from-evaluation
-                 $approval_policy
-                 $policy
-                 $commands
-                 $command
-                 $evaluation
-                 $used_complex_parsing
-                 $requested_amendment))))))))
+             $used_complex_parsing))))))
+
+(= (codex:approval-for-command-with-sandbox-matches
+      $approval_policy
+      $sandbox_policy
+      $file_system_sandbox_kind
+      $sandbox_permissions
+      $policy
+      $commands
+      $command
+      $prefix_rule
+      $used_complex_parsing
+      $matched_rules)
+   (let $evaluation
+     (CodexExecPolicyCheckOutput
+       $matched_rules
+       (codex:decision-from-matched-rules $matched_rules))
+     (let $requested_amendment
+       (once
+         (eval
+           (codex:derive-requested-execpolicy-amendment-from-prefix-rule-with-sandbox
+             $prefix_rule
+             $matched_rules
+             $policy
+             $approval_policy
+             $sandbox_policy
+             $file_system_sandbox_kind
+             $sandbox_permissions
+             $commands
+             $used_complex_parsing)))
+       (codex:approval-from-evaluation
+         $approval_policy
+         $policy
+         $commands
+         $command
+         $evaluation
+         $used_complex_parsing
+         $requested_amendment))))
 
 (= (codex:approval-from-evaluation
       $approval_policy
@@ -1061,7 +1180,8 @@
       $used_complex_parsing
       $requested_amendment)
    (let $decision (once (eval (codex:check-output-decision $evaluation)))
-     (let $matched_rules (once (eval (codex:check-output-matched-rules $evaluation)))
+     (let $matched_rules
+       (list:first (collapse (codex:check-output-matched-rules $evaluation)))
        (let $auto_amendment
          (once
            (eval
