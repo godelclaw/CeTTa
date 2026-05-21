@@ -12,6 +12,7 @@
 ; - render_instruction_template
 ; - ensure_unique_headers
 ; - AgentJob result/progress JSON projections
+; - build_worker_prompt
 ; - value_to_csv_string / csv_escape / render_job_csv
 ;
 ; Required slice-local deviations from Rust, documented for audit:
@@ -22,6 +23,14 @@
 ;   timestamps. This CeTTa projection carries only fields read by the renderer;
 ;   optional timestamp fields are expected to already be RFC3339 text when
 ;   present.
+; - Rust `build_worker_prompt` receives a full `codex_state::AgentJob`. This
+;   CeTTa projection carries the full Rust field list for stable construction,
+;   while the prompt helper reads only `id`, `instruction`, and
+;   `output_schema_json`, matching the Rust implementation.
+; - Rust uses `serde_json::to_string_pretty`, which is fallible in the generic
+;   serializer API. CeTTa JSON atoms are already in the local JSON value
+;   representation, so this slice exposes deterministic pretty rendering rather
+;   than a fallible serializer wrapper.
 
 !(import! &self function_tool)
 !(import! &self json)
@@ -79,6 +88,17 @@
 (= (codex:agent-job-status-as-str (CodexAgentJobStatusCancelled))
    "cancelled")
 
+(= (codex:agent-job-status-parse $value)
+   (case $value
+     (("pending" (codex:agent-job-ok (CodexAgentJobStatusPending)))
+      ("running" (codex:agent-job-ok (CodexAgentJobStatusRunning)))
+      ("completed" (codex:agent-job-ok (CodexAgentJobStatusCompleted)))
+      ("failed" (codex:agent-job-ok (CodexAgentJobStatusFailed)))
+      ("cancelled" (codex:agent-job-ok (CodexAgentJobStatusCancelled)))
+      ($other
+       (codex:agent-job-err
+         (format-args "invalid agent job status: {}" ($other)))))))
+
 (= (codex:is-agent-job-status-final $status)
    (case (once (eval $status))
      (((CodexAgentJobStatusCompleted) True)
@@ -109,6 +129,16 @@
 
 (= (codex:agent-job-item-status-as-str (CodexAgentJobItemStatusFailed))
    "failed")
+
+(= (codex:agent-job-item-status-parse $value)
+   (case $value
+     (("pending" (codex:agent-job-ok (CodexAgentJobItemStatusPending)))
+      ("running" (codex:agent-job-ok (CodexAgentJobItemStatusRunning)))
+      ("completed" (codex:agent-job-ok (CodexAgentJobItemStatusCompleted)))
+      ("failed" (codex:agent-job-ok (CodexAgentJobItemStatusFailed)))
+      ($other
+       (codex:agent-job-err
+         (format-args "invalid agent job item status: {}" ($other)))))))
 
 (= (codex:agent-job-normalize-concurrency $requested $max-threads)
    (let $requested-value
@@ -223,6 +253,205 @@
    (if (== $value CodexAbsent)
        JsonNull
        $value))
+
+(= (codex:agent-job-json-pretty-indent $width)
+   (str-join "" (list:repeat $width " ")))
+
+(= (codex:agent-job-json-pretty $value)
+   (codex:agent-job-json-pretty-at $value 0))
+
+(= (codex:agent-job-json-pretty-at $value $indent)
+   (case (once (eval $value))
+     (((JsonObject ())
+       "{}")
+      ((JsonObject $pairs)
+       (codex:agent-job-json-pretty-object $pairs $indent))
+      ((JsonArray ())
+       "[]")
+      ((JsonArray $items)
+       (codex:agent-job-json-pretty-array $items $indent))
+      ((JsonString $text)
+       (json-stringify (JsonString $text)))
+      ((JsonNumber $text)
+       $text)
+      ((JsonBool True)
+       "true")
+      ((JsonBool False)
+       "false")
+      (JsonNull
+       "null"))))
+
+(= (codex:agent-job-json-pretty-pair (JsonPair $key $value) $indent)
+   (str-concat
+     (codex:agent-job-json-pretty-indent $indent)
+     (str-concat
+       (json-stringify (JsonString $key))
+       (str-concat
+         ": "
+         (codex:agent-job-json-pretty-at $value $indent)))))
+
+(= (codex:agent-job-json-pretty-object $pairs $indent)
+   (let $next-indent (+ $indent 2)
+     (let $body
+       (str-join
+         ",\n"
+         (map-atom
+           $pairs
+           $pair
+           (codex:agent-job-json-pretty-pair $pair $next-indent)))
+       (str-concat
+         "{\n"
+         (str-concat
+           $body
+           (str-concat
+             "\n"
+             (str-concat
+               (codex:agent-job-json-pretty-indent $indent)
+               "}")))))))
+
+(= (codex:agent-job-json-pretty-array-item $item $indent)
+   (str-concat
+     (codex:agent-job-json-pretty-indent $indent)
+     (codex:agent-job-json-pretty-at $item $indent)))
+
+(= (codex:agent-job-json-pretty-array $items $indent)
+   (let $next-indent (+ $indent 2)
+     (let $body
+       (str-join
+         ",\n"
+         (map-atom
+           $items
+           $item
+           (codex:agent-job-json-pretty-array-item $item $next-indent)))
+       (str-concat
+         "[\n"
+         (str-concat
+           $body
+           (str-concat
+             "\n"
+             (str-concat
+               (codex:agent-job-json-pretty-indent $indent)
+               "]")))))))
+
+(= (codex:agent-job
+      $id
+      $name
+      $status
+      $instruction
+      $auto-export
+      $max-runtime-seconds
+      $output-schema-json
+      $input-headers
+      $input-csv-path
+      $output-csv-path
+      $created-at
+      $updated-at
+      $started-at
+      $completed-at
+      $last-error)
+   (CodexAgentJob
+     $id
+     $name
+     $status
+     $instruction
+     $auto-export
+     $max-runtime-seconds
+     $output-schema-json
+     $input-headers
+     $input-csv-path
+     $output-csv-path
+     $created-at
+     $updated-at
+     $started-at
+     $completed-at
+     $last-error))
+
+(= (codex:agent-job-id
+      (CodexAgentJob
+        $id
+        $name
+        $status
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path
+        $created-at
+        $updated-at
+        $started-at
+        $completed-at
+        $last-error))
+   $id)
+
+(= (codex:agent-job-instruction
+      (CodexAgentJob
+        $id
+        $name
+        $status
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path
+        $created-at
+        $updated-at
+        $started-at
+        $completed-at
+        $last-error))
+   $instruction)
+
+(= (codex:agent-job-output-schema-json
+      (CodexAgentJob
+        $id
+        $name
+        $status
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path
+        $created-at
+        $updated-at
+        $started-at
+        $completed-at
+        $last-error))
+   $output-schema-json)
+
+(= (codex:agent-job-output-schema-pretty $output-schema-json)
+   (if (== $output-schema-json CodexAbsent)
+       "{}"
+       (codex:agent-job-json-pretty $output-schema-json)))
+
+(= (codex:agent-job-build-worker-prompt $job $item)
+   (let $materialized-job (once (eval $job))
+     (let $materialized-item (once (eval $item))
+       (let $job-id (codex:agent-job-id $materialized-job)
+         (let $item-id (codex:agent-job-item-id $materialized-item)
+           (let $instruction
+             (codex:agent-job-render-instruction-template
+               (codex:agent-job-instruction $materialized-job)
+               (codex:agent-job-item-row-json $materialized-item))
+             (let $row-json
+               (codex:agent-job-json-pretty
+                 (codex:agent-job-item-row-json $materialized-item))
+               (let $output-schema
+                 (codex:agent-job-output-schema-pretty
+                   (codex:agent-job-output-schema-json $materialized-job))
+                 (str-concat
+                   (format-args
+                     "You are processing one item for a generic agent job.\nJob ID: {}\nItem ID: {}\n\nTask instruction:\n{}\n\nInput row (JSON):\n{}\n\nExpected result schema (JSON Schema or "
+                     ($job-id $item-id $instruction $row-json))
+                   (str-concat
+                     "{}"
+                     (format-args
+                       "):\n{}\n\nYou MUST call the `report_agent_job_result` tool exactly once with:\n1. `job_id` = \"{}\"\n2. `item_id` = \"{}\"\n3. `result` = a JSON object that contains your analysis result for this row.\n\nIf you need to stop the job early, include `stop` = true in the tool call.\n\nAfter the tool call succeeds, stop."
+                       ($output-schema $job-id $item-id))))))))))))
 
 (= (codex:agent-job-failure-summary $item-id $source-id $last-error)
    (CodexAgentJobFailureSummary $item-id $source-id $last-error))

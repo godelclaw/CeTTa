@@ -49,6 +49,22 @@
   "completed")
 
 !(assertEqual
+  (codex:agent-job-status-parse "cancelled")
+  (codex:agent-job-ok (codex:agent-job-status-cancelled)))
+
+!(assertEqual
+  (codex:agent-job-status-parse "paused")
+  (codex:agent-job-err "invalid agent job status: paused"))
+
+!(assertEqual
+  (codex:agent-job-item-status-parse "running")
+  (codex:agent-job-ok (codex:agent-job-item-status-running)))
+
+!(assertEqual
+  (codex:agent-job-item-status-parse "paused")
+  (codex:agent-job-err "invalid agent job item status: paused"))
+
+!(assertEqual
   (codex:agent-job-normalize-concurrency CodexAbsent CodexAbsent)
   16)
 
@@ -98,6 +114,64 @@
     "No object {{literal}} {missing}"
     (JsonArray ()))
   "No object {literal} {missing}")
+
+!(assertEqual
+  (codex:agent-job-json-pretty
+    (JsonObject
+      ((JsonPair "path" (JsonString "src/lib.rs"))
+       (JsonPair
+         "result"
+         (JsonObject
+           ((JsonPair "ok" (JsonBool True))
+            (JsonPair
+              "items"
+              (JsonArray ((JsonNumber "1") (JsonString "two"))))))))))
+  "{\n  \"path\": \"src/lib.rs\",\n  \"result\": {\n    \"ok\": true,\n    \"items\": [\n      1,\n      \"two\"\n    ]\n  }\n}")
+
+!(assertEqual
+  (codex:agent-job-build-worker-prompt
+    (codex:agent-job
+      "job-1"
+      "example"
+      (codex:agent-job-status-running)
+      "Review {path}; literal {{braces}}."
+      True
+      CodexAbsent
+      (JsonObject
+        ((JsonPair "type" (JsonString "object"))
+         (JsonPair
+           "properties"
+           (JsonObject
+             ((JsonPair
+                "summary"
+                (JsonObject ((JsonPair "type" (JsonString "string"))))))))))
+      ("path")
+      "/tmp/input.csv"
+      "/tmp/output.csv"
+      "2026-05-21T00:00:00+00:00"
+      "2026-05-21T00:00:00+00:00"
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent)
+    (codex:agent-job-item
+      "job-1"
+      "item-1"
+      0
+      CodexAbsent
+      (JsonObject
+        ((JsonPair "path" (JsonString "src/lib.rs"))
+         (JsonPair "priority" (JsonNumber "2"))))
+      (codex:agent-job-item-status-running)
+      1
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent))
+  "You are processing one item for a generic agent job.\nJob ID: job-1\nItem ID: item-1\n\nTask instruction:\nReview src/lib.rs; literal {braces}.\n\nInput row (JSON):\n{\n  \"path\": \"src/lib.rs\",\n  \"priority\": 2\n}\n\nExpected result schema (JSON Schema or {}):\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"summary\": {\n      \"type\": \"string\"\n    }\n  }\n}\n\nYou MUST call the `report_agent_job_result` tool exactly once with:\n1. `job_id` = \"job-1\"\n2. `item_id` = \"item-1\"\n3. `result` = a JSON object that contains your analysis result for this row.\n\nIf you need to stop the job early, include `stop` = true in the tool call.\n\nAfter the tool call succeeds, stop.")
+
+!(assertEqual
+  (codex:agent-job-output-schema-pretty CodexAbsent)
+  "{}")
 
 !(assertEqual
   (codex:agent-job-ensure-unique-headers ("id" "name" "id"))
