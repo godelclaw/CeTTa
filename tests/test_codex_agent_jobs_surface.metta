@@ -258,6 +258,30 @@
   "/agent_job_output.agent-job-12345678.csv")
 
 !(assertEqual
+  (codex:agent-job-parse-csv
+    "id,name\n1,\"alpha, beta\"\n2,gamma\n")
+  (codex:agent-job-ok
+    (codex:agent-job-csv-table
+      ("id" "name")
+      (("1" "alpha, beta") ("2" "gamma")))))
+
+!(assertEqual
+  (codex:agent-job-parse-csv
+    "﻿id,note\r\n,\r\n1,\"line one\nline two\"\r\n2,\"say \"\"hi\"\"\"\r\n")
+  (codex:agent-job-ok
+    (codex:agent-job-csv-table
+      ("id" "note")
+      (("1" "line one\nline two") ("2" "say \"hi\"")))))
+
+!(assertEqual
+  (codex:agent-job-parse-csv "id,note\n1,\"unterminated")
+  (codex:agent-job-err "CSV ended inside quoted field"))
+
+!(assertEqual
+  (codex:agent-job-parse-csv "id,note\n1,ba\"re")
+  (codex:agent-job-err "CSV bare quote in unquoted field"))
+
+!(assertEqual
   (codex:agent-job-ensure-unique-headers ("id" "name" "id"))
   (codex:agent-job-err
     (codex:function-call-error-respond-to-model

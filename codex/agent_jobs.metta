@@ -13,14 +13,19 @@
 ; - ensure_unique_headers
 ; - job_runtime_timeout
 ; - default_output_csv_path
+; - parse_csv
 ; - AgentJob result/progress JSON projections
 ; - build_worker_prompt
 ; - value_to_csv_string / csv_escape / render_job_csv
 ;
 ; Required slice-local deviations from Rust, documented for audit:
-; - Rust's CSV input parser uses the `csv` crate. This slice does not re-port
-;   that parser yet; it ports the deterministic CSV renderer used for output
-;   snapshots.
+; - Rust's CSV input parser uses `csv::ReaderBuilder` with headers and flexible
+;   row lengths. The CeTTa parser below is a direct finite-state implementation
+;   of the Codex-used settings for UTF-8 text input: comma delimiter, quoted
+;   fields, doubled quote escapes, LF/CRLF record terminators, flexible row
+;   lengths, BOM trimming on the first header, and all-empty data-row skipping.
+;   Malformed quote diagnostics are intentionally simpler than the `csv` crate's
+;   byte-positioned error strings.
 ; - Rust `render_job_csv` receives full `codex_state::AgentJobItem` structs with
 ;   timestamps. This CeTTa projection carries only fields read by the renderer;
 ;   optional timestamp fields are expected to already be RFC3339 text when
@@ -247,6 +252,346 @@
 
 (= (codex:agent-job-ensure-unique-headers $headers)
    (codex:agent-job-ensure-unique-headers-from $headers ()))
+
+(= (codex:agent-job-csv-table $headers $rows)
+   (CodexAgentJobCsvTable $headers $rows))
+
+(= (codex:agent-job-csv-table-headers
+      (CodexAgentJobCsvTable $headers $rows))
+   $headers)
+
+(= (codex:agent-job-csv-table-rows
+      (CodexAgentJobCsvTable $headers $rows))
+   $rows)
+
+(= (codex:agent-job-csv-finalize-row
+      $rows-rev
+      $row-rev
+      $field
+      $record-started)
+   (if (or $record-started
+           (or (not (== $row-rev ())) (not (== $field ""))))
+       (cons-atom
+         (list:reverse (cons-atom $field $row-rev))
+         $rows-rev)
+       $rows-rev))
+
+(= (codex:agent-job-csv-scan-after-record
+      $content
+      $index
+      $rows-rev)
+   (let $next-index (+ $index 1)
+     (if (and (< $next-index (str-length $content))
+              (== (str-slice $content $next-index (+ $next-index 1)) "\n"))
+         (codex:agent-job-csv-scan
+           $content
+           (+ $index 2)
+           $rows-rev
+           ()
+           ""
+           False
+           False
+           True
+           False)
+         (codex:agent-job-csv-scan
+           $content
+           (+ $index 1)
+           $rows-rev
+           ()
+           ""
+           False
+           False
+           True
+           False))))
+
+(= (codex:agent-job-csv-scan-finish
+      $rows-rev
+      $row-rev
+      $field
+      True
+      $after-quote
+      $field-start
+      $record-started)
+   (codex:agent-job-err "CSV ended inside quoted field"))
+
+(= (codex:agent-job-csv-scan-finish
+      $rows-rev
+      $row-rev
+      $field
+      False
+      $after-quote
+      $field-start
+      $record-started)
+   (codex:agent-job-ok
+     (list:reverse
+       (codex:agent-job-csv-finalize-row
+         $rows-rev
+         $row-rev
+         $field
+         $record-started))))
+
+(= (codex:agent-job-csv-scan-quoted
+      $content
+      $index
+      $rows-rev
+      $row-rev
+      $field
+      $field-start
+      $record-started
+      $char)
+   (case $char
+     (("\""
+       (codex:agent-job-csv-scan
+         $content
+         (+ $index 1)
+         $rows-rev
+         $row-rev
+         $field
+         False
+         True
+         False
+         True))
+      ($other
+       (codex:agent-job-csv-scan
+         $content
+         (+ $index 1)
+         $rows-rev
+         $row-rev
+         (str-concat $field $other)
+         True
+         False
+         False
+         True)))))
+
+(= (codex:agent-job-csv-scan-after-quote
+      $content
+      $index
+      $rows-rev
+      $row-rev
+      $field
+      $char)
+   (case $char
+     (("\""
+       (codex:agent-job-csv-scan
+         $content
+         (+ $index 1)
+         $rows-rev
+         $row-rev
+         (str-concat $field "\"")
+         True
+         False
+         False
+         True))
+      (","
+       (codex:agent-job-csv-scan
+         $content
+         (+ $index 1)
+         $rows-rev
+         (cons-atom $field $row-rev)
+         ""
+         False
+         False
+         True
+         True))
+      ("\n"
+       (codex:agent-job-csv-scan
+         $content
+         (+ $index 1)
+         (codex:agent-job-csv-finalize-row
+           $rows-rev
+           $row-rev
+           $field
+           True)
+         ()
+         ""
+         False
+         False
+         True
+         False))
+      ("\r"
+       (codex:agent-job-csv-scan-after-record
+         $content
+         $index
+         (codex:agent-job-csv-finalize-row
+           $rows-rev
+           $row-rev
+           $field
+           True)))
+      ($other
+       (codex:agent-job-err
+         "CSV quote must be followed by a delimiter, record terminator, or quote")))))
+
+(= (codex:agent-job-csv-scan-unquoted
+      $content
+      $index
+      $rows-rev
+      $row-rev
+      $field
+      $field-start
+      $record-started
+      $char)
+   (case $char
+     (("\""
+       (if $field-start
+           (codex:agent-job-csv-scan
+             $content
+             (+ $index 1)
+             $rows-rev
+             $row-rev
+             $field
+             True
+             False
+             False
+             True)
+           (codex:agent-job-err "CSV bare quote in unquoted field")))
+      (","
+       (codex:agent-job-csv-scan
+         $content
+         (+ $index 1)
+         $rows-rev
+         (cons-atom $field $row-rev)
+         ""
+         False
+         False
+         True
+         True))
+      ("\n"
+       (codex:agent-job-csv-scan
+         $content
+         (+ $index 1)
+         (codex:agent-job-csv-finalize-row
+           $rows-rev
+           $row-rev
+           $field
+           $record-started)
+         ()
+         ""
+         False
+         False
+         True
+         False))
+      ("\r"
+       (codex:agent-job-csv-scan-after-record
+         $content
+         $index
+         (codex:agent-job-csv-finalize-row
+           $rows-rev
+           $row-rev
+           $field
+           $record-started)))
+      ($other
+       (codex:agent-job-csv-scan
+         $content
+         (+ $index 1)
+         $rows-rev
+         $row-rev
+         (str-concat $field $other)
+         False
+         False
+         False
+         True)))))
+
+(= (codex:agent-job-csv-scan
+      $content
+      $index
+      $rows-rev
+      $row-rev
+      $field
+      $in-quotes
+      $after-quote
+      $field-start
+      $record-started)
+   (if (== $index (str-length $content))
+       (codex:agent-job-csv-scan-finish
+         $rows-rev
+         $row-rev
+         $field
+         $in-quotes
+         $after-quote
+         $field-start
+         $record-started)
+       (let $char (str-slice $content $index (+ $index 1))
+         (if $in-quotes
+             (codex:agent-job-csv-scan-quoted
+               $content
+               $index
+               $rows-rev
+               $row-rev
+               $field
+               $field-start
+               $record-started
+               $char)
+             (if $after-quote
+                 (codex:agent-job-csv-scan-after-quote
+                   $content
+                   $index
+                   $rows-rev
+                   $row-rev
+                   $field
+                   $char)
+                 (codex:agent-job-csv-scan-unquoted
+                   $content
+                   $index
+                   $rows-rev
+                   $row-rev
+                   $field
+                   $field-start
+                   $record-started
+                   $char))))))
+
+(= (codex:agent-job-csv-trim-bom $text)
+   ; CeTTa str-slice indexes UTF-8 bytes here; the BOM is three bytes.
+   (if (str-starts-with? $text "﻿")
+       (str-slice $text 3 (str-length $text))
+       $text))
+
+(= (codex:agent-job-csv-trim-first-header-bom ())
+   ())
+
+(= (codex:agent-job-csv-trim-first-header-bom $headers)
+   (let ($head $tail) (decons-atom $headers)
+     (cons-atom (codex:agent-job-csv-trim-bom $head) $tail)))
+
+(= (codex:agent-job-csv-row-is-all-empty ())
+   True)
+
+(= (codex:agent-job-csv-row-is-all-empty $row)
+   (let ($head $tail) (decons-atom $row)
+     (if (== $head "")
+         (codex:agent-job-csv-row-is-all-empty $tail)
+         False)))
+
+(= (codex:agent-job-csv-filter-nonempty-rows ())
+   ())
+
+(= (codex:agent-job-csv-filter-nonempty-rows $rows)
+   (let ($head $tail) (decons-atom $rows)
+     (let $filtered-tail (codex:agent-job-csv-filter-nonempty-rows $tail)
+       (if (codex:agent-job-csv-row-is-all-empty $head)
+           $filtered-tail
+           (cons-atom $head $filtered-tail)))))
+
+(= (codex:agent-job-parse-csv $content)
+   (case (codex:agent-job-csv-scan
+           $content
+           0
+           ()
+           ()
+           ""
+           False
+           False
+           True
+           False)
+     (((CodexAgentJobErr $error)
+       (codex:agent-job-err $error))
+      ((CodexAgentJobOk ())
+       (codex:agent-job-err "CSV input is empty"))
+      ((CodexAgentJobOk $records)
+       (let ($headers $rows) (decons-atom $records)
+         (codex:agent-job-ok
+           (codex:agent-job-csv-table
+             (codex:agent-job-csv-trim-first-header-bom $headers)
+             (codex:agent-job-csv-filter-nonempty-rows $rows))))))))
 
 (= (codex:agent-job-json-number $value)
    (JsonNumber (format-args "{}" ($value))))
