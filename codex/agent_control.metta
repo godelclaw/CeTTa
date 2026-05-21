@@ -6,6 +6,7 @@
 ; Covered in this increment:
 ; - thread_spawn_parent_thread_id
 ; - thread_spawn_depth
+; - keep_forked_rollout_item
 ; - register_session_root
 ; - get_agent_metadata registry forwarding
 ; - resolve_agent_reference path resolution and error mapping
@@ -26,6 +27,10 @@
 ; - Rust render_input_preview uses PathBuf::display for LocalImage and Skill
 ;   paths. The existing CeTTa protocol surface carries those same visible path
 ;   values as strings.
+; - Rust keep_forked_rollout_item consumes protocol RolloutItem values. The
+;   current CeTTa fork-history surface exposes those constructors through the
+;   thread_rollout_truncation slice, and this helper matches that same local
+;   representation at the AgentControl boundary.
 ; - CeTTa callers often pass registry metadata through local helper equations.
 ;   Rust stores concrete structs, so this boundary forces metadata evaluation
 ;   while scanning registry entries before applying the same field tests.
@@ -37,6 +42,7 @@
 !(import! &self protocol)
 !(import! &self session_prefix)
 !(import! &self str)
+!(import! &self thread_rollout_truncation)
 
 (= (codex:agent-control-ok $value)
    (CodexAgentControlOk $value))
@@ -122,6 +128,84 @@
            $agent-role))
        $depth)
       ($other CodexAbsent))))
+
+(= (codex:agent-control-is-final-answer-phase $phase)
+   (case (eval $phase)
+     (((CodexMessagePhaseFinalAnswer) True)
+      ("final_answer" True)
+      ($other False))))
+
+(= (codex:agent-control-keep-forked-message $role $phase)
+   (case $role
+     (("system" True)
+      ("developer" True)
+      ("user" True)
+      ("assistant"
+       (codex:agent-control-is-final-answer-phase $phase))
+      ($other False))))
+
+(= (codex:agent-control-keep-forked-response-item $response-item)
+   (case (once (eval $response-item))
+     (((CodexResponseItemMessage $role $content $phase)
+       (codex:agent-control-keep-forked-message $role $phase))
+      ((CodexResponseItemMessageWithId $id $role $content $phase)
+       (codex:agent-control-keep-forked-message $role $phase))
+      ((CodexResponseItemReasoning $id $summary $content $encrypted-content)
+       False)
+      ((CodexResponseItemLocalShellCall $id $call-id $status $action)
+       False)
+      ((CodexResponseItemFunctionCall $id $name $namespace $arguments $call-id)
+       False)
+      ((CodexResponseItemToolSearchCall
+         $id
+         $status
+         $queries
+         $source
+         $targets
+         $operation
+         $tools)
+       False)
+      ((CodexResponseItemFunctionCallOutput $call-id $output)
+       False)
+      ((CodexResponseItemCustomToolCall $call-id $name $input)
+       False)
+      ((CodexResponseItemCustomToolCallOutput $call-id $name $output)
+       False)
+      ((CodexResponseItemToolSearchOutput
+         $call-id
+         $status
+         $execution
+         $tools)
+       False)
+      ((CodexResponseItemWebSearchCall $id $status $action)
+       False)
+      ((CodexResponseItemImageGenerationCall
+         $id
+         $status
+         $revised-prompt
+         $result)
+       False)
+      ((CodexResponseItemGhostSnapshot $ghost-commit)
+       False)
+      ((CodexResponseItemCompaction $encrypted-content)
+       False)
+      ((CodexResponseItemOther)
+       False)
+      ($other False))))
+
+(= (codex:agent-control-keep-forked-rollout-item $item)
+   (case (once (eval $item))
+     (((CodexRolloutItemResponseItem $response-item)
+       (codex:agent-control-keep-forked-response-item $response-item))
+      ((CodexRolloutItemTurnContext $turn-context)
+       False)
+      ((CodexRolloutItemCompacted $compacted-item)
+       True)
+      ((CodexRolloutItemEventMsg $event)
+       True)
+      ((CodexRolloutItemSessionMeta $meta)
+       True)
+      ($other False))))
 
 (= (codex:agent-control-registry-entry-metadata $entry)
    (eval (codex:agent-registry-entry-metadata $entry)))

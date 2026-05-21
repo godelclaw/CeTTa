@@ -4,6 +4,7 @@
 !(import! &self codex:agent_registry)
 !(import! &self codex:error)
 !(import! &self codex:protocol)
+!(import! &self codex:thread_rollout_truncation)
 
 (= (test:root-thread)
    "00000000-0000-0000-0000-000000000001")
@@ -150,6 +151,111 @@
   (codex:agent-control-thread-spawn-depth
     (codex:session-source-cli))
   CodexAbsent)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-response-item
+      (CodexResponseItemMessage
+        "system"
+        ((CodexInputText "system"))
+        CodexAbsent)))
+  True)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-response-item
+      (CodexResponseItemMessage
+        "developer"
+        ((CodexInputText "developer"))
+        "commentary")))
+  True)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-response-item
+      (CodexResponseItemMessageWithId
+        "msg-user"
+        "user"
+        ((CodexInputText "user"))
+        CodexAbsent)))
+  True)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-response-item
+      (CodexResponseItemMessage
+        "assistant"
+        ((CodexOutputText "done"))
+        "final_answer")))
+  True)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-response-item
+      (CodexResponseItemMessageWithId
+        "msg-final"
+        "assistant"
+        ((CodexOutputText "done"))
+        (codex:message-phase-final-answer))))
+  True)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-response-item
+      (CodexResponseItemMessage
+        "assistant"
+        ((CodexOutputText "working"))
+        CodexAbsent)))
+  False)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-response-item
+      (CodexResponseItemMessage
+        "assistant"
+        ((CodexOutputText "working"))
+        "commentary")))
+  False)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-response-item
+      (CodexResponseItemMessage
+        "tool"
+        ((CodexOutputText "unknown"))
+        "final_answer")))
+  False)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-response-item
+      (CodexResponseItemFunctionCall
+        CodexAbsent
+        "shell"
+        CodexAbsent
+        "{}"
+        "call-1")))
+  False)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-turn-context "context"))
+  False)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-compacted "compacted"))
+  True)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-event-msg "event"))
+  True)
+
+!(assertEqual
+  (codex:agent-control-keep-forked-rollout-item
+    (codex:rollout-session-meta "meta"))
+  True)
 
 !(assertEqual
   (codex:agent-control-get-agent-metadata
