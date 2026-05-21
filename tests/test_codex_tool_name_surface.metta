@@ -33,3 +33,49 @@
         "mcp__memory__"
         "create_entities")))
   ("{\"name\":\"create_entities\",\"namespace\":\"mcp__memory__\"}"))
+
+!(assertEqual
+  (codex:tool-name-from-json
+    (JsonObject
+      ((JsonPair "name" (JsonString "exec_command")))))
+  (CodexToolNameParseOk
+    (CodexToolName "exec_command" CodexAbsent)))
+
+!(assertEqual
+  (codex:tool-name-from-json
+    (JsonObject
+      ((JsonPair "name" (JsonString "exec_command"))
+       (JsonPair "namespace" JsonNull))))
+  (CodexToolNameParseOk
+    (CodexToolName "exec_command" CodexAbsent)))
+
+!(assertEqualToResult
+  (case (json-parse
+          "{\"name\":\"create_entities\",\"namespace\":\"mcp__memory__\",\"ignored\":true}")
+    (($json
+      (codex:tool-name-from-json $json))))
+  ((CodexToolNameParseOk
+     (CodexToolName "create_entities" "mcp__memory__"))))
+
+!(assertEqual
+  (codex:tool-name-parse-result-value
+    (codex:tool-name-from-json
+      (JsonObject
+        ((JsonPair "name" (JsonString "read_file"))
+         (JsonPair "namespace" (JsonString "mcp__fs__"))))))
+  (CodexToolName "read_file" "mcp__fs__"))
+
+!(assertEqual
+  (codex:tool-name-parse-result-error
+    (codex:tool-name-from-json
+      (JsonObject
+        ((JsonPair "namespace" (JsonString "mcp__fs__"))))))
+  "missing field `name`")
+
+!(assertEqual
+  (codex:tool-name-parse-result-error
+    (codex:tool-name-from-json
+      (JsonObject
+        ((JsonPair "name" (JsonString "read_file"))
+         (JsonPair "namespace" (JsonBool True))))))
+  "invalid type for field `namespace`: expected string or null")

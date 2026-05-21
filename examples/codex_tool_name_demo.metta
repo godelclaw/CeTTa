@@ -13,3 +13,10 @@
       (codex:namespaced-tool-name
         "mcp__memory__"
         "create_entities"))))
+!(println!
+  (codex:tool-name-display
+    (codex:tool-name-parse-result-value
+      (codex:tool-name-from-json
+        (JsonObject
+          ((JsonPair "name" (JsonString "create_entities"))
+           (JsonPair "namespace" (JsonString "mcp__memory__"))))))))
