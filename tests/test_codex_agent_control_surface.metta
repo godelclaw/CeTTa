@@ -872,6 +872,126 @@
       (codex:error-thread-not-found (test:scout-thread)))))
 
 !(assertEqual
+  (case
+    (codex:agent-control-shutdown-agent-tree-result
+      (test:registry-state)
+      (test:scout-thread)
+      (codex:agent-control-shutdown-live-thread
+        (codex:agent-control-ok ())
+        (codex:protocol-agent-status-running)
+        (codex:agent-control-ok "root-shutdown"))
+      (codex:agent-control-err
+        (codex:error-thread-not-found (test:scout-thread)))
+      ((codex:agent-control-shutdown-agent-tree-entry
+         (test:tester-thread)
+         CodexAbsent
+         (codex:agent-control-err
+           (codex:error-thread-not-found (test:tester-thread))))
+       (codex:agent-control-shutdown-agent-tree-entry
+         (test:alpha-thread)
+         (codex:agent-control-shutdown-live-thread
+           (codex:agent-control-ok ())
+           (codex:protocol-agent-status-running)
+           (codex:agent-control-err
+             (codex:error-internal-agent-died)))
+         (codex:agent-control-err
+           (codex:error-thread-not-found (test:alpha-thread))))))
+    (((CodexAgentControlThreadRequestOutcome $state $result)
+      (case
+        (codex:agent-control-agent-metadata-for-thread
+          $state
+          (test:scout-thread))
+        (($metadata
+          (test:request-release-check
+            $metadata
+            (codex:agent-registry-state-total-count $state)
+            $result)))))))
+  (test:request-release-check
+    CodexAbsent
+    1
+    (codex:agent-control-ok "root-shutdown")))
+
+!(assertEqual
+  (case
+    (codex:agent-control-shutdown-agent-tree-result
+      (test:registry-state)
+      (test:scout-thread)
+      (codex:agent-control-shutdown-live-thread
+        (codex:agent-control-ok ())
+        (codex:protocol-agent-status-running)
+        (codex:agent-control-err
+          (codex:error-fatal "root send failed")))
+      (codex:agent-control-err
+        (codex:error-thread-not-found (test:scout-thread)))
+      ((codex:agent-control-shutdown-agent-tree-entry
+         (test:tester-thread)
+         (codex:agent-control-shutdown-live-thread
+           (codex:agent-control-ok ())
+           (codex:protocol-agent-status-running)
+           (codex:agent-control-ok "tester-shutdown"))
+         (codex:agent-control-err
+           (codex:error-thread-not-found (test:tester-thread))))))
+    (((CodexAgentControlThreadRequestOutcome $state $result)
+      (case
+        (codex:agent-control-agent-metadata-for-thread
+          $state
+          (test:scout-thread))
+        (($metadata
+          (test:request-release-check
+            $metadata
+            (codex:agent-registry-state-total-count $state)
+            $result)))))))
+  (test:request-release-check
+    CodexAbsent
+    2
+    (codex:agent-control-err
+      (codex:error-fatal "root send failed"))))
+
+!(assertEqual
+  (case
+    (codex:agent-control-shutdown-agent-tree-result
+      (test:registry-state)
+      (test:scout-thread)
+      (codex:agent-control-shutdown-live-thread
+        (codex:agent-control-ok ())
+        (codex:protocol-agent-status-running)
+        (codex:agent-control-ok "root-shutdown"))
+      (codex:agent-control-err
+        (codex:error-thread-not-found (test:scout-thread)))
+      ((codex:agent-control-shutdown-agent-tree-entry
+         (test:tester-thread)
+         (codex:agent-control-shutdown-live-thread
+           (codex:agent-control-ok ())
+           (codex:protocol-agent-status-running)
+           (codex:agent-control-err
+             (codex:error-fatal "child failed")))
+         (codex:agent-control-err
+           (codex:error-thread-not-found (test:tester-thread))))
+       (codex:agent-control-shutdown-agent-tree-entry
+         (test:alpha-thread)
+         (codex:agent-control-shutdown-live-thread
+           (codex:agent-control-ok ())
+           (codex:protocol-agent-status-running)
+           (codex:agent-control-ok "alpha-should-not-run"))
+         (codex:agent-control-err
+           (codex:error-thread-not-found (test:alpha-thread))))))
+    (((CodexAgentControlThreadRequestOutcome $state $result)
+      (case
+        (codex:agent-control-agent-metadata-for-thread
+          $state
+          (test:alpha-thread))
+        (($metadata
+          (test:request-release-check
+            $metadata
+            (codex:agent-registry-state-total-count $state)
+            $result)))))))
+  (test:request-release-check
+    (test:alpha-metadata)
+    2
+    (codex:agent-control-err
+      (codex:error-fatal "child failed"))))
+
+!(assertEqual
   (codex:agent-control-resolve-agent-reference
     (test:registry-state)
     (test:root-thread)

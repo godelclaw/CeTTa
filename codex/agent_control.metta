@@ -17,6 +17,7 @@
 ; - send_input/send_inter_agent_communication last_task_message update
 ; - interrupt_agent result pass-through
 ; - shutdown_live_agent result/release boundary
+; - shutdown_agent_tree descendant error folding
 ; - resolve_agent_reference path resolution and error mapping
 ; - format_environment_context_subagents formatting over materialized children
 ; - agent_matches_prefix
@@ -62,6 +63,11 @@
 ;   checks, and `?` returns immediately on flush failure before remove/release.
 ;   This pure slice receives the materialized thread-load/flush/status/send
 ;   result at that boundary and preserves the same registry release behavior.
+; - Rust shutdown_agent_tree first computes live descendants, shuts down the
+;   root, then folds descendants in order, ignoring Ok, ThreadNotFound, and
+;   InternalAgentDied while returning the first other descendant error. This
+;   pure slice receives those materialized descendant shutdown inputs and keeps
+;   the same result precedence and registry transition order.
 
 !(import! &self agent_path)
 !(import! &self agent_registry)
@@ -167,6 +173,15 @@
      $flush-result
      $status
      $send-result))
+
+(= (codex:agent-control-shutdown-agent-tree-entry
+      $agent-id
+      $thread
+      $missing-thread-send-result)
+   (CodexAgentControlShutdownAgentTreeEntry
+     $agent-id
+     $thread
+     $missing-thread-send-result))
 
 (= (codex:agent-control-listed-agent
       $agent-name
@@ -1143,6 +1158,77 @@
          $registry-state
          $agent-id
          $send-result)))))
+
+(= (codex:agent-control-shutdown-agent-tree-ignores-descendant-result
+      $result)
+   (case $result
+     (((CodexAgentControlOk $value)
+       True)
+      ((CodexAgentControlErr (CodexErrThreadNotFound $thread-id))
+       True)
+      ((CodexAgentControlErr (CodexErrInternalAgentDied))
+       True)
+      ($other
+       False))))
+
+(= (codex:agent-control-shutdown-agent-tree-descendants-result
+      $registry-state
+      $root-result
+      ())
+   (codex:agent-control-thread-request-outcome
+     $registry-state
+     $root-result))
+
+(= (codex:agent-control-shutdown-agent-tree-descendants-result
+      $registry-state
+      $root-result
+      $descendant-entries)
+   (let $head (list:first $descendant-entries)
+     (let $tail (list:rest $descendant-entries)
+       (case $head
+         (((CodexAgentControlShutdownAgentTreeEntry
+             $agent-id
+             $thread
+             $missing-thread-send-result)
+           (case
+             (codex:agent-control-shutdown-live-agent-result
+               $registry-state
+               $agent-id
+               $thread
+               $missing-thread-send-result)
+             (((CodexAgentControlThreadRequestOutcome
+                 $next-registry-state
+                 $descendant-result)
+               (if
+                 (codex:agent-control-shutdown-agent-tree-ignores-descendant-result
+                   $descendant-result)
+                 (codex:agent-control-shutdown-agent-tree-descendants-result
+                   $next-registry-state
+                   $root-result
+                   $tail)
+                 (codex:agent-control-thread-request-outcome
+                   $next-registry-state
+                   $descendant-result)))))))))))
+
+(= (codex:agent-control-shutdown-agent-tree-result
+      $registry-state
+      $agent-id
+      $root-thread
+      $root-missing-thread-send-result
+      $descendant-entries)
+   (case
+     (codex:agent-control-shutdown-live-agent-result
+       $registry-state
+       $agent-id
+       $root-thread
+       $root-missing-thread-send-result)
+     (((CodexAgentControlThreadRequestOutcome
+         $after-root-state
+         $root-result)
+       (codex:agent-control-shutdown-agent-tree-descendants-result
+         $after-root-state
+         $root-result
+         $descendant-entries)))))
 
 (= (codex:agent-control-current-agent-path $session-source)
    (case (codex:session-source-get-agent-path $session-source)
