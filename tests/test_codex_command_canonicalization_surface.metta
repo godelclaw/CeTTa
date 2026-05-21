@@ -33,6 +33,16 @@
 
 !(assertEqualToResult
   (codex:canonicalize-command-for-approval
+    ("pwsh" "-NoLogo" "-NoProfile" "-c" "Get-ChildItem | Select-String foo"))
+  (("__codex_powershell_script__" "Get-ChildItem | Select-String foo")))
+
+!(assertEqualToResult
+  (codex:canonicalize-command-for-approval
+    ("powershell" "-BadFlag" "-Command" "Write-Host hi"))
+  (("powershell" "-BadFlag" "-Command" "Write-Host hi")))
+
+!(assertEqualToResult
+  (codex:canonicalize-command-for-approval
     ("bash.exe" "-lc" "cargo test"))
   (("cargo" "test")))
 
@@ -45,3 +55,23 @@
   (codex:canonicalize-command-for-approval
     ("cargo" "fmt"))
   (("cargo" "fmt")))
+
+!(assertEqualToResult
+  (codex:prefix-powershell-script-with-utf8
+    ("pwsh" "-NoProfile" "-Command" "Write-Output ok"))
+  (("pwsh" "-NoProfile" "-Command" "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;\nWrite-Output ok")))
+
+!(assertEqualToResult
+  (codex:prefix-powershell-script-with-utf8
+    ("pwsh" "-Command" "  [Console]::OutputEncoding=[System.Text.Encoding]::UTF8;\nWrite-Output ok"))
+  (("pwsh" "-Command" "  [Console]::OutputEncoding=[System.Text.Encoding]::UTF8;\nWrite-Output ok")))
+
+!(assertEqualToResult
+  (codex:prefix-powershell-script-with-utf8
+    ("bash" "-lc" "Write-Output ok"))
+  (("bash" "-lc" "Write-Output ok")))
+
+!(assertEqualToResult
+  (codex:prefix-powershell-script-with-utf8
+    ("pwsh" "-Command" "Write-Output ok" "-extra"))
+  (("pwsh" "-Command" "Write-Output ok" "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;\nWrite-Output ok")))

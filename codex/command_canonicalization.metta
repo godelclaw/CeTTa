@@ -2,11 +2,13 @@
 ;
 ; This ports:
 ; - openai-codex/codex-rs/core/src/command_canonicalization.rs
+; - openai-codex/codex-rs/shell-command/src/powershell.rs
 ;
 ; Covered in this increment:
 ; - word-only `bash|sh|zsh -c|-lc` canonicalization to inner argv
 ; - fallback bash/zsh/sh script canonicalization to a stable script key
 ; - fallback powershell canonicalization to a stable script key
+; - PowerShell UTF-8 output prefixing
 ; - non-shell command passthrough
 ;
 ; Required slice-local deviations from Rust, documented for audit:
@@ -28,6 +30,9 @@
 
 (= (codex:canonical-powershell-script-prefix)
    "__codex_powershell_script__")
+
+(= (codex:powershell-utf8-output-prefix)
+   "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;\n")
 
 (= (codex:command-canonicalization-ascii-lower-char $char)
    (case $char
@@ -155,6 +160,36 @@
              (codex:command-canonicalization-extract-powershell-rest
                (list:rest $command))
              CodexAbsent))))
+
+(= (codex:command-canonicalization-drop-last $items)
+   (if (== $items ())
+       ()
+       (let $head (list:first $items)
+         (let $tail (list:rest $items)
+           (if (== $tail ())
+               ()
+               (let $rest
+                 (eval (codex:command-canonicalization-drop-last $tail))
+                 (cons-atom $head $rest)))))))
+
+(= (codex:command-canonicalization-replace-last $items $item)
+   (list:push
+     (codex:command-canonicalization-drop-last $items)
+     $item))
+
+(= (codex:command-canonicalization-powershell-utf8-script $script)
+   (let $prefix (codex:powershell-utf8-output-prefix)
+     (if (str-starts-with? (str-trim $script) $prefix)
+         $script
+         (str-concat $prefix $script))))
+
+(= (codex:prefix-powershell-script-with-utf8 $command)
+   (case (codex:command-canonicalization-extract-powershell $command)
+     ((CodexAbsent $command)
+      ((CodexCommandCanonicalizationPowerShell $script)
+       (codex:command-canonicalization-replace-last
+         $command
+         (codex:command-canonicalization-powershell-utf8-script $script))))))
 
 (= (codex:canonicalize-command-for-approval $command)
    (case (codex:command-canonicalization-plain-shell-single-command $command)
