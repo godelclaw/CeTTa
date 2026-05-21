@@ -54,6 +54,10 @@
 ;   `which node`, checking filesystem existence at each path boundary. This
 ;   pure slice receives those already-observed existence/which values and keeps
 ;   the Rust precedence order.
+; - Rust builds the kernel process environment from `create_env`, dependency
+;   env, `CODEX_JS_TMP_DIR`, and optionally joined `js_repl_node_module_dirs`.
+;   This slice models the exact map-update order while receiving the
+;   platform-specific `join_paths` result at the runtime boundary.
 ; - Some parser/runtime-boundary helpers bind intermediate results with `let`
 ;   where Rust would call a helper inline. This only materializes the same value
 ;   in CeTTa's evaluator and does not change the branch order or accepted cases.
@@ -1293,6 +1297,122 @@
            (codex:js-repl-resolve-compatible-node-ok $node-path))
           ((CodexJsReplNodeVersionCheckError $message)
            (codex:js-repl-resolve-compatible-node-error $message))))))))
+
+(= (codex:js-repl-env-var $key $value)
+   (CodexJsReplEnvVar $key $value))
+
+(= (codex:js-repl-env-var-key (CodexJsReplEnvVar $key $value))
+   $key)
+
+(= (codex:js-repl-env-var-value (CodexJsReplEnvVar $key $value))
+   $value)
+
+(= (codex:js-repl-env-get $env $key)
+   (case $env
+     ((() CodexAbsent)
+      ($items
+       (let $head (list:first $items)
+         (if (== (codex:js-repl-env-var-key $head) $key)
+             (codex:js-repl-env-var-value $head)
+             (codex:js-repl-env-get (list:rest $items) $key)))))))
+
+(= (codex:js-repl-env-contains-key $env $key)
+   (not (== (codex:js-repl-env-get $env $key) CodexAbsent)))
+
+(= (codex:js-repl-env-remove $env $key)
+   (case $env
+     ((() ())
+      ($items
+       (let $head (list:first $items)
+         (let $rest
+           (codex:js-repl-env-remove (list:rest $items) $key)
+           (if (== (codex:js-repl-env-var-key $head) $key)
+               $rest
+               (cons-atom $head $rest))))))))
+
+(= (codex:js-repl-env-insert $env $key $value)
+   (cons-atom
+     (codex:js-repl-env-var $key $value)
+     (codex:js-repl-env-remove $env $key)))
+
+(= (codex:js-repl-env-overlay $base-env $overlay-env)
+   (case $overlay-env
+     ((() $base-env)
+      ($items
+       (let $head (list:first $items)
+         (codex:js-repl-env-overlay
+           (codex:js-repl-env-insert
+             $base-env
+             (codex:js-repl-env-var-key $head)
+             (codex:js-repl-env-var-value $head))
+           (list:rest $items)))))))
+
+(= (codex:js-repl-tmp-dir-env-key)
+   "CODEX_JS_TMP_DIR")
+
+(= (codex:js-repl-node-module-dirs-env-key)
+   "CODEX_JS_REPL_NODE_MODULE_DIRS")
+
+(= (codex:js-repl-node-module-dirs-join-ok $joined)
+   (CodexJsReplNodeModuleDirsJoinOk $joined))
+
+(= (codex:js-repl-node-module-dirs-join-error $message)
+   (CodexJsReplNodeModuleDirsJoinError $message))
+
+(= (codex:js-repl-start-kernel-env-ok $env)
+   (CodexJsReplStartKernelEnvOk $env))
+
+(= (codex:js-repl-start-kernel-env-error $message)
+   (CodexJsReplStartKernelEnvError $message))
+
+(= (codex:js-repl-start-kernel-env-value
+      (CodexJsReplStartKernelEnvOk $env))
+   $env)
+
+(= (codex:js-repl-start-kernel-env-error-message
+      (CodexJsReplStartKernelEnvError $message))
+   $message)
+
+(= (codex:js-repl-apply-node-module-dirs-env
+      $env
+      $node-module-dirs
+      $join-result)
+   (if (or
+         (== $node-module-dirs ())
+         (codex:js-repl-env-contains-key
+           $env
+           (codex:js-repl-node-module-dirs-env-key)))
+       (codex:js-repl-start-kernel-env-ok $env)
+       (case $join-result
+         (((CodexJsReplNodeModuleDirsJoinOk $joined)
+           (codex:js-repl-start-kernel-env-ok
+             (codex:js-repl-env-insert
+               $env
+               (codex:js-repl-node-module-dirs-env-key)
+               $joined)))
+          ((CodexJsReplNodeModuleDirsJoinError $message)
+           (codex:js-repl-start-kernel-env-error
+             (str-concat
+               "failed to join js_repl_node_module_dirs: "
+               $message)))))))
+
+(= (codex:js-repl-start-kernel-env
+      $base-env
+      $dependency-env
+      $tmp-dir
+      $node-module-dirs
+      $join-result)
+   (let $with-dependencies
+     (codex:js-repl-env-overlay $base-env $dependency-env)
+     (let $with-tmp-dir
+       (codex:js-repl-env-insert
+         $with-dependencies
+         (codex:js-repl-tmp-dir-env-key)
+         $tmp-dir)
+       (codex:js-repl-apply-node-module-dirs-env
+         $with-tmp-dir
+         $node-module-dirs
+         $join-result))))
 
 (= (codex:js-repl-tool-call-payload-kind-message-content)
    (CodexJsReplToolCallPayloadKindMessageContent))
