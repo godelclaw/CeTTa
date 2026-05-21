@@ -8,6 +8,8 @@
 ; - network-rule line formatting with host normalization and decision spelling
 ; - duplicate-line suppression and newline insertion when appending
 ; - file-backed append helpers for prefix and network rules
+; - append_amendment_and_update / append_network_rule_and_update visible policy
+;   update behavior
 ;
 ; Required CeTTa deviation for audit:
 ; - Rust uses advisory file locking while reading and appending. The current
@@ -15,6 +17,9 @@
 ;   lock primitive, so the file-backed helpers preserve the same sequential
 ;   visible behavior and error surface where available, but are not yet
 ;   concurrency-equivalent under simultaneous writers.
+; - Rust serializes updates with a Semaphore and uses spawn_blocking. CeTTa
+;   file-mode execution is sequential here, so the update helpers expose the
+;   same append-then-in-memory-update order without async task scheduling.
 
 !(import! &self exec_policy)
 !(import! &self fs)
@@ -29,6 +34,12 @@
 (= (codex:exec-policy-amend-error $error)
    (CodexExecPolicyAmendError $error))
 
+(= (codex:exec-policy-update-ok $policy)
+   (CodexExecPolicyUpdateOk $policy))
+
+(= (codex:exec-policy-update-error $error)
+   (CodexExecPolicyUpdateError $error))
+
 (= (codex:exec-policy-amend-value
       (CodexExecPolicyAmendOk $value))
    $value)
@@ -36,6 +47,20 @@
 (= (codex:exec-policy-amend-error-value
       (CodexExecPolicyAmendError $error))
    $error)
+
+(= (codex:exec-policy-update-value
+      (CodexExecPolicyUpdateOk $policy))
+   $policy)
+
+(= (codex:exec-policy-update-error-value
+      (CodexExecPolicyUpdateError $error))
+   $error)
+
+(= (codex:exec-policy-update-error-append-rule $path $source)
+   (CodexExecPolicyUpdateErrorAppendRule $path $source))
+
+(= (codex:exec-policy-update-error-add-rule $source)
+   (CodexExecPolicyUpdateErrorAddRule $source))
 
 (= (codex:exec-policy-amend-error-message
       (CodexExecPolicyAmendErrorEmptyPrefix))
@@ -288,3 +313,158 @@
        (codex:exec-policy-amend-error $error))
       ((CodexExecPolicyAmendOk $line)
        (codex:exec-policy-amend-append-rule-line $policy-path $line)))))
+
+(= (codex:is-exec-policy-update-policy-match
+      (CodexExecPolicyPrefixRuleMatch $matched-prefix $decision $justification))
+   True)
+
+(= (codex:is-exec-policy-update-policy-match
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $matched-prefix
+        $decision
+        $resolved-program
+        $justification))
+   True)
+
+(= (codex:is-exec-policy-update-policy-match
+      (CodexExecPolicyHeuristicsRuleMatch $command $decision))
+   False)
+
+(= (codex:is-exec-policy-update-allow-match
+      (CodexExecPolicyPrefixRuleMatch $matched-prefix $decision $justification))
+   (== $decision (codex:decision-allow)))
+
+(= (codex:is-exec-policy-update-allow-match
+      (CodexExecPolicyPrefixRuleMatchResolved
+        $matched-prefix
+        $decision
+        $resolved-program
+        $justification))
+   (== $decision (codex:decision-allow)))
+
+(= (codex:is-exec-policy-update-allow-match
+      (CodexExecPolicyHeuristicsRuleMatch $command $decision))
+   False)
+
+(= (codex:exec-policy-update-any-policy-allow-match ())
+   False)
+
+(= (codex:exec-policy-update-any-policy-allow-match $matches)
+   (let $head (list:first $matches)
+     (let $tail (list:rest $matches)
+       (if (and
+             (codex:is-exec-policy-update-policy-match $head)
+             (codex:is-exec-policy-update-allow-match $head))
+           True
+           (codex:exec-policy-update-any-policy-allow-match $tail)))))
+
+(= (codex:exec-policy-update-already-allowed $policy $command)
+   (let $evaluation
+     (codex:check-policy-multiple-with-options-and-heuristics
+       $policy
+       ($command)
+       (codex:heuristics-fallback-decision (codex:decision-forbidden))
+       (codex:match-options True))
+     (and
+       (== (codex:check-output-decision $evaluation) (codex:decision-allow))
+       (codex:exec-policy-update-any-policy-allow-match
+         (codex:check-output-matched-rules $evaluation)))))
+
+(= (codex:append-amendment-and-update
+      $codex-home
+      $current-policy
+      $amendment)
+   (codex:append-amendment-and-update-at-path
+     (codex:default-policy-path $codex-home)
+     $current-policy
+     $amendment))
+
+(= (codex:append-amendment-and-update-at-path
+      $policy-path
+      $current-policy
+      (CodexExecPolicyAmendment $command))
+   (case (codex:blocking-append-allow-prefix-rule $policy-path $command)
+     (((CodexExecPolicyAmendError $error)
+       (codex:exec-policy-update-error
+         (codex:exec-policy-update-error-append-rule
+           $policy-path
+           $error)))
+      ((CodexExecPolicyAmendOk $unit)
+       (if (codex:exec-policy-update-already-allowed
+             $current-policy
+             $command)
+           (codex:exec-policy-update-ok $current-policy)
+           (case
+             (codex:policy-add-prefix-rule
+               $current-policy
+               $command
+               (codex:decision-allow))
+             (((CodexExecPolicyRuleError $message)
+               (codex:exec-policy-update-error
+                 (codex:exec-policy-update-error-add-rule
+                   (CodexExecPolicyRuleError $message))))
+              ($updated-policy
+               (codex:exec-policy-update-ok $updated-policy)))))))))
+
+(= (codex:append-network-rule-and-update
+      $codex-home
+      $current-policy
+      $host
+      $protocol
+      $decision)
+   (codex:append-network-rule-and-update
+     $codex-home
+     $current-policy
+     $host
+     $protocol
+     $decision
+     CodexAbsent))
+
+(= (codex:append-network-rule-and-update
+      $codex-home
+      $current-policy
+      $host
+      $protocol
+      $decision
+      $justification)
+   (codex:append-network-rule-and-update-at-path
+     (codex:default-policy-path $codex-home)
+     $current-policy
+     $host
+     $protocol
+     $decision
+     $justification))
+
+(= (codex:append-network-rule-and-update-at-path
+      $policy-path
+      $current-policy
+      $host
+      $protocol
+      $decision
+      $justification)
+   (case
+     (codex:blocking-append-network-rule
+       $policy-path
+       $host
+       $protocol
+       $decision
+       $justification)
+     (((CodexExecPolicyAmendError $error)
+       (codex:exec-policy-update-error
+         (codex:exec-policy-update-error-append-rule
+           $policy-path
+           $error)))
+      ((CodexExecPolicyAmendOk $unit)
+       (case
+         (codex:policy-add-network-rule
+           $current-policy
+           $host
+           $protocol
+           $decision
+           $justification)
+         (((CodexExecPolicyRuleError $message)
+           (codex:exec-policy-update-error
+             (codex:exec-policy-update-error-add-rule
+               (CodexExecPolicyRuleError $message))))
+          ($updated-policy
+           (codex:exec-policy-update-ok $updated-policy))))))))

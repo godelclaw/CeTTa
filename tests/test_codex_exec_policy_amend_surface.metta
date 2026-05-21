@@ -1,5 +1,6 @@
 !(register-module! ../codex)
 !(import! &self fs)
+!(import! &self json)
 !(import! &self process)
 !(import! &self codex:exec_policy)
 !(import! &self codex:exec_policy_amend)
@@ -9,6 +10,9 @@
 
 (= (exec-policy-amend-policy-path)
    "/home/zarclaw/repos/CeTTa/runtime/codex-exec-policy-amend/rules/default.rules")
+
+(= (exec-policy-update-home)
+   "/home/zarclaw/repos/CeTTa/runtime/codex-exec-policy-update")
 
 !(assertEqualToResult
   (process-result-exit-code
@@ -112,3 +116,63 @@
 !(assertEqualToResult
   (fs-read-text (exec-policy-amend-policy-path))
   ("prefix_rule(pattern=[\"curl\"], decision=\"allow\")\nnetwork_rule(host=\"api.github.com\", protocol=\"https\", decision=\"allow\", justification=\"Allow https_connect access to api.github.com\")\n"))
+
+!(assertEqualToResult
+  (process-result-exit-code
+    (process-run-shell
+      "rm -rf /home/zarclaw/repos/CeTTa/runtime/codex-exec-policy-update && mkdir -p /home/zarclaw/repos/CeTTa/runtime/codex-exec-policy-update"))
+  (0))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:check-output-json
+      (codex:check-policy
+        (codex:exec-policy-update-value
+          (codex:append-amendment-and-update
+            (exec-policy-update-home)
+            (codex:policy ())
+            (CodexExecPolicyAmendment ("echo" "hello"))))
+        ("echo" "hello" "world"))))
+  ("{\"matchedRules\":[{\"prefixRuleMatch\":{\"matchedPrefix\":[\"echo\",\"hello\"],\"decision\":\"allow\"}}],\"decision\":\"allow\"}"))
+
+!(assertEqualToResult
+  (fs-read-text (codex:default-policy-path (exec-policy-update-home)))
+  ("prefix_rule(pattern=[\"echo\", \"hello\"], decision=\"allow\")\n"))
+
+!(assertEqual
+  (codex:exec-policy-update-already-allowed
+    (codex:policy
+      ((codex:prefix-rule
+         ((codex:pattern-token "echo")
+          (codex:pattern-token "hello"))
+         (codex:decision-allow))))
+    ("echo" "hello" "world"))
+  True)
+
+!(assertEqualToResult
+  (codex:exec-policy-update-error-value
+    (codex:append-amendment-and-update
+      (exec-policy-update-home)
+      (codex:policy ())
+      (CodexExecPolicyAmendment ())))
+  ((CodexExecPolicyUpdateErrorAppendRule
+     "/home/zarclaw/repos/CeTTa/runtime/codex-exec-policy-update/rules/default.rules"
+     (CodexExecPolicyAmendErrorEmptyPrefix))))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:compiled-network-domains-json
+      (codex:compiled-network-domains
+        (codex:exec-policy-update-value
+          (codex:append-network-rule-and-update
+            (exec-policy-update-home)
+            (codex:policy ())
+            "Api.GitHub.com"
+            (codex:network-rule-protocol-https)
+            (codex:decision-allow)
+            "Allow https_connect access to api.github.com")))))
+  ("{\"allowed\":[\"api.github.com\"],\"denied\":[]}"))
+
+!(assertEqualToResult
+  (fs-read-text (codex:default-policy-path (exec-policy-update-home)))
+  ("prefix_rule(pattern=[\"echo\", \"hello\"], decision=\"allow\")\nnetwork_rule(host=\"api.github.com\", protocol=\"https\", decision=\"allow\", justification=\"Allow https_connect access to api.github.com\")\n"))

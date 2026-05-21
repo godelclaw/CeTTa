@@ -1301,6 +1301,40 @@
          (codex:policy-network-rules $policy)
          (codex:policy-host-executables $policy))))
 
+(= (codex:policy-add-network-rule $policy $host $protocol $decision)
+   (codex:policy-add-network-rule
+     $policy
+     $host
+     $protocol
+     $decision
+     CodexAbsent))
+
+(= (codex:policy-add-network-rule
+      $policy
+      $host
+      $protocol
+      $decision
+      $justification)
+   (case (codex:normalize-network-rule-host $host)
+     (((CodexExecPolicyNetworkRuleHostError $message)
+       (CodexExecPolicyRuleError $message))
+      ((CodexExecPolicyNetworkRuleHostOk $normalized-host)
+       (if (and
+             (not (== $justification CodexAbsent))
+             (== (str-trim $justification) ""))
+           (CodexExecPolicyRuleError "justification cannot be empty")
+           (codex:policy-rebuild-like
+             $policy
+             (codex:policy-rules $policy)
+             (list:push
+               (codex:policy-network-rules $policy)
+               (CodexExecPolicyNetworkRule
+                 $normalized-host
+                 $protocol
+                 $decision
+                 $justification))
+             (codex:policy-host-executables $policy)))))))
+
 (= (codex:merge-host-executables $base $overlay)
    (if (== $overlay ())
        $base
