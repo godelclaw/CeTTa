@@ -486,6 +486,92 @@
       "csv input must include a header row")))
 
 !(assertEqual
+  (codex:prepare-spawn-agents-on-csv
+    (codex:spawn-agents-on-csv-args
+      "input.csv"
+      "Review {name}"
+      "id"
+      CodexAbsent
+      (JsonObject ((JsonPair "type" (JsonString "object"))))
+      4
+      2
+      CodexAbsent)
+    "/tmp/input.csv"
+    "id,name\nA,Ada\nA,Augusta\n"
+    "123456789abcdef0"
+    120)
+  (codex:agent-job-ok
+    (codex:prepared-spawn-agents-on-csv
+      (codex:agent-job-create-params
+        "123456789abcdef0"
+        "agent-job-12345678"
+        "Review {name}"
+        True
+        120
+        (JsonObject ((JsonPair "type" (JsonString "object"))))
+        ("id" "name")
+        "/tmp/input.csv"
+        "/tmp/input.agent-job-12345678.csv")
+      ((codex:agent-job-item-create-params
+         "A"
+         0
+         "A"
+         (JsonObject
+           ((JsonPair "id" (JsonString "A"))
+            (JsonPair "name" (JsonString "Ada")))))
+       (codex:agent-job-item-create-params
+         "A-2"
+         1
+         "A"
+         (JsonObject
+           ((JsonPair "id" (JsonString "A"))
+            (JsonPair "name" (JsonString "Augusta"))))))
+      4)))
+
+!(assertEqual
+  (case (codex:prepare-spawn-agents-on-csv
+          (codex:spawn-agents-on-csv-args
+            "input.csv"
+            "Review {name}"
+            CodexAbsent
+            "/tmp/out.csv"
+            CodexAbsent
+            CodexAbsent
+            3
+            90)
+          "/tmp/input.csv"
+          "name\nAda\n"
+          "abcdef0123456789"
+          120)
+    (((CodexAgentJobOk $prepared)
+      (let $params
+        (codex:prepared-spawn-agents-on-csv-create-params $prepared)
+        ((codex:agent-job-create-params-output-csv-path $params)
+         (codex:agent-job-create-params-max-runtime-seconds $params)
+           (codex:prepared-spawn-agents-on-csv-requested-concurrency
+             $prepared))))))
+  ("/tmp/out.csv" 90 3))
+
+!(assertEqual
+  (codex:prepare-spawn-agents-on-csv
+    (codex:spawn-agents-on-csv-args
+      "input.csv"
+      "Review"
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent)
+    "/tmp/input.csv"
+    "id,note\n1,\"unterminated"
+    "123456789abcdef0"
+    CodexAbsent)
+  (codex:agent-job-err
+    (codex:function-call-error-respond-to-model
+      "failed to parse csv input: CSV ended inside quoted field")))
+
+!(assertEqual
   (codex:agent-job-ensure-unique-headers ("id" "name" "id"))
   (codex:agent-job-err
     (codex:function-call-error-respond-to-model

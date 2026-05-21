@@ -17,6 +17,7 @@
 ; - CSV row to AgentJobItemCreateParams conversion
 ; - SpawnAgentsOnCsvArgs / ReportAgentJobResultArgs parsing and immediate
 ;   handler validation
+; - spawn_agents_on_csv preparation up to AgentJobCreateParams / item params
 ; - AgentJob result/progress JSON projections
 ; - build_worker_prompt
 ; - value_to_csv_string / csv_escape / render_job_csv
@@ -53,6 +54,10 @@
 ;   target type. This slice keeps the same required/optional/null/value
 ;   acceptance rules for the two agent-job structs, but uses explicit
 ;   field-local diagnostic strings so the pure CeTTa decoder remains auditable.
+; - Rust resolves an explicit `output_csv_path` through `TurnContext` before
+;   building `AgentJobCreateParams`. The pure preparation helper below expects
+;   that path to already be turn-resolved when present; the default output path
+;   branch is still computed locally from the resolved input path and job id.
 
 !(import! &self function_tool)
 !(import! &self json)
@@ -1298,6 +1303,259 @@
                  0
                  ()
                  ())))))))))
+
+(= (codex:agent-job-create-params
+      $id
+      $name
+      $instruction
+      $auto-export
+      $max-runtime-seconds
+      $output-schema-json
+      $input-headers
+      $input-csv-path
+      $output-csv-path)
+   (CodexAgentJobCreateParams
+     $id
+     $name
+     $instruction
+     $auto-export
+     $max-runtime-seconds
+     $output-schema-json
+     $input-headers
+     $input-csv-path
+     $output-csv-path))
+
+(= (codex:agent-job-create-params-id
+      (CodexAgentJobCreateParams
+        $id
+        $name
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path))
+   $id)
+
+(= (codex:agent-job-create-params-name
+      (CodexAgentJobCreateParams
+        $id
+        $name
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path))
+   $name)
+
+(= (codex:agent-job-create-params-instruction
+      (CodexAgentJobCreateParams
+        $id
+        $name
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path))
+   $instruction)
+
+(= (codex:agent-job-create-params-auto-export
+      (CodexAgentJobCreateParams
+        $id
+        $name
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path))
+   $auto-export)
+
+(= (codex:agent-job-create-params-max-runtime-seconds
+      (CodexAgentJobCreateParams
+        $id
+        $name
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path))
+   $max-runtime-seconds)
+
+(= (codex:agent-job-create-params-output-schema-json
+      (CodexAgentJobCreateParams
+        $id
+        $name
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path))
+   $output-schema-json)
+
+(= (codex:agent-job-create-params-input-headers
+      (CodexAgentJobCreateParams
+        $id
+        $name
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path))
+   $input-headers)
+
+(= (codex:agent-job-create-params-input-csv-path
+      (CodexAgentJobCreateParams
+        $id
+        $name
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path))
+   $input-csv-path)
+
+(= (codex:agent-job-create-params-output-csv-path
+      (CodexAgentJobCreateParams
+        $id
+        $name
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path))
+   $output-csv-path)
+
+(= (codex:prepared-spawn-agents-on-csv
+      $create-params
+      $items
+      $requested-concurrency)
+   (CodexPreparedSpawnAgentsOnCsv
+     $create-params
+     $items
+     $requested-concurrency))
+
+(= (codex:prepared-spawn-agents-on-csv-create-params
+      (CodexPreparedSpawnAgentsOnCsv
+        $create-params
+        $items
+        $requested-concurrency))
+   $create-params)
+
+(= (codex:prepared-spawn-agents-on-csv-items
+      (CodexPreparedSpawnAgentsOnCsv
+        $create-params
+        $items
+        $requested-concurrency))
+   $items)
+
+(= (codex:prepared-spawn-agents-on-csv-requested-concurrency
+      (CodexPreparedSpawnAgentsOnCsv
+        $create-params
+        $items
+        $requested-concurrency))
+   $requested-concurrency)
+
+(= (codex:agent-job-name-from-id $job-id)
+   (format-args "agent-job-{}" ((str-slice $job-id 0 8))))
+
+(= (codex:agent-job-output-csv-path-for-spawn
+      $input-csv-path
+      $job-id
+      $requested-output-csv-path)
+   (if (== $requested-output-csv-path CodexAbsent)
+       (codex:agent-job-default-output-csv-path $input-csv-path $job-id)
+       $requested-output-csv-path))
+
+(= (codex:agent-job-option-or $first $second)
+   (if (== $first CodexAbsent)
+       $second
+       $first))
+
+(= (codex:agent-job-parse-csv-for-spawn $content)
+   (case (codex:agent-job-parse-csv $content)
+     (((CodexAgentJobErr $error)
+       (codex:agent-job-err
+         (codex:function-call-error-respond-to-model
+           (format-args "failed to parse csv input: {}" ($error)))))
+      ((CodexAgentJobOk $table)
+       (codex:agent-job-ok $table)))))
+
+(= (codex:prepare-spawn-agents-on-csv-from-table
+      $args
+      $input-csv-path
+      $job-id
+      $config-max-runtime-seconds
+      (CodexAgentJobCsvTable $headers $rows))
+   (case (codex:agent-job-items-from-csv-table
+           (codex:agent-job-csv-table $headers $rows)
+           (codex:spawn-agents-on-csv-args-id-column $args))
+     (((CodexAgentJobErr $error)
+       (codex:agent-job-err $error))
+      ((CodexAgentJobOk $items)
+       (case (codex:agent-job-normalize-max-runtime-seconds
+               (codex:agent-job-option-or
+                 (codex:spawn-agents-on-csv-args-max-runtime-seconds $args)
+                 $config-max-runtime-seconds))
+         (((CodexAgentJobErr $error)
+           (codex:agent-job-err $error))
+          ((CodexAgentJobOk $max-runtime-seconds)
+           (codex:agent-job-ok
+             (codex:prepared-spawn-agents-on-csv
+               (codex:agent-job-create-params
+                 $job-id
+                 (codex:agent-job-name-from-id $job-id)
+                 (codex:spawn-agents-on-csv-args-instruction $args)
+                 True
+                 $max-runtime-seconds
+                 (codex:spawn-agents-on-csv-args-output-schema $args)
+                 $headers
+                 $input-csv-path
+                 (codex:agent-job-output-csv-path-for-spawn
+                   $input-csv-path
+                   $job-id
+                   (codex:spawn-agents-on-csv-args-output-csv-path
+                     $args)))
+               $items
+               (codex:spawn-agents-on-csv-args-requested-concurrency
+                 $args))))))))))
+
+(= (codex:prepare-spawn-agents-on-csv
+      $args
+      $input-csv-path
+      $csv-content
+      $job-id
+      $config-max-runtime-seconds)
+   (case (codex:validate-spawn-agents-on-csv-args $args)
+     (((CodexAgentJobErr $error)
+       (codex:agent-job-err $error))
+      ((CodexAgentJobOk $valid-args)
+       (case (codex:agent-job-parse-csv-for-spawn $csv-content)
+         (((CodexAgentJobErr $error)
+           (codex:agent-job-err $error))
+          ((CodexAgentJobOk $table)
+           (codex:prepare-spawn-agents-on-csv-from-table
+             $valid-args
+             $input-csv-path
+             $job-id
+             $config-max-runtime-seconds
+             $table))))))))
 
 (= (codex:agent-job-json-number $value)
    (JsonNumber (format-args "{}" ($value))))
