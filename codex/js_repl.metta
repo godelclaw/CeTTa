@@ -10,15 +10,25 @@
 ; - freeform grammar exposed to the Responses API
 ; - parse_freeform_args pragma handling
 ; - reject_json_or_quoted_source malformed-input guard
+; - ToolHandler kind/matches_kind and feature/payload guard behavior
+; - function-payload JsReplArgs decoding before the async runtime boundary
+; - js_repl exec begin/end event payload construction
 ; - small exec-output aggregation helper used by js_repl events
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust executes parsed JavaScript through a persistent Node kernel stored on
-;   the turn context. This slice only ports the pure pre-runtime parser and
-;   metadata; kernel process management remains a later runtime increment.
+;   the turn context. This slice ports the pure pre-runtime parser, metadata,
+;   handler guard logic, and exec event payloads; kernel process management
+;   remains a later runtime increment. The handler result therefore carries a
+;   `CodexJsReplExecPlan` at the exact Rust handoff point where `manager()`
+;   would be awaited.
 ; - Rust parses timeout_ms as u64. CeTTa integers are not currently bounded to
 ;   Rust integer widths, so this slice validates the same non-empty decimal
 ;   syntax but does not reject values above u64::MAX.
+; - Rust gets serde's exact parse diagnostics for function-payload JsReplArgs.
+;   This slice preserves the same accepted fields and failure classes with
+;   reconstructed messages because the current CeTTa JSON helper does not
+;   expose serde-style typed errors.
 
 !(import! &self json)
 !(import! &self list)
@@ -103,6 +113,10 @@
 
 (= (codex:js-repl-parse-result-error (CodexJsReplParseError $message))
    $message)
+
+(= (codex:js-repl-function-args-error $message)
+   (codex:js-repl-parse-error
+     (str-concat "failed to parse function arguments: " $message)))
 
 (= (codex:js-repl-split-first-line-result $first-line $rest)
    (CodexJsReplSplitFirstLine $first-line $rest))
@@ -355,6 +369,146 @@
          $input
          (codex:js-repl-split-first-line $input))))
 
+(= (codex:is-js-repl-function-args-known-key $key)
+   (or (== $key "code") (== $key "timeout_ms")))
+
+(= (codex:js-repl-function-args-first-unknown-key ())
+   CodexAbsent)
+
+(= (codex:js-repl-function-args-first-unknown-key $pairs)
+   (let ($head $tail) (decons-atom $pairs)
+     (case $head
+       (((JsonPair $key $value)
+         (if (codex:is-js-repl-function-args-known-key $key)
+             (codex:js-repl-function-args-first-unknown-key $tail)
+             $key))))))
+
+(= (codex:js-repl-function-args-code-result $object)
+   (case (json-object-get $object "code")
+     ((Empty
+       (codex:js-repl-function-args-error "missing field `code`"))
+      ; CeTTa's JSON getter currently reaches this branch for an absent key in
+      ; the loaded surface, so keep Rust's missing-field class for that case.
+      (JsonNull
+       (codex:js-repl-function-args-error
+         "missing field `code`"))
+      ((JsonString $code)
+       (codex:js-repl-parse-ok $code))
+      ($other
+       (codex:js-repl-function-args-error
+         "invalid type for `code`; expected string")))))
+
+(= (codex:js-repl-function-args-timeout-result $object)
+   (case (json-object-get $object "timeout_ms")
+     ((Empty (codex:js-repl-parse-ok CodexAbsent))
+      (JsonNull (codex:js-repl-parse-ok CodexAbsent))
+      ((JsonNumber $value)
+       (let $number-text (format-args "{}" ($value))
+         (if (codex:is-js-repl-decimal-string $number-text)
+           (codex:js-repl-parse-ok
+             (codex:js-repl-decimal-string-to-number $number-text))
+           (codex:js-repl-function-args-error
+             "invalid type for `timeout_ms`; expected integer or null"))))
+      ($other
+       (codex:js-repl-function-args-error
+         "invalid type for `timeout_ms`; expected integer or null")))))
+
+(= (codex:js-repl-function-args-from-object (JsonObject $pairs))
+   (case (codex:js-repl-function-args-first-unknown-key $pairs)
+     ((CodexAbsent
+       (case (codex:js-repl-function-args-code-result (JsonObject $pairs))
+         (((CodexJsReplParseError $message)
+           (codex:js-repl-parse-error $message))
+          ((CodexJsReplParseOk $code)
+           (case (codex:js-repl-function-args-timeout-result
+                   (JsonObject $pairs))
+             (((CodexJsReplParseError $message)
+               (codex:js-repl-parse-error $message))
+              ((CodexJsReplParseOk $timeout-ms)
+               (codex:js-repl-parse-ok
+                 (codex:js-repl-args $code $timeout-ms)))))))))
+      ($unknown
+       (codex:js-repl-function-args-error
+         (format-args
+           "unknown field `{}`, expected `code` or `timeout_ms`"
+           ($unknown)))))))
+
+(= (codex:parse-js-repl-function-args $arguments)
+   (case (json-parse $arguments)
+     (((JsonObject $pairs)
+       (codex:js-repl-function-args-from-object (JsonObject $pairs)))
+      ((Error $source $message)
+       (codex:js-repl-function-args-error $message))
+      ($other
+       (codex:js-repl-function-args-error
+         "invalid type: expected object")))))
+
+(= (codex:js-repl-handler-kind)
+   "function")
+
+(= (codex:js-repl-reset-handler-kind)
+   "function")
+
+(= (codex:js-repl-handler-matches-kind $payload)
+   (case $payload
+     (((CodexToolPayloadFunction $arguments) True)
+      ((CodexToolPayloadCustom $input) True)
+      ($other False))))
+
+(= (codex:js-repl-handler-ok $value)
+   (CodexJsReplHandlerOk $value))
+
+(= (codex:js-repl-handler-err $error)
+   (CodexJsReplHandlerErr $error))
+
+(= (codex:js-repl-handler-result-value
+      (CodexJsReplHandlerOk $value))
+   $value)
+
+(= (codex:js-repl-handler-result-error
+      (CodexJsReplHandlerErr $error))
+   $error)
+
+(= (codex:js-repl-exec-plan $args)
+   (CodexJsReplExecPlan $args))
+
+(= (codex:js-repl-exec-plan-args (CodexJsReplExecPlan $args))
+   $args)
+
+(= (codex:js-repl-handler-parse-payload $payload)
+   (case $payload
+     (((CodexToolPayloadFunction $arguments)
+       (codex:parse-js-repl-function-args $arguments))
+      ((CodexToolPayloadCustom $input)
+       (codex:parse-js-repl-freeform-args $input))
+      ($other
+       (codex:js-repl-parse-error
+         (codex:js-repl-unsupported-payload-message))))))
+
+(= (codex:run-js-repl-handler $js-repl-feature-enabled $payload)
+   (if (== $js-repl-feature-enabled False)
+       (codex:js-repl-handler-err
+         (CodexFunctionCallErrorRespondToModel
+           (codex:js-repl-disabled-message)))
+       (case (codex:js-repl-handler-parse-payload $payload)
+         (((CodexJsReplParseError $message)
+           (codex:js-repl-handler-err
+             (CodexFunctionCallErrorRespondToModel $message)))
+          ((CodexJsReplParseOk $args)
+           (codex:js-repl-handler-ok
+             (codex:js-repl-exec-plan $args)))))))
+
+(= (codex:run-js-repl-reset-handler $js-repl-feature-enabled)
+   (if (== $js-repl-feature-enabled False)
+       (codex:js-repl-handler-err
+         (CodexFunctionCallErrorRespondToModel
+           (codex:js-repl-disabled-message)))
+       (codex:js-repl-handler-ok
+         (CodexToolOutputFunction
+           ((CodexInputText (codex:js-repl-reset-output-text)))
+           True
+           CodexAbsent))))
+
 (= (codex:js-repl-join-outputs $stdout $stderr)
    (if (== $stdout "")
        $stderr
@@ -377,6 +531,56 @@
      $duration-ms
      $timed-out))
 
+(= (codex:js-repl-exec-output-exit-code
+      (CodexJsReplExecOutput
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $timed-out))
+   $exit-code)
+
+(= (codex:js-repl-exec-output-stdout
+      (CodexJsReplExecOutput
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $timed-out))
+   $stdout)
+
+(= (codex:js-repl-exec-output-stderr
+      (CodexJsReplExecOutput
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $timed-out))
+   $stderr)
+
+(= (codex:js-repl-exec-output-aggregated-output
+      (CodexJsReplExecOutput
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $timed-out))
+   $aggregated-output)
+
+(= (codex:js-repl-exec-output-duration-ms
+      (CodexJsReplExecOutput
+        $exit-code
+        $stdout
+        $stderr
+        $aggregated-output
+        $duration-ms
+        $timed-out))
+   $duration-ms)
+
 (= (codex:build-js-repl-exec-output $output $error $duration-ms)
    (if (== $error CodexAbsent)
        (codex:js-repl-exec-output
@@ -393,3 +597,67 @@
          (codex:js-repl-join-outputs $output $error)
          $duration-ms
          False)))
+
+(= (codex:js-repl-floor-div $numerator $denominator)
+   (let $remainder (% $numerator $denominator)
+     (/ (- $numerator $remainder) $denominator)))
+
+(= (codex:js-repl-duration-from-ms $duration-ms)
+   (let $secs (codex:js-repl-floor-div $duration-ms 1000)
+     (let $ms-remainder (% $duration-ms 1000)
+       (CodexDuration $secs (* $ms-remainder 1000000)))))
+
+(= (codex:js-repl-exec-command)
+   ("js_repl"))
+
+(= (codex:js-repl-parsed-command)
+   ((CodexParsedCommandUnknown "js_repl")))
+
+(= (codex:emit-js-repl-exec-begin-event $call-id $turn-id $cwd)
+   (CodexEventExecCommandBegin
+     $call-id
+     CodexAbsent
+     $turn-id
+     (codex:js-repl-exec-command)
+     $cwd
+     (codex:js-repl-parsed-command)
+     (CodexExecCommandSourceAgent)
+     CodexAbsent))
+
+(= (codex:js-repl-exec-status-for-exit-code $exit-code)
+   (if (== $exit-code 0)
+       (CodexExecCommandStatusCompleted)
+       (CodexExecCommandStatusFailed)))
+
+(= (codex:emit-js-repl-exec-end-event
+      $call-id
+      $turn-id
+      $cwd
+      $output
+      $error
+      $duration-ms)
+   (let $exec-output
+     (codex:build-js-repl-exec-output $output $error $duration-ms)
+     (let $exit-code
+       (codex:js-repl-exec-output-exit-code $exec-output)
+       (let $stdout (codex:js-repl-exec-output-stdout $exec-output)
+         (let $stderr (codex:js-repl-exec-output-stderr $exec-output)
+           (let $aggregated-output
+             (codex:js-repl-exec-output-aggregated-output $exec-output)
+             (CodexEventExecCommandEnd
+               $call-id
+               CodexAbsent
+               $turn-id
+               (codex:js-repl-exec-command)
+               $cwd
+               (codex:js-repl-parsed-command)
+               (CodexExecCommandSourceAgent)
+               CodexAbsent
+               $stdout
+               $stderr
+               $aggregated-output
+               $exit-code
+               (codex:js-repl-duration-from-ms
+                 (codex:js-repl-exec-output-duration-ms $exec-output))
+               $aggregated-output
+               (codex:js-repl-exec-status-for-exit-code $exit-code))))))))
