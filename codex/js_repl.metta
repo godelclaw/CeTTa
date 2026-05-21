@@ -50,6 +50,10 @@
 ;   accepts already-observed spawn/status/stdout/stderr values at that runtime
 ;   boundary and preserves Rust's exact post-observation formatting and version
 ;   comparison branches.
+; - Rust resolves Node from `CODEX_JS_REPL_NODE_PATH`, then config, then
+;   `which node`, checking filesystem existence at each path boundary. This
+;   pure slice receives those already-observed existence/which values and keeps
+;   the Rust precedence order.
 ; - Some parser/runtime-boundary helpers bind intermediate results with `let`
 ;   where Rust would call a helper inline. This only materializes the same value
 ;   in CeTTa's evaluator and does not change the branch order or accepted cases.
@@ -1226,6 +1230,69 @@
            $found
            $required))
        (codex:js-repl-node-version-check-ok)))
+
+(= (codex:js-repl-resolve-compatible-node-ok $node-path)
+   (CodexJsReplResolveCompatibleNodeOk $node-path))
+
+(= (codex:js-repl-resolve-compatible-node-error $message)
+   (CodexJsReplResolveCompatibleNodeError $message))
+
+(= (codex:js-repl-resolve-compatible-node-error-message
+      (CodexJsReplResolveCompatibleNodeError $message))
+   $message)
+
+(= (codex:js-repl-node-runtime-not-found-message)
+   "Node runtime not found; install Node or set CODEX_JS_REPL_NODE_PATH")
+
+(= (codex:js-repl-resolve-node-from-env
+      $env-path
+      $env-exists
+      $fallback)
+   (case $env-path
+     ((CodexAbsent $fallback)
+      ($path
+       (if $env-exists
+           $path
+           $fallback)))))
+
+(= (codex:js-repl-resolve-node-from-config
+      $config-path
+      $config-exists
+      $fallback)
+   (case $config-path
+     ((CodexAbsent $fallback)
+      ($path
+       (if $config-exists
+           $path
+           $fallback)))))
+
+(= (codex:js-repl-resolve-node
+      $env-path
+      $env-exists
+      $config-path
+      $config-exists
+      $which-node-path)
+   (codex:js-repl-resolve-node-from-env
+     $env-path
+     $env-exists
+     (codex:js-repl-resolve-node-from-config
+       $config-path
+       $config-exists
+       $which-node-path)))
+
+(= (codex:js-repl-resolve-compatible-node
+      $resolved-node-path
+      $version-check)
+   (case $resolved-node-path
+     ((CodexAbsent
+       (codex:js-repl-resolve-compatible-node-error
+         (codex:js-repl-node-runtime-not-found-message)))
+      ($node-path
+       (case $version-check
+         (((CodexJsReplNodeVersionCheckOk)
+           (codex:js-repl-resolve-compatible-node-ok $node-path))
+          ((CodexJsReplNodeVersionCheckError $message)
+           (codex:js-repl-resolve-compatible-node-error $message))))))))
 
 (= (codex:js-repl-tool-call-payload-kind-message-content)
    (CodexJsReplToolCallPayloadKindMessageContent))

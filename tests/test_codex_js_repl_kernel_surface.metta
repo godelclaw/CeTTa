@@ -365,3 +365,59 @@
     (CodexJsReplNodeVersion 22 22 0)
     (CodexJsReplNodeVersion 22 22 0))
   (CodexJsReplNodeVersionCheckOk))
+
+!(assertEqual
+  (codex:js-repl-resolve-node
+    "/env/node"
+    True
+    "/config/node"
+    True
+    "/usr/bin/node")
+  "/env/node")
+
+!(assertEqual
+  (codex:js-repl-resolve-node
+    "/env/node"
+    False
+    "/config/node"
+    True
+    "/usr/bin/node")
+  "/config/node")
+
+!(assertEqual
+  (codex:js-repl-resolve-node
+    CodexAbsent
+    False
+    "/config/node"
+    False
+    "/usr/bin/node")
+  "/usr/bin/node")
+
+!(assertEqual
+  (codex:js-repl-resolve-node
+    CodexAbsent
+    False
+    CodexAbsent
+    False
+    CodexAbsent)
+  CodexAbsent)
+
+!(assertEqual
+  (codex:js-repl-resolve-compatible-node
+    "/usr/bin/node"
+    (CodexJsReplNodeVersionCheckOk))
+  (CodexJsReplResolveCompatibleNodeOk "/usr/bin/node"))
+
+!(assertEqual
+  (codex:js-repl-resolve-compatible-node-error-message
+    (codex:js-repl-resolve-compatible-node
+      CodexAbsent
+      (CodexJsReplNodeVersionCheckOk)))
+  "Node runtime not found; install Node or set CODEX_JS_REPL_NODE_PATH")
+
+!(assertEqual
+  (codex:js-repl-resolve-compatible-node-error-message
+    (codex:js-repl-resolve-compatible-node
+      "/usr/bin/node"
+      (CodexJsReplNodeVersionCheckError "too old")))
+  "too old")
