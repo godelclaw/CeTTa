@@ -64,38 +64,15 @@
 (= (codex:environment-selection-ascii-lower-text $text)
    (if (== $text "")
        ""
-       (let $head
+       (str-concat
          (codex:environment-selection-ascii-lower-char
            (str-slice $text 0 1))
-         (let $tail
-           (eval
-             (codex:environment-selection-ascii-lower-text
-               (str-slice $text 1 (str-length $text))))
-           (str-concat $head $tail)))))
+         (codex:environment-selection-ascii-lower-text
+           (str-slice $text 1 (str-length $text))))))
 
-(= (codex:environment-selection-is-none-url $text)
-   (let $len (str-length $text)
-     (if (== $len 4)
-         (let $c0
-           (codex:environment-selection-ascii-lower-char
-             (str-slice $text 0 1))
-           (let $c1
-             (codex:environment-selection-ascii-lower-char
-               (str-slice $text 1 2))
-             (let $c2
-               (codex:environment-selection-ascii-lower-char
-                 (str-slice $text 2 3))
-               (let $c3
-                 (codex:environment-selection-ascii-lower-char
-                   (str-slice $text 3 4))
-                 (and
-                   (== $c0 "n")
-                   (and
-                     (== $c1 "o")
-                     (and
-                       (== $c2 "n")
-                       (== $c3 "e"))))))))
-         False)))
+(= (codex:environment-selection-eq-ignore-ascii-case $left $right)
+   (== (codex:environment-selection-ascii-lower-text $left)
+       (codex:environment-selection-ascii-lower-text $right)))
 
 (= (codex:environment-normalized-exec-server-url $url $disabled)
    (CodexEnvironmentNormalizedExecServerUrl $url $disabled))
@@ -114,11 +91,11 @@
        (let $trimmed (str-trim $exec-server-url)
          (if (== $trimmed "")
              (codex:environment-normalized-exec-server-url CodexAbsent False)
-             (let $is-none
-               (codex:environment-selection-is-none-url $trimmed)
-               (if $is-none
-                   (codex:environment-normalized-exec-server-url CodexAbsent True)
-                   (codex:environment-normalized-exec-server-url $trimmed False)))))))
+             (if (codex:environment-selection-eq-ignore-ascii-case
+                   $trimmed
+                   "none")
+                 (codex:environment-normalized-exec-server-url CodexAbsent True)
+                 (codex:environment-normalized-exec-server-url $trimmed False))))))
 
 (= (codex:environment $environment-id $is-remote $exec-server-url)
    (CodexEnvironment $environment-id $is-remote $exec-server-url))
