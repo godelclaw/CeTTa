@@ -1,5 +1,6 @@
 !(register-module! ../codex)
 !(import! &self codex:fs_sandbox)
+!(import! &self codex:permissions)
 !(import! &self codex:unified_exec_env)
 
 (= (test:fs-helper-vars)
@@ -85,3 +86,93 @@
        (codex:unified-exec-env-var "HOME" "C:\\Users\\codex")))
     "Path")
   "C:\\Windows")
+
+!(assertEqual
+  (codex:fs-sandbox-helper-read-roots
+    (codex:fs-sandbox-runtime-paths
+      "/opt/codex/bin/codex"
+      CodexAbsent))
+  ("/opt/codex/bin"))
+
+!(assertEqual
+  (codex:fs-sandbox-helper-read-roots
+    (codex:fs-sandbox-runtime-paths
+      "/opt/codex/bin/codex"
+      "/opt/codex/aliases/codex-linux-sandbox"))
+  ("/opt/codex/bin" "/opt/codex/aliases"))
+
+!(assertEqual
+  (codex:fs-sandbox-helper-read-roots
+    (codex:fs-sandbox-runtime-paths
+      "/opt/codex/bin/codex"
+      "/opt/codex/bin/codex-linux-sandbox"))
+  ("/opt/codex/bin"))
+
+!(assertEqual
+  (codex:file-system-sandbox-policy-include-platform-defaults
+    (codex:fs-sandbox-add-helper-runtime-permissions
+      (codex:file-system-sandbox-policy-restricted ())
+      ()
+      "/workspace"))
+  True)
+
+!(assertEqual
+  (codex:fs-sandbox-add-helper-runtime-permissions
+    (codex:file-system-sandbox-policy-restricted
+      ((codex:fs-sandbox-minimal-read-entry)))
+    ()
+    "/workspace")
+  (codex:file-system-sandbox-policy-restricted
+    ((codex:fs-sandbox-minimal-read-entry))))
+
+!(assertEqual
+  (let $policy
+    (codex:fs-sandbox-add-helper-runtime-permissions
+      (codex:file-system-sandbox-policy-restricted
+        ((codex:file-system-sandbox-entry
+           (codex:file-system-path-path "/workspace/writable")
+           (codex:file-system-access-write))))
+      ("/opt/codex/bin")
+      "/workspace")
+    (and
+      (codex:file-system-sandbox-policy-can-read-path-with-cwd
+        $policy
+        "/opt/codex/bin/codex"
+        "/workspace")
+      (codex:file-system-sandbox-policy-can-write-path-with-cwd
+        $policy
+        "/workspace/writable"
+        "/workspace")))
+  True)
+
+!(assertEqual
+  (codex:fs-sandbox-add-helper-runtime-permissions
+    (codex:file-system-sandbox-policy-restricted
+      ((codex:file-system-sandbox-entry
+         (codex:file-system-path-special
+           (codex:file-system-special-path-root))
+         (codex:file-system-access-read))))
+    ("/opt/codex/bin")
+    "/workspace")
+  (codex:file-system-sandbox-policy-restricted
+    ((codex:file-system-sandbox-entry
+       (codex:file-system-path-special
+         (codex:file-system-special-path-root))
+       (codex:file-system-access-read)))))
+
+!(assertEqual
+  (let $policy
+    (codex:fs-sandbox-add-helper-runtime-permissions
+      (codex:file-system-sandbox-policy-restricted ())
+      ("/opt/codex/bin" "/opt/codex/aliases")
+      "/workspace")
+    (and
+      (codex:file-system-sandbox-policy-can-read-path-with-cwd
+        $policy
+        "/opt/codex/bin/codex"
+        "/workspace")
+      (codex:file-system-sandbox-policy-can-read-path-with-cwd
+        $policy
+        "/opt/codex/aliases/codex-linux-sandbox"
+        "/workspace")))
+  True)
