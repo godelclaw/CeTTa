@@ -54,6 +54,11 @@ Early in the restart, the green lane is explicit and staged:
 Once the committed Codex suite becomes large enough, expand the gate to the full
 `tests/test_codex_*.metta` sweep.
 
+Known red Codex surfaces are tracked in `specs/codex_known_red_surfaces.md`.
+Do not spend repeated checkpoint sessions on the same known-red surface unless
+the next pass starts from a smaller evaluator/materialization repro or a new
+Rust-reference discrepancy.
+
 ## Verification
 
 Use `scripts/check_codex_surfaces.sh` for output-aware Codex checks.
