@@ -13,6 +13,8 @@
 ; - ToolHandler kind/matches_kind and feature/payload guard behavior
 ; - function-payload JsReplArgs decoding before the async runtime boundary
 ; - js_repl exec begin/end event payload construction
+; - nested tool-call response summary for message/function/custom/tool_search
+;   responses plus handler errors
 ; - small exec-output aggregation helper used by js_repl events
 ;
 ; Required slice-local deviations from Rust, documented for audit:
@@ -33,6 +35,7 @@
 !(import! &self json)
 !(import! &self list)
 !(import! &self str)
+!(import! &self codex:string_truncate)
 
 (= (codex:js-repl-tool-name)
    "js_repl")
@@ -57,6 +60,9 @@
 
 (= (codex:js-repl-reset-output-text)
    "js_repl kernel reset")
+
+(= (codex:js-repl-tool-response-text-preview-max-bytes)
+   512)
 
 (= (codex:js-repl-empty-input-message)
    "js_repl expects raw JavaScript tool input (non-empty). Provide JS source text, optionally with first-line `// codex-js-repl: ...`.")
@@ -508,6 +514,337 @@
            ((CodexInputText (codex:js-repl-reset-output-text)))
            True
            CodexAbsent))))
+
+(= (codex:js-repl-tool-call-payload-kind-message-content)
+   (CodexJsReplToolCallPayloadKindMessageContent))
+
+(= (codex:js-repl-tool-call-payload-kind-function-text)
+   (CodexJsReplToolCallPayloadKindFunctionText))
+
+(= (codex:js-repl-tool-call-payload-kind-function-content-items)
+   (CodexJsReplToolCallPayloadKindFunctionContentItems))
+
+(= (codex:js-repl-tool-call-payload-kind-custom-text)
+   (CodexJsReplToolCallPayloadKindCustomText))
+
+(= (codex:js-repl-tool-call-payload-kind-custom-content-items)
+   (CodexJsReplToolCallPayloadKindCustomContentItems))
+
+(= (codex:js-repl-tool-call-payload-kind-error)
+   (CodexJsReplToolCallPayloadKindError))
+
+(= (codex:js-repl-tool-call-response-summary
+      $response-type
+      $payload-kind
+      $payload-text-preview
+      $payload-text-length
+      $payload-item-count
+      $text-item-count
+      $image-item-count
+      $structured-content-present
+      $result-is-error)
+   (CodexJsReplToolCallResponseSummary
+     $response-type
+     $payload-kind
+     $payload-text-preview
+     $payload-text-length
+     $payload-item-count
+     $text-item-count
+     $image-item-count
+     $structured-content-present
+     $result-is-error))
+
+(= (codex:js-repl-tool-call-response-summary-response-type
+      (CodexJsReplToolCallResponseSummary
+        $response-type
+        $payload-kind
+        $payload-text-preview
+        $payload-text-length
+        $payload-item-count
+        $text-item-count
+        $image-item-count
+        $structured-content-present
+        $result-is-error))
+   $response-type)
+
+(= (codex:js-repl-tool-call-response-summary-payload-kind
+      (CodexJsReplToolCallResponseSummary
+        $response-type
+        $payload-kind
+        $payload-text-preview
+        $payload-text-length
+        $payload-item-count
+        $text-item-count
+        $image-item-count
+        $structured-content-present
+        $result-is-error))
+   $payload-kind)
+
+(= (codex:js-repl-tool-call-response-summary-payload-text-preview
+      (CodexJsReplToolCallResponseSummary
+        $response-type
+        $payload-kind
+        $payload-text-preview
+        $payload-text-length
+        $payload-item-count
+        $text-item-count
+        $image-item-count
+        $structured-content-present
+        $result-is-error))
+   $payload-text-preview)
+
+(= (codex:js-repl-tool-call-response-summary-payload-text-length
+      (CodexJsReplToolCallResponseSummary
+        $response-type
+        $payload-kind
+        $payload-text-preview
+        $payload-text-length
+        $payload-item-count
+        $text-item-count
+        $image-item-count
+        $structured-content-present
+        $result-is-error))
+   $payload-text-length)
+
+(= (codex:js-repl-tool-call-response-summary-payload-item-count
+      (CodexJsReplToolCallResponseSummary
+        $response-type
+        $payload-kind
+        $payload-text-preview
+        $payload-text-length
+        $payload-item-count
+        $text-item-count
+        $image-item-count
+        $structured-content-present
+        $result-is-error))
+   $payload-item-count)
+
+(= (codex:js-repl-tool-call-response-summary-text-item-count
+      (CodexJsReplToolCallResponseSummary
+        $response-type
+        $payload-kind
+        $payload-text-preview
+        $payload-text-length
+        $payload-item-count
+        $text-item-count
+        $image-item-count
+        $structured-content-present
+        $result-is-error))
+   $text-item-count)
+
+(= (codex:js-repl-tool-call-response-summary-image-item-count
+      (CodexJsReplToolCallResponseSummary
+        $response-type
+        $payload-kind
+        $payload-text-preview
+        $payload-text-length
+        $payload-item-count
+        $text-item-count
+        $image-item-count
+        $structured-content-present
+        $result-is-error))
+   $image-item-count)
+
+(= (codex:js-repl-preview-text $text)
+   (if (== $text "")
+       CodexAbsent
+       (if (> (str-length $text)
+              (codex:js-repl-tool-response-text-preview-max-bytes))
+           (codex:string-truncate-middle-chars
+             $text
+             (codex:js-repl-tool-response-text-preview-max-bytes))
+           $text)))
+
+(= (codex:js-repl-summarize-text-payload
+      $response-type
+      $payload-kind
+      $text)
+   (codex:js-repl-tool-call-response-summary
+     $response-type
+     $payload-kind
+     (codex:js-repl-preview-text $text)
+     (str-length $text)
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent))
+
+(= (codex:is-js-repl-function-output-text-item $item)
+   (case $item
+     (((CodexInputText $text) True)
+      ($other False))))
+
+(= (codex:is-js-repl-message-text-item $item)
+   (case $item
+     (((CodexInputText $text) True)
+      ((CodexOutputText $text) True)
+      ($other False))))
+
+(= (codex:js-repl-count-matching-items () $predicate)
+   0)
+
+(= (codex:js-repl-count-matching-items $items $predicate)
+   (let ($head $tail) (decons-atom $items)
+     (let $tail-count (codex:js-repl-count-matching-items $tail $predicate)
+       (case $predicate
+         ((FunctionOutputText
+           (if (codex:is-js-repl-function-output-text-item $head)
+               (+ $tail-count 1)
+               $tail-count))
+          (MessageText
+           (if (codex:is-js-repl-message-text-item $head)
+               (+ $tail-count 1)
+               $tail-count)))))))
+
+(= (codex:js-repl-text-segment-from-function-output-item $item)
+   (case $item
+     (((CodexInputText $text)
+       (if (== (str-trim $text) "") CodexAbsent $text))
+      ($other CodexAbsent))))
+
+(= (codex:js-repl-text-segment-from-message-item $item)
+   (case $item
+     (((CodexInputText $text)
+       (if (== (str-trim $text) "") CodexAbsent $text))
+      ((CodexOutputText $text)
+       (if (== (str-trim $text) "") CodexAbsent $text))
+      ($other CodexAbsent))))
+
+(= (codex:js-repl-content-text-segments () $mode)
+   ())
+
+(= (codex:js-repl-content-text-segments $items $mode)
+   (let ($head $tail) (decons-atom $items)
+     (let $segment
+       (case $mode
+         ((FunctionOutput
+           (codex:js-repl-text-segment-from-function-output-item $head))
+          (Message
+           (codex:js-repl-text-segment-from-message-item $head))))
+       (let $tail-segments
+         (codex:js-repl-content-text-segments $tail $mode)
+         (if (== $segment CodexAbsent)
+             $tail-segments
+             (cons-atom $segment $tail-segments))))))
+
+(= (codex:js-repl-content-text $items $mode)
+   (let $segments (codex:js-repl-content-text-segments $items $mode)
+     (if (== $segments ())
+         CodexAbsent
+         (str-join "\n" $segments))))
+
+(= (codex:js-repl-summarize-function-output-payload
+      $response-type
+      $payload-kind
+      (CodexFunctionCallOutputText $text))
+   (codex:js-repl-tool-call-response-summary
+     $response-type
+     $payload-kind
+     (codex:js-repl-preview-text $text)
+     (str-length $text)
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent))
+
+(= (codex:js-repl-summarize-function-output-payload
+      $response-type
+      $payload-kind
+      (CodexFunctionCallOutputContentItems $items))
+   (let $payload-text (codex:js-repl-content-text $items FunctionOutput)
+     (let $text-count
+       (codex:js-repl-count-matching-items $items FunctionOutputText)
+       (codex:js-repl-tool-call-response-summary
+         $response-type
+         $payload-kind
+         (if (== $payload-text CodexAbsent)
+             CodexAbsent
+             (codex:js-repl-preview-text $payload-text))
+         (if (== $payload-text CodexAbsent)
+             CodexAbsent
+             (str-length $payload-text))
+         (list:len $items)
+         $text-count
+         (- (list:len $items) $text-count)
+         CodexAbsent
+         CodexAbsent))))
+
+(= (codex:js-repl-summarize-message-payload $content)
+   (let $payload-text (codex:js-repl-content-text $content Message)
+     (let $text-count
+       (codex:js-repl-count-matching-items $content MessageText)
+       (codex:js-repl-tool-call-response-summary
+         "message"
+         (codex:js-repl-tool-call-payload-kind-message-content)
+         (if (== $payload-text CodexAbsent)
+             CodexAbsent
+             (codex:js-repl-preview-text $payload-text))
+         (if (== $payload-text CodexAbsent)
+             CodexAbsent
+             (str-length $payload-text))
+         (list:len $content)
+         $text-count
+         (- (list:len $content) $text-count)
+         CodexAbsent
+         CodexAbsent))))
+
+(= (codex:js-repl-summarize-tool-call-response
+      (CodexResponseItemMessage $role $content $phase))
+   (codex:js-repl-summarize-message-payload $content))
+
+(= (codex:js-repl-summarize-tool-call-response
+      (CodexResponseItemMessageWithId $id $role $content $phase))
+   (codex:js-repl-summarize-message-payload $content))
+
+(= (codex:js-repl-summarize-tool-call-response
+      (CodexResponseItemFunctionCallOutput $call-id $output))
+   (case $output
+     (((CodexFunctionCallOutputContentItems $items)
+       (codex:js-repl-summarize-function-output-payload
+         "function_call_output"
+         (codex:js-repl-tool-call-payload-kind-function-content-items)
+         $output))
+      ($other
+       (codex:js-repl-summarize-function-output-payload
+         "function_call_output"
+         (codex:js-repl-tool-call-payload-kind-function-text)
+         $output)))))
+
+(= (codex:js-repl-summarize-tool-call-response
+      (CodexResponseItemCustomToolCallOutput $call-id $name $output))
+   (case $output
+     (((CodexFunctionCallOutputContentItems $items)
+       (codex:js-repl-summarize-function-output-payload
+         "custom_tool_call_output"
+         (codex:js-repl-tool-call-payload-kind-custom-content-items)
+         $output))
+      ($other
+       (codex:js-repl-summarize-function-output-payload
+         "custom_tool_call_output"
+         (codex:js-repl-tool-call-payload-kind-custom-text)
+         $output)))))
+
+(= (codex:js-repl-summarize-tool-call-response
+      (CodexResponseItemToolSearchOutput $call-id $status $execution $tools))
+   (let $payload-text (json-stringify (JsonArray $tools))
+     (codex:js-repl-tool-call-response-summary
+       "tool_search_output"
+       (codex:js-repl-tool-call-payload-kind-function-text)
+       $payload-text
+       (str-length $payload-text)
+       (list:len $tools)
+       CodexAbsent
+       CodexAbsent
+       CodexAbsent
+       CodexAbsent)))
+
+(= (codex:js-repl-summarize-tool-call-error $error)
+   (codex:js-repl-summarize-text-payload
+     CodexAbsent
+     (codex:js-repl-tool-call-payload-kind-error)
+     $error))
 
 (= (codex:js-repl-join-outputs $stdout $stderr)
    (if (== $stdout "")

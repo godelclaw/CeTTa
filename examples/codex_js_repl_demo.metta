@@ -14,3 +14,8 @@
     "ok"
     CodexAbsent
     12))
+!(println!
+  (codex:js-repl-summarize-tool-call-response
+    (CodexResponseItemFunctionCallOutput
+      "fn-call"
+      (CodexFunctionCallOutputText "ok"))))
