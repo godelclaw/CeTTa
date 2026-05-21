@@ -14,6 +14,7 @@
 ; - job_runtime_timeout
 ; - default_output_csv_path
 ; - parse_csv
+; - CSV row to AgentJobItemCreateParams conversion
 ; - AgentJob result/progress JSON projections
 ; - build_worker_prompt
 ; - value_to_csv_string / csv_escape / render_job_csv
@@ -42,6 +43,10 @@
 ;   takes path text and delegates joining/normalization to CeTTa's path library;
 ;   the `file_stem`, parent fallback, and `job_id[..8]` behavior are kept
 ;   explicit below.
+; - Rust increments duplicate item-id suffixes with `usize::saturating_add`.
+;   CeTTa numbers are unbounded here, so `(+)` matches Rust until the practical
+;   `usize` saturation boundary and avoids introducing an artificial machine
+;   integer limit in the pure helper.
 
 !(import! &self function_tool)
 !(import! &self json)
@@ -592,6 +597,202 @@
            (codex:agent-job-csv-table
              (codex:agent-job-csv-trim-first-header-bom $headers)
              (codex:agent-job-csv-filter-nonempty-rows $rows))))))))
+
+(= (codex:agent-job-item-create-params
+      $item-id
+      $row-index
+      $source-id
+      $row-json)
+   (CodexAgentJobItemCreateParams
+     $item-id
+     $row-index
+     $source-id
+     $row-json))
+
+(= (codex:agent-job-item-create-params-item-id
+      (CodexAgentJobItemCreateParams
+        $item-id
+        $row-index
+        $source-id
+        $row-json))
+   $item-id)
+
+(= (codex:agent-job-item-create-params-row-index
+      (CodexAgentJobItemCreateParams
+        $item-id
+        $row-index
+        $source-id
+        $row-json))
+   $row-index)
+
+(= (codex:agent-job-item-create-params-source-id
+      (CodexAgentJobItemCreateParams
+        $item-id
+        $row-index
+        $source-id
+        $row-json))
+   $source-id)
+
+(= (codex:agent-job-item-create-params-row-json
+      (CodexAgentJobItemCreateParams
+        $item-id
+        $row-index
+        $source-id
+        $row-json))
+   $row-json)
+
+(= (codex:agent-job-header-index-from $headers $column-name $index)
+   (if (== $headers ())
+       CodexAbsent
+       (let ($head $tail) (decons-atom $headers)
+         (if (== $head $column-name)
+             $index
+             (codex:agent-job-header-index-from
+               $tail
+               $column-name
+               (+ $index 1))))))
+
+(= (codex:agent-job-id-column-index $headers $column-name)
+   (case $column-name
+     ((CodexAbsent (codex:agent-job-ok CodexAbsent))
+      ($name
+       (let $index (codex:agent-job-header-index-from $headers $name 0)
+         (if (== $index CodexAbsent)
+             (codex:agent-job-err
+               (codex:function-call-error-respond-to-model
+                 (format-args
+                   "id_column {} was not found in csv headers"
+                   ($name))))
+             (codex:agent-job-ok $index)))))))
+
+(= (codex:agent-job-source-id-from-row $row CodexAbsent)
+   CodexAbsent)
+
+(= (codex:agent-job-source-id-from-row $row $id-column-index)
+   (let $value (list:at $row $id-column-index)
+     (if (== (str-trim $value) "")
+         CodexAbsent
+         $value)))
+
+(= (codex:agent-job-base-item-id $source-id $row-number)
+   (if (== $source-id CodexAbsent)
+       (format-args "row-{}" ($row-number))
+       $source-id))
+
+(= (codex:agent-job-next-unique-item-id $base-item-id $seen-ids)
+   (if (codex:agent-job-list-contains $seen-ids $base-item-id)
+       (codex:agent-job-next-unique-item-id-with-suffix
+         $base-item-id
+         $seen-ids
+         2)
+       $base-item-id))
+
+(= (codex:agent-job-next-unique-item-id-with-suffix
+      $base-item-id
+      $seen-ids
+      $suffix)
+   (let $candidate (format-args "{}-{}" ($base-item-id $suffix))
+     (if (codex:agent-job-list-contains $seen-ids $candidate)
+         (codex:agent-job-next-unique-item-id-with-suffix
+           $base-item-id
+           $seen-ids
+           (+ $suffix 1))
+         $candidate)))
+
+(= (codex:agent-job-row-json-pairs $headers $row)
+   (if (== $headers ())
+       ()
+       (let ($header $header-tail) (decons-atom $headers)
+         (let ($value $value-tail) (decons-atom $row)
+           (let $tail-pairs
+             (codex:agent-job-row-json-pairs $header-tail $value-tail)
+             (cons-atom
+               (JsonPair $header (JsonString $value))
+               $tail-pairs))))))
+
+(= (codex:agent-job-row-json-object $headers $row)
+   (JsonObject (codex:agent-job-row-json-pairs $headers $row)))
+
+(= (codex:agent-job-csv-row-to-item
+      $headers
+      $row
+      $id-column-index
+      $row-offset
+      $seen-ids)
+   (let $row-len (list:len $row)
+     (let $header-len (list:len $headers)
+       (if (not (== $row-len $header-len))
+           (codex:agent-job-err
+             (codex:function-call-error-respond-to-model
+               (format-args
+                 "csv row {} has {} fields but header has {}"
+                 ((+ $row-offset 2) $row-len $header-len))))
+           (let $source-id
+             (codex:agent-job-source-id-from-row $row $id-column-index)
+             (let $base-item-id
+               (codex:agent-job-base-item-id $source-id (+ $row-offset 1))
+               (let $item-id
+                 (codex:agent-job-next-unique-item-id $base-item-id $seen-ids)
+                 (codex:agent-job-ok
+                   (codex:agent-job-item-create-params
+                     $item-id
+                     $row-offset
+                     $source-id
+                     (codex:agent-job-row-json-object
+                       $headers
+                       $row))))))))))
+
+(= (codex:agent-job-csv-rows-to-items
+      $headers
+      $rows
+      $id-column-index
+      $row-offset
+      $seen-ids
+      $items-rev)
+   (if (== $rows ())
+       (codex:agent-job-ok (list:reverse $items-rev))
+       (let ($row $tail) (decons-atom $rows)
+         (case (codex:agent-job-csv-row-to-item
+                 $headers
+                 $row
+                 $id-column-index
+                 $row-offset
+                 $seen-ids)
+           (((CodexAgentJobErr $error)
+             (codex:agent-job-err $error))
+            ((CodexAgentJobOk $item)
+             (let $item-id
+               (codex:agent-job-item-create-params-item-id $item)
+               (codex:agent-job-csv-rows-to-items
+                 $headers
+                 $tail
+                 $id-column-index
+                 (+ $row-offset 1)
+                 (cons-atom $item-id $seen-ids)
+                 (cons-atom $item $items-rev)))))))))
+
+(= (codex:agent-job-items-from-csv-table
+      (CodexAgentJobCsvTable $headers $rows)
+      $id-column)
+   (if (== $headers ())
+       (codex:agent-job-err
+         (codex:function-call-error-respond-to-model
+           "csv input must include a header row"))
+       (case (codex:agent-job-ensure-unique-headers $headers)
+         (((CodexAgentJobErr $error)
+           (codex:agent-job-err $error))
+          ((CodexAgentJobOk $unit)
+           (case (codex:agent-job-id-column-index $headers $id-column)
+             (((CodexAgentJobErr $error)
+               (codex:agent-job-err $error))
+              ((CodexAgentJobOk $id-column-index)
+               (codex:agent-job-csv-rows-to-items
+                 $headers
+                 $rows
+                 $id-column-index
+                 0
+                 ()
+                 ())))))))))
 
 (= (codex:agent-job-json-number $value)
    (JsonNumber (format-args "{}" ($value))))

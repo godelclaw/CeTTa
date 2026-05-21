@@ -282,6 +282,85 @@
   (codex:agent-job-err "CSV bare quote in unquoted field"))
 
 !(assertEqual
+  (codex:agent-job-items-from-csv-table
+    (codex:agent-job-csv-table
+      ("id" "name")
+      (("A" "Ada") ("A" "Augusta") ("   " "Blank") ("" "Empty")))
+    "id")
+  (codex:agent-job-ok
+    ((codex:agent-job-item-create-params
+       "A"
+       0
+       "A"
+       (JsonObject
+         ((JsonPair "id" (JsonString "A"))
+          (JsonPair "name" (JsonString "Ada")))))
+     (codex:agent-job-item-create-params
+       "A-2"
+       1
+       "A"
+       (JsonObject
+         ((JsonPair "id" (JsonString "A"))
+          (JsonPair "name" (JsonString "Augusta")))))
+     (codex:agent-job-item-create-params
+       "row-3"
+       2
+       CodexAbsent
+       (JsonObject
+         ((JsonPair "id" (JsonString "   "))
+          (JsonPair "name" (JsonString "Blank")))))
+     (codex:agent-job-item-create-params
+       "row-4"
+       3
+       CodexAbsent
+       (JsonObject
+         ((JsonPair "id" (JsonString ""))
+          (JsonPair "name" (JsonString "Empty"))))))))
+
+!(assertEqual
+  (codex:agent-job-items-from-csv-table
+    (codex:agent-job-csv-table
+      ("id" "name")
+      (("A" "Ada")))
+    CodexAbsent)
+  (codex:agent-job-ok
+    ((codex:agent-job-item-create-params
+       "row-1"
+       0
+       CodexAbsent
+       (JsonObject
+         ((JsonPair "id" (JsonString "A"))
+          (JsonPair "name" (JsonString "Ada"))))))))
+
+!(assertEqual
+  (codex:agent-job-items-from-csv-table
+    (codex:agent-job-csv-table
+      ("id" "name")
+      (("A")))
+    "id")
+  (codex:agent-job-err
+    (codex:function-call-error-respond-to-model
+      "csv row 2 has 1 fields but header has 2")))
+
+!(assertEqual
+  (codex:agent-job-items-from-csv-table
+    (codex:agent-job-csv-table
+      ("id" "name")
+      ())
+    "missing")
+  (codex:agent-job-err
+    (codex:function-call-error-respond-to-model
+      "id_column missing was not found in csv headers")))
+
+!(assertEqual
+  (codex:agent-job-items-from-csv-table
+    (codex:agent-job-csv-table () ())
+    CodexAbsent)
+  (codex:agent-job-err
+    (codex:function-call-error-respond-to-model
+      "csv input must include a header row")))
+
+!(assertEqual
   (codex:agent-job-ensure-unique-headers ("id" "name" "id"))
   (codex:agent-job-err
     (codex:function-call-error-respond-to-model
