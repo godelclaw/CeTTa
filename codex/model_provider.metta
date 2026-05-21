@@ -30,6 +30,7 @@
 !(import! &self account)
 !(import! &self auth_provider)
 !(import! &self error)
+!(import! &self list)
 !(import! &self login_auth)
 !(import! &self model_provider_auth)
 !(import! &self model_provider_info)
@@ -365,9 +366,12 @@
    $headers)
 
 (= (codex:amazon-bedrock-remove-headers-not-preserved-by-bedrock-mantle $headers)
-   (codex:headers-remove
-     $headers
-     (codex:amazon-bedrock-legacy-session-id-header)))
+   (let $headers-results (collapse $headers)
+     (case (list:first $headers-results)
+       (($materialized-headers
+         (codex:headers-remove
+           $materialized-headers
+           (codex:amazon-bedrock-legacy-session-id-header)))))))
 
 (= (codex:amazon-bedrock-resolve-provider-auth-from-env-value $aws $env-value)
    (case (codex:amazon-bedrock-resolve-auth-method-from-env-value
