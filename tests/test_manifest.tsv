@@ -127,6 +127,7 @@ tests/test_codex_event_mapping_user_local_image_surface.metta	he	metta	he_extend
 tests/test_codex_event_mapping_web_search_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_policy_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_fixture_turn_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_fs_sandbox_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_hook_prompt_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_hook_prompt_visible_message_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_image_detail_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
