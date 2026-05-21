@@ -11,6 +11,8 @@
 ; - register_session_root
 ; - prepare_thread_spawn pure registry/session-source preparation
 ; - get_agent_metadata registry forwarding
+; - live_thread_spawn_children/open_thread_spawn_children over thread snapshots
+; - live_thread_spawn_descendants/list_live_agent_subtree_thread_ids
 ; - resolve_agent_reference path resolution and error mapping
 ; - format_environment_context_subagents formatting over materialized children
 ; - agent_matches_prefix
@@ -43,6 +45,10 @@
 ;   registry reservation. This pure boundary receives ordered user role configs
 ;   plus an in-bounds nickname choice index, preserving the same role candidate
 ;   selection and registry state transitions at deterministic boundaries.
+; - Rust live_thread_spawn_children lists ThreadManager threads, reads each
+;   config snapshot asynchronously, and skips threads that disappear. This pure
+;   slice receives the still-live materialized thread snapshots at that async
+;   boundary and keeps the same parent grouping, metadata fallback, and sorting.
 
 !(import! &self agent_path)
 !(import! &self agent_registry)
@@ -90,6 +96,36 @@
 (= (codex:agent-control-status-entry-status
       (CodexAgentControlStatusEntry $thread-id $status))
    (eval $status))
+
+(= (codex:agent-control-thread-snapshot-entry $thread-id $session-source)
+   (CodexAgentControlThreadSnapshotEntry $thread-id $session-source))
+
+(= (codex:agent-control-thread-snapshot-entry-thread-id
+      (CodexAgentControlThreadSnapshotEntry $thread-id $session-source))
+   $thread-id)
+
+(= (codex:agent-control-thread-snapshot-entry-session-source
+      (CodexAgentControlThreadSnapshotEntry $thread-id $session-source))
+   (eval $session-source))
+
+(= (codex:agent-control-thread-spawn-children-entry
+      $parent-thread-id
+      $children)
+   (CodexAgentControlThreadSpawnChildrenEntry
+     $parent-thread-id
+     $children))
+
+(= (codex:agent-control-thread-spawn-children-entry-parent-thread-id
+      (CodexAgentControlThreadSpawnChildrenEntry
+        $parent-thread-id
+        $children))
+   $parent-thread-id)
+
+(= (codex:agent-control-thread-spawn-children-entry-children
+      (CodexAgentControlThreadSpawnChildrenEntry
+        $parent-thread-id
+        $children))
+   $children)
 
 (= (codex:agent-control-listed-agent
       $agent-name
@@ -416,13 +452,15 @@
       ($non-empty-entries
        (let $head (list:first $non-empty-entries)
          (let $tail (list:rest $non-empty-entries)
-           (if (== (codex:agent-registry-entry-key $head)
-                   $agent-path-key)
+           (case (== (codex:agent-registry-entry-key $head)
+                     $agent-path-key)
+             ((True
                (codex:agent-registry-metadata-agent-id
-                 (codex:agent-control-registry-entry-metadata $head))
+                 (codex:agent-control-registry-entry-metadata $head)))
+              (False
                (codex:agent-control-agent-id-for-path-from
                  $tail
-                 $agent-path-key))))))))
+                 $agent-path-key))))))))))
 
 (= (codex:agent-control-agent-id-for-path
       $registry-state
@@ -441,12 +479,13 @@
          (let $tail (list:rest $non-empty-entries)
            (let $metadata
              (codex:agent-control-registry-entry-metadata $head)
-             (if (== (codex:agent-registry-metadata-agent-id $metadata)
-                     $thread-id)
-                 $metadata
+             (case (== (codex:agent-registry-metadata-agent-id $metadata)
+                       $thread-id)
+               ((True $metadata)
+                (False
                  (codex:agent-control-agent-metadata-for-thread-from
                    $tail
-                   $thread-id)))))))))
+                   $thread-id)))))))))))
 
 (= (codex:agent-control-agent-metadata-for-thread
       $registry-state
@@ -603,6 +642,323 @@
    (codex:agent-control-agent-metadata-for-thread
      $registry-state
      $agent-id))
+
+(= (codex:agent-control-default-metadata-for-thread $thread-id)
+   (codex:agent-registry-metadata
+     $thread-id
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent))
+
+(= (codex:agent-control-live-thread-metadata $registry-state $thread-id)
+   (case
+     (codex:agent-control-agent-metadata-for-thread
+       $registry-state
+       $thread-id)
+     ((CodexAbsent
+       (codex:agent-control-default-metadata-for-thread $thread-id))
+      ($metadata $metadata))))
+
+(= (codex:agent-control-thread-metadata-entry-sort-path $entry)
+   (case
+     (eval
+       (codex:agent-registry-metadata-agent-path
+         (codex:agent-control-thread-metadata-entry-metadata $entry)))
+     ((CodexAbsent "")
+      ($agent-path (codex:agent-path-as-str $agent-path)))))
+
+(= (codex:agent-control-thread-metadata-entry-le $left $right)
+   (let $left-path
+     (codex:agent-control-thread-metadata-entry-sort-path $left)
+     (let $right-path
+       (codex:agent-control-thread-metadata-entry-sort-path $right)
+       (case (== $left-path $right-path)
+         ((True
+           (codex:agent-control-text-le
+             (codex:agent-control-thread-metadata-entry-thread-id $left)
+             (codex:agent-control-thread-metadata-entry-thread-id $right)))
+          (False
+           (codex:agent-control-text-le $left-path $right-path)))))))
+
+(= (codex:agent-control-sort-thread-metadata-entries $entries)
+   (case $entries
+     ((() ())
+      ($non-empty-entries
+       (let $head (list:first $non-empty-entries)
+         (let $tail (list:rest $non-empty-entries)
+           (case
+             (codex:agent-control-sort-thread-metadata-entries $tail)
+             (($sorted-tail
+               (codex:agent-control-insert-thread-metadata-entry
+                 $head
+                 $sorted-tail))))))))))
+
+(= (codex:agent-control-insert-thread-metadata-entry $entry $sorted)
+   (case $sorted
+     ((() ($entry))
+      ($non-empty-sorted
+       (let $head (list:first $non-empty-sorted)
+         (let $tail (list:rest $non-empty-sorted)
+           (case
+             (codex:agent-control-thread-metadata-entry-le $entry $head)
+             ((True (cons-atom $entry $non-empty-sorted))
+              (False
+               (case
+                 (codex:agent-control-insert-thread-metadata-entry
+                   $entry
+                   $tail)
+                 (($inserted-tail
+                   (cons-atom $head $inserted-tail)))))))))))))
+
+(= (codex:agent-control-thread-spawn-children-list-add
+      ()
+      $parent-thread-id
+      $child)
+   (let $child-entry
+     $child
+     (let $entry
+       (codex:agent-control-thread-spawn-children-entry
+         $parent-thread-id
+         ($child-entry))
+       ($entry))))
+
+(= (codex:agent-control-thread-spawn-children-list-add
+      $entries
+      $parent-thread-id
+      $child)
+   (let $head (list:first $entries)
+     (let $tail (list:rest $entries)
+       (case
+         (== (codex:agent-control-thread-spawn-children-entry-parent-thread-id
+               $head)
+             $parent-thread-id)
+         ((True
+           (let $child-entry
+             $child
+             (let $children
+               (codex:agent-control-thread-spawn-children-entry-children
+                 $head)
+               (let $entry
+                 (codex:agent-control-thread-spawn-children-entry
+                   $parent-thread-id
+                   (cons-atom $child-entry $children))
+                 (cons-atom $entry $tail)))))
+          (False
+           (let $updated-tail
+             (codex:agent-control-thread-spawn-children-list-add
+               $tail
+               $parent-thread-id
+               $child)
+             (cons-atom $head $updated-tail))))))))
+
+(= (codex:agent-control-thread-spawn-children-for-parent
+      ()
+      $parent-thread-id)
+   ())
+
+(= (codex:agent-control-thread-spawn-children-for-parent
+      $entries
+      $parent-thread-id)
+   (let $head (list:first $entries)
+     (let $tail (list:rest $entries)
+       (case
+         (== (codex:agent-control-thread-spawn-children-entry-parent-thread-id
+               $head)
+             $parent-thread-id)
+         ((True
+           (codex:agent-control-thread-spawn-children-entry-children
+             $head))
+          (False
+           (codex:agent-control-thread-spawn-children-for-parent
+             $tail
+             $parent-thread-id)))))))
+
+(= (codex:agent-control-thread-spawn-children-remove-parent
+      ()
+      $parent-thread-id)
+   ())
+
+(= (codex:agent-control-thread-spawn-children-remove-parent
+      $entries
+      $parent-thread-id)
+   (let $head (list:first $entries)
+     (let $tail (list:rest $entries)
+       (case
+         (== (codex:agent-control-thread-spawn-children-entry-parent-thread-id
+               $head)
+             $parent-thread-id)
+         ((True $tail)
+          (False
+           (case
+             (codex:agent-control-thread-spawn-children-remove-parent
+               $tail
+               $parent-thread-id)
+             (($remaining-tail
+               (cons-atom $head $remaining-tail))))))))))
+
+(= (codex:agent-control-sort-thread-spawn-children-entry
+      (CodexAgentControlThreadSpawnChildrenEntry
+        $parent-thread-id
+        $children))
+   (case
+     (codex:agent-control-sort-thread-metadata-entries $children)
+     (($sorted-children
+       (codex:agent-control-thread-spawn-children-entry
+         $parent-thread-id
+         $sorted-children)))))
+
+(= (codex:agent-control-sort-thread-spawn-children-map $entries)
+   (case $entries
+     ((() ())
+      ($non-empty-entries
+       (let $head (list:first $non-empty-entries)
+         (let $tail (list:rest $non-empty-entries)
+           (case
+             (codex:agent-control-sort-thread-spawn-children-map $tail)
+             (($sorted-tail
+               (case
+                 (codex:agent-control-sort-thread-spawn-children-entry
+                   $head)
+                 (($sorted-head
+                   (cons-atom
+                     $sorted-head
+                     $sorted-tail)))))))))))))
+
+(= (codex:agent-control-live-thread-spawn-children-from
+      $registry-state
+      $snapshots)
+   (case $snapshots
+     ((() ())
+      ($non-empty-snapshots
+       (let $head (list:first $non-empty-snapshots)
+         (let $tail (list:rest $non-empty-snapshots)
+           (case
+             (codex:agent-control-live-thread-spawn-children-from
+               $registry-state
+               $tail)
+             (($tail-map
+               (let $thread-id
+                 (codex:agent-control-thread-snapshot-entry-thread-id $head)
+                 (let $session-source
+                   (codex:agent-control-thread-snapshot-entry-session-source
+                     $head)
+                   (case
+                     (codex:agent-control-thread-spawn-parent-thread-id
+                       $session-source)
+                     ((CodexAbsent $tail-map)
+                      ($parent-thread-id
+                       (codex:agent-control-thread-spawn-children-list-add
+                         $tail-map
+                         $parent-thread-id
+                         (codex:agent-control-thread-metadata-entry
+                           $thread-id
+                           (codex:agent-control-live-thread-metadata
+                             $registry-state
+                             $thread-id)))))))))))))))))
+
+(= (codex:agent-control-live-thread-spawn-children
+      $registry-state
+      $snapshots)
+   (codex:agent-control-sort-thread-spawn-children-map
+     (codex:agent-control-live-thread-spawn-children-from
+       $registry-state
+       $snapshots)))
+
+(= (codex:agent-control-open-thread-spawn-children
+      $registry-state
+      $snapshots
+      $parent-thread-id)
+   (codex:agent-control-thread-spawn-children-for-parent
+     (codex:agent-control-live-thread-spawn-children
+       $registry-state
+       $snapshots)
+     $parent-thread-id))
+
+(= (codex:agent-control-thread-metadata-entry-thread-ids ())
+   ())
+
+(= (codex:agent-control-thread-metadata-entry-thread-ids $entries)
+   (let $head (list:first $entries)
+     (let $tail (list:rest $entries)
+       (case
+         (codex:agent-control-thread-metadata-entry-thread-id $head)
+         (($thread-id
+           (case
+             (codex:agent-control-thread-metadata-entry-thread-ids $tail)
+             (($tail-ids
+               (cons-atom $thread-id $tail-ids))))))))))
+
+(= (codex:agent-control-live-thread-spawn-descendants-from
+      $children-map
+      $stack)
+   (case $stack
+     ((() ())
+      ($non-empty-stack
+       (let $thread-id (list:first $non-empty-stack)
+         (let $rest-stack (list:rest $non-empty-stack)
+           (let $children
+             (codex:agent-control-thread-spawn-children-for-parent
+               $children-map
+               $thread-id)
+             (let $remaining-map
+               (codex:agent-control-thread-spawn-children-remove-parent
+                 $children-map
+                 $thread-id)
+               (case
+                 (codex:agent-control-thread-metadata-entry-thread-ids
+                   $children)
+                 (($child-thread-ids
+                   (case
+                     (list:append $child-thread-ids $rest-stack)
+                     (($next-stack
+                       (case
+                         (codex:agent-control-live-thread-spawn-descendants-from
+                           $remaining-map
+                           $next-stack)
+                         (($tail-descendants
+                            (cons-atom
+                              $thread-id
+                              $tail-descendants))))))))))))))))))
+
+(= (codex:agent-control-live-thread-spawn-descendants
+      $registry-state
+      $snapshots
+      $root-thread-id)
+   (case
+     (codex:agent-control-live-thread-spawn-children
+       $registry-state
+       $snapshots)
+     (($children-map
+       (case
+         (codex:agent-control-thread-spawn-children-for-parent
+           $children-map
+           $root-thread-id)
+         (($root-children
+           (case
+             (codex:agent-control-thread-spawn-children-remove-parent
+               $children-map
+               $root-thread-id)
+             (($remaining-map
+               (case
+                 (codex:agent-control-thread-metadata-entry-thread-ids
+                   $root-children)
+                  (($stack
+                    (codex:agent-control-live-thread-spawn-descendants-from
+                      $remaining-map
+                      $stack))))))))))))))
+
+(= (codex:agent-control-list-live-agent-subtree-thread-ids
+      $registry-state
+      $snapshots
+      $agent-id)
+   (case
+     (codex:agent-control-live-thread-spawn-descendants
+       $registry-state
+       $snapshots
+       $agent-id)
+     (($descendants
+       (cons-atom $agent-id $descendants)))))
 
 (= (codex:agent-control-current-agent-path $session-source)
    (case (codex:session-source-get-agent-path $session-source)

@@ -22,6 +22,12 @@
 (= (test:missing-thread)
    "00000000-0000-0000-0000-000000000005")
 
+(= (test:anonymous-thread)
+   "00000000-0000-0000-0000-000000000006")
+
+(= (test:exec-thread)
+   "00000000-0000-0000-0000-000000000007")
+
 (= (test:scout-path)
    (codex:agent-path "/root/scout"))
 
@@ -90,6 +96,14 @@
      CodexAbsent
      CodexAbsent))
 
+(= (test:anonymous-fallback-metadata)
+   (codex:agent-registry-metadata
+     (test:anonymous-thread)
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent
+     CodexAbsent))
+
 (= (test:registry-state)
    (codex:agent-registry-state
      ((codex:agent-registry-entry
@@ -133,6 +147,44 @@
        (test:scout-path)
        "Scout"
        "explorer")))
+
+(= (test:thread-snapshots)
+   ((codex:agent-control-thread-snapshot-entry
+      (test:root-thread)
+      (codex:session-source-cli))
+    (codex:agent-control-thread-snapshot-entry
+      (test:scout-thread)
+      (test:scout-session-source))
+    (codex:agent-control-thread-snapshot-entry
+      (test:tester-thread)
+      (codex:session-source-subagent
+        (codex:subagent-source-thread-spawn
+          (test:scout-thread)
+          2
+          (test:tester-path)
+          CodexAbsent
+          "worker")))
+    (codex:agent-control-thread-snapshot-entry
+      (test:alpha-thread)
+      (codex:session-source-subagent
+        (codex:subagent-source-thread-spawn
+          (test:root-thread)
+          1
+          (test:alpha-path)
+          "Alpha"
+          "reviewer")))
+    (codex:agent-control-thread-snapshot-entry
+      (test:anonymous-thread)
+      (codex:session-source-subagent
+        (codex:subagent-source-thread-spawn
+          (test:root-thread)
+          1
+          CodexAbsent
+          "Anon"
+          CodexAbsent)))
+    (codex:agent-control-thread-snapshot-entry
+      (test:exec-thread)
+      (codex:session-source-exec))))
 
 (= (test:fork-user $text)
    (codex:rollout-response-item
@@ -527,6 +579,55 @@
     (test:registry-state)
     (test:scout-thread))
   (test:scout-metadata))
+
+!(assertEqual
+  (codex:agent-control-open-thread-spawn-children
+    (test:registry-state)
+    (test:thread-snapshots)
+    (test:root-thread))
+  ((codex:agent-control-thread-metadata-entry
+     (test:anonymous-thread)
+     (test:anonymous-fallback-metadata))
+   (codex:agent-control-thread-metadata-entry
+     (test:alpha-thread)
+     (test:alpha-metadata))
+   (codex:agent-control-thread-metadata-entry
+     (test:scout-thread)
+     (test:scout-metadata))))
+
+!(assertEqual
+  (codex:agent-control-open-thread-spawn-children
+    (test:registry-state)
+    (test:thread-snapshots)
+    (test:scout-thread))
+  ((codex:agent-control-thread-metadata-entry
+     (test:tester-thread)
+     (test:tester-metadata))))
+
+!(assertEqual
+  (codex:agent-control-open-thread-spawn-children
+    (test:registry-state)
+    (test:thread-snapshots)
+    (test:missing-thread))
+  ())
+
+!(assertEqual
+  (codex:agent-control-live-thread-spawn-descendants
+    (test:registry-state)
+    (test:thread-snapshots)
+    (test:root-thread))
+  ((test:anonymous-thread)
+   (test:alpha-thread)
+   (test:scout-thread)
+   (test:tester-thread)))
+
+!(assertEqual
+  (codex:agent-control-list-live-agent-subtree-thread-ids
+    (test:registry-state)
+    (test:thread-snapshots)
+    (test:scout-thread))
+  ((test:scout-thread)
+   (test:tester-thread)))
 
 !(assertEqual
   (codex:agent-control-resolve-agent-reference
