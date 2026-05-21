@@ -18,6 +18,8 @@
 ; - interrupt_agent result pass-through
 ; - shutdown_live_agent result/release boundary
 ; - shutdown_agent_tree descendant error folding
+; - persist_thread_spawn_edge_for_source open-edge action planning
+; - close_agent closed-edge action planning before shutdown-tree result
 ; - resolve_agent_reference path resolution and error mapping
 ; - format_environment_context_subagents formatting over materialized children
 ; - agent_matches_prefix
@@ -68,6 +70,10 @@
 ;   InternalAgentDied while returning the first other descendant error. This
 ;   pure slice receives those materialized descendant shutdown inputs and keeps
 ;   the same result precedence and registry transition order.
+; - Rust persists thread-spawn edges through StateDb and logs failures without
+;   changing the caller-visible result. This pure boundary emits the same
+;   persistence actions only when Rust would attempt them; the runtime bridge
+;   must ignore execution errors in the same way.
 
 !(import! &self agent_path)
 !(import! &self agent_registry)
@@ -164,6 +170,47 @@
         $registry-state
         $result))
    $result)
+
+(= (codex:thread-spawn-edge-status-open)
+   (CodexThreadSpawnEdgeStatusOpen))
+
+(= (codex:thread-spawn-edge-status-closed)
+   (CodexThreadSpawnEdgeStatusClosed))
+
+(= (codex:agent-control-thread-spawn-edge-upsert-action
+      $parent-thread-id
+      $child-thread-id
+      $status)
+   (CodexAgentControlThreadSpawnEdgeUpsertAction
+     $parent-thread-id
+     $child-thread-id
+     $status))
+
+(= (codex:agent-control-thread-spawn-edge-set-status-action
+      $thread-id
+      $status)
+   (CodexAgentControlThreadSpawnEdgeSetStatusAction
+     $thread-id
+     $status))
+
+(= (codex:agent-control-close-agent-plan
+      $persist-action
+      $shutdown-tree-outcome)
+   (CodexAgentControlCloseAgentPlan
+     $persist-action
+     $shutdown-tree-outcome))
+
+(= (codex:agent-control-close-agent-plan-persist-action
+      (CodexAgentControlCloseAgentPlan
+        $persist-action
+        $shutdown-tree-outcome))
+   $persist-action)
+
+(= (codex:agent-control-close-agent-plan-shutdown-tree-outcome
+      (CodexAgentControlCloseAgentPlan
+        $persist-action
+        $shutdown-tree-outcome))
+   $shutdown-tree-outcome)
 
 (= (codex:agent-control-shutdown-live-thread
       $flush-result
@@ -372,6 +419,45 @@
            $agent-role))
        $depth)
       ($other CodexAbsent))))
+
+(= (codex:agent-control-persist-thread-spawn-edge-for-source
+      $child-thread-id
+      $session-source
+      $has-state-db)
+   (if (not $has-state-db)
+       CodexAbsent
+       (case
+         (eval
+           (codex:agent-control-thread-spawn-parent-thread-id
+             $session-source))
+         ((CodexAbsent CodexAbsent)
+          ($parent-thread-id
+           (codex:agent-control-thread-spawn-edge-upsert-action
+             $parent-thread-id
+             $child-thread-id
+             (codex:thread-spawn-edge-status-open)))))))
+
+(= (codex:agent-control-close-thread-spawn-edge-status-action
+      $agent-id
+      $thread-found
+      $has-state-db)
+   (if (and $thread-found $has-state-db)
+       (codex:agent-control-thread-spawn-edge-set-status-action
+         $agent-id
+         (codex:thread-spawn-edge-status-closed))
+       CodexAbsent))
+
+(= (codex:agent-control-close-agent
+      $agent-id
+      $thread-found
+      $has-state-db
+      $shutdown-tree-outcome)
+   (codex:agent-control-close-agent-plan
+     (codex:agent-control-close-thread-spawn-edge-status-action
+       $agent-id
+       $thread-found
+       $has-state-db)
+     $shutdown-tree-outcome))
 
 (= (codex:agent-control-is-final-answer-phase $phase)
    (case (eval $phase)

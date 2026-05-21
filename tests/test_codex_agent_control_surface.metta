@@ -295,6 +295,65 @@
   CodexAbsent)
 
 !(assertEqual
+  (codex:agent-control-persist-thread-spawn-edge-for-source
+    (test:scout-thread)
+    (test:scout-session-source)
+    True)
+  (codex:agent-control-thread-spawn-edge-upsert-action
+    (test:root-thread)
+    (test:scout-thread)
+    (codex:thread-spawn-edge-status-open)))
+
+!(assertEqual
+  (codex:agent-control-persist-thread-spawn-edge-for-source
+    (test:scout-thread)
+    (codex:session-source-cli)
+    True)
+  CodexAbsent)
+
+!(assertEqual
+  (codex:agent-control-persist-thread-spawn-edge-for-source
+    (test:scout-thread)
+    (test:scout-session-source)
+    False)
+  CodexAbsent)
+
+!(assertEqual
+  (codex:agent-control-close-thread-spawn-edge-status-action
+    (test:scout-thread)
+    True
+    True)
+  (codex:agent-control-thread-spawn-edge-set-status-action
+    (test:scout-thread)
+    (codex:thread-spawn-edge-status-closed)))
+
+!(assertEqual
+  (codex:agent-control-close-thread-spawn-edge-status-action
+    (test:scout-thread)
+    False
+    True)
+  CodexAbsent)
+
+!(assertEqual
+  (codex:agent-control-close-thread-spawn-edge-status-action
+    (test:scout-thread)
+    True
+    False)
+  CodexAbsent)
+
+!(assertEqual
+  (codex:agent-control-close-agent
+    (test:scout-thread)
+    True
+    True
+    (codex:agent-control-ok "shutdown"))
+  (codex:agent-control-close-agent-plan
+    (codex:agent-control-thread-spawn-edge-set-status-action
+      (test:scout-thread)
+      (codex:thread-spawn-edge-status-closed))
+    (codex:agent-control-ok "shutdown")))
+
+!(assertEqual
   (case
     (codex:agent-registry-reserve-spawn-slot
       (codex:agent-registry-state-empty)
