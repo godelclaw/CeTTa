@@ -7,6 +7,11 @@
 ;   - helper_env_from_vars
 ;   - helper_read_roots
 ;   - add_helper_runtime_permissions
+;   - FileSystemSandboxContext core accessors
+;   - FileSystemSandboxContext::should_run_in_sandbox
+;   - FileSystemSandboxContext::drop_cwd_if_unused
+;   - file_system_policy_has_cwd_dependent_entries
+;   - sandbox_cwd
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust uses compile-time `cfg!(windows)`. This pure helper exposes the target
@@ -20,6 +25,15 @@
 ;   observing full-disk read access. This pure helper returns early in that
 ;   case; the visible policy is identical because every helper root is already
 ;   readable.
+; - Rust `FileSystemSandboxContext` stores a full `PermissionProfile` and asks
+;   it for `file_system_sandbox_policy()`. This slice carries the already
+;   materialized `FileSystemSandboxPolicy`, because the functions ported here
+;   only observe that projection.
+; - Rust resolves fallback cwd through `current_sandbox_cwd()` and validates it
+;   as an `AbsolutePathBuf`. CeTTa reuses the existing `permissions-current-dir`
+;   helper and keeps the same absolute-path check; if that check fails, CeTTa
+;   reports the visible cwd string because there is no `AbsolutePathBuf` error
+;   value yet.
 
 !(import! &self list)
 !(import! &self path)
@@ -115,6 +129,187 @@
 
 (= (codex:fs-helper-env-from-vars $vars)
    (codex:fs-helper-env-from-vars-on-platform False $vars))
+
+(= (codex:fs-sandbox-context
+      $file-system-policy
+      $cwd
+      $windows-sandbox-level
+      $windows-sandbox-private-desktop
+      $use-legacy-landlock)
+   (CodexFsSandboxContext
+     $file-system-policy
+     $cwd
+     $windows-sandbox-level
+     $windows-sandbox-private-desktop
+     $use-legacy-landlock))
+
+(= (codex:fs-sandbox-context-from-file-system-policy
+      $file-system-policy)
+   (codex:fs-sandbox-context
+     $file-system-policy
+     CodexAbsent
+     "Disabled"
+     False
+     False))
+
+(= (codex:fs-sandbox-context-from-file-system-policy-with-cwd
+      $file-system-policy
+      $cwd)
+   (codex:fs-sandbox-context
+     $file-system-policy
+     $cwd
+     "Disabled"
+     False
+     False))
+
+(= (codex:fs-sandbox-context-file-system-policy
+      (CodexFsSandboxContext
+        $file-system-policy
+        $cwd
+        $windows-sandbox-level
+        $windows-sandbox-private-desktop
+        $use-legacy-landlock))
+   $file-system-policy)
+
+(= (codex:fs-sandbox-context-cwd
+      (CodexFsSandboxContext
+        $file-system-policy
+        $cwd
+        $windows-sandbox-level
+        $windows-sandbox-private-desktop
+        $use-legacy-landlock))
+   $cwd)
+
+(= (codex:fs-sandbox-context-windows-sandbox-level
+      (CodexFsSandboxContext
+        $file-system-policy
+        $cwd
+        $windows-sandbox-level
+        $windows-sandbox-private-desktop
+        $use-legacy-landlock))
+   $windows-sandbox-level)
+
+(= (codex:fs-sandbox-context-windows-sandbox-private-desktop
+      (CodexFsSandboxContext
+        $file-system-policy
+        $cwd
+        $windows-sandbox-level
+        $windows-sandbox-private-desktop
+        $use-legacy-landlock))
+   $windows-sandbox-private-desktop)
+
+(= (codex:fs-sandbox-context-use-legacy-landlock
+      (CodexFsSandboxContext
+        $file-system-policy
+        $cwd
+        $windows-sandbox-level
+        $windows-sandbox-private-desktop
+        $use-legacy-landlock))
+   $use-legacy-landlock)
+
+(= (codex:fs-sandbox-context-with-cwd
+      (CodexFsSandboxContext
+        $file-system-policy
+        $cwd
+        $windows-sandbox-level
+        $windows-sandbox-private-desktop
+        $use-legacy-landlock)
+      $new-cwd)
+   (CodexFsSandboxContext
+     $file-system-policy
+     $new-cwd
+     $windows-sandbox-level
+     $windows-sandbox-private-desktop
+     $use-legacy-landlock))
+
+(= (codex:fs-sandbox-context-should-run-in-sandbox $context)
+   (let $file-system-policy
+     (codex:fs-sandbox-context-file-system-policy $context)
+     (and
+       (== (codex:file-system-sandbox-policy-kind $file-system-policy)
+           (codex:file-system-sandbox-kind-restricted))
+       (not
+         (codex:file-system-sandbox-policy-has-full-disk-write-access
+           $file-system-policy)))))
+
+(= (codex:fs-sandbox-special-path-is-cwd-dependent $value)
+   (or
+     (== $value
+         (codex:file-system-special-path-current-working-directory))
+     (== (codex:file-system-special-path-tag $value)
+         "project_roots")))
+
+(= (codex:fs-sandbox-file-system-path-is-cwd-dependent $path)
+   (let $tag (codex:file-system-path-tag $path)
+     (if (== $tag "glob_pattern")
+         (not
+           (path-is-absolute?
+             (codex:file-system-path-glob-pattern-value $path)))
+         (if (== $tag "special")
+             (codex:fs-sandbox-special-path-is-cwd-dependent
+               (codex:file-system-path-special-value $path))
+             False))))
+
+(= (codex:fs-sandbox-entry-is-cwd-dependent $entry)
+   (codex:fs-sandbox-file-system-path-is-cwd-dependent
+     (codex:file-system-sandbox-entry-path $entry)))
+
+(= (codex:fs-sandbox-entries-have-cwd-dependent-path ())
+   False)
+
+(= (codex:fs-sandbox-entries-have-cwd-dependent-path $entries)
+   (let ($head $tail) (decons-atom $entries)
+     (if (codex:fs-sandbox-entry-is-cwd-dependent $head)
+         True
+         (codex:fs-sandbox-entries-have-cwd-dependent-path $tail))))
+
+(= (codex:fs-sandbox-file-system-policy-has-cwd-dependent-entries
+      $file-system-policy)
+   (codex:fs-sandbox-entries-have-cwd-dependent-path
+     (codex:file-system-sandbox-policy-entries $file-system-policy)))
+
+(= (codex:fs-sandbox-context-drop-cwd-if-unused $context)
+   (if (codex:fs-sandbox-file-system-policy-has-cwd-dependent-entries
+         (codex:fs-sandbox-context-file-system-policy $context))
+       $context
+       (codex:fs-sandbox-context-with-cwd $context CodexAbsent)))
+
+(= (codex:fs-sandbox-result-ok $value)
+   (CodexFsSandboxResultOk $value))
+
+(= (codex:fs-sandbox-result-error $message)
+   (CodexFsSandboxResultError $message))
+
+(= (codex:fs-sandbox-result-value
+      (CodexFsSandboxResultOk $value))
+   $value)
+
+(= (codex:fs-sandbox-result-error-message
+      (CodexFsSandboxResultError $message))
+   $message)
+
+(= (codex:fs-sandbox-cwd-required-error)
+   "file system sandbox context with cwd-relative permissions requires cwd")
+
+(= (codex:fs-sandbox-current-directory-not-absolute-error $cwd)
+   (str-concat "current directory is not absolute: " $cwd))
+
+(= (codex:fs-sandbox-cwd $context)
+   (let $cwd (codex:fs-sandbox-context-cwd $context)
+     (if (not (== $cwd CodexAbsent))
+         (codex:fs-sandbox-result-ok $cwd)
+         (let $file-system-policy
+           (codex:fs-sandbox-context-file-system-policy $context)
+           (if (codex:fs-sandbox-file-system-policy-has-cwd-dependent-entries
+                 $file-system-policy)
+               (codex:fs-sandbox-result-error
+                 (codex:fs-sandbox-cwd-required-error))
+               (let $current-cwd (codex:permissions-current-dir)
+                 (if (path-is-absolute? $current-cwd)
+                     (codex:fs-sandbox-result-ok $current-cwd)
+                     (codex:fs-sandbox-result-error
+                       (codex:fs-sandbox-current-directory-not-absolute-error
+                         $current-cwd)))))))))
 
 (= (codex:fs-sandbox-runtime-paths
       $codex-self-exe

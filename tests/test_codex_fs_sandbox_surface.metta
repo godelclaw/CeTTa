@@ -176,3 +176,129 @@
         "/opt/codex/aliases/codex-linux-sandbox"
         "/workspace")))
   True)
+
+!(assertEqual
+  (codex:fs-sandbox-file-system-policy-has-cwd-dependent-entries
+    (codex:file-system-sandbox-policy-restricted
+      ((codex:file-system-sandbox-entry
+         (codex:file-system-path-path "/workspace")
+         (codex:file-system-access-read))
+       (codex:file-system-sandbox-entry
+         (codex:file-system-path-glob-pattern "/workspace/**/*.secret")
+         (codex:file-system-access-none))
+       (codex:file-system-sandbox-entry
+         (codex:file-system-path-special
+           (codex:file-system-special-path-root))
+         (codex:file-system-access-read)))))
+  False)
+
+!(assertEqual
+  (codex:fs-sandbox-file-system-policy-has-cwd-dependent-entries
+    (codex:file-system-sandbox-policy-restricted
+      ((codex:file-system-sandbox-entry
+         (codex:file-system-path-glob-pattern "**/*.secret")
+         (codex:file-system-access-none)))))
+  True)
+
+!(assertEqual
+  (codex:fs-sandbox-file-system-policy-has-cwd-dependent-entries
+    (codex:file-system-sandbox-policy-restricted
+      ((codex:file-system-sandbox-entry
+         (codex:file-system-path-special
+           (codex:file-system-special-path-current-working-directory))
+         (codex:file-system-access-read)))))
+  True)
+
+!(assertEqual
+  (codex:fs-sandbox-file-system-policy-has-cwd-dependent-entries
+    (codex:file-system-sandbox-policy-restricted
+      ((codex:file-system-sandbox-entry
+         (codex:file-system-path-special
+           (codex:file-system-special-path-project-roots "docs"))
+         (codex:file-system-access-read)))))
+  True)
+
+!(assertEqual
+  (codex:fs-sandbox-file-system-policy-has-cwd-dependent-entries
+    (codex:file-system-sandbox-policy-restricted
+      ((codex:file-system-sandbox-entry
+         (codex:file-system-path-special
+           (codex:file-system-special-path-project-roots CodexAbsent))
+         (codex:file-system-access-read)))))
+  True)
+
+!(assertEqual
+  (codex:fs-sandbox-context-should-run-in-sandbox
+    (codex:fs-sandbox-context-from-file-system-policy
+      (codex:file-system-sandbox-policy-restricted ())))
+  True)
+
+!(assertEqual
+  (codex:fs-sandbox-context-should-run-in-sandbox
+    (codex:fs-sandbox-context-from-file-system-policy
+      (codex:file-system-sandbox-policy-unrestricted)))
+  False)
+
+!(assertEqual
+  (codex:fs-sandbox-context-should-run-in-sandbox
+    (codex:fs-sandbox-context-from-file-system-policy
+      (codex:file-system-sandbox-policy-restricted
+        ((codex:file-system-sandbox-entry
+           (codex:file-system-path-special
+             (codex:file-system-special-path-root))
+           (codex:file-system-access-write))))))
+  False)
+
+!(assertEqual
+  (codex:fs-sandbox-context-cwd
+    (codex:fs-sandbox-context-drop-cwd-if-unused
+      (codex:fs-sandbox-context-from-file-system-policy-with-cwd
+        (codex:file-system-sandbox-policy-restricted
+          ((codex:file-system-sandbox-entry
+             (codex:file-system-path-path "/workspace")
+             (codex:file-system-access-read))))
+        "/workspace")))
+  CodexAbsent)
+
+!(assertEqual
+  (codex:fs-sandbox-context-cwd
+    (codex:fs-sandbox-context-drop-cwd-if-unused
+      (codex:fs-sandbox-context-from-file-system-policy-with-cwd
+        (codex:file-system-sandbox-policy-restricted
+          ((codex:file-system-sandbox-entry
+             (codex:file-system-path-special
+               (codex:file-system-special-path-current-working-directory))
+             (codex:file-system-access-read))))
+        "/workspace")))
+  "/workspace")
+
+!(assertEqual
+  (codex:fs-sandbox-cwd
+    (codex:fs-sandbox-context-from-file-system-policy-with-cwd
+      (codex:file-system-sandbox-policy-restricted
+        ((codex:file-system-sandbox-entry
+           (codex:file-system-path-glob-pattern "**/*.secret")
+           (codex:file-system-access-none))))
+      "/workspace"))
+  (codex:fs-sandbox-result-ok "/workspace"))
+
+!(assertEqual
+  (codex:fs-sandbox-cwd
+    (codex:fs-sandbox-context-from-file-system-policy
+      (codex:file-system-sandbox-policy-restricted
+        ((codex:file-system-sandbox-entry
+           (codex:file-system-path-special
+             (codex:file-system-special-path-current-working-directory))
+           (codex:file-system-access-read))))))
+  (codex:fs-sandbox-result-error
+    (codex:fs-sandbox-cwd-required-error)))
+
+!(assertEqual
+  (codex:fs-sandbox-cwd
+    (codex:fs-sandbox-context-from-file-system-policy
+      (codex:file-system-sandbox-policy-restricted
+        ((codex:file-system-sandbox-entry
+           (codex:file-system-path-path "/workspace")
+           (codex:file-system-access-read))))))
+  (codex:fs-sandbox-result-ok
+    (codex:permissions-current-dir)))
