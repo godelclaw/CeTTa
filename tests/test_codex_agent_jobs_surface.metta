@@ -174,6 +174,90 @@
   "{}")
 
 !(assertEqual
+  (codex:agent-job-runtime-timeout-seconds
+    (codex:agent-job
+      "job-1"
+      "example"
+      (codex:agent-job-status-running)
+      "Review {path}"
+      True
+      CodexAbsent
+      CodexAbsent
+      ("path")
+      "/tmp/input.csv"
+      "/tmp/output.csv"
+      "2026-05-21T00:00:00+00:00"
+      "2026-05-21T00:00:00+00:00"
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent))
+  1800)
+
+!(assertEqual
+  (codex:agent-job-runtime-timeout-seconds
+    (codex:agent-job
+      "job-1"
+      "example"
+      (codex:agent-job-status-running)
+      "Review {path}"
+      True
+      75
+      CodexAbsent
+      ("path")
+      "/tmp/input.csv"
+      "/tmp/output.csv"
+      "2026-05-21T00:00:00+00:00"
+      "2026-05-21T00:00:00+00:00"
+      CodexAbsent
+      CodexAbsent
+      CodexAbsent))
+  75)
+
+!(assertEqual
+  (codex:agent-job-file-stem-or-default "/tmp/report.csv")
+  "report")
+
+!(assertEqual
+  (codex:agent-job-file-stem-or-default "/tmp/report.final.csv")
+  "report.final")
+
+!(assertEqual
+  (codex:agent-job-file-stem-or-default "/tmp/.env")
+  ".env")
+
+!(assertEqual
+  (codex:agent-job-file-stem-or-default "/tmp/.env.local")
+  ".env")
+
+!(assertEqual
+  (codex:agent-job-file-stem-or-default "/")
+  "agent_job_output")
+
+!(assertEqual
+  (codex:agent-job-default-output-csv-path
+    "/tmp/report.csv"
+    "123456789abcdef")
+  "/tmp/report.agent-job-12345678.csv")
+
+!(assertEqual
+  (codex:agent-job-default-output-csv-path
+    "/tmp/report.final.csv"
+    "abcdef0123456789")
+  "/tmp/report.final.agent-job-abcdef01.csv")
+
+!(assertEqual
+  (codex:agent-job-default-output-csv-path
+    "/tmp/"
+    "123456789abcdef")
+  "/tmp.agent-job-12345678.csv")
+
+!(assertEqual
+  (codex:agent-job-default-output-csv-path
+    "/"
+    "123456789abcdef")
+  "/agent_job_output.agent-job-12345678.csv")
+
+!(assertEqual
   (codex:agent-job-ensure-unique-headers ("id" "name" "id"))
   (codex:agent-job-err
     (codex:function-call-error-respond-to-model

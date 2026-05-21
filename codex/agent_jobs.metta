@@ -11,6 +11,8 @@
 ; - normalize_max_runtime_seconds
 ; - render_instruction_template
 ; - ensure_unique_headers
+; - job_runtime_timeout
+; - default_output_csv_path
 ; - AgentJob result/progress JSON projections
 ; - build_worker_prompt
 ; - value_to_csv_string / csv_escape / render_job_csv
@@ -31,10 +33,15 @@
 ;   serializer API. CeTTa JSON atoms are already in the local JSON value
 ;   representation, so this slice exposes deterministic pretty rendering rather
 ;   than a fallible serializer wrapper.
+; - Rust `default_output_csv_path` receives an `AbsolutePathBuf`. This helper
+;   takes path text and delegates joining/normalization to CeTTa's path library;
+;   the `file_stem`, parent fallback, and `job_id[..8]` behavior are kept
+;   explicit below.
 
 !(import! &self function_tool)
 !(import! &self json)
 !(import! &self list)
+!(import! &self path)
 !(import! &self str)
 
 (= (codex:agent-job-ok $value)
@@ -422,6 +429,83 @@
         $completed-at
         $last-error))
    $output-schema-json)
+
+(= (codex:agent-job-max-runtime-seconds
+      (CodexAgentJob
+        $id
+        $name
+        $status
+        $instruction
+        $auto-export
+        $max-runtime-seconds
+        $output-schema-json
+        $input-headers
+        $input-csv-path
+        $output-csv-path
+        $created-at
+        $updated-at
+        $started-at
+        $completed-at
+        $last-error))
+   $max-runtime-seconds)
+
+(= (codex:agent-job-runtime-timeout-seconds $job)
+   (let $materialized-job (once (eval $job))
+     (let $max-runtime-seconds
+       (codex:agent-job-max-runtime-seconds $materialized-job)
+       (if (== $max-runtime-seconds CodexAbsent)
+           (codex:agent-job-default-item-timeout-seconds)
+           $max-runtime-seconds))))
+
+(= (codex:agent-job-path-last-part () $fallback)
+   $fallback)
+
+(= (codex:agent-job-path-last-part $parts $fallback)
+   (let ($head $tail) (decons-atom $parts)
+     (codex:agent-job-path-last-part $tail $head)))
+
+(= (codex:agent-job-path-file-name $path)
+   (let $parts (path-parts $path)
+     (if (== $parts ())
+         CodexAbsent
+         (codex:agent-job-path-last-part $parts CodexAbsent))))
+
+(= (codex:agent-job-last-dot-after-first-index-from $text $index $last)
+   (if (== $index (str-length $text))
+       $last
+       (let $char (str-slice $text $index (+ $index 1))
+         (codex:agent-job-last-dot-after-first-index-from
+           $text
+           (+ $index 1)
+           (if (and (> $index 0) (== $char "."))
+               $index
+               $last)))))
+
+(= (codex:agent-job-last-dot-after-first-index $text)
+   (codex:agent-job-last-dot-after-first-index-from $text 0 CodexAbsent))
+
+(= (codex:agent-job-file-stem-from-name $file-name)
+   (let $last-dot (codex:agent-job-last-dot-after-first-index $file-name)
+     (if (== $last-dot CodexAbsent)
+         $file-name
+         (str-slice $file-name 0 $last-dot))))
+
+(= (codex:agent-job-file-stem-or-default $path)
+   (let $file-name (codex:agent-job-path-file-name $path)
+     (if (== $file-name CodexAbsent)
+         "agent_job_output"
+         (codex:agent-job-file-stem-from-name $file-name))))
+
+(= (codex:agent-job-default-output-csv-path $input-csv-path $job-id)
+   (let $stem (codex:agent-job-file-stem-or-default $input-csv-path)
+     (let $job-suffix (str-slice $job-id 0 8)
+       (let $output-dir
+         (if (== (path-parts $input-csv-path) ())
+             $input-csv-path
+             (path-dirname $input-csv-path))
+         (path-join
+           $output-dir
+           (format-args "{}.agent-job-{}.csv" ($stem $job-suffix)))))))
 
 (= (codex:agent-job-output-schema-pretty $output-schema-json)
    (if (== $output-schema-json CodexAbsent)
