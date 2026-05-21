@@ -989,37 +989,54 @@
 (= (codex:unified-exec-process-text-has-sandbox-keyword
       $text
       $keywords)
-   (if (== $keywords ())
-       False
-       (let $lower
-         (codex:unified-exec-process-ascii-lower $text)
-         (let $head (list:first $keywords)
-           (let $tail (list:rest $keywords)
-             (if (codex:unified-exec-process-text-contains
-                   $lower
-                   $head)
-                 True
-                 (codex:unified-exec-process-text-has-sandbox-keyword
-                   $text
-                   $tail)))))))
+   (let $lower-results
+     (collapse (codex:unified-exec-process-ascii-lower $text))
+     (let $keyword-results (collapse $keywords)
+       (codex:unified-exec-process-text-has-sandbox-keyword-resolved
+         (list:first $lower-results)
+         (list:first $keyword-results)))))
+
+(= (codex:unified-exec-process-text-has-sandbox-keyword-resolved
+      $lower
+      ())
+   False)
+
+(= (codex:unified-exec-process-text-has-sandbox-keyword-resolved
+      $lower
+      $keywords)
+   (let ($head $tail) (decons-atom $keywords)
+     (if (codex:unified-exec-process-text-contains $lower $head)
+         True
+         (codex:unified-exec-process-text-has-sandbox-keyword-resolved
+           $lower
+           $tail))))
 
 (= (codex:unified-exec-process-output-has-sandbox-keyword $output)
-   (let $keywords
-     (codex:unified-exec-process-sandbox-denied-keywords)
-     (or
-       (codex:unified-exec-process-text-has-sandbox-keyword
-         (codex:unified-exec-process-exec-tool-call-output-stderr
-           $output)
-         $keywords)
-       (or
-         (codex:unified-exec-process-text-has-sandbox-keyword
-           (codex:unified-exec-process-exec-tool-call-output-stdout
-             $output)
-           $keywords)
-         (codex:unified-exec-process-text-has-sandbox-keyword
-           (codex:unified-exec-process-exec-tool-call-output-aggregated-output
-             $output)
-           $keywords)))))
+   (let $resolved-output (list:first (collapse $output))
+     (let $keywords
+       (codex:unified-exec-process-sandbox-denied-keywords)
+       (case
+         (collapse
+           (codex:unified-exec-process-text-has-sandbox-keyword
+             (codex:unified-exec-process-exec-tool-call-output-stderr
+               $resolved-output)
+             $keywords))
+         (((True)
+           True)
+          ((False)
+           (case
+             (collapse
+               (codex:unified-exec-process-text-has-sandbox-keyword
+                 (codex:unified-exec-process-exec-tool-call-output-stdout
+                   $resolved-output)
+                 $keywords))
+             (((True)
+               True)
+              ((False)
+               (codex:unified-exec-process-text-has-sandbox-keyword
+                 (codex:unified-exec-process-exec-tool-call-output-aggregated-output
+                   $resolved-output)
+                 $keywords))))))))))
 
 (= (codex:unified-exec-process-quick-reject-exit-code $exit-code)
    (or
@@ -1032,26 +1049,39 @@
       $sandbox-type
       $output
       $host-platform)
-   (let $exit-code
-     (codex:unified-exec-process-exec-tool-call-output-exit-code
-       $output)
-     (if (or
-           (== $sandbox-type (codex:sandbox-type-none))
-           (== $exit-code 0))
-         False
-         (if (codex:unified-exec-process-output-has-sandbox-keyword
-               $output)
-             True
-             (if (codex:unified-exec-process-quick-reject-exit-code
-                   $exit-code)
-                 False
-                 (and
-                   (== $host-platform (codex:host-platform-linux))
+   (let $resolved-output (list:first (collapse $output))
+     (let $exit-code
+       (codex:unified-exec-process-exec-tool-call-output-exit-code
+         $resolved-output)
+       (case
+         (collapse
+           (or
+             (== $sandbox-type (codex:sandbox-type-none))
+             (== $exit-code 0)))
+         (((True)
+           False)
+          ((False)
+           (case
+             (collapse
+               (codex:unified-exec-process-output-has-sandbox-keyword
+                 $resolved-output))
+             (((True)
+               True)
+              ((False)
+               (case
+                 (collapse
+                   (codex:unified-exec-process-quick-reject-exit-code
+                     $exit-code))
+                 (((True)
+                   False)
+                  ((False)
                    (and
-                     (== $sandbox-type
-                         (codex:sandbox-type-linux-seccomp))
-                     (== $exit-code
-                         (codex:unified-exec-linux-sigsys-exit-code)))))))))
+                     (== $host-platform (codex:host-platform-linux))
+                     (and
+                       (== $sandbox-type
+                           (codex:sandbox-type-linux-seccomp))
+                       (== $exit-code
+                           (codex:unified-exec-linux-sigsys-exit-code))))))))))))))))
 
 (= (codex:unified-exec-process-strip-trailing-dot-zero $text)
    (if (str-ends-with? $text ".0")
