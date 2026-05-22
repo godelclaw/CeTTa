@@ -1,7 +1,7 @@
 # Codex Known Red Surfaces
 
-Last updated: 2026-05-22 on branch `exp/codex` after the dynamic registry
-wiring pass.
+Last updated: 2026-05-22 on branch `exp/codex` after the dynamic tool handler
+planning pass.
 
 This file records Codex-in-CeTTa surfaces that are known red while the core
 validation baseline remains green. They should not block unrelated slice work,
@@ -12,10 +12,14 @@ but they must be checked with output-aware validation because `./cetta` exits
 
 - `make -s` passes.
 - `scripts/check_codex_surfaces.sh` exits nonzero only for the two deferred
-  surfaces documented below. Rechecked after the dynamic registry wiring pass.
+  surfaces documented below. Rechecked after the dynamic tool handler planning
+  pass.
 - The dynamic tool registry surface is green in
   `tests/test_codex_tool_registry_plan_surface.metta`, including handler
   registration and coalesced namespace specs.
+- The dynamic tool handler planning surface is green in
+  `tests/test_codex_dynamic_tool_handler_surface.metta`, including request and
+  response event projection plus cancellation handling.
 - Four cross-module repair surfaces remain green:
   - `tests/test_codex_approval_surface.metta`
   - `tests/test_codex_config_permissions_warnings_surface.metta`
