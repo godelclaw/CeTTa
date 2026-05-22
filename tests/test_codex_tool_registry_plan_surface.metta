@@ -145,6 +145,26 @@
              (JsonObject
                ((JsonPair "type" (JsonString "array")))))))))))
 
+(= (codex-tool-registry-dynamic-tools)
+   ((codex:dynamic-tool-spec
+      "tickets"
+      "lookup_order"
+      "Look up an order"
+      (codex-tool-registry-order-schema)
+      True)
+    (codex:dynamic-tool-spec
+      CodexAbsent
+      "run_sql"
+      "Query database"
+      (codex:json-schema-object ())
+      False)
+    (codex:dynamic-tool-spec
+      "tickets"
+      "create_order"
+      "Create an order"
+      (codex:json-schema-object ())
+      False)))
+
 !(assertEqualToResult
   (json-stringify
     (codex:tool-spec-json
@@ -328,6 +348,59 @@
              (codex:json-schema-object ())
              False))))))
   ("[{\"type\":\"namespace\",\"name\":\"tickets\",\"description\":\"Tools in the tickets namespace.\",\"tools\":[{\"type\":\"function\",\"name\":\"lookup_order\",\"description\":\"Look up an order\",\"strict\":false,\"defer_loading\":true,\"parameters\":{\"type\":\"object\",\"properties\":{\"order_id\":{\"type\":\"string\"}},\"required\":[\"order_id\"],\"additionalProperties\":false}},{\"type\":\"function\",\"name\":\"create_order\",\"description\":\"Create an order\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{}}}]},{\"type\":\"function\",\"name\":\"run_sql\",\"description\":\"Query database\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{}}}]"))
+
+!(assertEqualToResult
+  (unique
+    (codex:string-list-contains
+      (codex:tool-registry-plan-spec-names
+        (codex:build-tool-registry-plan-with-dynamic-tools
+          (codex-tool-registry-default-config)
+          (codex-tool-registry-dynamic-tools)))
+      "tickets"))
+  (True))
+
+!(assertEqualToResult
+  (unique
+    (codex:string-list-contains
+      (codex:tool-registry-plan-spec-names
+        (codex:build-tool-registry-plan-with-dynamic-tools
+          (codex-tool-registry-default-config)
+          (codex-tool-registry-dynamic-tools)))
+      "run_sql"))
+  (True))
+
+!(assertEqualToResult
+  (unique
+    (codex:string-list-contains
+      (codex:tool-registry-plan-handler-display-names
+        (codex:build-tool-registry-plan-with-dynamic-tools
+          (codex-tool-registry-default-config)
+          (codex-tool-registry-dynamic-tools)))
+      "ticketslookup_order"))
+  (True))
+
+!(assertEqualToResult
+  (unique
+    (codex:string-list-contains
+      (codex:tool-registry-plan-handler-display-names
+        (codex:build-tool-registry-plan-with-dynamic-tools
+          (codex-tool-registry-default-config)
+          (codex-tool-registry-dynamic-tools)))
+      "run_sql"))
+  (True))
+
+!(assertEqualToResult
+  (unique
+    (json-stringify
+      (codex:tool-spec-json
+        (codex:configured-tool-spec-spec
+          (codex:find-configured-tool-spec-by-name
+            (codex:tool-registry-plan-specs
+              (codex:build-tool-registry-plan-with-dynamic-tools
+                (codex-tool-registry-default-config)
+                (codex-tool-registry-dynamic-tools)))
+            "tickets")))))
+  ("{\"type\":\"namespace\",\"name\":\"tickets\",\"description\":\"Tools in the tickets namespace.\",\"tools\":[{\"type\":\"function\",\"name\":\"lookup_order\",\"description\":\"Look up an order\",\"strict\":false,\"defer_loading\":true,\"parameters\":{\"type\":\"object\",\"properties\":{\"order_id\":{\"type\":\"string\"}},\"required\":[\"order_id\"],\"additionalProperties\":false}},{\"type\":\"function\",\"name\":\"create_order\",\"description\":\"Create an order\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{}}}]}"))
 
 !(assertEqualToResult
   (json-stringify

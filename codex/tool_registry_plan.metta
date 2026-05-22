@@ -10,6 +10,7 @@
 ; - ToolSpec / ConfiguredToolSpec / ToolHandlerSpec / ToolRegistryPlan values
 ; - Responses API JSON projection for function/custom/namespace tool specs
 ; - ToolDefinition and Responses API conversion for dynamic/loadable tools
+; - dynamic tool loading into the registry plan
 ; - Rust-shaped tool specs for exec_command, write_stdin, update_plan,
 ;   request_user_input, request_permissions, list_dir, view_image, and
 ;   js_repl, js_repl_reset, tool_search, and freeform apply_patch
@@ -18,9 +19,9 @@
 ;
 ; Required slice-local deviations from Rust, documented for later audit:
 ; - The restarted CeTTa port does not yet have the full Rust tool registry,
-;   code-mode augmentation, MCP/dynamic tool loading, web/image-generation
-;   tools, or the agent-job/collaboration registry branches. This slice only
-;   exposes the tools whose handlers already exist locally.
+;   code-mode augmentation, MCP tool loading, web/image-generation tools, or the
+;   agent-job/collaboration registry branches. This slice only exposes the
+;   tools whose handlers already exist locally.
 ; - Function-tool `output_schema` is preserved on the internal CeTTa record,
 ;   but `tool-spec-json` omits it, matching Rust `ResponsesApiTool`
 ;   serialization to the Responses API.
@@ -40,6 +41,7 @@
 !(import! &self request_permissions)
 !(import! &self request_user_input)
 !(import! &self tool_config)
+!(import! &self tool_name)
 !(import! &self update_plan)
 !(import! &self view_image)
 
@@ -69,6 +71,9 @@
 
 (= (codex:tool-handler-kind-js-repl-reset)
    "JsReplReset")
+
+(= (codex:tool-handler-kind-dynamic-tool)
+   "DynamicTool")
 
 (= (codex:responses-api-tool
       $name
@@ -314,6 +319,16 @@
 
 (= (codex:tool-handler-spec-pair (CodexToolHandlerSpec $name $kind))
    ($name $kind))
+
+(= (codex:tool-handler-name-display $name)
+   (case $name
+     (((CodexToolName $tool-name $namespace)
+       (codex:tool-name-display (CodexToolName $tool-name $namespace)))
+      ($other $other))))
+
+(= (codex:tool-handler-spec-display-name
+      (CodexToolHandlerSpec $name $kind))
+   (codex:tool-handler-name-display $name))
 
 (= (codex:tool-registry-plan-specs $plan)
    (unique (case (once (eval $plan))
@@ -781,14 +796,10 @@
    (codex:responses-api-tool-json $tool))
 
 (= (codex:responses-api-namespace-tool-json-items $tools)
-   (function
-     (let $json-items
-       (eval
-         (map-atom
-           $tools
-           $tool
-           (codex:responses-api-namespace-tool-json $tool)))
-       (return $json-items))))
+   (map-atom-strict
+     $tools
+     $tool
+     (codex:responses-api-namespace-tool-json $tool)))
 
 (= (codex:responses-api-namespace-json
       (CodexResponsesApiNamespace $name $description $tools))
@@ -810,14 +821,10 @@
    (codex:responses-api-namespace-json $namespace))
 
 (= (codex:loadable-tool-spec-json-items $specs)
-   (function
-     (let $json-items
-       (eval
-         (map-atom
-           $specs
-           $spec
-           (codex:loadable-tool-spec-json $spec)))
-       (return $json-items))))
+   (map-atom-strict
+     $specs
+     $spec
+     (codex:loadable-tool-spec-json $spec)))
 
 (= (codex:loadable-tool-specs-json $specs)
    (JsonArray (codex:loadable-tool-spec-json-items $specs)))
@@ -1034,20 +1041,16 @@
       (JsonPair "parameters" $parameters))))
 
 (= (codex:tool-spec-json-items $specs)
-   (function
-     (let $json-items
-       (eval (map-atom $specs $spec (codex:tool-spec-json $spec)))
-       (return $json-items))))
+   (map-atom-strict
+     $specs
+     $spec
+     (codex:tool-spec-json $spec)))
 
 (= (codex:configured-tool-spec-json-items $specs)
-   (function
-     (let $json-items
-       (eval
-         (map-atom
-           $specs
-           $spec
-           (codex:tool-spec-json (codex:configured-tool-spec-spec $spec))))
-       (return $json-items))))
+   (map-atom-strict
+     $specs
+     $spec
+     (codex:tool-spec-json (codex:configured-tool-spec-spec $spec))))
 
 (= (codex:create-tools-json-for-responses-api $specs)
    (JsonArray (codex:tool-spec-json-items $specs)))
@@ -1058,44 +1061,47 @@
        (JsonArray (codex:configured-tool-spec-json-items $specs)))))))
 
 (= (codex:configured-tool-spec-names $specs)
-   (function
-     (let $names
-       (eval (map-atom $specs $spec (codex:configured-tool-spec-name $spec)))
-       (return $names))))
+   (map-atom-strict
+     $specs
+     $spec
+     (codex:configured-tool-spec-name $spec)))
 
 (= (codex:configured-tool-spec-parallel-flags $specs)
-   (function
-     (let $flags
-       (eval
-         (map-atom
-           $specs
-           $spec
-           (codex:configured-tool-spec-supports-parallel-tool-calls $spec)))
-       (return $flags))))
+   (map-atom-strict
+     $specs
+     $spec
+     (codex:configured-tool-spec-supports-parallel-tool-calls $spec)))
 
 (= (codex:tool-handler-spec-pairs $handlers)
-   (function
-     (let $pairs
-       (eval (map-atom $handlers $handler (codex:tool-handler-spec-pair $handler)))
-       (return $pairs))))
+   (map-atom-strict
+     $handlers
+     $handler
+     (codex:tool-handler-spec-pair $handler)))
+
+(= (codex:tool-handler-spec-display-names $handlers)
+   (map-atom-strict
+     $handlers
+     $handler
+     (codex:tool-handler-spec-display-name $handler)))
 
 (= (codex:json-bool-array $items)
-   (function
-     (let $json-items
-       (eval (map-atom $items $item (JsonBool $item)))
-       (return (JsonArray $json-items)))))
+   (JsonArray
+     (map-atom-strict
+       $items
+       $item
+       (JsonBool $item))))
 
 (= (codex:tool-handler-spec-pair-json (CodexToolHandlerSpec $name $kind))
    (JsonArray
-     ((JsonString $name)
+     ((JsonString (codex:tool-handler-name-display $name))
       (JsonString $kind))))
 
 (= (codex:tool-handler-spec-pairs-json $handlers)
-   (function
-     (let $json-items
-       (eval
-         (map-atom $handlers $handler (codex:tool-handler-spec-pair-json $handler)))
-       (return (JsonArray $json-items)))))
+   (JsonArray
+     (map-atom-strict
+       $handlers
+       $handler
+       (codex:tool-handler-spec-pair-json $handler))))
 
 (= (codex:tool-registry-plan-spec-names $plan)
    (unique (case (once (eval $plan))
@@ -1124,6 +1130,11 @@
      (((CodexToolRegistryPlan $specs $handlers)
        (codex:tool-handler-spec-pairs $handlers))))))
 
+(= (codex:tool-registry-plan-handler-display-names $plan)
+   (unique (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       (codex:tool-handler-spec-display-names $handlers))))))
+
 (= (codex:tool-registry-plan-handler-pairs-json $plan)
    (unique (case (once (eval $plan))
      (((CodexToolRegistryPlan $specs $handlers)
@@ -1133,10 +1144,11 @@
    Empty)
 
 (= (codex:find-configured-tool-spec-by-name $specs $name)
-   (let ($head $tail) (decons-atom $specs)
-     (if (== (codex:configured-tool-spec-name $head) $name)
-         $head
-         (codex:find-configured-tool-spec-by-name $tail $name))))
+   (unique
+     (let ($head $tail) (decons-atom $specs)
+       (if (== (codex:configured-tool-spec-name $head) $name)
+           $head
+           (codex:find-configured-tool-spec-by-name $tail $name)))))
 
 (= (codex:unified-exec-output-schema)
    (codex:json-schema-object-with-required-and-additional-properties
@@ -1651,6 +1663,103 @@
            $handlers
            (codex:tool-handler-spec $name $kind)))))))
 
+(= (codex:tool-registry-plan-add-spec
+      $plan
+      $spec
+      $supports-parallel-tool-calls)
+   (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       (codex:tool-registry-plan
+         (codex:tool-registry-plan-append-one
+           $specs
+           (codex:configured-tool-spec $spec $supports-parallel-tool-calls))
+         $handlers)))))
+
+(= (codex:tool-registry-plan-add-handler
+      $plan
+      $name
+      $kind)
+   (case (once (eval $plan))
+     (((CodexToolRegistryPlan $specs $handlers)
+       (codex:tool-registry-plan
+         $specs
+         (codex:tool-registry-plan-append-one
+           $handlers
+           (codex:tool-handler-spec $name $kind)))))))
+
+(= (codex:tool-registry-plan-dynamic-handler-name $tool)
+   (codex:tool-name
+     (codex:dynamic-tool-spec-namespace $tool)
+     (codex:dynamic-tool-spec-name $tool)))
+
+(= (codex:tool-registry-plan-register-dynamic-handlers $plan ())
+   $plan)
+
+(= (codex:tool-registry-plan-register-dynamic-handlers $plan $tools)
+   (let ($head $tail) (decons-atom $tools)
+     (let $tool (eval $head)
+       (let $next-plan
+         (once (eval
+           (codex:tool-registry-plan-add-handler
+             $plan
+             (codex:tool-registry-plan-dynamic-handler-name $tool)
+             (codex:tool-handler-kind-dynamic-tool))))
+         (codex:tool-registry-plan-register-dynamic-handlers
+           $next-plan
+           $tail)))))
+
+(= (codex:tool-registry-plan-dynamic-loadable-specs ())
+   ())
+
+(= (codex:tool-registry-plan-dynamic-loadable-specs $tools)
+   (let ($head $tail) (decons-atom $tools)
+     (let $tool (eval $head)
+       (let $loadable-tool
+         (eval (codex:dynamic-tool-to-loadable-tool-spec $tool))
+         (let $tail-specs
+           (eval (codex:tool-registry-plan-dynamic-loadable-specs $tail))
+           (cons-atom $loadable-tool $tail-specs))))))
+
+(= (codex:loadable-tool-spec-to-tool-spec
+      (CodexLoadableToolSpecFunction $tool))
+   (codex:tool-spec-function $tool))
+
+(= (codex:loadable-tool-spec-to-tool-spec
+      (CodexLoadableToolSpecNamespace $namespace))
+   (codex:tool-spec-namespace $namespace))
+
+(= (codex:tool-registry-plan-push-loadable-specs $plan ())
+   $plan)
+
+(= (codex:tool-registry-plan-push-loadable-specs $plan $loadable-specs)
+   (let ($head $tail) (decons-atom $loadable-specs)
+     (let $spec (eval $head)
+       (let $next-plan
+         (once (eval
+           (codex:tool-registry-plan-add-spec
+             $plan
+             (codex:loadable-tool-spec-to-tool-spec $spec)
+             False)))
+         (codex:tool-registry-plan-push-loadable-specs
+           $next-plan
+           $tail)))))
+
+(= (codex:tool-registry-plan-add-dynamic-tools $plan $tools)
+   ; Rust registers handlers inside the successful conversion branch. The
+   ; current CeTTa dynamic-tool conversion surface is total for representable
+   ; inputs; when conversion errors are ported, mirror Rust by skipping handler
+   ; registration and spec insertion for failed conversions.
+   (let $plan-with-handlers
+     (once (eval
+       (codex:tool-registry-plan-register-dynamic-handlers $plan $tools)))
+     (let $loadable-specs
+       (once (eval (codex:tool-registry-plan-dynamic-loadable-specs $tools)))
+       (let $coalesced-specs
+         (once (eval (codex:coalesce-loadable-tool-specs $loadable-specs)))
+         (codex:tool-registry-plan-push-loadable-specs
+           $plan-with-handlers
+           $coalesced-specs)))))
+
 (= (codex:string-list-contains $values $needle)
    (case (unique (eval $values))
      (($materialized-values
@@ -1667,7 +1776,7 @@
              (list:rest $values)
              $needle))))
 
-(= (codex:build-tool-registry-plan $config)
+(= (codex:build-tool-registry-plan-fixed $config)
    (unique
    (let $config-value (once (eval $config))
    (let $plan0 (codex:tool-registry-plan-empty)
@@ -1779,3 +1888,13 @@
                          (codex:tool-handler-kind-view-image))
                        $plan7)))
                   $plan8))))))))))))
+
+(= (codex:build-tool-registry-plan-with-dynamic-tools $config $dynamic-tools)
+   (let $fixed-plan (once (eval (codex:build-tool-registry-plan-fixed $config)))
+     (let $dynamic-tools-value (once (eval $dynamic-tools))
+       (codex:tool-registry-plan-add-dynamic-tools
+         $fixed-plan
+         $dynamic-tools-value))))
+
+(= (codex:build-tool-registry-plan $config)
+   (codex:build-tool-registry-plan-with-dynamic-tools $config ()))
