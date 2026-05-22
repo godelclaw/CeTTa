@@ -4,10 +4,12 @@
 ; - openai-codex/codex-rs/tools/src/{tool_spec.rs,tool_registry_plan.rs}
 ; - openai-codex/codex-rs/tools/src/{plan_tool.rs,request_user_input_tool.rs}
 ; - openai-codex/codex-rs/tools/src/{local_tool.rs,apply_patch_tool.rs}
+; - openai-codex/codex-rs/tools/src/{dynamic_tool.rs,responses_api.rs}
 ;
 ; Covered in this increment:
 ; - ToolSpec / ConfiguredToolSpec / ToolHandlerSpec / ToolRegistryPlan values
 ; - Responses API JSON projection for function/custom/namespace tool specs
+; - ToolDefinition and Responses API conversion for dynamic/loadable tools
 ; - Rust-shaped tool specs for exec_command, write_stdin, update_plan,
 ;   request_user_input, request_permissions, list_dir, view_image, and
 ;   js_repl, js_repl_reset, tool_search, and freeform apply_patch
@@ -25,8 +27,13 @@
 ; - Rust can choose JSON or freeform apply_patch depending on model/tool
 ;   config. The current visible CeTTa runtime only executes the freeform
 ;   surface, so this slice currently builds the freeform branch only.
+; - parse-tool-input-schema mirrors Rust sanitization for the object/boolean
+;   schema forms consumed by dynamic tools here, but this CeTTa slice does not
+;   yet model serde_json::Error for invalid top-level non-object schemas or the
+;   singleton-null rejection path.
 
 !(import! &self json)
+!(import! &self dynamic_tools)
 !(import! &self js_repl)
 !(import! &self list)
 !(import! &self list_dir)
@@ -136,6 +143,19 @@
 (= (codex:tool-registry-plan $specs $handlers)
    (CodexToolRegistryPlan $specs $handlers))
 
+(= (codex:tool-definition
+      $name
+      $description
+      $input-schema
+      $output-schema
+      $defer-loading)
+   (CodexToolDefinition
+     $name
+     $description
+     $input-schema
+     $output-schema
+     $defer-loading))
+
 (= (codex:tool-registry-plan-empty)
    (codex:tool-registry-plan () ()))
 
@@ -244,6 +264,36 @@
       (CodexResponsesApiNamespace $name $description $tools))
    $tools)
 
+(= (codex:tool-definition-to-responses-api-tool
+      (CodexToolDefinition
+        $name
+        $description
+        $input-schema
+        $output-schema
+        False))
+   (codex:responses-api-tool
+     $name
+     $description
+     False
+     CodexAbsent
+     $input-schema
+     $output-schema))
+
+(= (codex:tool-definition-to-responses-api-tool
+      (CodexToolDefinition
+        $name
+        $description
+        $input-schema
+        $output-schema
+        True))
+   (codex:responses-api-tool
+     $name
+     $description
+     False
+     True
+     $input-schema
+     $output-schema))
+
 (= (codex:configured-tool-spec-spec
       (CodexConfiguredToolSpec $spec $supports-parallel-tool-calls))
    $spec)
@@ -348,6 +398,337 @@
       (JsonPair "required" (codex:tool-registry-json-string-array $required))
       (JsonPair "additionalProperties" (JsonBool $additional-properties)))))
 
+(= (codex:default-namespace-description $namespace-name)
+   (str-concat
+     "Tools in the "
+     (str-concat $namespace-name " namespace.")))
+
+(= (codex:tool-input-schema-valid-type-name $type-name)
+   (or (== $type-name "string")
+       (or (== $type-name "number")
+           (or (== $type-name "boolean")
+               (or (== $type-name "integer")
+                   (or (== $type-name "object")
+                       (or (== $type-name "array")
+                           (== $type-name "null"))))))))
+
+(= (codex:tool-input-schema-normalized-type-items ())
+   ())
+
+(= (codex:tool-input-schema-normalized-type-items $items)
+   (let $head (list:first $items)
+     (let $tail (list:rest $items)
+       (let $rest
+         (eval (codex:tool-input-schema-normalized-type-items $tail))
+         (case $head
+           (((JsonString $type-name)
+             (if (codex:tool-input-schema-valid-type-name $type-name)
+                 (cons-atom $type-name $rest)
+                 $rest))))))))
+
+(= (codex:tool-input-schema-normalized-types $schema)
+   (let $schema-type (json-object-get $schema "type")
+     (if (or (== $schema-type Empty) (== $schema-type JsonNull))
+         ()
+         (case $schema-type
+           (((JsonString $type-name)
+             (if (codex:tool-input-schema-valid-type-name $type-name)
+                 ($type-name)
+                 ()))
+            ((JsonArray $items)
+             (codex:tool-input-schema-normalized-type-items $items)))))))
+
+(= (codex:tool-input-schema-has-key $schema $key)
+   (let $value (json-object-get $schema $key)
+     (and
+       (not (== $value Empty))
+       (not (== $value JsonNull)))))
+
+(= (codex:tool-input-schema-type-list-contains () $type-name)
+   False)
+
+(= (codex:tool-input-schema-type-list-contains $types $type-name)
+   (let $head (list:first $types)
+     (let $tail (list:rest $types)
+       (if (== $head $type-name)
+           True
+           (codex:tool-input-schema-type-list-contains $tail $type-name)))))
+
+(= (codex:tool-input-schema-inferred-types $schema)
+   (let $normalized-types
+     (codex:tool-input-schema-normalized-types $schema)
+     (if (not (== $normalized-types ()))
+         $normalized-types
+         (if (codex:tool-input-schema-has-key $schema "anyOf")
+             ()
+             (if (or (codex:tool-input-schema-has-key $schema "properties")
+                     (or (codex:tool-input-schema-has-key $schema "required")
+                         (codex:tool-input-schema-has-key
+                           $schema
+                           "additionalProperties")))
+                 ("object")
+                 (if (or (codex:tool-input-schema-has-key $schema "items")
+                         (codex:tool-input-schema-has-key $schema "prefixItems"))
+                     ("array")
+                     (if (or (codex:tool-input-schema-has-key $schema "enum")
+                             (codex:tool-input-schema-has-key $schema "format"))
+                         ("string")
+                         (if (or (codex:tool-input-schema-has-key $schema "minimum")
+                                 (or
+                                   (codex:tool-input-schema-has-key $schema "maximum")
+                                   (or
+                                     (codex:tool-input-schema-has-key
+                                       $schema
+                                       "exclusiveMinimum")
+                                     (or
+                                       (codex:tool-input-schema-has-key
+                                         $schema
+                                         "exclusiveMaximum")
+                                       (codex:tool-input-schema-has-key
+                                         $schema
+                                         "multipleOf")))))
+                             ("number")
+                             ("string")))))))))
+
+(= (codex:tool-input-schema-type-json ())
+   CodexAbsent)
+
+(= (codex:tool-input-schema-type-json $types)
+   (if (== (list:len $types) 1)
+       (JsonString (list:first $types))
+       (JsonArray
+         (map-atom-strict
+           $types
+           $type-name
+           (JsonString $type-name)))))
+
+(= (codex:tool-input-schema-optional-field $schema $key)
+   (let $value (json-object-get $schema $key)
+     (if (== $value Empty)
+         CodexAbsent
+         (if (== $value JsonNull)
+             CodexAbsent
+             $value))))
+
+(= (codex:tool-input-schema-sanitize-property-pair
+      (JsonPair $key $value))
+   (let $sanitized-value (codex:parse-tool-input-schema $value)
+     (JsonPair $key $sanitized-value)))
+
+(= (codex:tool-input-schema-sanitize-properties $value)
+   (if (== $value CodexAbsent)
+       CodexAbsent
+       (case $value
+         (((JsonObject $pairs)
+           (JsonObject
+             (map-atom-strict
+               $pairs
+               $pair
+               (codex:tool-input-schema-sanitize-property-pair $pair))))))))
+
+(= (codex:tool-input-schema-sanitize-items $value)
+   (if (== $value CodexAbsent)
+       CodexAbsent
+       (codex:parse-tool-input-schema $value)))
+
+(= (codex:tool-input-schema-sanitize-additional-properties $value)
+   (if (== $value CodexAbsent)
+       CodexAbsent
+       (if (or (== $value (JsonBool True))
+               (== $value (JsonBool False)))
+           $value
+           (codex:parse-tool-input-schema $value))))
+
+(= (codex:tool-input-schema-sanitize-any-of-item $value)
+   (codex:parse-tool-input-schema $value))
+
+(= (codex:tool-input-schema-sanitize-any-of $value)
+   (if (== $value CodexAbsent)
+       CodexAbsent
+       (case $value
+         (((JsonArray $items)
+           (JsonArray
+             (map-atom-strict
+               $items
+               $item
+               (codex:tool-input-schema-sanitize-any-of-item $item))))))))
+
+(= (codex:tool-input-schema-enum-field $schema)
+   (let $const-value (json-object-get $schema "const")
+     (if (or (== $const-value Empty) (== $const-value JsonNull))
+         (codex:tool-input-schema-optional-field $schema "enum")
+         (JsonArray ($const-value)))))
+
+(= (codex:tool-input-schema-prepend-json-pair $pairs $key $value)
+   (if (== $value CodexAbsent)
+       $pairs
+       (cons-atom (JsonPair $key $value) $pairs)))
+
+(= (codex:tool-input-schema-items-field $schema $types)
+   (let $raw-items (codex:tool-input-schema-optional-field $schema "items")
+     (if (and
+           (== $raw-items CodexAbsent)
+           (codex:tool-input-schema-type-list-contains $types "array"))
+         (codex:json-schema-string)
+         (codex:tool-input-schema-sanitize-items $raw-items))))
+
+(= (codex:tool-input-schema-properties-field $schema $types)
+   (let $raw-properties
+     (codex:tool-input-schema-optional-field $schema "properties")
+     (if (and
+           (== $raw-properties CodexAbsent)
+           (codex:tool-input-schema-type-list-contains $types "object"))
+         (JsonObject ())
+         (codex:tool-input-schema-sanitize-properties $raw-properties))))
+
+(= (codex:tool-input-schema-object-pairs-from-values
+      $type-json
+      $description
+      $enum-values
+      $items
+      $properties
+      $required
+      $additional-properties
+      $any-of)
+   (let $pairs1
+     (eval (codex:tool-input-schema-prepend-json-pair () "anyOf" $any-of))
+     (let $pairs2
+       (eval
+         (codex:tool-input-schema-prepend-json-pair
+           $pairs1
+           "additionalProperties"
+           $additional-properties))
+       (let $pairs3
+         (eval
+           (codex:tool-input-schema-prepend-json-pair
+             $pairs2
+             "required"
+             $required))
+         (let $pairs4
+           (eval
+             (codex:tool-input-schema-prepend-json-pair
+               $pairs3
+               "properties"
+               $properties))
+           (let $pairs5
+             (eval
+               (codex:tool-input-schema-prepend-json-pair
+                 $pairs4
+                 "items"
+                 $items))
+             (let $pairs6
+               (eval
+                 (codex:tool-input-schema-prepend-json-pair
+                   $pairs5
+                   "enum"
+                   $enum-values))
+               (let $pairs7
+                 (eval
+                   (codex:tool-input-schema-prepend-json-pair
+                     $pairs6
+                     "description"
+                     $description))
+                 (let $pairs8
+                   (eval
+                     (codex:tool-input-schema-prepend-json-pair
+                       $pairs7
+                       "type"
+                       $type-json))
+                   $pairs8)))))))))
+
+(= (codex:tool-input-schema-object-pairs $schema $types)
+   (let $type-json (codex:tool-input-schema-type-json $types)
+     (let $description (codex:tool-input-schema-optional-field $schema "description")
+       (let $enum-values (codex:tool-input-schema-enum-field $schema)
+         (let $items (codex:tool-input-schema-items-field $schema $types)
+           (let $properties (codex:tool-input-schema-properties-field $schema $types)
+             (let $required
+               (codex:tool-input-schema-optional-field $schema "required")
+               (let $additional-properties
+                 (codex:tool-input-schema-sanitize-additional-properties
+                   (codex:tool-input-schema-optional-field
+                     $schema
+                     "additionalProperties"))
+                 (let $any-of
+                   (codex:tool-input-schema-sanitize-any-of
+                     (codex:tool-input-schema-optional-field $schema "anyOf"))
+                   (codex:tool-input-schema-object-pairs-from-values
+                     $type-json
+                     $description
+                     $enum-values
+                     $items
+                     $properties
+                     $required
+                     $additional-properties
+                     $any-of))))))))))
+
+(= (codex:parse-tool-input-schema (JsonBool $value))
+   (codex:json-schema-string))
+
+(= (codex:parse-tool-input-schema
+      (JsonObject ((JsonPair "properties" (JsonObject $properties)))))
+   (JsonObject
+     ((JsonPair "type" (JsonString "object"))
+      (JsonPair
+        "properties"
+        (JsonObject
+          (map-atom-strict
+            $properties
+            $pair
+            (codex:tool-input-schema-sanitize-property-pair $pair)))))))
+
+(= (codex:parse-tool-input-schema (JsonObject $pairs))
+   (let $schema (JsonObject $pairs)
+     (case (eval (codex:tool-input-schema-inferred-types $schema))
+       (($schema-types
+         (case (eval (codex:tool-input-schema-object-pairs $schema $schema-types))
+           (($sanitized-pairs
+             (JsonObject $sanitized-pairs)))))))))
+
+(= (codex:parse-tool-input-schema (JsonArray $items))
+   (JsonArray
+     (map-atom-strict
+       $items
+       $item
+       (codex:parse-tool-input-schema $item))))
+
+(= (codex:parse-tool-input-schema (JsonString $value))
+   (JsonString $value))
+
+(= (codex:parse-tool-input-schema (JsonNumber $value))
+   (JsonNumber $value))
+
+(= (codex:parse-tool-input-schema JsonNull)
+   JsonNull)
+
+(= (codex:parse-dynamic-tool $tool)
+   (let $input-schema-expression
+     (eval (codex:dynamic-tool-spec-input-schema $tool))
+     (let $input-schema
+       (eval $input-schema-expression)
+       (codex:tool-definition
+         (codex:dynamic-tool-spec-name $tool)
+         (codex:dynamic-tool-spec-description $tool)
+         (codex:parse-tool-input-schema $input-schema)
+         CodexAbsent
+         (codex:dynamic-tool-spec-defer-loading $tool)))))
+
+(= (codex:dynamic-tool-to-responses-api-tool $tool)
+   (codex:tool-definition-to-responses-api-tool
+     (codex:parse-dynamic-tool $tool)))
+
+(= (codex:dynamic-tool-to-loadable-tool-spec $tool)
+   (let $output-tool (codex:dynamic-tool-to-responses-api-tool $tool)
+     (case (codex:dynamic-tool-spec-namespace $tool)
+       ((CodexAbsent
+         (codex:loadable-tool-spec-function $output-tool))
+        ($namespace
+         (codex:loadable-tool-spec-namespace
+           (codex:responses-api-namespace
+             $namespace
+             (codex:default-namespace-description $namespace)
+             ((codex:responses-api-namespace-tool-function $output-tool)))))))))
+
 (= (codex:responses-api-tool-json
       (CodexResponsesApiTool
         $name
@@ -427,6 +808,147 @@
 (= (codex:loadable-tool-spec-json
       (CodexLoadableToolSpecNamespace $namespace))
    (codex:responses-api-namespace-json $namespace))
+
+(= (codex:loadable-tool-spec-json-items $specs)
+   (function
+     (let $json-items
+       (eval
+         (map-atom
+           $specs
+           $spec
+           (codex:loadable-tool-spec-json $spec)))
+       (return $json-items))))
+
+(= (codex:loadable-tool-specs-json $specs)
+   (JsonArray (codex:loadable-tool-spec-json-items $specs)))
+
+(= (codex:loadable-tool-spec-namespace-tools
+      (CodexLoadableToolSpecNamespace
+        (CodexResponsesApiNamespace $name $description $tools)))
+   $tools)
+
+(= (codex:loadable-tool-spec-append-namespace-tools
+      (CodexLoadableToolSpecNamespace
+        (CodexResponsesApiNamespace $name $description $tools))
+      $more-tools)
+   (codex:loadable-tool-spec-namespace
+     (codex:responses-api-namespace
+       $name
+       $description
+       (list:append $tools $more-tools))))
+
+(= (codex:coalesce-loadable-namespace $coalesced $namespace)
+   (case $namespace
+     (((CodexResponsesApiNamespace $name $description $tools)
+       (codex:coalesce-loadable-namespace-values
+         $coalesced
+         $name
+         $description
+         $tools)))))
+
+(= (codex:coalesce-loadable-namespace-values
+      $coalesced
+      $name
+      $description
+      $tools)
+   (if (== $coalesced ())
+       ((codex:loadable-tool-spec-namespace
+          (codex:responses-api-namespace
+            $name
+            $description
+            $tools)))
+       (let ($head $tail) (decons-atom $coalesced)
+         (codex:coalesce-loadable-namespace-head
+           $head
+           $tail
+           $name
+           $description
+           $tools))))
+
+(= (codex:coalesce-loadable-namespace-head
+      $head
+      $tail
+      $name
+      $description
+      $tools)
+   (case $head
+     (((CodexLoadableToolSpecNamespace $namespace)
+       (codex:coalesce-loadable-namespace-head-namespace
+         $namespace
+         $tail
+         $name
+         $description
+         $tools))
+      ($other
+       (codex:coalesce-loadable-namespace-head-other
+         $head
+         $tail
+         $name
+         $description
+         $tools)))))
+
+(= (codex:coalesce-loadable-namespace-head-namespace
+      (CodexResponsesApiNamespace $head-name $head-description $head-tools)
+      $tail
+      $name
+      $description
+      $tools)
+   (if (== $head-name $name)
+       (cons-atom
+         (codex:loadable-tool-spec-namespace
+           (codex:responses-api-namespace
+             $head-name
+             $head-description
+             (list:append $head-tools $tools)))
+         $tail)
+       (codex:coalesce-loadable-namespace-head-other
+         (CodexLoadableToolSpecNamespace
+           (CodexResponsesApiNamespace
+             $head-name
+             $head-description
+             $head-tools))
+         $tail
+         $name
+         $description
+         $tools)))
+
+(= (codex:coalesce-loadable-namespace-head-other
+      $head
+      $tail
+      $name
+      $description
+      $tools)
+   (let $coalesced-tail
+     (eval
+       (codex:coalesce-loadable-namespace-values
+         $tail
+         $name
+         $description
+         $tools))
+     (cons-atom $head $coalesced-tail)))
+
+(= (codex:coalesce-one-loadable-tool-spec $coalesced $spec)
+   (case $spec
+     (((CodexLoadableToolSpecFunction $tool)
+       (list:append $coalesced ($spec)))
+      ((CodexLoadableToolSpecNamespace $namespace)
+       (codex:coalesce-loadable-namespace $coalesced $namespace)))))
+
+(= (codex:coalesce-loadable-tool-specs $specs)
+   (codex:coalesce-loadable-tool-specs-acc $specs ()))
+
+(= (codex:coalesce-loadable-tool-specs-acc () $coalesced)
+   $coalesced)
+
+(= (codex:coalesce-loadable-tool-specs-acc $specs $coalesced)
+   (let $head (list:first $specs)
+     (let $tail (list:rest $specs)
+       (let $spec (eval $head)
+         (let $next-coalesced
+           (eval (codex:coalesce-one-loadable-tool-spec $coalesced $spec))
+           (codex:coalesce-loadable-tool-specs-acc
+             $tail
+             $next-coalesced))))))
 
 (= (codex:tool-spec-json
       (CodexToolSpecFunction

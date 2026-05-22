@@ -1,5 +1,6 @@
 !(register-module! ../codex)
 !(import! &self json)
+!(import! &self codex:dynamic_tools)
 !(import! &self codex:js_repl)
 !(import! &self codex:tool_config)
 !(import! &self codex:tool_registry_plan)
@@ -101,6 +102,48 @@
        False
        (codex:tool-config-sandbox-policy-danger-full-access)
        (codex:windows-sandbox-level-disabled))))
+
+(= (codex-tool-registry-order-schema)
+   (JsonObject
+     ((JsonPair "type" (JsonString "object"))
+      (JsonPair
+        "properties"
+        (JsonObject
+          ((JsonPair
+             "order_id"
+             (JsonObject
+               ((JsonPair "type" (JsonString "string"))))))))
+      (JsonPair
+        "required"
+        (JsonArray ((JsonString "order_id"))))
+      (JsonPair "additionalProperties" (JsonBool False)))))
+
+(= (codex-tool-registry-ticket-schema-with-inferred-types)
+   (JsonObject
+     ((JsonPair
+        "properties"
+        (JsonObject
+          ((JsonPair
+             "id"
+             (JsonObject
+               ((JsonPair
+                  "description"
+                  (JsonString "Ticket identifier")))))))))))
+
+(= (codex-tool-registry-integer-and-array-schema)
+   (JsonObject
+     ((JsonPair "type" (JsonString "object"))
+      (JsonPair
+        "properties"
+        (JsonObject
+          ((JsonPair
+             "page"
+             (JsonObject
+               ((JsonPair "type" (JsonString "integer")))))
+           (JsonPair
+             "tags"
+             (JsonObject
+               ((JsonPair "type" (JsonString "array")))))))))))
 
 !(assertEqualToResult
   (json-stringify
@@ -204,6 +247,87 @@
                (codex:json-schema-object ())
                CodexAbsent)))))))
   ("{\"type\":\"namespace\",\"name\":\"mcp__calendar__\",\"description\":\"Plan events.\",\"tools\":[{\"type\":\"function\",\"name\":\"create_event\",\"description\":\"Create a calendar event.\",\"strict\":false,\"defer_loading\":true,\"parameters\":{\"type\":\"object\",\"properties\":{}}}]}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:responses-api-tool-json
+      (codex:dynamic-tool-to-responses-api-tool
+        (codex:dynamic-tool-spec
+          CodexAbsent
+          "lookup_order"
+          "Look up an order"
+          (codex-tool-registry-order-schema)
+          True))))
+  ("{\"type\":\"function\",\"name\":\"lookup_order\",\"description\":\"Look up an order\",\"strict\":false,\"defer_loading\":true,\"parameters\":{\"type\":\"object\",\"properties\":{\"order_id\":{\"type\":\"string\"}},\"required\":[\"order_id\"],\"additionalProperties\":false}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:function-tool-parameters
+      (codex:dynamic-tool-to-responses-api-tool
+        (codex:dynamic-tool-spec
+          CodexAbsent
+          "lookup_ticket"
+          "Fetch a ticket"
+          (codex-tool-registry-ticket-schema-with-inferred-types)
+          False))))
+  ("{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Ticket identifier\"}}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (let $schema (eval (codex-tool-registry-integer-and-array-schema))
+      (codex:parse-tool-input-schema $schema)))
+  ("{\"type\":\"object\",\"properties\":{\"page\":{\"type\":\"integer\"},\"tags\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:loadable-tool-spec-json
+      (codex:dynamic-tool-to-loadable-tool-spec
+        (codex:dynamic-tool-spec
+          "tickets"
+          "lookup_order"
+          "Look up an order"
+          (codex-tool-registry-order-schema)
+          True))))
+  ("{\"type\":\"namespace\",\"name\":\"tickets\",\"description\":\"Tools in the tickets namespace.\",\"tools\":[{\"type\":\"function\",\"name\":\"lookup_order\",\"description\":\"Look up an order\",\"strict\":false,\"defer_loading\":true,\"parameters\":{\"type\":\"object\",\"properties\":{\"order_id\":{\"type\":\"string\"}},\"required\":[\"order_id\"],\"additionalProperties\":false}}]}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:loadable-tool-spec-json
+      (codex:dynamic-tool-to-loadable-tool-spec
+        (codex:dynamic-tool-spec
+          CodexAbsent
+          "run_sql"
+          "Query database"
+          (codex:json-schema-object ())
+          False))))
+  ("{\"type\":\"function\",\"name\":\"run_sql\",\"description\":\"Query database\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{}}}"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:loadable-tool-specs-json
+      (codex:coalesce-loadable-tool-specs
+        ((codex:dynamic-tool-to-loadable-tool-spec
+           (codex:dynamic-tool-spec
+             "tickets"
+             "lookup_order"
+             "Look up an order"
+             (codex-tool-registry-order-schema)
+             True))
+         (codex:dynamic-tool-to-loadable-tool-spec
+           (codex:dynamic-tool-spec
+             CodexAbsent
+             "run_sql"
+             "Query database"
+             (codex:json-schema-object ())
+             False))
+         (codex:dynamic-tool-to-loadable-tool-spec
+           (codex:dynamic-tool-spec
+             "tickets"
+             "create_order"
+             "Create an order"
+             (codex:json-schema-object ())
+             False))))))
+  ("[{\"type\":\"namespace\",\"name\":\"tickets\",\"description\":\"Tools in the tickets namespace.\",\"tools\":[{\"type\":\"function\",\"name\":\"lookup_order\",\"description\":\"Look up an order\",\"strict\":false,\"defer_loading\":true,\"parameters\":{\"type\":\"object\",\"properties\":{\"order_id\":{\"type\":\"string\"}},\"required\":[\"order_id\"],\"additionalProperties\":false}},{\"type\":\"function\",\"name\":\"create_order\",\"description\":\"Create an order\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{}}}]},{\"type\":\"function\",\"name\":\"run_sql\",\"description\":\"Query database\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{}}}]"))
 
 !(assertEqualToResult
   (json-stringify
