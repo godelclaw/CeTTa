@@ -177,6 +177,8 @@
            False)
           ((CodexToolSpecToolSearch)
            False)
+          ((CodexToolSpecToolSearch $execution $description $parameters)
+           False)
           ((CodexToolSpecLocalShell)
            False)
           ((CodexToolSpecImageGeneration $output-format)

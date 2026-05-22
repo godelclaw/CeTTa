@@ -5,6 +5,7 @@
 ;   - DiscoverableToolType / DiscoverableToolAction wire names
 ;   - DiscoverableTool and DiscoverablePluginInfo helper surface
 ;   - filter_tool_suggest_discoverable_tools_for_client
+;   - create_tool_search_tool
 ;   - create_tool_suggest_tool
 ;   - collect_tool_suggest_entries
 ;   - format_discoverable_tools / plugin_summary
@@ -20,9 +21,6 @@
 ;   slice exposes a local discoverable connector record with the Rust fields
 ;   consumed by these helpers: id, name, description, install_url,
 ;   is_accessible, and is_enabled.
-; - Rust's create_tool_search_tool returns the ToolSpec::ToolSearch variant,
-;   whose full fields are not represented by the current CeTTa ToolSpec shape.
-;   This increment therefore ports the tool_suggest branch only.
 
 !(import! &self json)
 !(import! &self list)
@@ -51,8 +49,33 @@
 (= (codex:tool-search-tool-name)
    "tool_search")
 
+(= (codex:tool-search-default-limit)
+   8)
+
 (= (codex:tool-discovery-tui-client-name)
    "codex-tui")
+
+(= (codex:tool-search-source-info $name $description)
+   (CodexToolSearchSourceInfo $name $description))
+
+(= (codex:tool-search-source-info-name
+      (CodexToolSearchSourceInfo $name $description))
+   $name)
+
+(= (codex:tool-search-source-info-description
+      (CodexToolSearchSourceInfo $name $description))
+   $description)
+
+(= (codex:tool-search-source-description-entry $name $description)
+   (CodexToolSearchSourceDescriptionEntry $name $description))
+
+(= (codex:tool-search-source-description-entry-name
+      (CodexToolSearchSourceDescriptionEntry $name $description))
+   $name)
+
+(= (codex:tool-search-source-description-entry-description
+      (CodexToolSearchSourceDescriptionEntry $name $description))
+   $description)
 
 (= (codex:discoverable-connector-info
       $id
@@ -453,6 +476,150 @@
          (cons-atom
            (codex:tool-suggest-entry-id $head)
            $tail-ids))))))
+
+(= (codex:tool-search-source-description-merged
+      $existing-description
+      $source-description)
+   (if (== $existing-description CodexAbsent)
+       $source-description
+       $existing-description))
+
+(= (codex:tool-search-source-descriptions-upsert
+      $entries
+      $source)
+   (if (== $entries ())
+       ((codex:tool-search-source-description-entry
+          (codex:tool-search-source-info-name $source)
+          (codex:tool-search-source-info-description $source)))
+       (let ($head $tail) (decons-atom $entries)
+         (if (== (codex:tool-search-source-description-entry-name $head)
+                 (codex:tool-search-source-info-name $source))
+             (cons-atom
+               (codex:tool-search-source-description-entry
+                 (codex:tool-search-source-description-entry-name $head)
+                 (codex:tool-search-source-description-merged
+                   (codex:tool-search-source-description-entry-description
+                     $head)
+                   (codex:tool-search-source-info-description $source)))
+               $tail)
+             (case (codex:tool-search-source-descriptions-upsert
+                     $tail
+                     $source)
+               (($updated-tail
+                 (cons-atom $head $updated-tail))))))))
+
+(= (codex:tool-search-source-descriptions-acc $sources $entries)
+   (if (== $sources ())
+       $entries
+       (let ($head $tail) (decons-atom $sources)
+         (codex:tool-search-source-descriptions-acc
+           $tail
+           (codex:tool-search-source-descriptions-upsert
+             $entries
+             $head)))))
+
+(= (codex:tool-search-source-descriptions $sources)
+   (codex:tool-search-source-descriptions-acc $sources ()))
+
+(= (codex:tool-search-source-description-entry-le $left $right)
+   (codex:tool-discovery-string-le
+     (codex:tool-search-source-description-entry-name $left)
+     (codex:tool-search-source-description-entry-name $right)))
+
+(= (codex:insert-tool-search-source-description-sorted
+      $entry
+      $sorted)
+   (if (== $sorted ())
+       ($entry)
+       (let ($head $tail) (decons-atom $sorted)
+         (if (codex:tool-search-source-description-entry-le $entry $head)
+             (cons-atom $entry $sorted)
+             (case (codex:insert-tool-search-source-description-sorted
+                     $entry
+                     $tail)
+               (($inserted-tail
+                 (cons-atom $head $inserted-tail))))))))
+
+(= (codex:sort-tool-search-source-descriptions $entries)
+   (if (== $entries ())
+       ()
+       (let ($head $tail) (decons-atom $entries)
+         (case (codex:sort-tool-search-source-descriptions $tail)
+           (($sorted-tail
+             (codex:insert-tool-search-source-description-sorted
+               $head
+               $sorted-tail)))))))
+
+(= (codex:format-tool-search-source-description
+      (CodexToolSearchSourceDescriptionEntry $name $description))
+   (if (== $description CodexAbsent)
+       (str-concat "- " $name)
+       (str-concat
+         "- "
+         (str-concat
+           $name
+           (str-concat ": " $description)))))
+
+(= (codex:format-tool-search-source-descriptions $entries)
+   (if (== $entries ())
+       ()
+       (let ($head $tail) (decons-atom $entries)
+         (case (codex:format-tool-search-source-descriptions $tail)
+           (($tail-lines
+             (cons-atom
+               (codex:format-tool-search-source-description $head)
+               $tail-lines)))))))
+
+(= (codex:tool-search-source-descriptions-text $sources)
+   (case (codex:tool-search-source-descriptions $sources)
+     (($source-descriptions
+       (case (codex:sort-tool-search-source-descriptions
+               $source-descriptions)
+         ((()
+           "None currently enabled.")
+          ($sorted-sources
+           (str-join
+             "\n"
+             (codex:format-tool-search-source-descriptions
+               $sorted-sources)))))))))
+
+(= (codex:tool-search-tool-description $source-descriptions)
+   (str-concat
+     "# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\n\nYou have access to tools from the following sources:\n"
+     (str-concat
+       $source-descriptions
+       (str-concat
+         "\nSome of the tools may not have been provided to you upfront, and you should use this tool (`"
+         (str-concat
+           (codex:tool-search-tool-name)
+           (str-concat
+             "`) to search for the required tools. For MCP tool discovery, always use `"
+             (str-concat
+               (codex:tool-search-tool-name)
+               "` instead of `list_mcp_resources` or `list_mcp_resource_templates`.")))))))
+
+(= (codex:tool-search-tool-parameters-schema $default-limit)
+   (codex:json-schema-object-with-required-and-additional-properties
+     ((JsonPair "limit"
+        (codex:json-schema-number
+          (format-args
+            "Maximum number of tools to return (defaults to {})."
+            ($default-limit))))
+      (JsonPair "query"
+        (codex:json-schema-string
+          "Search query for deferred tools.")))
+     ("query")
+     False))
+
+(= (codex:create-tool-search-tool
+      $searchable-sources
+      $default-limit)
+   (case (codex:tool-search-source-descriptions-text $searchable-sources)
+     (($source-descriptions
+       (codex:tool-spec-tool-search
+         "client"
+         (codex:tool-search-tool-description $source-descriptions)
+         (codex:tool-search-tool-parameters-schema $default-limit))))))
 
 (= (codex:tool-suggest-plugin-summary-details
       $has-skills

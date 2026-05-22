@@ -95,6 +95,13 @@
 (= (codex:tool-router-specs-spec-name (CodexToolSpecToolSearch))
    "tool_search")
 
+(= (codex:tool-router-specs-spec-name
+      (CodexToolSpecToolSearch
+        $execution
+        $description
+        $parameters))
+   "tool_search")
+
 (= (codex:tool-router-specs-spec-name (CodexToolSpecLocalShell))
    "local_shell")
 
@@ -217,6 +224,8 @@
          $tools
          (CodexToolName $name $namespace)))
       ((CodexToolSpecToolSearch) CodexAbsent)
+      ((CodexToolSpecToolSearch $execution $description $parameters)
+       CodexAbsent)
       ((CodexToolSpecLocalShell) CodexAbsent)
       ((CodexToolSpecImageGeneration $output-format) CodexAbsent)
       ((CodexToolSpecWebSearch) CodexAbsent))))

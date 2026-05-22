@@ -195,6 +195,14 @@
   (CodexAbsent))
 
 !(assertEqualToResult
+  (codex:tool-spec-to-code-mode-tool-definition
+    (CodexToolSpecToolSearch
+      "client"
+      "Search deferred tools."
+      (JsonObject ())))
+  (CodexAbsent))
+
+!(assertEqualToResult
   (codex:code-mode-tool-definition-names
     (test:collected-definitions))
   (("alpha" "apply_patch" "mcp__memory___hidden" "mcp__memory__read_graph" "zeta")))

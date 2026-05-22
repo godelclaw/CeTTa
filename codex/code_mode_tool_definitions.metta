@@ -621,6 +621,13 @@
    ())
 
 (= (codex:code-mode-tool-definitions-for-spec
+      (CodexToolSpecToolSearch
+        $execution
+        $description
+        $parameters))
+   ())
+
+(= (codex:code-mode-tool-definitions-for-spec
       (CodexToolSpecImageGeneration $output-format))
    ())
 

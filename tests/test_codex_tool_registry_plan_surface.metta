@@ -157,6 +157,29 @@
   ("{\"type\":\"function\",\"name\":\"js_repl_reset\",\"description\":\"Restarts the js_repl kernel for this run and clears persisted top-level bindings.\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}}"))
 
 !(assertEqualToResult
+  (codex:tool-spec-name
+    (codex:tool-spec-tool-search
+      "client"
+      "Search deferred tools."
+      (codex:json-schema-object-with-required-and-additional-properties
+        ((JsonPair "query" (codex:json-schema-string)))
+        ("query")
+        False)))
+  ("tool_search"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:tool-spec-json
+      (codex:tool-spec-tool-search
+        "client"
+        "Search deferred tools."
+        (codex:json-schema-object-with-required-and-additional-properties
+          ((JsonPair "query" (codex:json-schema-string)))
+          ("query")
+          False))))
+  ("{\"type\":\"tool_search\",\"execution\":\"client\",\"description\":\"Search deferred tools.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"],\"additionalProperties\":false}}"))
+
+!(assertEqualToResult
   (json-stringify
     (json-object-get
       (json-object-get

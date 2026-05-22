@@ -136,6 +136,13 @@
    (codex:code-mode-tool-kind-function))
 
 (= (codex:code-mode-tool-kind-for-spec
+      (CodexToolSpecToolSearch
+        $execution
+        $description
+        $parameters))
+   (codex:code-mode-tool-kind-function))
+
+(= (codex:code-mode-tool-kind-for-spec
       (CodexToolSpecLocalShell))
    (codex:code-mode-tool-kind-function))
 
@@ -182,6 +189,16 @@
    (codex:code-mode-tool-kind-result-ok
      (codex:code-mode-tool-kind-for-spec
        (CodexToolSpecToolSearch))))
+
+(= (codex:code-mode-tool-kind-for-name
+      (CodexToolSpecToolSearch $execution $description $parameters)
+      $tool-name)
+   (codex:code-mode-tool-kind-result-ok
+     (codex:code-mode-tool-kind-for-spec
+       (CodexToolSpecToolSearch
+         $execution
+         $description
+         $parameters))))
 
 (= (codex:code-mode-tool-kind-for-name
       (CodexToolSpecLocalShell)

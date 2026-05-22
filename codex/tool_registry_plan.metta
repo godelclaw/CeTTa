@@ -10,7 +10,7 @@
 ; - Responses API JSON projection for function/custom tool specs
 ; - Rust-shaped tool specs for exec_command, write_stdin, update_plan,
 ;   request_user_input, request_permissions, list_dir, view_image, and
-;   js_repl, js_repl_reset, and freeform apply_patch
+;   js_repl, js_repl_reset, tool_search, and freeform apply_patch
 ; - the matching narrow build_tool_registry_plan order/handler wiring for the
 ;   currently ported CeTTa runtime surface
 ;
@@ -97,6 +97,15 @@
 (= (codex:tool-spec-freeform $tool)
    (CodexToolSpecFreeform $tool))
 
+(= (codex:tool-spec-tool-search
+      $execution
+      $description
+      $parameters)
+   (CodexToolSpecToolSearch
+     $execution
+     $description
+     $parameters))
+
 (= (codex:configured-tool-spec $spec $supports-parallel-tool-calls)
    (CodexConfiguredToolSpec $spec $supports-parallel-tool-calls))
 
@@ -129,6 +138,16 @@
           $format-syntax
           $format-definition)))
    $name)
+
+(= (codex:tool-spec-name
+      (CodexToolSpecToolSearch
+        $execution
+        $description
+        $parameters))
+   "tool_search")
+
+(= (codex:tool-spec-name (CodexToolSpecToolSearch))
+   "tool_search")
 
 (= (codex:tool-spec-function-tool (CodexToolSpecFunction $tool))
    $tool)
@@ -338,6 +357,17 @@
           ((JsonPair "type" (JsonString $format-type))
            (JsonPair "syntax" (JsonString $format-syntax))
            (JsonPair "definition" (JsonString $format-definition))))))))
+
+(= (codex:tool-spec-json
+      (CodexToolSpecToolSearch
+        $execution
+        $description
+        $parameters))
+   (JsonObject
+     ((JsonPair "type" (JsonString "tool_search"))
+      (JsonPair "execution" (JsonString $execution))
+      (JsonPair "description" (JsonString $description))
+      (JsonPair "parameters" $parameters))))
 
 (= (codex:tool-spec-json-items $specs)
    (function

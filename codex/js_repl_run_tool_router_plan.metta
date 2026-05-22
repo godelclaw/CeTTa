@@ -202,6 +202,8 @@
       ((CodexToolSpecLocalShell) CodexAbsent)
       ((CodexToolSpecImageGeneration $output-format) CodexAbsent)
       ((CodexToolSpecToolSearch) CodexAbsent)
+      ((CodexToolSpecToolSearch $execution $description $parameters)
+       CodexAbsent)
       ((CodexToolSpecWebSearch) CodexAbsent))))
 
 (= (codex:js-repl-run-tool-requested-tool-name-from-specs
@@ -277,6 +279,8 @@
       ((CodexToolSpecLocalShell) CodexAbsent)
       ((CodexToolSpecImageGeneration $output-format) CodexAbsent)
       ((CodexToolSpecToolSearch) CodexAbsent)
+      ((CodexToolSpecToolSearch $execution $description $parameters)
+       CodexAbsent)
       ((CodexToolSpecWebSearch) CodexAbsent))))
 
 (= (codex:js-repl-run-tool-router-find-spec () $tool-name)

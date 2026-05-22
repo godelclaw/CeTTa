@@ -169,3 +169,22 @@
     (test:configured-specs)
     (codex:plain-tool-name "tool_search"))
   (CodexAbsent))
+
+!(assertEqualToResult
+  (codex:tool-router-specs-spec-name
+    (CodexToolSpecToolSearch
+      "client"
+      "Search deferred tools."
+      (JsonObject ())))
+  ("tool_search"))
+
+!(assertEqualToResult
+  (codex:tool-router-find-spec-from-configured
+    ((codex:tool-router-specs-configured-spec
+       (CodexToolSpecToolSearch
+         "client"
+         "Search deferred tools."
+         (JsonObject ()))
+       True))
+    (codex:plain-tool-name "tool_search"))
+  (CodexAbsent))

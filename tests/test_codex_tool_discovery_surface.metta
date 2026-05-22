@@ -90,6 +90,17 @@
       ("github-mcp")
       ("github-app"))))
 
+(= (test:tool-search-sources)
+   ((codex:tool-search-source-info
+      "Google Drive"
+      "Use Google Drive as the single entrypoint for Drive, Docs, Sheets, and Slides work.")
+    (codex:tool-search-source-info
+      "Google Drive"
+      CodexAbsent)
+    (codex:tool-search-source-info
+      "docs"
+      CodexAbsent)))
+
 !(assertEqual
   (codex:discoverable-tool-type-connector)
   "connector")
@@ -212,6 +223,24 @@
           "parameters")
         "required")))
   ("[\"tool_type\",\"action_type\",\"tool_id\",\"suggest_reason\"]"))
+
+!(assertEqualToResult
+  (unique
+    (json-stringify
+      (codex:tool-spec-json
+        (codex:create-tool-search-tool
+          (test:tool-search-sources)
+          (codex:tool-search-default-limit)))))
+  ("{\"type\":\"tool_search\",\"execution\":\"client\",\"description\":\"# Tool discovery\\n\\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\\n\\nYou have access to tools from the following sources:\\n- Google Drive: Use Google Drive as the single entrypoint for Drive, Docs, Sheets, and Slides work.\\n- docs\\nSome of the tools may not have been provided to you upfront, and you should use this tool (`tool_search`) to search for the required tools. For MCP tool discovery, always use `tool_search` instead of `list_mcp_resources` or `list_mcp_resource_templates`.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"limit\":{\"type\":\"number\",\"description\":\"Maximum number of tools to return (defaults to 8).\"},\"query\":{\"type\":\"string\",\"description\":\"Search query for deferred tools.\"}},\"required\":[\"query\"],\"additionalProperties\":false}}"))
+
+!(assertEqualToResult
+  (unique
+    (json-stringify
+      (json-object-get
+        (codex:tool-spec-json
+          (codex:create-tool-search-tool () 8))
+        "description")))
+  ("\"# Tool discovery\\n\\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\\n\\nYou have access to tools from the following sources:\\nNone currently enabled.\\nSome of the tools may not have been provided to you upfront, and you should use this tool (`tool_search`) to search for the required tools. For MCP tool discovery, always use `tool_search` instead of `list_mcp_resources` or `list_mcp_resource_templates`.\""))
 
 !(assertEqualToResult
   (unique
