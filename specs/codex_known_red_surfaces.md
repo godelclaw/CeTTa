@@ -1,7 +1,7 @@
 # Codex Known Red Surfaces
 
 Last updated: 2026-05-22 on branch `exp/codex` after the tool registry
-dispatch planning pass.
+diff-consumer planning pass.
 
 This file records Codex-in-CeTTa surfaces that are known red while the core
 validation baseline remains green. They should not block unrelated slice work,
@@ -12,8 +12,8 @@ but they must be checked with output-aware validation because `./cetta` exits
 
 - `make -s` passes.
 - `scripts/check_codex_surfaces.sh` exits nonzero only for the two deferred
-  surfaces documented below. Rechecked after the tool registry dispatch planning
-  pass.
+  surfaces documented below. Rechecked after the tool registry diff-consumer
+  planning pass.
 - The dynamic tool registry surface is green in
   `tests/test_codex_tool_registry_plan_surface.metta`, including handler
   registration and coalesced namespace specs.
@@ -26,6 +26,10 @@ but they must be checked with output-aware validation because `./cetta` exits
 - The tool registry dispatch planning surface is green in
   `tests/test_codex_tool_registry_dispatch_plan_surface.metta`, including
   handler lookup, unsupported-call errors, and payload kind compatibility.
+- The tool registry diff-consumer planning surface is green in
+  `tests/test_codex_tool_registry_diff_consumer_plan_surface.metta`, including
+  apply_patch consumer creation and default no-consumer behavior for other
+  current handlers.
 - Four cross-module repair surfaces remain green:
   - `tests/test_codex_approval_surface.metta`
   - `tests/test_codex_config_permissions_warnings_surface.metta`
