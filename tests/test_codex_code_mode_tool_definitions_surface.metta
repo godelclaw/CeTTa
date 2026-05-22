@@ -48,6 +48,70 @@
             (codex:json-schema-object-with-additional-properties () False)
             CodexAbsent))))))
 
+(= (test:contains $haystack $needle)
+   (case (str-find $haystack $needle)
+     ((Empty False)
+      ($index True))))
+
+(= (test:structured-echo-schema)
+   (codex:json-schema-object-with-required-and-additional-properties
+     ((JsonPair "echo" (codex:json-schema-string)))
+     ("echo")
+     False))
+
+(= (test:mcp-call-tool-result-schema $structured-content-schema)
+   (codex:json-schema-object-with-required-and-additional-properties
+     ((JsonPair "content"
+        (codex:json-schema-array
+          (codex:json-schema-object ())))
+      (JsonPair "structuredContent" $structured-content-schema)
+      (JsonPair "isError" (codex:json-schema-boolean))
+      (JsonPair "_meta" (codex:json-schema-object ())))
+     ("content")
+     False))
+
+(= (test:mcp-definition $name $raw-name $description $structured-content-schema)
+   (codex:code-mode-tool-definition
+     $name
+     (codex:namespaced-tool-name "mcp__sample__" $raw-name)
+     $description
+     (codex:code-mode-tool-kind-function)
+     (codex:json-schema-object-with-additional-properties () False)
+     (test:mcp-call-tool-result-schema $structured-content-schema)))
+
+(= (test:mcp-description)
+   (codex:build-code-mode-exec-tool-description
+     ((test:mcp-definition
+        "mcp__sample__alpha"
+        "alpha"
+        "First tool"
+        (codex:json-schema-object-with-additional-properties () False))
+      (test:mcp-definition
+        "mcp__sample__beta"
+        "beta"
+        "Second tool"
+        (codex:json-schema-object-with-additional-properties () False)))
+     ((codex:code-mode-tool-namespace-description
+        "mcp__sample__"
+        "mcp__sample"
+        "Shared namespace guidance."))
+     True
+     False))
+
+(= (test:mcp-description-empty-namespace)
+   (codex:build-code-mode-exec-tool-description
+     ((test:mcp-definition
+        "mcp__sample__alpha"
+        "alpha"
+        "First tool"
+        (codex:json-schema-object-with-additional-properties () False)))
+     ((codex:code-mode-tool-namespace-description
+        "mcp__sample__"
+        "mcp__sample"
+        ""))
+     True
+     False))
+
 (= (test:collected-definitions)
    (codex:collect-code-mode-exec-prompt-tool-definitions
      ((test:function-spec "zeta" "Zeta tool")
@@ -108,6 +172,24 @@
   ("Look up an order\n\nexec tool declaration:\n```ts\ndeclare const tools: { lookup_order(args: { order_id: string; }): Promise<{ ok: boolean; }>; };\n```"))
 
 !(assertEqualToResult
+  (codex:code-mode-definition-output-type
+    (test:mcp-call-tool-result-schema
+      (test:structured-echo-schema)))
+  ("CallToolResult<{ echo: string; }>"))
+
+!(assertEqualToResult
+  (test:contains
+    (codex:code-mode-tool-definition-description
+      (codex:augment-code-mode-tool-definition
+        (test:mcp-definition
+          "mcp__sample__echo"
+          "echo"
+          "Echo tool"
+          (test:structured-echo-schema))))
+    "Promise<CallToolResult<{ echo: string; }>>;")
+  (True))
+
+!(assertEqualToResult
   (codex:tool-spec-to-code-mode-tool-definition
     (CodexToolSpecToolSearch))
   (CodexAbsent))
@@ -148,11 +230,47 @@
   (True))
 
 !(assertEqualToResult
+  (test:contains
+    (test:mcp-description)
+    "## mcp__sample\nShared namespace guidance.")
+  (True))
+
+!(assertEqualToResult
+  (test:contains
+    (test:mcp-description)
+    "declare const tools: { mcp__sample__alpha(args: {}): Promise<CallToolResult<{}>>; };")
+  (True))
+
+!(assertEqualToResult
+  (test:contains
+    (test:mcp-description)
+    "declare const tools: { mcp__sample__beta(args: {}): Promise<CallToolResult<{}>>; };")
+  (True))
+
+!(assertEqualToResult
+  (test:contains
+    (test:mcp-description)
+    "Shared MCP Types:\n```ts\ntype Role = \"user\" | \"assistant\";")
+  (True))
+
+!(assertEqualToResult
+  (test:contains
+    (test:mcp-description)
+    "type CallToolResult<TStructured = { [key: string]: unknown }> = {")
+  (True))
+
+!(assertEqualToResult
+  (test:contains
+    (test:mcp-description-empty-namespace)
+    "## mcp__sample")
+  (False))
+
+!(assertEqualToResult
   (case (str-find
           (codex:freeform-tool-description
             (codex:tool-spec-freeform-tool
               (codex:create-code-mode-exec-tool
-                (codex:collect-code-mode-tool-definitions
+                (codex:collect-code-mode-exec-prompt-tool-definitions
                   ((test:function-spec "alpha" "Alpha tool")))
                 ()
                 True

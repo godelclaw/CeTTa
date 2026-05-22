@@ -13,17 +13,17 @@
 ;   - normalize_code_mode_identifier
 ;   - augment_tool_definition/render_code_mode_sample for the schema subset
 ;     already represented by the CeTTa tool registry.
+;   - ToolNamespaceDescription and build_exec_tool_description namespace/MCP
+;     rendering.
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust's render_json_schema_to_typescript handles the full serde_json schema
 ;   surface. This slice implements the object/string/number/integer/boolean/
 ;   array/bool subset used by the currently ported CeTTa tool specs and returns
 ;   `unknown` for unsupported schema shapes, matching Rust's fallback type.
-; - Rust's build_exec_tool_description includes namespace grouping and MCP
-;   structured content type preamble. This slice preserves section ordering,
-;   code-mode-only/deferred branches, headings, and augmented tool descriptions;
-;   namespace grouping/MCP shared preamble remain out of scope until the MCP
-;   structured output schema port lands.
+; - Rust's MCP structured-content detection is preserved, but the rendered
+;   `CallToolResult<T>` type inherits the same narrow TypeScript schema
+;   renderer limitation above.
 
 !(import! &self json)
 !(import! &self list)
@@ -111,6 +111,36 @@
         $input-schema
         $output-schema))
    $output-schema)
+
+(= (codex:code-mode-tool-namespace-description
+      $namespace
+      $name
+      $description)
+   (CodexCodeModeToolNamespaceDescription
+     $namespace
+     $name
+     $description))
+
+(= (codex:code-mode-tool-namespace-description-namespace
+      (CodexCodeModeToolNamespaceDescription
+        $namespace
+        $name
+        $description))
+   $namespace)
+
+(= (codex:code-mode-tool-namespace-description-name
+      (CodexCodeModeToolNamespaceDescription
+        $namespace
+        $name
+        $description))
+   $name)
+
+(= (codex:code-mode-tool-namespace-description-description
+      (CodexCodeModeToolNamespaceDescription
+        $namespace
+        $name
+        $description))
+   $description)
 
 (= (codex:code-mode-public-tool-name)
    "exec")
@@ -281,6 +311,92 @@
 (= (codex:render-json-schema-to-typescript (JsonArray $items))
    "unknown")
 
+(= (codex:code-mode-json-schema-type-is $schema $schema-type)
+   (case $schema
+     (((JsonObject $pairs)
+       (== (json-object-get (JsonObject $pairs) "type")
+           (JsonString $schema-type)))
+      ($other False))))
+
+(= (codex:code-mode-mcp-content-schema-valid $content-schema)
+   (case $content-schema
+     (((JsonObject $pairs)
+       (case (codex:code-mode-json-schema-type-is
+               (JsonObject $pairs)
+               "array")
+         ((True
+           (codex:code-mode-json-schema-type-is
+             (json-object-get (JsonObject $pairs) "items")
+             "object"))
+          ($other False))))
+      ($other False))))
+
+(= (codex:code-mode-mcp-structured-content-or-default $properties)
+   (case (json-object-get $properties "structuredContent")
+     ((JsonNull (JsonBool True))
+      ($structured-content $structured-content))))
+
+(= (codex:code-mode-mcp-structured-content-schema-from-properties
+      $properties)
+   (case $properties
+     (((JsonObject $property-pairs)
+       (case (codex:code-mode-mcp-content-schema-valid
+               (json-object-get
+                 (JsonObject $property-pairs)
+                 "content"))
+         ((True
+           (case (codex:code-mode-json-schema-type-is
+                   (json-object-get
+                     (JsonObject $property-pairs)
+                     "isError")
+                   "boolean")
+             ((True
+               (case (codex:code-mode-json-schema-type-is
+                       (json-object-get
+                         (JsonObject $property-pairs)
+                         "_meta")
+                       "object")
+                 ((True
+                   (codex:code-mode-mcp-structured-content-or-default
+                     (JsonObject $property-pairs)))
+                  ($other CodexAbsent))))
+              ($other CodexAbsent))))
+          ($other CodexAbsent))))
+      ($other CodexAbsent))))
+
+(= (codex:code-mode-mcp-structured-content-schema CodexAbsent)
+   CodexAbsent)
+
+(= (codex:code-mode-mcp-structured-content-schema (JsonObject $pairs))
+   (case (json-object-get (JsonObject $pairs) "properties")
+     (((JsonObject $property-pairs)
+       (codex:code-mode-mcp-structured-content-schema-from-properties
+         (JsonObject $property-pairs)))
+      ($other CodexAbsent))))
+
+(= (codex:code-mode-mcp-structured-content-schema JsonNull)
+   CodexAbsent)
+
+(= (codex:code-mode-mcp-structured-content-schema (JsonBool $value))
+   CodexAbsent)
+
+(= (codex:code-mode-mcp-structured-content-schema (JsonString $value))
+   CodexAbsent)
+
+(= (codex:code-mode-mcp-structured-content-schema (JsonNumber $value))
+   CodexAbsent)
+
+(= (codex:code-mode-mcp-structured-content-schema (JsonArray $items))
+   CodexAbsent)
+
+(= (codex:code-mode-call-tool-result-output-type $structured-content-schema)
+   (case (codex:render-json-schema-to-typescript $structured-content-schema)
+     (("unknown" "CallToolResult")
+      ($structured-content-type
+       (str-concat
+         "CallToolResult<"
+         (str-concat $structured-content-type ">"))))))
+
 (= (codex:render-code-mode-tool-declaration
       $tool-name
       $input-name
@@ -347,9 +463,14 @@
    "string")
 
 (= (codex:code-mode-definition-output-type $output-schema)
-   (if (== $output-schema CodexAbsent)
-       "unknown"
-       (codex:render-json-schema-to-typescript $output-schema)))
+   (case (codex:code-mode-mcp-structured-content-schema $output-schema)
+     ((CodexAbsent
+       (if (== $output-schema CodexAbsent)
+           "unknown"
+           (codex:render-json-schema-to-typescript $output-schema)))
+      ($structured-content-schema
+       (codex:code-mode-call-tool-result-output-type
+         $structured-content-schema)))))
 
 (= (codex:freeform-tool-description
       (CodexFreeformTool
@@ -359,6 +480,27 @@
         $format-syntax
         $format-definition))
    $description)
+
+(= (codex:render-code-mode-sample-for-definition
+      (CodexCodeModeToolDefinition
+        $name
+        $tool-name
+        $description
+        $kind
+        $input-schema
+        $output-schema))
+   (case (codex:code-mode-definition-input-name $kind)
+     (($input-name
+       (case (codex:code-mode-definition-input-type $kind $input-schema)
+         (($input-type
+           (case (codex:code-mode-definition-output-type $output-schema)
+             (($output-type
+               (codex:render-code-mode-sample
+                 $description
+                 $name
+                 $input-name
+                 $input-type
+                 $output-type)))))))))))
 
 (= (codex:augment-code-mode-tool-definition
       (CodexCodeModeToolDefinition
@@ -376,26 +518,22 @@
          $kind
          $input-schema
          $output-schema)
-       (case (codex:code-mode-definition-input-name $kind)
-         (($input-name
-           (case (codex:code-mode-definition-input-type $kind $input-schema)
-             (($input-type
-               (case (codex:code-mode-definition-output-type $output-schema)
-                 (($output-type
-                   (case (codex:render-code-mode-sample
-                           $description
-                           $name
-                           $input-name
-                           $input-type
-                           $output-type)
-                     (($augmented-description
-                       (CodexCodeModeToolDefinition
-                         $name
-                         $tool-name
-                         $augmented-description
-                         $kind
-                         $input-schema
-                         $output-schema)))))))))))))))
+       (case (codex:render-code-mode-sample-for-definition
+               (CodexCodeModeToolDefinition
+                 $name
+                 $tool-name
+                 $description
+                 $kind
+                 $input-schema
+                 $output-schema))
+         (($augmented-description
+           (CodexCodeModeToolDefinition
+             $name
+             $tool-name
+             $augmented-description
+             $kind
+             $input-schema
+             $output-schema))))))
 
 (= (codex:code-mode-tool-definitions-for-spec
       (CodexToolSpecFunction
@@ -667,6 +805,9 @@
 (= (codex:code-mode-deferred-nested-tools-guidance)
    "Some nested MCP/app tools may be omitted from this description. They are still available on the global `tools` object and listed in `ALL_TOOLS`.\nTo find one, filter `ALL_TOOLS` by `name` and `description`; do not print the full `ALL_TOOLS` array. Print only a small set of relevant matches if you need to inspect them.")
 
+(= (codex:code-mode-mcp-typescript-preamble)
+   "type Role = \"user\" | \"assistant\";\ntype MetaObject = Record<string, unknown>;\ntype Annotations = {\n  audience?: Role[];\n  priority?: number;\n  lastModified?: string;\n};\ntype Icon = {\n  src: string;\n  mimeType?: string;\n  sizes?: string[];\n  theme?: \"light\" | \"dark\";\n};\ntype TextResourceContents = {\n  uri: string;\n  mimeType?: string;\n  _meta?: MetaObject;\n  text: string;\n};\ntype BlobResourceContents = {\n  uri: string;\n  mimeType?: string;\n  _meta?: MetaObject;\n  blob: string;\n};\ntype TextContent = {\n  type: \"text\";\n  text: string;\n  annotations?: Annotations;\n  _meta?: MetaObject;\n};\ntype ImageContent = {\n  type: \"image\";\n  data: string;\n  mimeType: string;\n  annotations?: Annotations;\n  _meta?: MetaObject;\n};\ntype AudioContent = {\n  type: \"audio\";\n  data: string;\n  mimeType: string;\n  annotations?: Annotations;\n  _meta?: MetaObject;\n};\ntype ResourceLink = {\n  icons?: Icon[];\n  name: string;\n  title?: string;\n  uri: string;\n  description?: string;\n  mimeType?: string;\n  annotations?: Annotations;\n  size?: number;\n  _meta?: MetaObject;\n  type: \"resource_link\";\n};\ntype EmbeddedResource = {\n  type: \"resource\";\n  resource: TextResourceContents | BlobResourceContents;\n  annotations?: Annotations;\n  _meta?: MetaObject;\n};\ntype ContentBlock =\n  | TextContent\n  | ImageContent\n  | AudioContent\n  | ResourceLink\n  | EmbeddedResource;\ntype CallToolResult<TStructured = { [key: string]: unknown }> = {\n  _meta?: MetaObject;\n  content: ContentBlock[];\n  isError?: boolean;\n  structuredContent?: TStructured;\n  [key: string]: unknown;\n};")
+
 (= (codex:code-mode-exec-description-template)
    "Run JavaScript code to orchestrate/compose tool calls\n- Evaluates the provided JavaScript code in a fresh V8 isolate as an async module.\n- All nested tools are available on the global `tools` object, for example `await tools.exec_command(...)`. Tool names are exposed as normalized JavaScript identifiers, for example `await tools.mcp__ologs__get_profile(...)`.\n- Nested tool methods take either a string or an object as their input argument.\n- Nested tools return either an object or a string, based on the description.\n- Runs raw JavaScript -- no Node, no file system, no network access, no console.\n- Accepts raw JavaScript source text, not JSON, quoted strings, or markdown code fences.\n- You may optionally start the tool input with a first-line pragma like `// @exec: {\"yield_time_ms\": 10000, \"max_output_tokens\": 1000}`.\n- `yield_time_ms` asks `exec` to yield early after that many milliseconds if the script is still running.\n- `max_output_tokens` sets the token budget for direct `exec` results. By default the result is truncated to 10000 tokens.\n- When the JS code is fully evaluated, the isolate's lifetime ends and unawaited promises are silently discarded.\n\n- Global helpers:\n- `exit()`: Immediately ends the current script successfully (like an early return from the top level).\n- `text(value: string | number | boolean | undefined | null)`: Appends a text item. Non-string values are stringified with `JSON.stringify(...)` when possible.\n- `image(imageUrlOrItem: string | { image_url: string; detail?: \"auto\" | \"low\" | \"high\" | \"original\" | null } | ImageContent, detail?: \"auto\" | \"low\" | \"high\" | \"original\" | null)`: Appends an image item. `image_url` can be an HTTPS URL or a base64-encoded `data:` URL. To forward an MCP tool image, pass an individual `ImageContent` block from `result.content`, for example `image(result.content[0])`. MCP image blocks may request detail with `_meta: { \"codex/imageDetail\": \"original\" }`. When provided, the second `detail` argument overrides any detail embedded in the first argument.\n- `store(key: string, value: any)`: stores a serializable value under a string key for later `exec` calls in the same session.\n- `load(key: string)`: returns the stored value for a string key, or `undefined` if it is missing.\n- `notify(value: string | number | boolean | undefined | null)`: immediately injects an extra `custom_tool_call_output` for the current `exec` call. Values are stringified like `text(...)`.\n- `setTimeout(callback: () => void, delayMs?: number)`: schedules a callback to run later and returns a timeout id. Pending timeouts do not keep `exec` alive by themselves; await an explicit promise if you need to wait for one.\n- `clearTimeout(timeoutId?: number)`: cancels a timeout created by `setTimeout`.\n- `ALL_TOOLS`: metadata for the enabled nested tools as `{ name, description }` entries.\n- `yield_control()`: yields the accumulated output to the model immediately while the script keeps running.")
 
@@ -679,37 +820,170 @@
            $global-name
            (str-concat "` (`" (str-concat $raw-name "`)"))))))
 
-(= (codex:code-mode-render-tool-reference ())
+(= (codex:code-mode-find-namespace-description () $namespace)
+   CodexAbsent)
+
+(= (codex:code-mode-find-namespace-description $descriptions $namespace)
+   (let ($head $tail) (decons-atom $descriptions)
+     (if (== (codex:code-mode-tool-namespace-description-namespace $head)
+             $namespace)
+         $head
+         (codex:code-mode-find-namespace-description $tail $namespace))))
+
+(= (codex:code-mode-namespace-description-for-tool
+      (CodexCodeModeToolDefinition
+        $name
+        (CodexToolName $raw-name $namespace)
+        $description
+        $kind
+        $input-schema
+        $output-schema)
+      $namespace-descriptions)
+   (if (== $namespace CodexAbsent)
+       CodexAbsent
+       (codex:code-mode-find-namespace-description
+         $namespace-descriptions
+         $namespace)))
+
+(= (codex:code-mode-next-namespace-name CodexAbsent)
+   CodexAbsent)
+
+(= (codex:code-mode-next-namespace-name
+      (CodexCodeModeToolNamespaceDescription
+        $namespace
+        $name
+        $description))
+   $name)
+
+(= (codex:code-mode-render-namespace-section CodexAbsent)
+   CodexAbsent)
+
+(= (codex:code-mode-render-namespace-section
+      (CodexCodeModeToolNamespaceDescription
+        $namespace
+        $name
+        $description))
+   (case (str-trim $description)
+     (("" CodexAbsent)
+      ($trimmed-description
+       (str-concat
+         "## "
+         (str-concat
+           $name
+           (str-concat "\n" $trimmed-description)))))))
+
+(= (codex:code-mode-render-tool-section $definition)
+   (case (codex:code-mode-tool-definition-name $definition)
+     (($name
+       (case (codex:normalize-code-mode-identifier $name)
+         (($global-name
+           (case (codex:code-mode-render-tool-heading $global-name $name)
+             (($heading
+               (case (codex:render-code-mode-sample-for-definition $definition)
+                 (($raw-description
+                   (case (str-trim $raw-description)
+                     (("" $heading)
+                      ($description
+                       (str-concat
+                         $heading
+                         (str-concat "\n" $description))))))))))))))))))
+
+(= (codex:code-mode-join-nonempty-section $namespace-section $tool-section)
+   (if (== $namespace-section CodexAbsent)
+       $tool-section
+       (str-concat
+         $namespace-section
+         (str-concat "\n\n" $tool-section))))
+
+(= (codex:code-mode-render-tool-reference-from
+      ()
+      $namespace-descriptions
+      $current-namespace)
    "")
 
-(= (codex:code-mode-render-tool-reference $definitions)
+(= (codex:code-mode-render-tool-reference-tail
+      $section
+      $tail
+      $namespace-descriptions
+      $next-namespace)
+   (if (== $tail ())
+       $section
+       (case (codex:code-mode-render-tool-reference-from
+               $tail
+               $namespace-descriptions
+               $next-namespace)
+         (($tail-reference
+           (str-concat
+             $section
+             (str-concat "\n\n" $tail-reference)))))))
+
+(= (codex:code-mode-render-tool-reference-from
+      $definitions
+      $namespace-descriptions
+      $current-namespace)
    (let ($head $tail) (decons-atom $definitions)
-     (case (codex:code-mode-tool-definition-name $head)
-       (($name
-         (case (codex:normalize-code-mode-identifier $name)
-           (($global-name
-             (case (codex:code-mode-render-tool-heading $global-name $name)
-               (($heading
-                 (case (codex:code-mode-tool-definition-description $head)
-                   (($raw-description
-                     (case (str-trim $raw-description)
-                       (($description
-                         (case (if (== $description "")
-                                   $heading
-                                   (str-concat
-                                     $heading
-                                     (str-concat "\n" $description)))
-                           (($section
-                             (if (== $tail ())
-                                 $section
-                                 (case (codex:code-mode-render-tool-reference
-                                         $tail)
-                                   (($tail-reference
-                                     (str-concat
-                                       $section
-                                       (str-concat
-                                         "\n\n"
-                                         $tail-reference))))))))))))))))))))))))))
+     (case (codex:code-mode-namespace-description-for-tool
+             $head
+             $namespace-descriptions)
+       (($namespace-description
+         (case (codex:code-mode-next-namespace-name $namespace-description)
+           (($next-namespace
+             (case (codex:code-mode-render-namespace-section
+                     (if (== $next-namespace $current-namespace)
+                         CodexAbsent
+                         $namespace-description))
+               (($namespace-section
+                 (case (codex:code-mode-render-tool-section $head)
+                   (($tool-section
+                     (case (codex:code-mode-join-nonempty-section
+                             $namespace-section
+                             $tool-section)
+                       (($section
+                         (codex:code-mode-render-tool-reference-tail
+                           $section
+                           $tail
+                           $namespace-descriptions
+                           $next-namespace))))))))))))))))))
+
+(= (codex:code-mode-render-tool-reference
+      $definitions
+      $namespace-descriptions)
+   (codex:code-mode-render-tool-reference-from
+     $definitions
+     $namespace-descriptions
+     CodexAbsent))
+
+(= (codex:code-mode-has-mcp-tools ())
+   False)
+
+(= (codex:code-mode-has-mcp-tools $definitions)
+   (let ($head $tail) (decons-atom $definitions)
+     (case (codex:code-mode-mcp-structured-content-schema
+             (codex:code-mode-tool-definition-output-schema $head))
+       ((CodexAbsent (codex:code-mode-has-mcp-tools $tail))
+        ($structured-content-schema True)))))
+
+(= (codex:code-mode-shared-mcp-types-section)
+   (str-concat
+     "Shared MCP Types:\n```ts\n"
+     (str-concat
+       (codex:code-mode-mcp-typescript-preamble)
+       "\n```")))
+
+(= (codex:code-mode-render-nested-tool-reference-with-preamble
+      $enabled-tools
+      $namespace-descriptions)
+   (case (codex:code-mode-render-tool-reference
+           $enabled-tools
+           $namespace-descriptions)
+     (($nested-tool-reference
+       (if (codex:code-mode-has-mcp-tools $enabled-tools)
+           (str-concat
+             $nested-tool-reference
+             (str-concat
+               "\n\n"
+               (codex:code-mode-shared-mcp-types-section)))
+           $nested-tool-reference)))))
 
 (= (codex:build-code-mode-exec-tool-description
       $enabled-tools
@@ -739,8 +1013,9 @@
              $with-deferred
              (str-concat
                "\n\n"
-               (codex:code-mode-render-tool-reference
-                 $enabled-tools)))))))
+               (codex:code-mode-render-nested-tool-reference-with-preamble
+                 $enabled-tools
+                 $namespace-descriptions)))))))
 
 (= (codex:create-code-mode-exec-tool
       $enabled-tools
