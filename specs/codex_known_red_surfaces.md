@@ -1,7 +1,7 @@
 # Codex Known Red Surfaces
 
-Last updated: 2026-05-21 on branch `exp/codex` after the js_repl
-runtime-helper pass.
+Last updated: 2026-05-22 on branch `exp/codex` after the tool suggestion
+discovery pass.
 
 This file records Codex-in-CeTTa surfaces that are known red while the core
 validation baseline remains green. They should not block unrelated slice work,
@@ -12,7 +12,8 @@ but they must be checked with output-aware validation because `./cetta` exits
 
 - `make -s` passes.
 - `scripts/check_codex_surfaces.sh` exits nonzero only for the two deferred
-  surfaces documented below.
+  surfaces documented below. Rechecked after commit `9f87638`
+  (`codex: add tool suggestion discovery`).
 - Four cross-module repair surfaces remain green:
   - `tests/test_codex_approval_surface.metta`
   - `tests/test_codex_config_permissions_warnings_surface.metta`
