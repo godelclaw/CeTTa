@@ -6,6 +6,8 @@
 ;   - DiscoverableTool and DiscoverablePluginInfo helper surface
 ;   - filter_tool_suggest_discoverable_tools_for_client
 ;   - create_tool_search_tool
+;   - collect_tool_search_source_infos
+;   - tool_search_result_source_namespace_description
 ;   - create_tool_suggest_tool
 ;   - collect_tool_suggest_entries
 ;   - format_discoverable_tools / plugin_summary
@@ -65,6 +67,111 @@
 (= (codex:tool-search-source-info-description
       (CodexToolSearchSourceInfo $name $description))
    $description)
+
+(= (codex:tool-search-source
+      $server-name
+      $connector-name
+      $connector-description)
+   (CodexToolSearchSource
+     $server-name
+     $connector-name
+     $connector-description))
+
+(= (codex:tool-search-source-server-name
+      (CodexToolSearchSource
+        $server-name
+        $connector-name
+        $connector-description))
+   $server-name)
+
+(= (codex:tool-search-source-connector-name
+      (CodexToolSearchSource
+        $server-name
+        $connector-name
+        $connector-description))
+   $connector-name)
+
+(= (codex:tool-search-source-connector-description
+      (CodexToolSearchSource
+        $server-name
+        $connector-name
+        $connector-description))
+   $connector-description)
+
+(= (codex:tool-search-result-source
+      $server-name
+      $tool-namespace
+      $tool-name
+      $tool
+      $connector-name
+      $connector-description)
+   (CodexToolSearchResultSource
+     $server-name
+     $tool-namespace
+     $tool-name
+     $tool
+     $connector-name
+     $connector-description))
+
+(= (codex:tool-search-result-source-server-name
+      (CodexToolSearchResultSource
+        $server-name
+        $tool-namespace
+        $tool-name
+        $tool
+        $connector-name
+        $connector-description))
+   $server-name)
+
+(= (codex:tool-search-result-source-tool-namespace
+      (CodexToolSearchResultSource
+        $server-name
+        $tool-namespace
+        $tool-name
+        $tool
+        $connector-name
+        $connector-description))
+   $tool-namespace)
+
+(= (codex:tool-search-result-source-tool-name
+      (CodexToolSearchResultSource
+        $server-name
+        $tool-namespace
+        $tool-name
+        $tool
+        $connector-name
+        $connector-description))
+   $tool-name)
+
+(= (codex:tool-search-result-source-tool
+      (CodexToolSearchResultSource
+        $server-name
+        $tool-namespace
+        $tool-name
+        $tool
+        $connector-name
+        $connector-description))
+   $tool)
+
+(= (codex:tool-search-result-source-connector-name
+      (CodexToolSearchResultSource
+        $server-name
+        $tool-namespace
+        $tool-name
+        $tool
+        $connector-name
+        $connector-description))
+   $connector-name)
+
+(= (codex:tool-search-result-source-connector-description
+      (CodexToolSearchResultSource
+        $server-name
+        $tool-namespace
+        $tool-name
+        $tool
+        $connector-name
+        $connector-description))
+   $connector-description)
 
 (= (codex:tool-search-source-description-entry $name $description)
    (CodexToolSearchSourceDescriptionEntry $name $description))
@@ -476,6 +583,64 @@
          (cons-atom
            (codex:tool-suggest-entry-id $head)
            $tail-ids))))))
+
+(= (codex:tool-search-trimmed-option $value)
+   (if (== $value CodexAbsent)
+       CodexAbsent
+       (let $trimmed (str-trim $value)
+         (if (== $trimmed "")
+             CodexAbsent
+             $trimmed))))
+
+(= (codex:collect-tool-search-source-info $source)
+   (let $connector-name
+     (codex:tool-search-trimmed-option
+       (codex:tool-search-source-connector-name $source))
+     (if (== $connector-name CodexAbsent)
+         (let $server-name
+           (str-trim (codex:tool-search-source-server-name $source))
+           (if (== $server-name "")
+               CodexAbsent
+               (codex:tool-search-source-info
+                 $server-name
+                 CodexAbsent)))
+         (codex:tool-search-source-info
+           $connector-name
+           (codex:tool-search-trimmed-option
+             (codex:tool-search-source-connector-description $source))))))
+
+(= (codex:collect-tool-search-source-infos $sources)
+   (if (== $sources ())
+       ()
+       (let ($head $tail) (decons-atom $sources)
+         (case (codex:collect-tool-search-source-infos $tail)
+           (($tail-infos
+             (case (codex:collect-tool-search-source-info $head)
+               ((CodexAbsent
+                 $tail-infos)
+                ($source-info
+                 (cons-atom $source-info $tail-infos))))))))))
+
+(= (codex:tool-search-default-namespace-description $namespace-name)
+   (str-concat
+     "Tools in the "
+     (str-concat $namespace-name " namespace.")))
+
+(= (codex:tool-search-result-source-namespace-description $source)
+   (let $connector-description
+     (codex:tool-search-trimmed-option
+       (codex:tool-search-result-source-connector-description $source))
+     (if (== $connector-description CodexAbsent)
+         (let $connector-name
+           (codex:tool-search-trimmed-option
+             (codex:tool-search-result-source-connector-name $source))
+           (if (== $connector-name CodexAbsent)
+               (codex:tool-search-default-namespace-description
+                 (codex:tool-search-result-source-tool-namespace $source))
+               (str-concat
+                 "Tools for working with "
+                 (str-concat $connector-name "."))))
+         $connector-description)))
 
 (= (codex:tool-search-source-description-merged
       $existing-description

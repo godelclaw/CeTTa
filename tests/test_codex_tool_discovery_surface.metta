@@ -101,6 +101,24 @@
       "docs"
       CodexAbsent)))
 
+(= (test:tool-search-source-inputs)
+   ((codex:tool-search-source
+      "mcp_calendar"
+      "  Google Calendar  "
+      "  Plan events and schedules.  ")
+    (codex:tool-search-source
+      "  docs  "
+      CodexAbsent
+      CodexAbsent)
+    (codex:tool-search-source
+      "  fallback-server  "
+      "   "
+      "ignored without a connector name")
+    (codex:tool-search-source
+      "   "
+      CodexAbsent
+      CodexAbsent)))
+
 !(assertEqual
   (codex:discoverable-tool-type-connector)
   "connector")
@@ -226,6 +244,20 @@
 
 !(assertEqualToResult
   (unique
+    (codex:collect-tool-search-source-infos
+      (test:tool-search-source-inputs)))
+  (((CodexToolSearchSourceInfo
+      "Google Calendar"
+      "Plan events and schedules.")
+    (CodexToolSearchSourceInfo
+      "docs"
+      CodexAbsent)
+    (CodexToolSearchSourceInfo
+      "fallback-server"
+      CodexAbsent))))
+
+!(assertEqualToResult
+  (unique
     (json-stringify
       (codex:tool-spec-json
         (codex:create-tool-search-tool
@@ -241,6 +273,42 @@
           (codex:create-tool-search-tool () 8))
         "description")))
   ("\"# Tool discovery\\n\\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\\n\\nYou have access to tools from the following sources:\\nNone currently enabled.\\nSome of the tools may not have been provided to you upfront, and you should use this tool (`tool_search`) to search for the required tools. For MCP tool discovery, always use `tool_search` instead of `list_mcp_resources` or `list_mcp_resource_templates`.\""))
+
+!(assertEqualToResult
+  (unique
+    (codex:tool-search-result-source-namespace-description
+      (codex:tool-search-result-source
+        "calendar"
+        "mcp__calendar__"
+        "create_event"
+        test-tool
+        "Google Calendar"
+        "  Manage calendar events.  ")))
+  ("Manage calendar events."))
+
+!(assertEqualToResult
+  (unique
+    (codex:tool-search-result-source-namespace-description
+      (codex:tool-search-result-source
+        "calendar"
+        "mcp__calendar__"
+        "create_event"
+        test-tool
+        "  Google Calendar  "
+        CodexAbsent)))
+  ("Tools for working with Google Calendar."))
+
+!(assertEqualToResult
+  (unique
+    (codex:tool-search-result-source-namespace-description
+      (codex:tool-search-result-source
+        "memory"
+        "mcp__memory__"
+        "read_graph"
+        test-tool
+        CodexAbsent
+        CodexAbsent)))
+  ("Tools in the mcp__memory__ namespace."))
 
 !(assertEqualToResult
   (unique
