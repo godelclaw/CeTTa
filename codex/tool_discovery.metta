@@ -8,6 +8,7 @@
 ;   - create_tool_search_tool
 ;   - collect_tool_search_source_infos
 ;   - tool_search_result_source_namespace_description
+;   - tool_search_result_source_to_loadable_tool_spec
 ;   - create_tool_suggest_tool
 ;   - collect_tool_suggest_entries
 ;   - format_discoverable_tools / plugin_summary
@@ -23,12 +24,18 @@
 ;   slice exposes a local discoverable connector record with the Rust fields
 ;   consumed by these helpers: id, name, description, install_url,
 ;   is_accessible, and is_enabled.
+; - Rust MCP tools carry an output_schema and wrap it in the internal
+;   CallToolResult output schema. The current CeTTa CodexMcpTool record does
+;   not carry output_schema yet, so deferred MCP tool conversion preserves
+;   Rust-visible Responses API JSON exactly and stores CodexAbsent internally
+;   until the MCP output-schema surface is ported.
 
 !(import! &self json)
 !(import! &self list)
 !(import! &self mcp_tool_call)
 !(import! &self str)
 !(import! &self tool_registry_plan)
+!(import! &self tool_search_entry)
 
 (= (codex:discoverable-tool-type-connector)
    "connector")
@@ -641,6 +648,46 @@
                  "Tools for working with "
                  (str-concat $connector-name "."))))
          $connector-description)))
+
+(= (codex:mcp-tool-description-or-empty $tool)
+   (case (codex:mcp-tool-description $tool)
+     ((CodexAbsent "")
+      ($description $description))))
+
+(= (codex:mcp-tool-input-schema-with-properties $schema)
+   (case $schema
+     (((JsonObject $pairs)
+       (let $properties (json-object-get (JsonObject $pairs) "properties")
+         (if (or (== $properties Empty) (== $properties JsonNull))
+             (JsonObject
+               (list:append
+                 $pairs
+                 ((JsonPair "properties" (JsonObject ())))))
+             (JsonObject $pairs))))
+      ($other $other))))
+
+(= (codex:mcp-tool-to-deferred-responses-api-tool $tool-name $tool)
+   (codex:responses-api-tool
+     $tool-name
+     (codex:mcp-tool-description-or-empty $tool)
+     False
+     True
+     (codex:mcp-tool-input-schema-with-properties
+       (codex:mcp-tool-input-schema $tool))
+     CodexAbsent))
+
+(= (codex:tool-search-result-source-to-namespace-tool $source)
+   (codex:responses-api-namespace-tool-function
+     (codex:mcp-tool-to-deferred-responses-api-tool
+       (codex:tool-search-result-source-tool-name $source)
+       (codex:tool-search-result-source-tool $source))))
+
+(= (codex:tool-search-result-source-to-loadable-tool-spec $source)
+   (codex:loadable-tool-spec-namespace
+     (codex:responses-api-namespace
+       (codex:tool-search-result-source-tool-namespace $source)
+       (codex:tool-search-result-source-namespace-description $source)
+       ((codex:tool-search-result-source-to-namespace-tool $source)))))
 
 (= (codex:tool-search-source-description-merged
       $existing-description

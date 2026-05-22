@@ -3,6 +3,7 @@
 !(import! &self codex:mcp_tool_call)
 !(import! &self codex:tool_discovery)
 !(import! &self codex:tool_registry_plan)
+!(import! &self codex:tool_search_entry)
 
 (= (test:calendar-connector)
    (codex:discoverable-tool-connector
@@ -118,6 +119,26 @@
       "   "
       CodexAbsent
       CodexAbsent)))
+
+(= (test:event-schema)
+   (JsonObject
+     ((JsonPair "type" (JsonString "object"))
+      (JsonPair
+        "properties"
+        (JsonObject
+          ((JsonPair "date" (JsonObject ()))
+           (JsonPair "title" (JsonObject ()))))))))
+
+(= (test:schema-without-properties)
+   (JsonObject
+     ((JsonPair "type" (JsonString "object")))))
+
+(= (test:calendar-mcp-tool)
+   (codex:mcp-tool
+     "create"
+     "Create Event"
+     "Create a calendar event."
+     (test:event-schema)))
 
 !(assertEqual
   (codex:discoverable-tool-type-connector)
@@ -309,6 +330,46 @@
         CodexAbsent
         CodexAbsent)))
   ("Tools in the mcp__memory__ namespace."))
+
+!(assertEqualToResult
+  (unique
+    (json-stringify
+      (codex:loadable-tool-spec-json
+        (codex:tool-search-result-source-to-loadable-tool-spec
+          (codex:tool-search-result-source
+            "calendar"
+            "mcp__calendar__"
+            "create_event"
+            (test:calendar-mcp-tool)
+            "Google Calendar"
+            "  Manage calendar events.  ")))))
+  ("{\"type\":\"namespace\",\"name\":\"mcp__calendar__\",\"description\":\"Manage calendar events.\",\"tools\":[{\"type\":\"function\",\"name\":\"create_event\",\"description\":\"Create a calendar event.\",\"strict\":false,\"defer_loading\":true,\"parameters\":{\"type\":\"object\",\"properties\":{\"date\":{},\"title\":{}}}}]}"))
+
+!(assertEqualToResult
+  (unique
+    (json-stringify
+      (codex:function-tool-parameters
+        (codex:mcp-tool-to-deferred-responses-api-tool
+          "read_graph"
+          (codex:mcp-tool
+            "read_graph"
+            CodexAbsent
+            CodexAbsent
+            (test:schema-without-properties))))))
+  ("{\"type\":\"object\",\"properties\":{}}"))
+
+!(assertEqualToResult
+  (unique
+    (json-stringify
+      (codex:responses-api-tool-json
+        (codex:mcp-tool-to-deferred-responses-api-tool
+          "read_graph"
+          (codex:mcp-tool
+            "read_graph"
+            CodexAbsent
+            CodexAbsent
+            (test:schema-without-properties))))))
+  ("{\"type\":\"function\",\"name\":\"read_graph\",\"description\":\"\",\"strict\":false,\"defer_loading\":true,\"parameters\":{\"type\":\"object\",\"properties\":{}}}"))
 
 !(assertEqualToResult
   (unique

@@ -7,7 +7,7 @@
 ;
 ; Covered in this increment:
 ; - ToolSpec / ConfiguredToolSpec / ToolHandlerSpec / ToolRegistryPlan values
-; - Responses API JSON projection for function/custom tool specs
+; - Responses API JSON projection for function/custom/namespace tool specs
 ; - Rust-shaped tool specs for exec_command, write_stdin, update_plan,
 ;   request_user_input, request_permissions, list_dir, view_image, and
 ;   js_repl, js_repl_reset, tool_search, and freeform apply_patch
@@ -91,11 +91,26 @@
      $format-syntax
      $format-definition))
 
+(= (codex:responses-api-namespace
+      $name
+      $description
+      $tools)
+   (CodexResponsesApiNamespace
+     $name
+     $description
+     $tools))
+
+(= (codex:responses-api-namespace-tool-function $tool)
+   (CodexResponsesApiNamespaceToolFunction $tool))
+
 (= (codex:tool-spec-function $tool)
    (CodexToolSpecFunction $tool))
 
 (= (codex:tool-spec-freeform $tool)
    (CodexToolSpecFreeform $tool))
+
+(= (codex:tool-spec-namespace $namespace)
+   (CodexToolSpecNamespace $namespace))
 
 (= (codex:tool-spec-tool-search
       $execution
@@ -105,6 +120,12 @@
      $execution
      $description
      $parameters))
+
+(= (codex:loadable-tool-spec-function $tool)
+   (CodexLoadableToolSpecFunction $tool))
+
+(= (codex:loadable-tool-spec-namespace $namespace)
+   (CodexLoadableToolSpecNamespace $namespace))
 
 (= (codex:configured-tool-spec $spec $supports-parallel-tool-calls)
    (CodexConfiguredToolSpec $spec $supports-parallel-tool-calls))
@@ -140,6 +161,11 @@
    $name)
 
 (= (codex:tool-spec-name
+      (CodexToolSpecNamespace
+        (CodexResponsesApiNamespace $name $description $tools)))
+   $name)
+
+(= (codex:tool-spec-name
       (CodexToolSpecToolSearch
         $execution
         $description
@@ -154,6 +180,26 @@
 
 (= (codex:tool-spec-freeform-tool (CodexToolSpecFreeform $tool))
    $tool)
+
+(= (codex:tool-spec-namespace-namespace
+      (CodexToolSpecNamespace $namespace))
+   $namespace)
+
+(= (codex:loadable-tool-spec-name
+      (CodexLoadableToolSpecFunction
+        (CodexResponsesApiTool
+          $name
+          $description
+          $strict
+          $defer-loading
+          $parameters
+          $output-schema)))
+   $name)
+
+(= (codex:loadable-tool-spec-name
+      (CodexLoadableToolSpecNamespace
+        (CodexResponsesApiNamespace $name $description $tools)))
+   $name)
 
 (= (codex:function-tool-parameters
       (CodexResponsesApiTool
@@ -185,6 +231,18 @@
         $format-syntax
         $format-definition))
    $format-definition)
+
+(= (codex:responses-api-namespace-name
+      (CodexResponsesApiNamespace $name $description $tools))
+   $name)
+
+(= (codex:responses-api-namespace-description
+      (CodexResponsesApiNamespace $name $description $tools))
+   $description)
+
+(= (codex:responses-api-namespace-tools
+      (CodexResponsesApiNamespace $name $description $tools))
+   $tools)
 
 (= (codex:configured-tool-spec-spec
       (CodexConfiguredToolSpec $spec $supports-parallel-tool-calls))
@@ -290,6 +348,86 @@
       (JsonPair "required" (codex:tool-registry-json-string-array $required))
       (JsonPair "additionalProperties" (JsonBool $additional-properties)))))
 
+(= (codex:responses-api-tool-json
+      (CodexResponsesApiTool
+        $name
+        $description
+        $strict
+        CodexAbsent
+        $parameters
+        $output-schema))
+   (JsonObject
+     ((JsonPair "type" (JsonString "function"))
+      (JsonPair "name" (JsonString $name))
+      (JsonPair "description" (JsonString $description))
+      (JsonPair "strict" (JsonBool $strict))
+      (JsonPair "parameters" $parameters))))
+
+(= (codex:responses-api-tool-json
+      (CodexResponsesApiTool
+        $name
+        $description
+        $strict
+        True
+        $parameters
+        $output-schema))
+   (JsonObject
+     ((JsonPair "type" (JsonString "function"))
+      (JsonPair "name" (JsonString $name))
+      (JsonPair "description" (JsonString $description))
+      (JsonPair "strict" (JsonBool $strict))
+      (JsonPair "defer_loading" (JsonBool True))
+      (JsonPair "parameters" $parameters))))
+
+(= (codex:responses-api-tool-json
+      (CodexResponsesApiTool
+        $name
+        $description
+        $strict
+        False
+        $parameters
+        $output-schema))
+   (JsonObject
+     ((JsonPair "type" (JsonString "function"))
+      (JsonPair "name" (JsonString $name))
+      (JsonPair "description" (JsonString $description))
+      (JsonPair "strict" (JsonBool $strict))
+      (JsonPair "defer_loading" (JsonBool False))
+      (JsonPair "parameters" $parameters))))
+
+(= (codex:responses-api-namespace-tool-json
+      (CodexResponsesApiNamespaceToolFunction $tool))
+   (codex:responses-api-tool-json $tool))
+
+(= (codex:responses-api-namespace-tool-json-items $tools)
+   (function
+     (let $json-items
+       (eval
+         (map-atom
+           $tools
+           $tool
+           (codex:responses-api-namespace-tool-json $tool)))
+       (return $json-items))))
+
+(= (codex:responses-api-namespace-json
+      (CodexResponsesApiNamespace $name $description $tools))
+   (JsonObject
+     ((JsonPair "type" (JsonString "namespace"))
+      (JsonPair "name" (JsonString $name))
+      (JsonPair "description" (JsonString $description))
+      (JsonPair
+        "tools"
+        (JsonArray
+          (codex:responses-api-namespace-tool-json-items $tools))))))
+
+(= (codex:loadable-tool-spec-json
+      (CodexLoadableToolSpecFunction $tool))
+   (codex:responses-api-tool-json $tool))
+
+(= (codex:loadable-tool-spec-json
+      (CodexLoadableToolSpecNamespace $namespace))
+   (codex:responses-api-namespace-json $namespace))
+
 (= (codex:tool-spec-json
       (CodexToolSpecFunction
         (CodexResponsesApiTool
@@ -357,6 +495,10 @@
           ((JsonPair "type" (JsonString $format-type))
            (JsonPair "syntax" (JsonString $format-syntax))
            (JsonPair "definition" (JsonString $format-definition))))))))
+
+(= (codex:tool-spec-json
+      (CodexToolSpecNamespace $namespace))
+   (codex:responses-api-namespace-json $namespace))
 
 (= (codex:tool-spec-json
       (CodexToolSpecToolSearch

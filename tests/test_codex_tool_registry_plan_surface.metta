@@ -180,6 +180,32 @@
   ("{\"type\":\"tool_search\",\"execution\":\"client\",\"description\":\"Search deferred tools.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"],\"additionalProperties\":false}}"))
 
 !(assertEqualToResult
+  (codex:tool-spec-name
+    (codex:tool-spec-namespace
+      (codex:responses-api-namespace
+        "mcp__calendar__"
+        "Plan events."
+        ())))
+  ("mcp__calendar__"))
+
+!(assertEqualToResult
+  (json-stringify
+    (codex:tool-spec-json
+      (codex:tool-spec-namespace
+        (codex:responses-api-namespace
+          "mcp__calendar__"
+          "Plan events."
+          ((codex:responses-api-namespace-tool-function
+             (codex:responses-api-tool
+               "create_event"
+               "Create a calendar event."
+               False
+               True
+               (codex:json-schema-object ())
+               CodexAbsent)))))))
+  ("{\"type\":\"namespace\",\"name\":\"mcp__calendar__\",\"description\":\"Plan events.\",\"tools\":[{\"type\":\"function\",\"name\":\"create_event\",\"description\":\"Create a calendar event.\",\"strict\":false,\"defer_loading\":true,\"parameters\":{\"type\":\"object\",\"properties\":{}}}]}"))
+
+!(assertEqualToResult
   (json-stringify
     (json-object-get
       (json-object-get
