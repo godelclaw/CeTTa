@@ -437,6 +437,7 @@ tests/test_codex_unified_exec_exec_command_surface.metta	he	metta	he_extended	ma
 tests/test_codex_unified_exec_head_tail_buffer_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_unified_exec_open_session_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_unified_exec_prepared_process_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_unified_exec_process_manager_cleanup_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_unified_exec_process_manager_state_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_unified_exec_process_pruning_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_unified_exec_process_runtime_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
