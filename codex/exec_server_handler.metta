@@ -8,6 +8,7 @@
 ;   - initialize one-shot latch and attach failure reset
 ;   - initialized notification sequencing
 ;   - require_initialized_for / require_session_attached
+;   - exec / exec_read / exec_write / terminate guard and result ordering
 ;   - reserve_http_body_stream / release_http_body_stream
 ;   - start_http_body_stream cancellation branch
 ;   - http_request reservation, runner/serialization/notification failure
@@ -28,6 +29,11 @@
 ; - Rust `http_request` runs reqwest, serde_json serialization, and async
 ;   notification send. This slice accepts those runtime outcomes symbolically
 ;   and preserves the same state transitions and error/outbound values.
+; - Rust process routes await the concrete Session process handler. This slice
+;   accepts the process outcome symbolically. For `exec_read`, the post-read
+;   state is explicit because Rust re-checks session attachment after the await;
+;   that state is consulted only after a successful process read, matching the
+;   Rust `?` short-circuit.
 
 !(import! &self list)
 !(import! &self str)
@@ -414,6 +420,84 @@
 
 (= (codex:exec-server-handler-http-check $state)
    (codex:exec-server-handler-require-initialized-for $state "http"))
+
+(= (codex:exec-server-handler-process-ok $response)
+   (CodexExecServerHandlerProcessOk $response))
+
+(= (codex:exec-server-handler-process-err $error)
+   (CodexExecServerHandlerProcessErr $error))
+
+(= (codex:exec-server-handler-process-flow-after-check
+      $state
+      (CodexExecServerHandlerRequireResultErr $error)
+      $process-outcome)
+   (CodexExecServerHandlerResultErr $state $error))
+
+(= (codex:exec-server-handler-process-flow-after-check
+      $state
+      (CodexExecServerHandlerRequireResultOk $session)
+      (CodexExecServerHandlerProcessErr $error))
+   (CodexExecServerHandlerResultErr $state $error))
+
+(= (codex:exec-server-handler-process-flow-after-check
+      $state
+      (CodexExecServerHandlerRequireResultOk $session)
+      (CodexExecServerHandlerProcessOk $response))
+   (CodexExecServerHandlerResultOk $state $response))
+
+(= (codex:exec-server-handler-exec-flow $state $process-outcome)
+   (codex:exec-server-handler-process-flow-after-check
+     $state
+     (codex:exec-server-handler-exec-check $state)
+     $process-outcome))
+
+(= (codex:exec-server-handler-exec-write-flow $state $process-outcome)
+   (codex:exec-server-handler-process-flow-after-check
+     $state
+     (codex:exec-server-handler-exec-check $state)
+     $process-outcome))
+
+(= (codex:exec-server-handler-terminate-flow $state $process-outcome)
+   (codex:exec-server-handler-process-flow-after-check
+     $state
+     (codex:exec-server-handler-exec-check $state)
+     $process-outcome))
+
+(= (codex:exec-server-handler-exec-read-flow-after-check
+      $state
+      (CodexExecServerHandlerRequireResultErr $error)
+      $process-outcome
+      $post-read-state)
+   (CodexExecServerHandlerResultErr $state $error))
+
+(= (codex:exec-server-handler-exec-read-flow-after-check
+      $state
+      (CodexExecServerHandlerRequireResultOk $session)
+      (CodexExecServerHandlerProcessErr $error)
+      $post-read-state)
+   (CodexExecServerHandlerResultErr $state $error))
+
+(= (codex:exec-server-handler-exec-read-flow-after-check
+      $state
+      (CodexExecServerHandlerRequireResultOk $session)
+      (CodexExecServerHandlerProcessOk $response)
+      $post-read-state)
+   (case (codex:exec-server-handler-require-session-attached
+           $post-read-state)
+     (((CodexExecServerHandlerRequireResultErr $error)
+       (CodexExecServerHandlerResultErr $post-read-state $error))
+      ((CodexExecServerHandlerRequireResultOk $post-read-session)
+       (CodexExecServerHandlerResultOk $post-read-state $response)))))
+
+(= (codex:exec-server-handler-exec-read-flow
+      $state
+      $process-outcome
+      $post-read-state)
+   (codex:exec-server-handler-exec-read-flow-after-check
+     $state
+     (codex:exec-server-handler-exec-check $state)
+     $process-outcome
+     $post-read-state))
 
 (= (codex:exec-server-handler-body-stream-id-contains
       ()
