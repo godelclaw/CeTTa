@@ -6,6 +6,7 @@
 ;   - JsonRpcConnectionEvent
 ;   - from_stdio reader line policy
 ;   - from_websocket frame policy
+;   - parsed-message incoming channel send failure policy
 ;   - send_disconnected / send_malformed_message
 ;   - write_jsonrpc_line_message / serialize_jsonrpc_message
 ;
@@ -16,6 +17,11 @@
 ; - Rust parses bytes into `codex_app_server_protocol::JSONRPCMessage` using
 ;   serde. This slice accepts a symbolic parse outcome and applies the same
 ;   framing, skip, and error-message policy around that boundary.
+; - Rust reader tasks await an incoming channel send after successful parsing.
+;   This slice takes that send outcome symbolically. A parsed-message send
+;   failure breaks the reader without sending a disconnected event, while
+;   malformed-message send failure is ignored by Rust's helper and the reader
+;   continues.
 ; - Rust websocket binary frames parse raw bytes. Until a byte-vector CeTTa
 ;   primitive is in this port, binary frame payloads are carried symbolically;
 ;   the success/error routing matches the Rust branch.
@@ -52,6 +58,30 @@
 
 (= (codex:exec-server-connection-parse-err $error)
    (CodexExecServerConnectionParseErr $error))
+
+(= (codex:exec-server-connection-incoming-send-ok)
+   (CodexExecServerConnectionIncomingSendOk))
+
+(= (codex:exec-server-connection-incoming-send-closed)
+   (CodexExecServerConnectionIncomingSendClosed))
+
+(= (codex:exec-server-connection-reader-step-continue $event)
+   (CodexExecServerConnectionReaderStepContinue $event))
+
+(= (codex:exec-server-connection-reader-step-break $reason $event)
+   (CodexExecServerConnectionReaderStepBreak $reason $event))
+
+(= (codex:exec-server-connection-reader-step-result-event
+      (CodexExecServerConnectionReaderStepContinue $event))
+   $event)
+
+(= (codex:exec-server-connection-reader-step-result-event
+      (CodexExecServerConnectionReaderStepBreak $reason $event))
+   $event)
+
+(= (codex:exec-server-connection-reader-step-result-reason
+      (CodexExecServerConnectionReaderStepBreak $reason $event))
+   $reason)
 
 (= (codex:exec-server-connection-send-disconnected-result
       $disconnected
@@ -142,6 +172,43 @@
                $reader-label
                $error)))))))
 
+(= (codex:exec-server-connection-stdio-line-step
+      $reader-label
+      $line
+      (CodexExecServerConnectionParseOk $message)
+      (CodexExecServerConnectionIncomingSendOk))
+   (if (== (str-trim $line) "")
+       (CodexExecServerConnectionReaderStepContinue
+         (CodexExecServerConnectionNoEvent))
+       (CodexExecServerConnectionReaderStepContinue
+         (CodexExecServerJsonRpcConnectionEventMessage $message))))
+
+(= (codex:exec-server-connection-stdio-line-step
+      $reader-label
+      $line
+      (CodexExecServerConnectionParseOk $message)
+      (CodexExecServerConnectionIncomingSendClosed))
+   (if (== (str-trim $line) "")
+       (CodexExecServerConnectionReaderStepContinue
+         (CodexExecServerConnectionNoEvent))
+       (CodexExecServerConnectionReaderStepBreak
+         (CodexExecServerConnectionReaderBreakIncomingClosed)
+         CodexAbsent)))
+
+(= (codex:exec-server-connection-stdio-line-step
+      $reader-label
+      $line
+      (CodexExecServerConnectionParseErr $error)
+      $incoming-send-outcome)
+   (if (== (str-trim $line) "")
+       (CodexExecServerConnectionReaderStepContinue
+         (CodexExecServerConnectionNoEvent))
+       (CodexExecServerConnectionReaderStepContinue
+         (CodexExecServerJsonRpcConnectionEventMalformedMessage
+           (codex:exec-server-connection-stdio-parse-error-reason
+             $reader-label
+             $error)))))
+
 (= (codex:exec-server-connection-stdio-eof-event)
    (codex:exec-server-connection-send-disconnected CodexAbsent))
 
@@ -217,6 +284,73 @@
            $error)))
       ((CodexExecServerConnectionWebsocketFrameNone)
        (codex:exec-server-connection-send-disconnected CodexAbsent)))))
+
+(= (codex:exec-server-connection-websocket-data-frame-step
+      $reader-label
+      (CodexExecServerConnectionParseOk $message)
+      (CodexExecServerConnectionIncomingSendOk))
+   (CodexExecServerConnectionReaderStepContinue
+     (CodexExecServerJsonRpcConnectionEventMessage $message)))
+
+(= (codex:exec-server-connection-websocket-data-frame-step
+      $reader-label
+      (CodexExecServerConnectionParseOk $message)
+      (CodexExecServerConnectionIncomingSendClosed))
+   (CodexExecServerConnectionReaderStepBreak
+     (CodexExecServerConnectionReaderBreakIncomingClosed)
+     CodexAbsent))
+
+(= (codex:exec-server-connection-websocket-data-frame-step
+      $reader-label
+      (CodexExecServerConnectionParseErr $error)
+      $incoming-send-outcome)
+   (CodexExecServerConnectionReaderStepContinue
+     (CodexExecServerJsonRpcConnectionEventMalformedMessage
+       (codex:exec-server-connection-websocket-parse-error-reason
+         $reader-label
+         $error))))
+
+(= (codex:exec-server-connection-websocket-frame-step
+      $reader-label
+      $frame
+      $parse-outcome
+      $incoming-send-outcome)
+   (case $frame
+     (((CodexExecServerConnectionWebsocketFrameText $text)
+       (codex:exec-server-connection-websocket-data-frame-step
+         $reader-label
+         $parse-outcome
+         $incoming-send-outcome))
+      ((CodexExecServerConnectionWebsocketFrameBinary $bytes)
+       (codex:exec-server-connection-websocket-data-frame-step
+         $reader-label
+         $parse-outcome
+         $incoming-send-outcome))
+      ((CodexExecServerConnectionWebsocketFrameClose)
+       (CodexExecServerConnectionReaderStepBreak
+         (CodexExecServerConnectionReaderBreakDisconnected CodexAbsent)
+         (CodexExecServerJsonRpcConnectionEventDisconnected CodexAbsent)))
+      ((CodexExecServerConnectionWebsocketFramePing $bytes)
+       (CodexExecServerConnectionReaderStepContinue
+         (CodexExecServerConnectionNoEvent)))
+      ((CodexExecServerConnectionWebsocketFramePong $bytes)
+       (CodexExecServerConnectionReaderStepContinue
+         (CodexExecServerConnectionNoEvent)))
+      ((CodexExecServerConnectionWebsocketFrameOther $value)
+       (CodexExecServerConnectionReaderStepContinue
+         (CodexExecServerConnectionNoEvent)))
+      ((CodexExecServerConnectionWebsocketFrameError $error)
+       (let $reason
+         (codex:exec-server-connection-websocket-read-error-reason
+           $reader-label
+           $error)
+         (CodexExecServerConnectionReaderStepBreak
+           (CodexExecServerConnectionReaderBreakDisconnected $reason)
+           (CodexExecServerJsonRpcConnectionEventDisconnected $reason))))
+      ((CodexExecServerConnectionWebsocketFrameNone)
+       (CodexExecServerConnectionReaderStepBreak
+         (CodexExecServerConnectionReaderBreakDisconnected CodexAbsent)
+         (CodexExecServerJsonRpcConnectionEventDisconnected CodexAbsent))))))
 
 (= (codex:exec-server-connection-serialize-jsonrpc-message $message)
    (json-stringify
