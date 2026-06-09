@@ -23,12 +23,12 @@
 ;   symbolic async process outcomes, then preserve the Rust router/processor
 ;   response projection and send ordering. The filesystem route-flow helpers
 ;   accept symbolic async filesystem outcomes and preserve the same
-;   router/processor response projection and send ordering. HTTP async
-;   operations remain symbolic until their runtime bridge is present. HTTP
-;   stream body reservation is intentionally left with the handler/runtime
-;   slice because Rust releases that reservation on later
-;   request/serialization/send failure, and this processor seam does not yet
-;   carry those downstream outcomes.
+;   router/processor response projection and send ordering. The HTTP
+;   route-flow helper accepts symbolic request-runner/serialization/notify
+;   outcomes and preserves `request_with_id` behavior: success returns no
+;   processor outbound message because the handler has already sent the
+;   response through its notification sink; failure is converted into a
+;   processor-sent JSON-RPC error.
 ; - Rust logs warnings/debug messages and then breaks. This slice exposes those
 ;   branch reasons as data so tests can pin them; they are not public protocol
 ;   output.
@@ -840,6 +840,50 @@
        (codex:exec-server-processor-runtime-state-handler-state
          $state)
        $file-system-outcome)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-http-request-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultErr $handler-state $error)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-error
+     $state
+     $request-id
+     $handler-state
+     $error
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-http-request-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultOk $handler-state $completed)
+      $send-outcome)
+   (CodexExecServerProcessorStepContinue
+     (codex:exec-server-processor-runtime-state-with-handler
+       $state
+       $handler-state)
+     ()))
+
+(= (codex:exec-server-processor-handle-http-request-route-flow
+      $state
+      $request-id
+      $params
+      $runner-outcome
+      $serialize-outcome
+      $notify-outcome
+      $send-outcome)
+   (codex:exec-server-processor-handle-http-request-route-result
+     $state
+     $request-id
+     (codex:exec-server-handler-http-request-flow
+       (codex:exec-server-processor-runtime-state-handler-state
+         $state)
+       $request-id
+       $params
+       $runner-outcome
+       $serialize-outcome
+       $notify-outcome)
      $send-outcome))
 
 (= (codex:exec-server-processor-handle-known-request

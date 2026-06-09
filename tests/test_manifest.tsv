@@ -208,6 +208,7 @@ tests/test_codex_exec_server_local_process_surface.metta	he	metta	he_extended	ma
 tests/test_codex_exec_server_process_id_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_process_protocol_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_processor_file_system_flow_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_exec_server_processor_http_flow_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_processor_known_routes_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_processor_process_flow_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_processor_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
