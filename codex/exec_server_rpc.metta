@@ -15,7 +15,8 @@
 ;   - JSON-RPC error constructors
 ;   - RpcClient request-id allocation, pending map routing,
 ;     notify/call serialization and send cleanup, request-from-server
-;     rejection, and drain_pending behavior
+;     rejection, reader event-loop disconnect/drain policy, and
+;     drain_pending behavior
 ;   - decode_params empty-object-to-null fallback policy
 ;
 ; Required slice-local deviations from Rust, documented for audit:
@@ -800,6 +801,143 @@
        ()
        $disconnected)
      (codex:exec-server-rpc-drain-pending-labels $pending ())))
+
+(= (codex:exec-server-rpc-reader-step-continue
+      $state
+      $client-event
+      $message-result)
+   (CodexExecServerRpcReaderStepContinue
+     $state
+     $client-event
+     $message-result))
+
+(= (codex:exec-server-rpc-reader-step-break
+      $state
+      $client-event
+      $closed-labels
+      $reason)
+   (CodexExecServerRpcReaderStepBreak
+     $state
+     $client-event
+     $closed-labels
+     $reason))
+
+(= (codex:exec-server-rpc-reader-step-result-state
+      (CodexExecServerRpcReaderStepContinue
+        $state
+        $client-event
+        $message-result))
+   $state)
+
+(= (codex:exec-server-rpc-reader-step-result-state
+      (CodexExecServerRpcReaderStepBreak
+        $state
+        $client-event
+        $closed-labels
+        $reason))
+   $state)
+
+(= (codex:exec-server-rpc-reader-step-result-client-event
+      (CodexExecServerRpcReaderStepContinue
+        $state
+        $client-event
+        $message-result))
+   $client-event)
+
+(= (codex:exec-server-rpc-reader-step-result-client-event
+      (CodexExecServerRpcReaderStepBreak
+        $state
+        $client-event
+        $closed-labels
+        $reason))
+   $client-event)
+
+(= (codex:exec-server-rpc-reader-step-result-message-result
+      (CodexExecServerRpcReaderStepContinue
+        $state
+        $client-event
+        $message-result))
+   $message-result)
+
+(= (codex:exec-server-rpc-reader-step-result-closed-labels
+      (CodexExecServerRpcReaderStepBreak
+        $state
+        $client-event
+        $closed-labels
+        $reason))
+   $closed-labels)
+
+(= (codex:exec-server-rpc-reader-step-result-reason
+      (CodexExecServerRpcReaderStepBreak
+        $state
+        $client-event
+        $closed-labels
+        $reason))
+   $reason)
+
+(= (codex:exec-server-rpc-reader-break-with-disconnected-event
+      $state
+      $event-reason
+      $break-reason)
+   (let $drained
+     (codex:exec-server-rpc-drain-pending $state)
+     (CodexExecServerRpcReaderStepBreak
+       (codex:exec-server-rpc-drain-pending-result-state $drained)
+       (CodexExecServerRpcClientEventDisconnected $event-reason)
+       (codex:exec-server-rpc-drain-pending-result-closed-labels $drained)
+       $break-reason)))
+
+(= (codex:exec-server-rpc-reader-step-message-result
+      $message-result)
+   (case $message-result
+     (((CodexExecServerRpcHandleMessageIgnored $state)
+       (CodexExecServerRpcReaderStepContinue
+         $state
+         CodexAbsent
+         $message-result))
+      ((CodexExecServerRpcHandleMessageDelivered $state $label $result)
+       (CodexExecServerRpcReaderStepContinue
+         $state
+         CodexAbsent
+         $message-result))
+      ((CodexExecServerRpcHandleMessageEvent $state $event)
+       (CodexExecServerRpcReaderStepContinue
+         $state
+         $event
+         $message-result))
+      ((CodexExecServerRpcHandleMessageProtocolError $state $message)
+       (codex:exec-server-rpc-reader-break-with-disconnected-event
+         $state
+         CodexAbsent
+         $message)))))
+
+(= (codex:exec-server-rpc-reader-step-event
+      $state
+      (CodexExecServerJsonRpcConnectionEventMessage $message))
+   (codex:exec-server-rpc-reader-step-message-result
+     (codex:exec-server-rpc-handle-server-message $state $message)))
+
+(= (codex:exec-server-rpc-reader-step-event
+      $state
+      (CodexExecServerJsonRpcConnectionEventMalformedMessage $reason))
+   (codex:exec-server-rpc-reader-break-with-disconnected-event
+     $state
+     CodexAbsent
+     $reason))
+
+(= (codex:exec-server-rpc-reader-step-event
+      $state
+      (CodexExecServerJsonRpcConnectionEventDisconnected $reason))
+   (codex:exec-server-rpc-reader-break-with-disconnected-event
+     (codex:exec-server-rpc-client-state-with-disconnected $state True)
+     $reason
+     (CodexExecServerRpcReaderBreakDisconnected $reason)))
+
+(= (codex:exec-server-rpc-reader-eof $state)
+   (codex:exec-server-rpc-reader-break-with-disconnected-event
+     $state
+     CodexAbsent
+     (CodexExecServerRpcReaderBreakIncomingClosed)))
 
 (= (codex:exec-server-rpc-decode-outcome-ok $value)
    (CodexExecServerRpcDecodeOutcomeOk $value))
