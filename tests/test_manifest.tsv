@@ -191,6 +191,7 @@ tests/test_codex_event_mapping_web_search_surface.metta	he	metta	he_extended	mai
 tests/test_codex_exec_policy_amend_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_policy_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_process_event_log_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_exec_server_client_api_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_client_session_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_connection_reader_send_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_connection_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
