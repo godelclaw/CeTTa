@@ -9,6 +9,9 @@
 ;   - initialized notification sequencing
 ;   - require_initialized_for / require_session_attached
 ;   - exec / exec_read / exec_write / terminate guard and result ordering
+;   - fs_read_file / fs_write_file / fs_create_directory /
+;     fs_get_metadata / fs_read_directory / fs_remove / fs_copy guard and
+;     result ordering
 ;   - reserve_http_body_stream / release_http_body_stream
 ;   - start_http_body_stream cancellation branch
 ;   - http_request reservation, runner/serialization/notification failure
@@ -34,11 +37,15 @@
 ;   state is explicit because Rust re-checks session attachment after the await;
 ;   that state is consulted only after a successful process read, matching the
 ;   Rust `?` short-circuit.
+; - Rust filesystem routes await the concrete FileSystemHandler after the
+;   initialized guard. This slice accepts the FileSystemHandler result
+;   symbolically and preserves the same guard-before-operation ordering.
 
 !(import! &self list)
 !(import! &self str)
 !(import! &self exec_server_rpc)
 !(import! &self exec_server_process_protocol)
+!(import! &self exec_server_file_system_handler)
 !(import! &self exec_server_http_protocol)
 
 (= (codex:exec-server-handler-session-handle
@@ -498,6 +505,65 @@
      (codex:exec-server-handler-exec-check $state)
      $process-outcome
      $post-read-state))
+
+(= (codex:exec-server-handler-fs-flow-after-check
+      $state
+      (CodexExecServerHandlerRequireResultErr $error)
+      $file-system-outcome)
+   (CodexExecServerHandlerResultErr $state $error))
+
+(= (codex:exec-server-handler-fs-flow-after-check
+      $state
+      (CodexExecServerHandlerRequireResultOk $session)
+      (CodexExecServerFsHandlerResultErr $error))
+   (CodexExecServerHandlerResultErr $state $error))
+
+(= (codex:exec-server-handler-fs-flow-after-check
+      $state
+      (CodexExecServerHandlerRequireResultOk $session)
+      (CodexExecServerFsHandlerResultOk $response))
+   (CodexExecServerHandlerResultOk $state $response))
+
+(= (codex:exec-server-handler-fs-flow $state $file-system-outcome)
+   (codex:exec-server-handler-fs-flow-after-check
+     $state
+     (codex:exec-server-handler-fs-check $state)
+     $file-system-outcome))
+
+(= (codex:exec-server-handler-fs-read-file-flow
+      $state
+      $file-system-outcome)
+   (codex:exec-server-handler-fs-flow $state $file-system-outcome))
+
+(= (codex:exec-server-handler-fs-write-file-flow
+      $state
+      $file-system-outcome)
+   (codex:exec-server-handler-fs-flow $state $file-system-outcome))
+
+(= (codex:exec-server-handler-fs-create-directory-flow
+      $state
+      $file-system-outcome)
+   (codex:exec-server-handler-fs-flow $state $file-system-outcome))
+
+(= (codex:exec-server-handler-fs-get-metadata-flow
+      $state
+      $file-system-outcome)
+   (codex:exec-server-handler-fs-flow $state $file-system-outcome))
+
+(= (codex:exec-server-handler-fs-read-directory-flow
+      $state
+      $file-system-outcome)
+   (codex:exec-server-handler-fs-flow $state $file-system-outcome))
+
+(= (codex:exec-server-handler-fs-remove-flow
+      $state
+      $file-system-outcome)
+   (codex:exec-server-handler-fs-flow $state $file-system-outcome))
+
+(= (codex:exec-server-handler-fs-copy-flow
+      $state
+      $file-system-outcome)
+   (codex:exec-server-handler-fs-flow $state $file-system-outcome))
 
 (= (codex:exec-server-handler-body-stream-id-contains
       ()
