@@ -255,3 +255,77 @@
       "first"
       "second"))
   "first")
+
+!(assertEqual
+  (codex:exec-server-client-call-flow-result-rpc-called
+    (codex:exec-server-client-call-flow
+      "already disconnected"
+      (CodexExecServerRpcOk (JsonString "ignored"))))
+  False)
+
+!(assertEqual
+  (codex:exec-server-client-call-flow-result-error
+    (codex:exec-server-client-call-flow
+      "already disconnected"
+      (CodexExecServerRpcOk (JsonString "ignored"))))
+  (CodexExecServerClientErrorDisconnected "already disconnected"))
+
+!(assertEqual
+  (codex:exec-server-client-call-flow-result-value
+    (codex:exec-server-client-call-flow
+      CodexAbsent
+      (CodexExecServerRpcOk (JsonString "ok"))))
+  (JsonString "ok"))
+
+!(assertEqual
+  (codex:exec-server-client-call-flow-result-error
+    (codex:exec-server-client-call-flow
+      CodexAbsent
+      (CodexExecServerRpcErr
+        (CodexExecServerRpcCallErrorClosed))))
+  (CodexExecServerClientErrorDisconnected
+    "exec-server transport disconnected"))
+
+!(assertEqual
+  (codex:exec-server-client-call-flow-result-latch
+    (codex:exec-server-client-call-flow
+      CodexAbsent
+      (CodexExecServerRpcErr
+        (CodexExecServerRpcCallErrorServer
+          (CodexExecServerRpcErrorError
+            -32000
+            CodexAbsent
+            "JSON-RPC transport closed")))))
+  "exec-server transport disconnected")
+
+!(assertEqual
+  (codex:exec-server-client-call-flow-result-error
+    (codex:exec-server-client-call-flow
+      CodexAbsent
+      (CodexExecServerRpcErr
+        (CodexExecServerRpcCallErrorServer
+          (CodexExecServerRpcErrorError
+            -32001
+            CodexAbsent
+            "JSON-RPC transport closed")))))
+  (CodexExecServerClientErrorServer
+    -32001
+    "JSON-RPC transport closed"))
+
+!(assertEqual
+  (codex:exec-server-client-call-flow-result-latch
+    (codex:exec-server-client-call-flow
+      CodexAbsent
+      (CodexExecServerRpcErr
+        (CodexExecServerRpcCallErrorJson
+          "response decode failed"))))
+  CodexAbsent)
+
+!(assertEqual
+  (codex:exec-server-client-call-flow-result-error
+    (codex:exec-server-client-call-flow
+      CodexAbsent
+      (CodexExecServerRpcErr
+        (CodexExecServerRpcCallErrorJson
+          "response decode failed"))))
+  (CodexExecServerClientErrorJson "response decode failed"))

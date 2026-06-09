@@ -12,6 +12,9 @@
 ;   - disconnected_message
 ;   - is_transport_closed_error
 ;   - record_disconnected first-writer latch behavior
+;   - From<RpcCallError> for ExecServerError
+;   - ExecServerClient::call disconnected preflight and
+;     transport-closed race handling
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust stores session state behind Arc, Mutex, watch channels, and a
@@ -480,6 +483,9 @@
 (= (codex:exec-server-client-error-disconnected $message)
    (CodexExecServerClientErrorDisconnected $message))
 
+(= (codex:exec-server-client-error-json $message)
+   (CodexExecServerClientErrorJson $message))
+
 (= (codex:exec-server-client-error-server $code $message)
    (CodexExecServerClientErrorServer $code $message))
 
@@ -513,3 +519,86 @@
    (if (== $existing CodexAbsent)
        (CodexExecServerClientRecordDisconnectedResult $message $message)
        (CodexExecServerClientRecordDisconnectedResult $existing $existing)))
+
+(= (codex:exec-server-client-error-from-rpc-call-error
+      (CodexExecServerRpcCallErrorClosed))
+   (CodexExecServerClientErrorClosed))
+
+(= (codex:exec-server-client-error-from-rpc-call-error
+      (CodexExecServerRpcCallErrorJson $message))
+   (CodexExecServerClientErrorJson $message))
+
+(= (codex:exec-server-client-error-from-rpc-call-error
+      (CodexExecServerRpcCallErrorServer
+        (CodexExecServerRpcErrorError $code $data $message)))
+   (CodexExecServerClientErrorServer $code $message))
+
+(= (codex:exec-server-client-call-flow-ok
+      $latch
+      $value
+      $rpc-called)
+   (CodexExecServerClientCallFlowOk $latch $value $rpc-called))
+
+(= (codex:exec-server-client-call-flow-err
+      $latch
+      $error
+      $rpc-called)
+   (CodexExecServerClientCallFlowErr $latch $error $rpc-called))
+
+(= (codex:exec-server-client-call-flow-result-latch
+      (CodexExecServerClientCallFlowOk $latch $value $rpc-called))
+   $latch)
+
+(= (codex:exec-server-client-call-flow-result-latch
+      (CodexExecServerClientCallFlowErr $latch $error $rpc-called))
+   $latch)
+
+(= (codex:exec-server-client-call-flow-result-value
+      (CodexExecServerClientCallFlowOk $latch $value $rpc-called))
+   $value)
+
+(= (codex:exec-server-client-call-flow-result-error
+      (CodexExecServerClientCallFlowErr $latch $error $rpc-called))
+   $error)
+
+(= (codex:exec-server-client-call-flow-result-rpc-called
+      (CodexExecServerClientCallFlowOk $latch $value $rpc-called))
+   $rpc-called)
+
+(= (codex:exec-server-client-call-flow-result-rpc-called
+      (CodexExecServerClientCallFlowErr $latch $error $rpc-called))
+   $rpc-called)
+
+(= (codex:exec-server-client-call-flow-after-rpc-error
+      $latch
+      $error)
+   (if (codex:exec-server-client-is-transport-closed-error $error)
+       (let $recorded
+         (codex:exec-server-client-record-disconnected
+           $latch
+           (codex:exec-server-client-disconnected-message CodexAbsent))
+         (CodexExecServerClientCallFlowErr
+           (codex:exec-server-client-record-disconnected-result-latch
+             $recorded)
+           (CodexExecServerClientErrorDisconnected
+             (codex:exec-server-client-record-disconnected-result-message
+               $recorded))
+           True))
+       (CodexExecServerClientCallFlowErr $latch $error True)))
+
+(= (codex:exec-server-client-call-flow
+      $latch
+      $rpc-result)
+   (if (not (== $latch CodexAbsent))
+       (CodexExecServerClientCallFlowErr
+         $latch
+         (CodexExecServerClientErrorDisconnected $latch)
+         False)
+       (case $rpc-result
+         (((CodexExecServerRpcOk $value)
+           (CodexExecServerClientCallFlowOk CodexAbsent $value True))
+          ((CodexExecServerRpcErr $rpc-error)
+           (codex:exec-server-client-call-flow-after-rpc-error
+             CodexAbsent
+             (codex:exec-server-client-error-from-rpc-call-error
+               $rpc-error)))))))
