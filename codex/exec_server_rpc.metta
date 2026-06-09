@@ -14,7 +14,8 @@
 ;     decode, handler-result, serialization, and Option outbound policy
 ;   - JSON-RPC error constructors
 ;   - RpcClient request-id allocation, pending map routing,
-;     request-from-server rejection, and drain_pending behavior
+;     notify/call serialization and send cleanup, request-from-server
+;     rejection, and drain_pending behavior
 ;   - decode_params empty-object-to-null fallback policy
 ;
 ; Required slice-local deviations from Rust, documented for audit:
@@ -416,6 +417,27 @@
      $pending
      $new-disconnected))
 
+(= (codex:exec-server-rpc-client-state-with-pending
+      (CodexExecServerRpcClientState
+        $next-request-id
+        $pending
+        $disconnected)
+      $new-pending)
+   (CodexExecServerRpcClientState
+     $next-request-id
+     $new-pending
+     $disconnected))
+
+(= (codex:exec-server-rpc-client-state-remove-pending
+      $state
+      $request-id)
+   (codex:exec-server-rpc-client-state-with-pending
+     $state
+     (codex:exec-server-rpc-pending-remove-result-pending
+       (codex:exec-server-rpc-pending-remove
+         (codex:exec-server-rpc-client-state-pending $state)
+         $request-id))))
+
 (= (codex:exec-server-rpc-call-start-ok $request-id $state)
    (CodexExecServerRpcCallStartOk $request-id $state))
 
@@ -435,23 +457,200 @@
    $state)
 
 (= (codex:exec-server-rpc-client-start-call $state $label)
-   (if (codex:exec-server-rpc-client-state-disconnected $state)
-       (CodexExecServerRpcCallStartClosed $state)
-       (let $request-id
-         (CodexExecServerRpcRequestIdInteger
-           (codex:exec-server-rpc-client-state-next-request-id $state))
-         (CodexExecServerRpcCallStartOk
-           $request-id
-           (CodexExecServerRpcClientState
-             (+
-               (codex:exec-server-rpc-client-state-next-request-id $state)
-               1)
-             (codex:exec-server-rpc-pending-insert
+   (let $request-id
+     (CodexExecServerRpcRequestIdInteger
+       (codex:exec-server-rpc-client-state-next-request-id $state))
+     (let $next-request-id
+       (+ (codex:exec-server-rpc-client-state-next-request-id $state) 1)
+       (if (codex:exec-server-rpc-client-state-disconnected $state)
+           (CodexExecServerRpcCallStartClosed
+             (CodexExecServerRpcClientState
+               $next-request-id
                (codex:exec-server-rpc-client-state-pending $state)
-               $request-id
-               $label)
-             (codex:exec-server-rpc-client-state-disconnected
-               $state))))))
+               True))
+           (CodexExecServerRpcCallStartOk
+             $request-id
+             (CodexExecServerRpcClientState
+               $next-request-id
+               (codex:exec-server-rpc-pending-insert
+                 (codex:exec-server-rpc-client-state-pending $state)
+                 $request-id
+                 $label)
+               (codex:exec-server-rpc-client-state-disconnected
+                 $state)))))))
+
+(= (codex:exec-server-rpc-client-send-ok)
+   (CodexExecServerRpcClientSendOk))
+
+(= (codex:exec-server-rpc-client-send-closed)
+   (CodexExecServerRpcClientSendClosed))
+
+(= (codex:exec-server-rpc-client-notify-result-ok $message)
+   (CodexExecServerRpcClientNotifyResultOk $message))
+
+(= (codex:exec-server-rpc-client-notify-result-err $message)
+   (CodexExecServerRpcClientNotifyResultErr $message))
+
+(= (codex:exec-server-rpc-client-notify-result-message
+      (CodexExecServerRpcClientNotifyResultOk $message))
+   $message)
+
+(= (codex:exec-server-rpc-client-notify-result-message
+      (CodexExecServerRpcClientNotifyResultErr $message))
+   $message)
+
+(= (codex:exec-server-rpc-client-notify-flow
+      $method
+      (CodexExecServerRpcSerializeOutcomeErr $message)
+      $send-outcome)
+   (CodexExecServerRpcClientNotifyResultErr $message))
+
+(= (codex:exec-server-rpc-client-notify-flow
+      $method
+      (CodexExecServerRpcSerializeOutcomeOk $params-json)
+      (CodexExecServerRpcClientSendClosed))
+   (CodexExecServerRpcClientNotifyResultErr
+     "JSON-RPC transport closed"))
+
+(= (codex:exec-server-rpc-client-notify-flow
+      $method
+      (CodexExecServerRpcSerializeOutcomeOk $params-json)
+      (CodexExecServerRpcClientSendOk))
+   (CodexExecServerRpcClientNotifyResultOk
+     (CodexExecServerRpcMessageNotification
+       (CodexExecServerRpcNotification $method $params-json))))
+
+(= (codex:exec-server-rpc-client-call-dispatch-awaiting
+      $state
+      $request-id
+      $message)
+   (CodexExecServerRpcClientCallDispatchAwaiting
+     $state
+     $request-id
+     $message))
+
+(= (codex:exec-server-rpc-client-call-dispatch-err
+      $state
+      $error)
+   (CodexExecServerRpcClientCallDispatchErr $state $error))
+
+(= (codex:exec-server-rpc-client-call-dispatch-result-state
+      (CodexExecServerRpcClientCallDispatchAwaiting
+        $state
+        $request-id
+        $message))
+   $state)
+
+(= (codex:exec-server-rpc-client-call-dispatch-result-state
+      (CodexExecServerRpcClientCallDispatchErr $state $error))
+   $state)
+
+(= (codex:exec-server-rpc-client-call-dispatch-result-request-id
+      (CodexExecServerRpcClientCallDispatchAwaiting
+        $state
+        $request-id
+        $message))
+   $request-id)
+
+(= (codex:exec-server-rpc-client-call-dispatch-result-message
+      (CodexExecServerRpcClientCallDispatchAwaiting
+        $state
+        $request-id
+        $message))
+   $message)
+
+(= (codex:exec-server-rpc-client-call-dispatch-result-error
+      (CodexExecServerRpcClientCallDispatchErr $state $error))
+   $error)
+
+(= (codex:exec-server-rpc-client-call-dispatch-after-start
+      $state
+      $request-id
+      $method
+      (CodexExecServerRpcSerializeOutcomeErr $message)
+      $send-outcome)
+   (CodexExecServerRpcClientCallDispatchErr
+     (codex:exec-server-rpc-client-state-remove-pending
+       $state
+       $request-id)
+     (CodexExecServerRpcCallErrorJson $message)))
+
+(= (codex:exec-server-rpc-client-call-dispatch-after-start
+      $state
+      $request-id
+      $method
+      (CodexExecServerRpcSerializeOutcomeOk $params-json)
+      (CodexExecServerRpcClientSendClosed))
+   (CodexExecServerRpcClientCallDispatchErr
+     (codex:exec-server-rpc-client-state-remove-pending
+       $state
+       $request-id)
+     (CodexExecServerRpcCallErrorClosed)))
+
+(= (codex:exec-server-rpc-client-call-dispatch-after-start
+      $state
+      $request-id
+      $method
+      (CodexExecServerRpcSerializeOutcomeOk $params-json)
+      (CodexExecServerRpcClientSendOk))
+   (CodexExecServerRpcClientCallDispatchAwaiting
+     $state
+     $request-id
+     (CodexExecServerRpcMessageRequest
+       (CodexExecServerRpcRequest
+         $request-id
+         $method
+         $params-json
+         CodexAbsent))))
+
+(= (codex:exec-server-rpc-client-call-dispatch
+      $state
+      $method
+      $label
+      $serialize-outcome
+      $send-outcome)
+   (case (codex:exec-server-rpc-client-start-call $state $label)
+     (((CodexExecServerRpcCallStartClosed $next-state)
+       (CodexExecServerRpcClientCallDispatchErr
+         $next-state
+         (CodexExecServerRpcCallErrorClosed)))
+      ((CodexExecServerRpcCallStartOk $request-id $next-state)
+       (codex:exec-server-rpc-client-call-dispatch-after-start
+         $next-state
+         $request-id
+         $method
+         $serialize-outcome
+         $send-outcome)))))
+
+(= (codex:exec-server-rpc-client-call-finish-ok $value)
+   (CodexExecServerRpcClientCallFinishOk $value))
+
+(= (codex:exec-server-rpc-client-call-finish-err $error)
+   (CodexExecServerRpcClientCallFinishErr $error))
+
+(= (codex:exec-server-rpc-client-call-finish-result-value
+      (CodexExecServerRpcClientCallFinishOk $value))
+   $value)
+
+(= (codex:exec-server-rpc-client-call-finish-result-error
+      (CodexExecServerRpcClientCallFinishErr $error))
+   $error)
+
+(= (codex:exec-server-rpc-client-call-finish
+      (CodexExecServerRpcErr $error)
+      $deserialize-outcome)
+   (CodexExecServerRpcClientCallFinishErr $error))
+
+(= (codex:exec-server-rpc-client-call-finish
+      (CodexExecServerRpcOk $json)
+      (CodexExecServerRpcDecodeOutcomeErr $message))
+   (CodexExecServerRpcClientCallFinishErr
+     (CodexExecServerRpcCallErrorJson $message)))
+
+(= (codex:exec-server-rpc-client-call-finish
+      (CodexExecServerRpcOk $json)
+      (CodexExecServerRpcDecodeOutcomeOk $value))
+   (CodexExecServerRpcClientCallFinishOk $value))
 
 (= (codex:exec-server-rpc-handle-message-ignored $state)
    (CodexExecServerRpcHandleMessageIgnored $state))

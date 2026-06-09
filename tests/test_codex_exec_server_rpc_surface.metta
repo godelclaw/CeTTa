@@ -313,7 +313,7 @@
       True)
     "blocked")
   (CodexExecServerRpcCallStartClosed
-    (CodexExecServerRpcClientState 1 () True)))
+    (CodexExecServerRpcClientState 2 () True)))
 
 !(assertEqual
   (codex:exec-server-rpc-drain-pending-result-closed-labels
