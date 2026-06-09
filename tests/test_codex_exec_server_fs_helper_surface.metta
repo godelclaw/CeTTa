@@ -1,5 +1,6 @@
 !(register-module! ../codex)
 !(import! &self json)
+!(import! &self str)
 !(import! &self codex:exec_server_rpc)
 !(import! &self codex:exec_server_file_system_protocol)
 !(import! &self codex:exec_server_fs_helper)
@@ -22,6 +23,16 @@
 
 (= (test:helper-error $kind $message)
    (codex:exec-server-fs-helper-file-system-error $kind $message))
+
+(= (test:read-file-request)
+   (codex:exec-server-fs-helper-request-read-file
+     (codex:exec-server-fs-read-file-params
+       "/repo/file.txt"
+       CodexAbsent)))
+
+(= (test:read-file-payload)
+   (codex:exec-server-fs-helper-payload-read-file
+     (codex:exec-server-fs-read-file-response "aGk=")))
 
 !(assertEqual
   (codex:exec-server-fs-helper-arg1)
@@ -284,3 +295,152 @@
           (codex:exec-server-fs-helper-error-kind-other)
           "copy failed"))))
   (CodexExecServerRpcErrorError -32603 CodexAbsent "copy failed"))
+
+!(assertEqual
+  (codex:exec-server-fs-helper-main-exit-code
+    (codex:exec-server-fs-helper-main-flow
+      (codex:exec-server-fs-helper-main-runtime-err
+        "builder failed")
+      (codex:exec-server-fs-helper-main-run-main-ok)))
+  1)
+
+!(assertEqual
+  (codex:exec-server-fs-helper-main-stderr
+    (codex:exec-server-fs-helper-main-flow
+      (codex:exec-server-fs-helper-main-runtime-err
+        "builder failed")
+      (codex:exec-server-fs-helper-main-run-main-ok)))
+  (str-concat
+    "failed to start fs sandbox helper runtime: builder failed"
+    "\n"))
+
+!(assertEqual
+  (codex:exec-server-fs-helper-main-flow
+    (codex:exec-server-fs-helper-main-runtime-ok)
+    (codex:exec-server-fs-helper-main-run-main-ok))
+  (CodexExecServerFsHelperMainResult 0 CodexAbsent))
+
+!(assertEqual
+  (codex:exec-server-fs-helper-main-stderr
+    (codex:exec-server-fs-helper-main-flow
+      (codex:exec-server-fs-helper-main-runtime-ok)
+      (codex:exec-server-fs-helper-main-run-main-err
+        "parse failed")))
+  (str-concat "fs sandbox helper failed: parse failed" "\n"))
+
+!(assertEqual
+  (codex:exec-server-fs-helper-main-response-from-direct
+    (codex:exec-server-fs-helper-run-main-direct-ok
+      (test:read-file-payload)))
+  (CodexExecServerFsHelperResponseOk
+    (CodexExecServerFsHelperPayloadReadFile
+      (CodexExecServerFsReadFileResponse "aGk="))))
+
+!(assertEqual
+  (codex:exec-server-fs-helper-main-response-from-direct
+    (codex:exec-server-fs-helper-run-main-direct-err
+      (codex:exec-server-rpc-invalid-request "bad request")))
+  (CodexExecServerFsHelperResponseError
+    (CodexExecServerRpcErrorError -32600 CodexAbsent "bad request")))
+
+!(assertEqual
+  (codex:exec-server-fs-helper-run-main-flow
+    (codex:exec-server-fs-helper-run-main-read-stdin-err
+      "stdin failed")
+    (codex:exec-server-fs-helper-run-main-parse-request-ok
+      (test:read-file-request))
+    (codex:exec-server-fs-helper-run-main-direct-ok
+      (test:read-file-payload))
+    (codex:exec-server-fs-helper-run-main-serialize-response-ok
+      "encoded")
+    (codex:exec-server-fs-helper-run-main-write-response-ok)
+    (codex:exec-server-fs-helper-run-main-write-newline-ok))
+  (CodexExecServerFsHelperRunMainResultErr "" "stdin failed"))
+
+!(assertEqual
+  (codex:exec-server-fs-helper-run-main-flow
+    (codex:exec-server-fs-helper-run-main-read-stdin-ok
+      "{json}")
+    (codex:exec-server-fs-helper-run-main-parse-request-err
+      "expected value")
+    (codex:exec-server-fs-helper-run-main-direct-ok
+      (test:read-file-payload))
+    (codex:exec-server-fs-helper-run-main-serialize-response-ok
+      "encoded")
+    (codex:exec-server-fs-helper-run-main-write-response-ok)
+    (codex:exec-server-fs-helper-run-main-write-newline-ok))
+  (CodexExecServerFsHelperRunMainResultErr "" "expected value"))
+
+!(assertEqual
+  (codex:exec-server-fs-helper-run-main-flow
+    (codex:exec-server-fs-helper-run-main-read-stdin-ok
+      "{json}")
+    (codex:exec-server-fs-helper-run-main-parse-request-ok
+      (test:read-file-request))
+    (codex:exec-server-fs-helper-run-main-direct-ok
+      (test:read-file-payload))
+    (codex:exec-server-fs-helper-run-main-serialize-response-ok
+      "encoded")
+    (codex:exec-server-fs-helper-run-main-write-response-ok)
+    (codex:exec-server-fs-helper-run-main-write-newline-ok))
+  (CodexExecServerFsHelperRunMainResultOk
+    (str-concat "encoded" "\n")))
+
+!(assertEqual
+  (codex:exec-server-fs-helper-run-main-flow
+    (codex:exec-server-fs-helper-run-main-read-stdin-ok
+      "{json}")
+    (codex:exec-server-fs-helper-run-main-parse-request-ok
+      (test:read-file-request))
+    (codex:exec-server-fs-helper-run-main-direct-err
+      (codex:exec-server-rpc-internal-error "fs failed"))
+    (codex:exec-server-fs-helper-run-main-serialize-response-ok
+      "error-json")
+    (codex:exec-server-fs-helper-run-main-write-response-ok)
+    (codex:exec-server-fs-helper-run-main-write-newline-ok))
+  (CodexExecServerFsHelperRunMainResultOk
+    (str-concat "error-json" "\n")))
+
+!(assertEqual
+  (codex:exec-server-fs-helper-run-main-flow
+    (codex:exec-server-fs-helper-run-main-read-stdin-ok
+      "{json}")
+    (codex:exec-server-fs-helper-run-main-parse-request-ok
+      (test:read-file-request))
+    (codex:exec-server-fs-helper-run-main-direct-ok
+      (test:read-file-payload))
+    (codex:exec-server-fs-helper-run-main-serialize-response-err
+      "serialize failed")
+    (codex:exec-server-fs-helper-run-main-write-response-ok)
+    (codex:exec-server-fs-helper-run-main-write-newline-ok))
+  (CodexExecServerFsHelperRunMainResultErr "" "serialize failed"))
+
+!(assertEqual
+  (codex:exec-server-fs-helper-run-main-flow
+    (codex:exec-server-fs-helper-run-main-read-stdin-ok
+      "{json}")
+    (codex:exec-server-fs-helper-run-main-parse-request-ok
+      (test:read-file-request))
+    (codex:exec-server-fs-helper-run-main-direct-ok
+      (test:read-file-payload))
+    (codex:exec-server-fs-helper-run-main-serialize-response-ok
+      "encoded")
+    (codex:exec-server-fs-helper-run-main-write-response-err
+      "stdout failed")
+    (codex:exec-server-fs-helper-run-main-write-newline-ok))
+  (CodexExecServerFsHelperRunMainResultErr "" "stdout failed"))
+
+!(assertEqual
+  (codex:exec-server-fs-helper-run-main-flow
+    (codex:exec-server-fs-helper-run-main-read-stdin-ok
+      "{json}")
+    (codex:exec-server-fs-helper-run-main-parse-request-ok
+      (test:read-file-request))
+    (codex:exec-server-fs-helper-run-main-direct-ok
+      (test:read-file-payload))
+    (codex:exec-server-fs-helper-run-main-serialize-response-ok
+      "encoded")
+    (codex:exec-server-fs-helper-run-main-write-response-ok)
+    (codex:exec-server-fs-helper-run-main-write-newline-err
+      "newline failed"))
+  (CodexExecServerFsHelperRunMainResultErr "encoded" "newline failed"))

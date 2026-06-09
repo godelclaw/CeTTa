@@ -6,6 +6,10 @@
 ;   - FsHelperRequest / FsHelperResponse / FsHelperPayload serde envelopes
 ;   - FsHelperPayload operation and expect_* mismatch policy
 ;   - run_direct_request response shaping, option defaults, and error mapping
+; - openai-codex/codex-rs/exec-server/src/fs_helper_main.rs
+;   - main runtime startup, run_main exit-code, and stderr policy
+;   - run_main stdin read, request parse, response wrapping, response
+;     serialization, stdout write, and newline write ordering
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust executes filesystem operations asynchronously through DirectFileSystem.
@@ -19,6 +23,10 @@
 ; - Rust byte vectors may contain arbitrary bytes. This slice represents bytes
 ;   as current CeTTa text at the boundary; binary materialization belongs in
 ;   the eventual filesystem runtime bridge.
+; - Rust `main` and `run_main` perform tokio runtime startup, stdin/stdout I/O,
+;   serde parsing, and serde serialization. This slice takes those runtime
+;   outcomes symbolically while preserving Rust's branch order, response
+;   wrapping, stderr text, and stdout write/newline ordering.
 
 !(import! &self json)
 !(import! &self str)
@@ -552,3 +560,204 @@
        (codex:exec-server-fs-helper-run-direct-copy
          $params
          $operation-outcome)))))
+
+(= (codex:exec-server-fs-helper-main-runtime-ok)
+   (CodexExecServerFsHelperMainRuntimeOk))
+
+(= (codex:exec-server-fs-helper-main-runtime-err $message)
+   (CodexExecServerFsHelperMainRuntimeErr $message))
+
+(= (codex:exec-server-fs-helper-run-main-read-stdin-ok $input)
+   (CodexExecServerFsHelperRunMainReadStdinOk $input))
+
+(= (codex:exec-server-fs-helper-run-main-read-stdin-err $message)
+   (CodexExecServerFsHelperRunMainReadStdinErr $message))
+
+(= (codex:exec-server-fs-helper-run-main-parse-request-ok $request)
+   (CodexExecServerFsHelperRunMainParseRequestOk $request))
+
+(= (codex:exec-server-fs-helper-run-main-parse-request-err $message)
+   (CodexExecServerFsHelperRunMainParseRequestErr $message))
+
+(= (codex:exec-server-fs-helper-run-main-direct-ok $payload)
+   (CodexExecServerFsHelperResultOk $payload))
+
+(= (codex:exec-server-fs-helper-run-main-direct-err $error)
+   (CodexExecServerFsHelperResultErr $error))
+
+(= (codex:exec-server-fs-helper-run-main-serialize-response-ok $text)
+   (CodexExecServerFsHelperRunMainSerializeResponseOk $text))
+
+(= (codex:exec-server-fs-helper-run-main-serialize-response-err
+      $message)
+   (CodexExecServerFsHelperRunMainSerializeResponseErr $message))
+
+(= (codex:exec-server-fs-helper-run-main-write-response-ok)
+   (CodexExecServerFsHelperRunMainWriteResponseOk))
+
+(= (codex:exec-server-fs-helper-run-main-write-response-err $message)
+   (CodexExecServerFsHelperRunMainWriteResponseErr $message))
+
+(= (codex:exec-server-fs-helper-run-main-write-newline-ok)
+   (CodexExecServerFsHelperRunMainWriteNewlineOk))
+
+(= (codex:exec-server-fs-helper-run-main-write-newline-err $message)
+   (CodexExecServerFsHelperRunMainWriteNewlineErr $message))
+
+(= (codex:exec-server-fs-helper-run-main-result-ok $stdout)
+   (CodexExecServerFsHelperRunMainResultOk $stdout))
+
+(= (codex:exec-server-fs-helper-run-main-result-err
+      $stdout
+      $message)
+   (CodexExecServerFsHelperRunMainResultErr $stdout $message))
+
+(= (codex:exec-server-fs-helper-run-main-result-stdout
+      (CodexExecServerFsHelperRunMainResultOk $stdout))
+   $stdout)
+
+(= (codex:exec-server-fs-helper-run-main-result-stdout
+      (CodexExecServerFsHelperRunMainResultErr $stdout $message))
+   $stdout)
+
+(= (codex:exec-server-fs-helper-run-main-result-error
+      (CodexExecServerFsHelperRunMainResultErr $stdout $message))
+   $message)
+
+(= (codex:exec-server-fs-helper-main-result
+      $exit-code
+      $stderr)
+   (CodexExecServerFsHelperMainResult $exit-code $stderr))
+
+(= (codex:exec-server-fs-helper-main-exit-code
+      (CodexExecServerFsHelperMainResult $exit-code $stderr))
+   $exit-code)
+
+(= (codex:exec-server-fs-helper-main-stderr
+      (CodexExecServerFsHelperMainResult $exit-code $stderr))
+   $stderr)
+
+(= (codex:exec-server-fs-helper-main-run-main-ok)
+   (CodexExecServerFsHelperRunMainResultOk ""))
+
+(= (codex:exec-server-fs-helper-main-run-main-err $message)
+   (CodexExecServerFsHelperRunMainResultErr "" $message))
+
+(= (codex:exec-server-fs-helper-main-eprintln-stderr $message)
+   (str-concat $message "\n"))
+
+(= (codex:exec-server-fs-helper-main-flow
+      (CodexExecServerFsHelperMainRuntimeErr $message)
+      $run-main-result)
+   (CodexExecServerFsHelperMainResult
+     1
+     (codex:exec-server-fs-helper-main-eprintln-stderr
+       (format-args
+         "failed to start fs sandbox helper runtime: {}"
+         ($message)))))
+
+(= (codex:exec-server-fs-helper-main-flow
+      (CodexExecServerFsHelperMainRuntimeOk)
+      (CodexExecServerFsHelperRunMainResultOk $stdout))
+   (CodexExecServerFsHelperMainResult 0 CodexAbsent))
+
+(= (codex:exec-server-fs-helper-main-flow
+      (CodexExecServerFsHelperMainRuntimeOk)
+      (CodexExecServerFsHelperRunMainResultErr $stdout $message))
+   (CodexExecServerFsHelperMainResult
+     1
+     (codex:exec-server-fs-helper-main-eprintln-stderr
+       (format-args "fs sandbox helper failed: {}" ($message)))))
+
+(= (codex:exec-server-fs-helper-main-response-from-direct
+      (CodexExecServerFsHelperResultOk $payload))
+   (CodexExecServerFsHelperResponseOk $payload))
+
+(= (codex:exec-server-fs-helper-main-response-from-direct
+      (CodexExecServerFsHelperResultErr $error))
+   (CodexExecServerFsHelperResponseError $error))
+
+(= (codex:exec-server-fs-helper-run-main-after-response
+      $response
+      (CodexExecServerFsHelperRunMainSerializeResponseErr $message)
+      $write-response-outcome
+      $write-newline-outcome)
+   (CodexExecServerFsHelperRunMainResultErr "" $message))
+
+(= (codex:exec-server-fs-helper-run-main-after-response
+      $response
+      (CodexExecServerFsHelperRunMainSerializeResponseOk $text)
+      (CodexExecServerFsHelperRunMainWriteResponseErr $message)
+      $write-newline-outcome)
+   (CodexExecServerFsHelperRunMainResultErr "" $message))
+
+(= (codex:exec-server-fs-helper-run-main-after-response
+      $response
+      (CodexExecServerFsHelperRunMainSerializeResponseOk $text)
+      (CodexExecServerFsHelperRunMainWriteResponseOk)
+      (CodexExecServerFsHelperRunMainWriteNewlineErr $message))
+   (CodexExecServerFsHelperRunMainResultErr $text $message))
+
+(= (codex:exec-server-fs-helper-run-main-after-response
+      $response
+      (CodexExecServerFsHelperRunMainSerializeResponseOk $text)
+      (CodexExecServerFsHelperRunMainWriteResponseOk)
+      (CodexExecServerFsHelperRunMainWriteNewlineOk))
+   (CodexExecServerFsHelperRunMainResultOk
+     (str-concat $text "\n")))
+
+(= (codex:exec-server-fs-helper-run-main-after-direct
+      $direct-outcome
+      $serialize-outcome
+      $write-response-outcome
+      $write-newline-outcome)
+   (codex:exec-server-fs-helper-run-main-after-response
+     (codex:exec-server-fs-helper-main-response-from-direct
+       $direct-outcome)
+     $serialize-outcome
+     $write-response-outcome
+     $write-newline-outcome))
+
+(= (codex:exec-server-fs-helper-run-main-after-parse
+      $request
+      $direct-outcome
+      $serialize-outcome
+      $write-response-outcome
+      $write-newline-outcome)
+   (codex:exec-server-fs-helper-run-main-after-direct
+     $direct-outcome
+     $serialize-outcome
+     $write-response-outcome
+     $write-newline-outcome))
+
+(= (codex:exec-server-fs-helper-run-main-flow
+      (CodexExecServerFsHelperRunMainReadStdinErr $message)
+      $parse-outcome
+      $direct-outcome
+      $serialize-outcome
+      $write-response-outcome
+      $write-newline-outcome)
+   (CodexExecServerFsHelperRunMainResultErr "" $message))
+
+(= (codex:exec-server-fs-helper-run-main-flow
+      (CodexExecServerFsHelperRunMainReadStdinOk $input)
+      (CodexExecServerFsHelperRunMainParseRequestErr $message)
+      $direct-outcome
+      $serialize-outcome
+      $write-response-outcome
+      $write-newline-outcome)
+   (CodexExecServerFsHelperRunMainResultErr "" $message))
+
+(= (codex:exec-server-fs-helper-run-main-flow
+      (CodexExecServerFsHelperRunMainReadStdinOk $input)
+      (CodexExecServerFsHelperRunMainParseRequestOk $request)
+      $direct-outcome
+      $serialize-outcome
+      $write-response-outcome
+      $write-newline-outcome)
+   (codex:exec-server-fs-helper-run-main-after-parse
+     $request
+     $direct-outcome
+     $serialize-outcome
+     $write-response-outcome
+     $write-newline-outcome))
