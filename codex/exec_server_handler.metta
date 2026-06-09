@@ -10,6 +10,8 @@
 ;   - require_initialized_for / require_session_attached
 ;   - reserve_http_body_stream / release_http_body_stream
 ;   - start_http_body_stream cancellation branch
+;   - http_request reservation, runner/serialization/notification failure
+;     release ordering, notification response shape, and body-stream startup
 ;
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust owns Arc, Mutex, AtomicBool, CancellationToken, TaskTracker, a live
@@ -23,6 +25,9 @@
 ; - Rust tracks active HTTP body stream ids in a `HashSet<String>`. This slice
 ;   stores ids in a list and observes only exact membership/removal, matching
 ;   the visible duplicate-reservation behavior.
+; - Rust `http_request` runs reqwest, serde_json serialization, and async
+;   notification send. This slice accepts those runtime outcomes symbolically
+;   and preserves the same state transitions and error/outbound values.
 
 !(import! &self list)
 !(import! &self str)
@@ -521,7 +526,154 @@
                (codex:exec-server-handler-state-background-task-count
                  $state)
                1))
-           (CodexExecServerHandlerBodyStreamStarted)))))
+         (CodexExecServerHandlerBodyStreamStarted)))))
+
+(= (codex:exec-server-handler-http-runner-ok
+      $response
+      $pending-stream)
+   (CodexExecServerHandlerHttpRunnerOk $response $pending-stream))
+
+(= (codex:exec-server-handler-http-runner-err $error)
+   (CodexExecServerHandlerHttpRunnerErr $error))
+
+(= (codex:exec-server-handler-http-serialize-ok)
+   (CodexExecServerHandlerHttpSerializeOk))
+
+(= (codex:exec-server-handler-http-serialize-err $message)
+   (CodexExecServerHandlerHttpSerializeErr $message))
+
+(= (codex:exec-server-handler-http-notify-ok)
+   (CodexExecServerHandlerHttpNotifyOk))
+
+(= (codex:exec-server-handler-http-notify-err $error)
+   (CodexExecServerHandlerHttpNotifyErr $error))
+
+(= (codex:exec-server-handler-http-request-completed
+      $outbound-response
+      $body-stream-action)
+   (CodexExecServerHandlerHttpRequestCompleted
+     $outbound-response
+     $body-stream-action))
+
+(= (codex:exec-server-handler-http-request-completed-outbound-response
+      (CodexExecServerHandlerHttpRequestCompleted
+        $outbound-response
+        $body-stream-action))
+   $outbound-response)
+
+(= (codex:exec-server-handler-http-request-completed-body-stream-action
+      (CodexExecServerHandlerHttpRequestCompleted
+        $outbound-response
+        $body-stream-action))
+   $body-stream-action)
+
+(= (codex:exec-server-handler-release-pending-http-body-stream
+      $state
+      CodexAbsent)
+   $state)
+
+(= (codex:exec-server-handler-release-pending-http-body-stream
+      $state
+      (CodexExecServerHandlerPendingHttpBodyStream $request-id))
+   (codex:exec-server-handler-release-http-body-stream
+     $state
+     $request-id))
+
+(= (codex:exec-server-handler-release-request-http-body-stream-if-needed
+      $state
+      $params)
+   (if (codex:exec-server-http-request-params-stream-response $params)
+       (codex:exec-server-handler-release-http-body-stream
+         $state
+         (codex:exec-server-http-request-params-request-id $params))
+       $state))
+
+(= (codex:exec-server-handler-http-request-flow-after-runner-ok
+      $state
+      $request-id
+      $response
+      $pending-stream
+      (CodexExecServerHandlerHttpSerializeErr $message)
+      $notify-outcome)
+   (CodexExecServerHandlerResultErr
+     (codex:exec-server-handler-release-pending-http-body-stream
+       $state
+       $pending-stream)
+     (codex:exec-server-rpc-internal-error $message)))
+
+(= (codex:exec-server-handler-http-request-flow-after-runner-ok
+      $state
+      $request-id
+      $response
+      $pending-stream
+      (CodexExecServerHandlerHttpSerializeOk)
+      (CodexExecServerHandlerHttpNotifyErr $error))
+   (CodexExecServerHandlerResultErr
+     (codex:exec-server-handler-release-pending-http-body-stream
+       $state
+       $pending-stream)
+     $error))
+
+(= (codex:exec-server-handler-http-request-flow-after-runner-ok
+      $state
+      $request-id
+      $response
+      CodexAbsent
+      (CodexExecServerHandlerHttpSerializeOk)
+      (CodexExecServerHandlerHttpNotifyOk))
+   (CodexExecServerHandlerResultOk
+     $state
+     (CodexExecServerHandlerHttpRequestCompleted
+       (codex:exec-server-rpc-server-outbound-response
+         $request-id
+         (codex:exec-server-http-request-response-json $response))
+       CodexAbsent)))
+
+(= (codex:exec-server-handler-http-request-flow-after-runner-ok
+      $state
+      $request-id
+      $response
+      (CodexExecServerHandlerPendingHttpBodyStream $pending-request-id)
+      (CodexExecServerHandlerHttpSerializeOk)
+      (CodexExecServerHandlerHttpNotifyOk))
+   (let $started
+     (codex:exec-server-handler-start-http-body-stream
+       $state
+       (CodexExecServerHandlerPendingHttpBodyStream $pending-request-id))
+     (CodexExecServerHandlerResultOk
+       (codex:exec-server-handler-result-state $started)
+       (CodexExecServerHandlerHttpRequestCompleted
+         (codex:exec-server-rpc-server-outbound-response
+           $request-id
+           (codex:exec-server-http-request-response-json $response))
+         (codex:exec-server-handler-result-value $started)))))
+
+(= (codex:exec-server-handler-http-request-flow
+      $state
+      $request-id
+      $params
+      $runner-outcome
+      $serialize-outcome
+      $notify-outcome)
+   (case (codex:exec-server-handler-http-request-reserve $state $params)
+     (((CodexExecServerHandlerResultErr $reserve-state $error)
+       (CodexExecServerHandlerResultErr $reserve-state $error))
+      ((CodexExecServerHandlerResultOk $reserved-state $value)
+       (case $runner-outcome
+         (((CodexExecServerHandlerHttpRunnerErr $error)
+           (CodexExecServerHandlerResultErr
+             (codex:exec-server-handler-release-request-http-body-stream-if-needed
+               $reserved-state
+               $params)
+             $error))
+          ((CodexExecServerHandlerHttpRunnerOk $response $pending-stream)
+           (codex:exec-server-handler-http-request-flow-after-runner-ok
+             $reserved-state
+             $request-id
+             $response
+             $pending-stream
+             $serialize-outcome
+             $notify-outcome))))))))
 
 (= (codex:exec-server-handler-shutdown $state)
    (let $session (codex:exec-server-handler-state-session $state)

@@ -5,6 +5,7 @@
 !(import! &self codex:exec_server_handler)
 !(import! &self codex:exec_server_registry)
 !(import! &self codex:exec_server_session_registry)
+!(import! &self codex:exec_server_process_protocol)
 !(import! &self codex:exec_server_processor)
 
 (= (test:processor-router)
@@ -46,6 +47,54 @@
    (codex:exec-server-rpc-server-outbound-response
      (codex:exec-server-rpc-request-id-integer $id)
      (JsonBool True)))
+
+(= (test:processor-initialize-request $id)
+   (codex:exec-server-rpc-request
+     (codex:exec-server-rpc-request-id-integer $id)
+     (codex:exec-server-protocol-initialize-method)
+     (codex:exec-server-initialize-params "exec-server-test" CodexAbsent)
+     CodexAbsent))
+
+(= (test:processor-initialize-event $id)
+   (codex:exec-server-json-rpc-connection-event-message
+     (codex:exec-server-rpc-message-request
+       (test:processor-initialize-request $id))))
+
+(= (test:processor-initialized-event)
+   (test:processor-notification-event
+     (codex:exec-server-protocol-initialized-method)))
+
+(= (test:processor-attach-ok)
+   (codex:exec-server-handler-attach-ok
+     (codex:exec-server-handler-session-handle
+       "session-real"
+       "connection-real"
+       True)))
+
+(= (test:processor-known-step $state $event)
+   (codex:exec-server-processor-step-event-known-routes
+     $state
+     (test:processor-router)
+     $event
+     (test:processor-attach-ok)
+     (codex:exec-server-processor-request-route-outcome-none)
+     (codex:exec-server-processor-notification-route-outcome-ok)
+     (codex:exec-server-processor-send-outcome-ok)))
+
+(= (test:processor-initialize-step)
+   (test:processor-known-step
+     (test:processor-state)
+     (test:processor-initialize-event 15)))
+
+(= (test:processor-after-initialize-state)
+   (codex:exec-server-processor-step-result-state
+     (test:processor-initialize-step)))
+
+(= (test:processor-after-initialized-state)
+   (codex:exec-server-processor-step-result-state
+     (test:processor-known-step
+       (test:processor-after-initialize-state)
+       (test:processor-initialized-event))))
 
 (= (test:processor-step
       $event
@@ -109,6 +158,64 @@
         (CodexRuntimePaths "root")))
     "initialize")
   (CodexExecServerRegistryHandlerInitialize))
+
+!(assertEqual
+  (codex:exec-server-processor-step-result-outbound
+    (test:processor-initialize-step))
+  ((CodexExecServerRpcServerOutboundResponse
+     (CodexExecServerRpcRequestIdInteger 15)
+     (JsonObject
+       ((JsonPair "sessionId" (JsonString "session-real")))))))
+
+!(assertEqual
+  (codex:exec-server-handler-state-initialize-requested
+    (codex:exec-server-processor-runtime-state-handler-state
+      (test:processor-after-initialize-state)))
+  True)
+
+!(assertEqual
+  (codex:exec-server-handler-state-session
+    (codex:exec-server-processor-runtime-state-handler-state
+      (test:processor-after-initialize-state)))
+  (CodexExecServerHandlerSessionHandle
+    "session-real"
+    "connection-real"
+    True))
+
+!(assertEqual
+  (codex:exec-server-processor-step-result-outbound
+    (test:processor-known-step
+      (test:processor-after-initialize-state)
+      (test:processor-initialize-event 16)))
+  ((CodexExecServerRpcServerOutboundError
+     (CodexExecServerRpcRequestIdInteger 16)
+     (CodexExecServerRpcErrorError
+       -32600
+       CodexAbsent
+       "initialize may only be sent once per connection"))))
+
+!(assertEqual
+  (codex:exec-server-processor-step-result-reason
+    (test:processor-known-step
+      (test:processor-state)
+      (test:processor-initialized-event)))
+  "closing exec-server connection after protocol error: received `initialized` notification before `initialize`")
+
+!(assertEqual
+  (codex:exec-server-handler-state-initialized
+    (codex:exec-server-processor-runtime-state-handler-state
+      (codex:exec-server-processor-step-result-state
+        (test:processor-known-step
+          (test:processor-after-initialize-state)
+          (test:processor-initialized-event)))))
+  True)
+
+!(assertEqual
+  (codex:exec-server-processor-step-result-outbound
+    (test:processor-known-step
+      (test:processor-after-initialize-state)
+      (test:processor-initialized-event)))
+  ())
 
 !(assertEqual
   (codex:exec-server-processor-step-result-outbound

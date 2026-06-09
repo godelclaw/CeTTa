@@ -17,6 +17,13 @@
 ; - Rust owns Tokio tasks, channels, Arc handlers, and async route futures. This
 ;   pure slice takes route outcomes and send outcomes as symbolic inputs and
 ;   preserves the same branch decisions, outbound messages, and shutdown state.
+;   The `known-routes` helpers below execute the deterministic initialize,
+;   initialized, and exec/filesystem/http precondition guards directly after
+;   the typed-params decode boundary; async process/filesystem/http operations
+;   remain symbolic until their runtime bridge is present. HTTP stream body
+;   reservation is intentionally left with the handler/runtime slice because
+;   Rust releases that reservation on later request/serialization/send failure,
+;   and this processor seam does not yet carry those downstream outcomes.
 ; - Rust logs warnings/debug messages and then breaks. This slice exposes those
 ;   branch reasons as data so tests can pin them; they are not public protocol
 ;   output.
@@ -31,6 +38,7 @@
 !(import! &self exec_server_handler)
 !(import! &self exec_server_registry)
 !(import! &self exec_server_session_registry)
+!(import! &self exec_server_process_protocol)
 
 (= (codex:exec-server-processor-runtime-state
       $handler-state
@@ -270,6 +278,154 @@
              $outbound
              $send-outcome)))))))
 
+(= (codex:exec-server-processor-handle-initialize-route
+      $state
+      (CodexExecServerRpcRequest $id $method $params $trace)
+      $attach-outcome
+      $send-outcome)
+   (case (codex:exec-server-handler-initialize
+           (codex:exec-server-processor-runtime-state-handler-state
+             $state)
+           $attach-outcome)
+     (((CodexExecServerHandlerResultOk $handler-state $response)
+       (codex:exec-server-processor-outgoing-send
+         (codex:exec-server-processor-runtime-state-with-handler
+           $state
+           $handler-state)
+         (codex:exec-server-rpc-server-outbound-response
+           $id
+           (codex:exec-server-initialize-response-json $response))
+         $send-outcome))
+      ((CodexExecServerHandlerResultErr $handler-state $error)
+       (codex:exec-server-processor-outgoing-send
+         (codex:exec-server-processor-runtime-state-with-handler
+           $state
+           $handler-state)
+         (codex:exec-server-rpc-server-outbound-error
+           $id
+           $error)
+         $send-outcome)))))
+
+(= (codex:exec-server-processor-is-exec-request-method $method)
+   (if (== $method (codex:exec-server-protocol-exec-method))
+       True
+       (if (== $method (codex:exec-server-protocol-exec-read-method))
+           True
+           (if (== $method (codex:exec-server-protocol-exec-write-method))
+               True
+               (== $method
+                   (codex:exec-server-protocol-exec-terminate-method))))))
+
+(= (codex:exec-server-processor-is-filesystem-request-method $method)
+   (if (== $method (codex:exec-server-protocol-fs-read-file-method))
+       True
+       (if (== $method (codex:exec-server-protocol-fs-write-file-method))
+           True
+           (if (== $method (codex:exec-server-protocol-fs-create-directory-method))
+               True
+               (if (== $method (codex:exec-server-protocol-fs-get-metadata-method))
+                   True
+                   (if (== $method (codex:exec-server-protocol-fs-read-directory-method))
+                       True
+                       (if (== $method (codex:exec-server-protocol-fs-remove-method))
+                           True
+                           (== $method
+                               (codex:exec-server-protocol-fs-copy-method)))))))))
+
+(= (codex:exec-server-processor-is-http-request-method $method)
+   (== $method (codex:exec-server-protocol-http-request-method)))
+
+(= (codex:exec-server-processor-request-guard-ok $state)
+   (CodexExecServerProcessorRequestGuardOk $state))
+
+(= (codex:exec-server-processor-request-guard-err $state $error)
+   (CodexExecServerProcessorRequestGuardErr $state $error))
+
+(= (codex:exec-server-processor-request-guard
+      $state
+      $method)
+   (if (codex:exec-server-processor-is-exec-request-method $method)
+       (case (codex:exec-server-handler-exec-check
+               (codex:exec-server-processor-runtime-state-handler-state
+                 $state))
+         (((CodexExecServerHandlerRequireResultOk $session)
+           (CodexExecServerProcessorRequestGuardOk $state))
+          ((CodexExecServerHandlerRequireResultErr $error)
+           (CodexExecServerProcessorRequestGuardErr $state $error))))
+       (if (codex:exec-server-processor-is-filesystem-request-method $method)
+           (case (codex:exec-server-handler-fs-check
+                   (codex:exec-server-processor-runtime-state-handler-state
+                     $state))
+             (((CodexExecServerHandlerRequireResultOk $session)
+               (CodexExecServerProcessorRequestGuardOk $state))
+              ((CodexExecServerHandlerRequireResultErr $error)
+               (CodexExecServerProcessorRequestGuardErr $state $error))))
+           (if (codex:exec-server-processor-is-http-request-method $method)
+               (case (codex:exec-server-handler-http-check
+                       (codex:exec-server-processor-runtime-state-handler-state
+                         $state))
+                 (((CodexExecServerHandlerRequireResultOk $session)
+                   (CodexExecServerProcessorRequestGuardOk $state))
+                  ((CodexExecServerHandlerRequireResultErr $error)
+                   (CodexExecServerProcessorRequestGuardErr $state $error))))
+               (CodexExecServerProcessorRequestGuardOk $state)))))
+
+(= (codex:exec-server-processor-route-outcome-after-guard
+      $state
+      $route-outcome
+      $send-outcome)
+   (case $route-outcome
+     (((CodexExecServerProcessorRequestRouteOutcomeDisconnected)
+       (codex:exec-server-processor-finish-break
+         $state
+         (CodexExecServerProcessorBreakRequestDisconnected)
+         ()))
+      ((CodexExecServerProcessorRequestRouteOutcomeNone)
+       (CodexExecServerProcessorStepContinue $state ()))
+      ((CodexExecServerProcessorRequestRouteOutcomeSome $outbound)
+       (codex:exec-server-processor-outgoing-send
+         $state
+         $outbound
+         $send-outcome)))))
+
+(= (codex:exec-server-processor-handle-known-request
+      $state
+      $router
+      (CodexExecServerRpcRequest $id $method $params $trace)
+      $initialize-attach-outcome
+      $route-outcome
+      $send-outcome)
+   (if (== $method (codex:exec-server-protocol-initialize-method))
+       (codex:exec-server-processor-handle-initialize-route
+         $state
+         (CodexExecServerRpcRequest $id $method $params $trace)
+         $initialize-attach-outcome
+         $send-outcome)
+       (let $route
+         (codex:exec-server-rpc-router-request-route $router $method)
+         (if (== $route CodexAbsent)
+             (codex:exec-server-processor-handle-request
+               $state
+               $router
+               (CodexExecServerRpcRequest $id $method $params $trace)
+               $route-outcome
+               $send-outcome)
+             (case (codex:exec-server-processor-request-guard
+                     $state
+                     $method)
+               (((CodexExecServerProcessorRequestGuardOk $guard-state)
+                 (codex:exec-server-processor-route-outcome-after-guard
+                   $guard-state
+                   $route-outcome
+                   $send-outcome))
+                ((CodexExecServerProcessorRequestGuardErr $guard-state $error)
+                 (codex:exec-server-processor-outgoing-send
+                   $guard-state
+                   (codex:exec-server-rpc-server-outbound-error
+                     $id
+                     $error)
+                   $send-outcome))))))))
+
 (= (codex:exec-server-processor-handle-notification
       $state
       $router
@@ -299,6 +455,43 @@
                "closing exec-server connection after protocol error: {}"
                ($message))
              ())))))))
+
+(= (codex:exec-server-processor-handle-initialized-route
+      $state
+      (CodexExecServerRpcNotification $method $params))
+   (case (codex:exec-server-handler-initialized
+           (codex:exec-server-processor-runtime-state-handler-state
+             $state))
+     (((CodexExecServerHandlerStringResultOk $handler-state)
+       (CodexExecServerProcessorStepContinue
+         (codex:exec-server-processor-runtime-state-with-handler
+           $state
+           $handler-state)
+         ()))
+      ((CodexExecServerHandlerStringResultErr $handler-state $message)
+       (codex:exec-server-processor-finish-break
+         (codex:exec-server-processor-runtime-state-with-handler
+           $state
+           $handler-state)
+         (format-args
+           "closing exec-server connection after protocol error: {}"
+           ($message))
+         ())))))
+
+(= (codex:exec-server-processor-handle-known-notification
+      $state
+      $router
+      (CodexExecServerRpcNotification $method $params)
+      $route-outcome)
+   (if (== $method (codex:exec-server-protocol-initialized-method))
+       (codex:exec-server-processor-handle-initialized-route
+         $state
+         (CodexExecServerRpcNotification $method $params))
+       (codex:exec-server-processor-handle-notification
+         $state
+         $router
+         (CodexExecServerRpcNotification $method $params)
+         $route-outcome)))
 
 (= (codex:exec-server-processor-handle-message
       $state
@@ -338,6 +531,46 @@
            (codex:exec-server-rpc-request-id-display $id))
          ())))))
 
+(= (codex:exec-server-processor-handle-known-message
+      $state
+      $router
+      $message
+      $initialize-attach-outcome
+      $request-route-outcome
+      $notification-route-outcome
+      $send-outcome)
+   (case $message
+     (((CodexExecServerRpcMessageRequest $request)
+       (codex:exec-server-processor-handle-known-request
+         $state
+         $router
+         $request
+         $initialize-attach-outcome
+         $request-route-outcome
+         $send-outcome))
+      ((CodexExecServerRpcMessageNotification $notification)
+       (codex:exec-server-processor-handle-known-notification
+         $state
+         $router
+         $notification
+         $notification-route-outcome))
+      ((CodexExecServerRpcMessageResponse $response)
+       (codex:exec-server-processor-handle-message
+         $state
+         $router
+         $message
+         $request-route-outcome
+         $notification-route-outcome
+         $send-outcome))
+      ((CodexExecServerRpcMessageError $error)
+       (codex:exec-server-processor-handle-message
+         $state
+         $router
+         $message
+         $request-route-outcome
+         $notification-route-outcome
+         $send-outcome)))))
+
 (= (codex:exec-server-processor-step-event
       $state
       $router
@@ -366,6 +599,45 @@
              $state
              $router
              $message
+             $request-route-outcome
+             $notification-route-outcome
+             $send-outcome))
+          ((CodexExecServerJsonRpcConnectionEventDisconnected $reason)
+           (codex:exec-server-processor-finish-break
+             $state
+             (CodexExecServerProcessorBreakDisconnected $reason)
+             ()))))))
+
+(= (codex:exec-server-processor-step-event-known-routes
+      $state
+      $router
+      $event
+      $initialize-attach-outcome
+      $request-route-outcome
+      $notification-route-outcome
+      $send-outcome)
+   (if (not
+         (codex:exec-server-handler-is-session-attached
+           (codex:exec-server-processor-runtime-state-handler-state
+             $state)))
+       (codex:exec-server-processor-finish-break
+         $state
+         "exec-server connection evicted after session resume"
+         ())
+       (case $event
+         (((CodexExecServerJsonRpcConnectionEventMalformedMessage $reason)
+           (codex:exec-server-processor-outgoing-send
+             $state
+             (codex:exec-server-rpc-server-outbound-error
+               (codex:exec-server-rpc-request-id-integer -1)
+               (codex:exec-server-rpc-invalid-request $reason))
+             $send-outcome))
+          ((CodexExecServerJsonRpcConnectionEventMessage $message)
+           (codex:exec-server-processor-handle-known-message
+             $state
+             $router
+             $message
+             $initialize-attach-outcome
              $request-route-outcome
              $notification-route-outcome
              $send-outcome))

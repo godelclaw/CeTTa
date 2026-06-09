@@ -197,6 +197,7 @@ tests/test_codex_exec_server_environment_surface.metta	he	metta	he_extended	main
 tests/test_codex_exec_server_file_system_handler_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_file_system_protocol_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_fs_helper_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_exec_server_handler_http_flow_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_handler_registry_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_http_body_stream_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_http_protocol_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
@@ -204,6 +205,7 @@ tests/test_codex_exec_server_local_file_system_surface.metta	he	metta	he_extende
 tests/test_codex_exec_server_local_process_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_process_id_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_process_protocol_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_codex_exec_server_processor_known_routes_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_processor_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_rpc_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
 tests/test_codex_exec_server_runtime_paths_surface.metta	he	metta	he_extended	main	native	test	property	assertion-only property without golden oracle
