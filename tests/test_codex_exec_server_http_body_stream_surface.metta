@@ -1,5 +1,6 @@
 !(register-module! ../codex)
 !(import! &self json)
+!(import! &self list)
 !(import! &self codex:exec_server_process_protocol)
 !(import! &self codex:exec_server_http_protocol)
 !(import! &self codex:exec_server_http_body_stream)
@@ -37,6 +38,38 @@
       (test:http-body-delta "http-1" 2 "world" False CodexAbsent)
       (test:http-body-delta "http-1" 3 "!" True CodexAbsent))
      CodexAbsent))
+
+(= (test:http-body-fail-all-mixed)
+   (codex:exec-server-http-body-fail-all-http-body-streams
+     (codex:exec-server-http-body-client-state
+       7
+       ("http-1" "http-2" "http-3"))
+     ("http-2")
+     ((codex:exec-server-http-body-failure-entry "stale" "old"))
+     "transport closed"))
+
+(= (test:http-body-fail-all-notifications)
+   (codex:exec-server-http-body-fail-all-result-notifications
+     (test:http-body-fail-all-mixed)))
+
+(= (test:http-body-fail-all-first-notification)
+   (list:first (test:http-body-fail-all-notifications)))
+
+(= (test:http-body-fail-all-second-notification)
+   (list:first
+     (list:rest (test:http-body-fail-all-notifications))))
+
+(= (test:http-body-take-http2-failure)
+   (codex:exec-server-http-body-take-failure
+     (codex:exec-server-http-body-fail-all-result-failures
+       (test:http-body-fail-all-mixed))
+     "http-2"))
+
+(= (test:http-body-insert-clears-failure)
+   (codex:exec-server-http-body-insert-route-with-failures
+     (codex:exec-server-http-body-client-state-default)
+     ((codex:exec-server-http-body-failure-entry "http-1" "old"))
+     "http-1"))
 
 !(assertEqual
   (codex:exec-server-http-body-delta-channel-capacity)
@@ -117,6 +150,93 @@
         0))
     "http-1")
   False)
+
+!(assertEqual
+  (codex:exec-server-http-body-client-state-route-ids
+    (codex:exec-server-http-body-fail-all-result-state
+      (test:http-body-fail-all-mixed)))
+  ())
+
+!(assertEqual
+  (codex:exec-server-http-body-client-state-next-id
+    (codex:exec-server-http-body-fail-all-result-state
+      (test:http-body-fail-all-mixed)))
+  7)
+
+!(assertEqual
+  (list:len (test:http-body-fail-all-notifications))
+  2)
+
+!(assertEqual
+  (codex:exec-server-http-body-delta-request-id
+    (test:http-body-fail-all-first-notification))
+  "http-1")
+
+!(assertEqual
+  (codex:exec-server-http-body-delta-request-id
+    (test:http-body-fail-all-second-notification))
+  "http-3")
+
+!(assertEqual
+  (codex:exec-server-http-body-delta-seq
+    (test:http-body-fail-all-first-notification))
+  1)
+
+!(assertEqual
+  (codex:exec-server-http-body-delta-done
+    (test:http-body-fail-all-first-notification))
+  True)
+
+!(assertEqual
+  (codex:exec-server-byte-chunk-into-inner
+    (codex:exec-server-http-body-delta-chunk
+      (test:http-body-fail-all-first-notification)))
+  "")
+
+!(assertEqual
+  (codex:exec-server-http-body-delta-error
+    (test:http-body-fail-all-first-notification))
+  "transport closed")
+
+!(assertEqual
+  (codex:exec-server-http-body-failure-lookup
+    (codex:exec-server-http-body-fail-all-result-failures
+      (test:http-body-fail-all-mixed))
+    "http-2")
+  "transport closed")
+
+!(assertEqual
+  (codex:exec-server-http-body-failure-lookup
+    (codex:exec-server-http-body-fail-all-result-failures
+      (test:http-body-fail-all-mixed))
+    "stale")
+  "old")
+
+!(assertEqual
+  (codex:exec-server-http-body-take-failure-result-message
+    (test:http-body-take-http2-failure))
+  "transport closed")
+
+!(assertEqual
+  (codex:exec-server-http-body-failure-lookup
+    (codex:exec-server-http-body-take-failure-result-failures
+      (test:http-body-take-http2-failure))
+    "http-2")
+  CodexAbsent)
+
+!(assertEqual
+  (codex:exec-server-http-body-route-active
+    (codex:exec-server-http-body-insert-route-with-failures-result-state
+      (test:http-body-insert-clears-failure))
+    "http-1")
+  True)
+
+!(assertEqual
+  (codex:exec-server-http-body-failure-lookup
+    (codex:exec-server-http-body-insert-route-with-failures-result-failures
+      (test:http-body-insert-clears-failure))
+    "http-1")
+  CodexAbsent)
 
 !(assertEqual
   (codex:exec-server-http-body-route-delta-result-message

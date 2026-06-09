@@ -14,9 +14,11 @@
 ; Required slice-local deviations from Rust, documented for audit:
 ; - Rust stores body routes in `ArcSwap<HashMap<String, Sender<_>>>` and uses
 ;   bounded Tokio mpsc channels. This pure CeTTa slice represents the routing
-;   table as an ordered request-id list and represents receiver state as an
-;   explicit queue. The route decisions, generated ids, capacity boundary,
-;   sequence checks, EOF handling, and failure messages are preserved.
+;   table as an ordered request-id list, represents receiver state as an
+;   explicit queue, and represents `try_send` failure in `fail_all` with an
+;   explicit send-failed request-id list. The route decisions, generated ids,
+;   capacity boundary, sequence checks, EOF handling, and failure messages are
+;   preserved.
 ; - Rust errors are returned as `ExecServerError::Protocol(message)`, whose
 ;   display adds the `exec-server protocol error:` prefix. This slice returns
 ;   the protocol message itself so callers can wrap it at the later error
@@ -139,6 +141,119 @@
      (codex:exec-server-http-body-route-id-remove
        (codex:exec-server-http-body-client-state-route-ids $state)
        $request-id)))
+
+(= (codex:exec-server-http-body-failure-entry $request-id $message)
+   (CodexExecServerHttpBodyFailureEntry $request-id $message))
+
+(= (codex:exec-server-http-body-failure-entry-request-id
+      (CodexExecServerHttpBodyFailureEntry $request-id $message))
+   $request-id)
+
+(= (codex:exec-server-http-body-failure-entry-message
+      (CodexExecServerHttpBodyFailureEntry $request-id $message))
+   $message)
+
+(= (codex:exec-server-http-body-failure-remove () $request-id)
+   ())
+
+(= (codex:exec-server-http-body-failure-remove $failures $request-id)
+   (let $head (list:first $failures)
+     (let $tail
+       (codex:exec-server-http-body-failure-remove
+         (list:rest $failures)
+         $request-id)
+       (if (== (codex:exec-server-http-body-failure-entry-request-id $head)
+               $request-id)
+           $tail
+           (list:cons $head $tail)))))
+
+(= (codex:exec-server-http-body-failure-upsert
+      $failures
+      $request-id
+      $message)
+   (list:append
+     (codex:exec-server-http-body-failure-remove $failures $request-id)
+     (list:cons
+       (codex:exec-server-http-body-failure-entry $request-id $message)
+       ())))
+
+(= (codex:exec-server-http-body-failure-lookup () $request-id)
+   CodexAbsent)
+
+(= (codex:exec-server-http-body-failure-lookup $failures $request-id)
+   (let $head (list:first $failures)
+     (if (== (codex:exec-server-http-body-failure-entry-request-id $head)
+             $request-id)
+         (codex:exec-server-http-body-failure-entry-message $head)
+         (codex:exec-server-http-body-failure-lookup
+           (list:rest $failures)
+           $request-id))))
+
+(= (codex:exec-server-http-body-take-failure-result
+      $message
+      $failures)
+   (CodexExecServerHttpBodyTakeFailureResult $message $failures))
+
+(= (codex:exec-server-http-body-take-failure-result-message
+      (CodexExecServerHttpBodyTakeFailureResult $message $failures))
+   $message)
+
+(= (codex:exec-server-http-body-take-failure-result-failures
+      (CodexExecServerHttpBodyTakeFailureResult $message $failures))
+   $failures)
+
+(= (codex:exec-server-http-body-take-failure $failures $request-id)
+   (let $message
+     (codex:exec-server-http-body-failure-lookup $failures $request-id)
+     (if (== $message CodexAbsent)
+         (CodexExecServerHttpBodyTakeFailureResult CodexAbsent $failures)
+         (CodexExecServerHttpBodyTakeFailureResult
+           $message
+           (codex:exec-server-http-body-failure-remove
+             $failures
+             $request-id)))))
+
+(= (codex:exec-server-http-body-insert-route-with-failures-ok
+      $state
+      $failures)
+   (CodexExecServerHttpBodyInsertRouteWithFailuresOk $state $failures))
+
+(= (codex:exec-server-http-body-insert-route-with-failures-err
+      $message
+      $failures)
+   (CodexExecServerHttpBodyInsertRouteWithFailuresErr $message $failures))
+
+(= (codex:exec-server-http-body-insert-route-with-failures-result-state
+      (CodexExecServerHttpBodyInsertRouteWithFailuresOk $state $failures))
+   $state)
+
+(= (codex:exec-server-http-body-insert-route-with-failures-result-failures
+      (CodexExecServerHttpBodyInsertRouteWithFailuresOk $state $failures))
+   $failures)
+
+(= (codex:exec-server-http-body-insert-route-with-failures-result-failures
+      (CodexExecServerHttpBodyInsertRouteWithFailuresErr $message $failures))
+   $failures)
+
+(= (codex:exec-server-http-body-insert-route-with-failures-result-message
+      (CodexExecServerHttpBodyInsertRouteWithFailuresErr $message $failures))
+   $message)
+
+(= (codex:exec-server-http-body-insert-route-with-failures
+      $state
+      $failures
+      $request-id)
+   (case (codex:exec-server-http-body-insert-route $state $request-id)
+     (((CodexExecServerHttpBodyInsertRouteOk $inserted-state)
+       (CodexExecServerHttpBodyInsertRouteWithFailuresOk
+         $inserted-state
+         (codex:exec-server-http-body-failure-remove
+           $failures
+           $request-id)))
+      ((CodexExecServerHttpBodyInsertRouteErr $message)
+       (CodexExecServerHttpBodyInsertRouteWithFailuresErr
+         $message
+         $failures)))))
 
 (= (codex:exec-server-http-body-force-buffered-request
       (CodexExecServerHttpRequestParams
@@ -283,6 +398,115 @@
        (not
          (== (codex:exec-server-http-body-delta-error $delta)
              CodexAbsent))))
+
+(= (codex:exec-server-http-body-fail-all-notification
+      $request-id
+      $message)
+   (codex:exec-server-http-body-delta-notification
+     $request-id
+     1
+     (codex:exec-server-byte-chunk "")
+     True
+     $message))
+
+(= (codex:exec-server-http-body-fail-all-fold
+      $notifications
+      $failures)
+   (CodexExecServerHttpBodyFailAllFold $notifications $failures))
+
+(= (codex:exec-server-http-body-fail-all-fold-notifications
+      (CodexExecServerHttpBodyFailAllFold $notifications $failures))
+   $notifications)
+
+(= (codex:exec-server-http-body-fail-all-fold-failures
+      (CodexExecServerHttpBodyFailAllFold $notifications $failures))
+   $failures)
+
+(= (codex:exec-server-http-body-fail-all-route-ids
+      ()
+      $send-failed-request-ids
+      $failures
+      $message)
+   (CodexExecServerHttpBodyFailAllFold () $failures))
+
+(= (codex:exec-server-http-body-fail-all-route-ids
+      $route-ids
+      $send-failed-request-ids
+      $failures
+      $message)
+   (let $request-id (list:first $route-ids)
+     (let $tail-fold
+       (codex:exec-server-http-body-fail-all-route-ids
+         (list:rest $route-ids)
+         $send-failed-request-ids
+         $failures
+         $message)
+       (if (codex:exec-server-http-body-route-id-contains
+             $send-failed-request-ids
+             $request-id)
+           (CodexExecServerHttpBodyFailAllFold
+             (codex:exec-server-http-body-fail-all-fold-notifications
+               $tail-fold)
+             (codex:exec-server-http-body-failure-upsert
+               (codex:exec-server-http-body-fail-all-fold-failures
+                 $tail-fold)
+               $request-id
+               $message))
+           (CodexExecServerHttpBodyFailAllFold
+             (list:cons
+               (codex:exec-server-http-body-fail-all-notification
+                 $request-id
+                 $message)
+               (codex:exec-server-http-body-fail-all-fold-notifications
+                 $tail-fold))
+             (codex:exec-server-http-body-fail-all-fold-failures
+               $tail-fold))))))
+
+(= (codex:exec-server-http-body-fail-all-result
+      $state
+      $notifications
+      $failures)
+   (CodexExecServerHttpBodyFailAllResult
+     $state
+     $notifications
+     $failures))
+
+(= (codex:exec-server-http-body-fail-all-result-state
+      (CodexExecServerHttpBodyFailAllResult
+        $state
+        $notifications
+        $failures))
+   $state)
+
+(= (codex:exec-server-http-body-fail-all-result-notifications
+      (CodexExecServerHttpBodyFailAllResult
+        $state
+        $notifications
+        $failures))
+   $notifications)
+
+(= (codex:exec-server-http-body-fail-all-result-failures
+      (CodexExecServerHttpBodyFailAllResult
+        $state
+        $notifications
+        $failures))
+   $failures)
+
+(= (codex:exec-server-http-body-fail-all-http-body-streams
+      $state
+      $send-failed-request-ids
+      $failures
+      $message)
+   (let $fold
+     (codex:exec-server-http-body-fail-all-route-ids
+       (codex:exec-server-http-body-client-state-route-ids $state)
+       $send-failed-request-ids
+       $failures
+       $message)
+     (CodexExecServerHttpBodyFailAllResult
+       (codex:exec-server-http-body-client-state-with-route-ids $state ())
+       (codex:exec-server-http-body-fail-all-fold-notifications $fold)
+       (codex:exec-server-http-body-fail-all-fold-failures $fold))))
 
 (= (codex:exec-server-http-body-route-delta-delivered
       $state
