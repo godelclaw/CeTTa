@@ -21,11 +21,14 @@
 ;   initialized, and exec/filesystem/http precondition guards directly after
 ;   the typed-params decode boundary. The process route-flow helpers accept
 ;   symbolic async process outcomes, then preserve the Rust router/processor
-;   response projection and send ordering. Filesystem/http async operations
-;   remain symbolic until their runtime bridges are present. HTTP stream body
-;   reservation is intentionally left with the handler/runtime slice because
-;   Rust releases that reservation on later request/serialization/send failure,
-;   and this processor seam does not yet carry those downstream outcomes.
+;   response projection and send ordering. The filesystem route-flow helpers
+;   accept symbolic async filesystem outcomes and preserve the same
+;   router/processor response projection and send ordering. HTTP async
+;   operations remain symbolic until their runtime bridge is present. HTTP
+;   stream body reservation is intentionally left with the handler/runtime
+;   slice because Rust releases that reservation on later
+;   request/serialization/send failure, and this processor seam does not yet
+;   carry those downstream outcomes.
 ; - Rust logs warnings/debug messages and then breaks. This slice exposes those
 ;   branch reasons as data so tests can pin them; they are not public protocol
 ;   output.
@@ -41,6 +44,7 @@
 !(import! &self exec_server_registry)
 !(import! &self exec_server_session_registry)
 !(import! &self exec_server_process_protocol)
+!(import! &self exec_server_file_system_protocol)
 
 (= (codex:exec-server-processor-runtime-state
       $handler-state
@@ -570,6 +574,272 @@
        (codex:exec-server-processor-runtime-state-handler-state
          $state)
        $process-outcome)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-read-file-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultErr $handler-state $error)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-error
+     $state
+     $request-id
+     $handler-state
+     $error
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-read-file-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultOk $handler-state $response)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-response
+     $state
+     $request-id
+     $handler-state
+     (codex:exec-server-fs-read-file-response-json $response)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-write-file-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultErr $handler-state $error)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-error
+     $state
+     $request-id
+     $handler-state
+     $error
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-write-file-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultOk $handler-state $response)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-response
+     $state
+     $request-id
+     $handler-state
+     (codex:exec-server-fs-write-file-response-json $response)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-create-directory-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultErr $handler-state $error)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-error
+     $state
+     $request-id
+     $handler-state
+     $error
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-create-directory-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultOk $handler-state $response)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-response
+     $state
+     $request-id
+     $handler-state
+     (codex:exec-server-fs-create-directory-response-json $response)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-get-metadata-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultErr $handler-state $error)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-error
+     $state
+     $request-id
+     $handler-state
+     $error
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-get-metadata-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultOk $handler-state $response)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-response
+     $state
+     $request-id
+     $handler-state
+     (codex:exec-server-fs-get-metadata-response-json $response)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-read-directory-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultErr $handler-state $error)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-error
+     $state
+     $request-id
+     $handler-state
+     $error
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-read-directory-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultOk $handler-state $response)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-response
+     $state
+     $request-id
+     $handler-state
+     (codex:exec-server-fs-read-directory-response-json $response)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-remove-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultErr $handler-state $error)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-error
+     $state
+     $request-id
+     $handler-state
+     $error
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-remove-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultOk $handler-state $response)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-response
+     $state
+     $request-id
+     $handler-state
+     (codex:exec-server-fs-remove-response-json $response)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-copy-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultErr $handler-state $error)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-error
+     $state
+     $request-id
+     $handler-state
+     $error
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-copy-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultOk $handler-state $response)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-response
+     $state
+     $request-id
+     $handler-state
+     (codex:exec-server-fs-copy-response-json $response)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-read-file-route-flow
+      $state
+      $request-id
+      $file-system-outcome
+      $send-outcome)
+   (codex:exec-server-processor-handle-fs-read-file-route-result
+     $state
+     $request-id
+     (codex:exec-server-handler-fs-read-file-flow
+       (codex:exec-server-processor-runtime-state-handler-state
+         $state)
+       $file-system-outcome)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-write-file-route-flow
+      $state
+      $request-id
+      $file-system-outcome
+      $send-outcome)
+   (codex:exec-server-processor-handle-fs-write-file-route-result
+     $state
+     $request-id
+     (codex:exec-server-handler-fs-write-file-flow
+       (codex:exec-server-processor-runtime-state-handler-state
+         $state)
+       $file-system-outcome)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-create-directory-route-flow
+      $state
+      $request-id
+      $file-system-outcome
+      $send-outcome)
+   (codex:exec-server-processor-handle-fs-create-directory-route-result
+     $state
+     $request-id
+     (codex:exec-server-handler-fs-create-directory-flow
+       (codex:exec-server-processor-runtime-state-handler-state
+         $state)
+       $file-system-outcome)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-get-metadata-route-flow
+      $state
+      $request-id
+      $file-system-outcome
+      $send-outcome)
+   (codex:exec-server-processor-handle-fs-get-metadata-route-result
+     $state
+     $request-id
+     (codex:exec-server-handler-fs-get-metadata-flow
+       (codex:exec-server-processor-runtime-state-handler-state
+         $state)
+       $file-system-outcome)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-read-directory-route-flow
+      $state
+      $request-id
+      $file-system-outcome
+      $send-outcome)
+   (codex:exec-server-processor-handle-fs-read-directory-route-result
+     $state
+     $request-id
+     (codex:exec-server-handler-fs-read-directory-flow
+       (codex:exec-server-processor-runtime-state-handler-state
+         $state)
+       $file-system-outcome)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-remove-route-flow
+      $state
+      $request-id
+      $file-system-outcome
+      $send-outcome)
+   (codex:exec-server-processor-handle-fs-remove-route-result
+     $state
+     $request-id
+     (codex:exec-server-handler-fs-remove-flow
+       (codex:exec-server-processor-runtime-state-handler-state
+         $state)
+       $file-system-outcome)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-fs-copy-route-flow
+      $state
+      $request-id
+      $file-system-outcome
+      $send-outcome)
+   (codex:exec-server-processor-handle-fs-copy-route-result
+     $state
+     $request-id
+     (codex:exec-server-handler-fs-copy-flow
+       (codex:exec-server-processor-runtime-state-handler-state
+         $state)
+       $file-system-outcome)
      $send-outcome))
 
 (= (codex:exec-server-processor-handle-known-request
