@@ -10,6 +10,8 @@
 ; - openai-codex/codex-rs/exec-server/src/rpc.rs
 ;   - RpcCallError
 ;   - RpcServerOutboundMessage / encode_server_message
+;   - RpcRouter request / request_with_id / notification route invocation
+;     decode, handler-result, serialization, and Option outbound policy
 ;   - JSON-RPC error constructors
 ;   - RpcClient request-id allocation, pending map routing,
 ;     request-from-server rejection, and drain_pending behavior
@@ -31,7 +33,9 @@
 ;   decoding as JSON null, and null-decode failure returns the original error.
 ; - Rust `RpcRouter` stores async handler closures. This slice models the
 ;   deterministic method registration and lookup surface with symbolic route
-;   handlers; actual async invocation belongs with the future runtime bridge.
+;   handlers. The route invocation helpers accept symbolic decode, handler,
+;   and serialization outcomes at that runtime boundary while preserving the
+;   exact Rust branch decisions.
 
 !(import! &self json)
 !(import! &self list)
@@ -647,6 +651,110 @@
      $params
      $primary-outcome
      $null-outcome))
+
+(= (codex:exec-server-rpc-serialize-outcome-ok $json)
+   (CodexExecServerRpcSerializeOutcomeOk $json))
+
+(= (codex:exec-server-rpc-serialize-outcome-err $message)
+   (CodexExecServerRpcSerializeOutcomeErr $message))
+
+(= (codex:exec-server-rpc-request-route-result-none)
+   (CodexExecServerRpcRequestRouteResultNone))
+
+(= (codex:exec-server-rpc-request-route-result-some $outbound)
+   (CodexExecServerRpcRequestRouteResultSome $outbound))
+
+(= (codex:exec-server-rpc-request-route-result-outbound
+      (CodexExecServerRpcRequestRouteResultSome $outbound))
+   $outbound)
+
+(= (codex:exec-server-rpc-notification-handler-ok)
+   (CodexExecServerRpcNotificationHandlerOk))
+
+(= (codex:exec-server-rpc-notification-handler-err $message)
+   (CodexExecServerRpcNotificationHandlerErr $message))
+
+(= (codex:exec-server-rpc-notification-route-result-ok)
+   (CodexExecServerRpcNotificationRouteResultOk))
+
+(= (codex:exec-server-rpc-notification-route-result-err $message)
+   (CodexExecServerRpcNotificationRouteResultErr $message))
+
+(= (codex:exec-server-rpc-notification-route-result-message
+      (CodexExecServerRpcNotificationRouteResultErr $message))
+   $message)
+
+(= (codex:exec-server-rpc-router-request-invoke
+      (CodexExecServerRpcRequest $id $method $params $trace)
+      (CodexExecServerRpcErr $error)
+      $handler-outcome
+      $serialize-outcome)
+   (CodexExecServerRpcRequestRouteResultSome
+     (CodexExecServerRpcServerOutboundError $id $error)))
+
+(= (codex:exec-server-rpc-router-request-invoke
+      (CodexExecServerRpcRequest $id $method $params $trace)
+      (CodexExecServerRpcOk $decoded-params)
+      (CodexExecServerRpcErr $error)
+      $serialize-outcome)
+   (CodexExecServerRpcRequestRouteResultSome
+     (CodexExecServerRpcServerOutboundError $id $error)))
+
+(= (codex:exec-server-rpc-router-request-invoke
+      (CodexExecServerRpcRequest $id $method $params $trace)
+      (CodexExecServerRpcOk $decoded-params)
+      (CodexExecServerRpcOk $handler-value)
+      (CodexExecServerRpcSerializeOutcomeErr $message))
+   (CodexExecServerRpcRequestRouteResultSome
+     (CodexExecServerRpcServerOutboundError
+       $id
+       (codex:exec-server-rpc-internal-error $message))))
+
+(= (codex:exec-server-rpc-router-request-invoke
+      (CodexExecServerRpcRequest $id $method $params $trace)
+      (CodexExecServerRpcOk $decoded-params)
+      (CodexExecServerRpcOk $handler-value)
+      (CodexExecServerRpcSerializeOutcomeOk $json))
+   (CodexExecServerRpcRequestRouteResultSome
+     (CodexExecServerRpcServerOutboundResponse $id $json)))
+
+(= (codex:exec-server-rpc-router-request-with-id-invoke
+      (CodexExecServerRpcRequest $id $method $params $trace)
+      (CodexExecServerRpcErr $error)
+      $handler-outcome)
+   (CodexExecServerRpcRequestRouteResultSome
+     (CodexExecServerRpcServerOutboundError $id $error)))
+
+(= (codex:exec-server-rpc-router-request-with-id-invoke
+      (CodexExecServerRpcRequest $id $method $params $trace)
+      (CodexExecServerRpcOk $decoded-params)
+      (CodexExecServerRpcErr $error))
+   (CodexExecServerRpcRequestRouteResultSome
+     (CodexExecServerRpcServerOutboundError $id $error)))
+
+(= (codex:exec-server-rpc-router-request-with-id-invoke
+      (CodexExecServerRpcRequest $id $method $params $trace)
+      (CodexExecServerRpcOk $decoded-params)
+      (CodexExecServerRpcOk $unit))
+   (CodexExecServerRpcRequestRouteResultNone))
+
+(= (codex:exec-server-rpc-router-notification-invoke
+      (CodexExecServerRpcNotification $method $params)
+      (CodexExecServerRpcDecodeOutcomeErr $message)
+      $handler-outcome)
+   (CodexExecServerRpcNotificationRouteResultErr $message))
+
+(= (codex:exec-server-rpc-router-notification-invoke
+      (CodexExecServerRpcNotification $method $params)
+      (CodexExecServerRpcDecodeOutcomeOk $decoded-params)
+      (CodexExecServerRpcNotificationHandlerErr $message))
+   (CodexExecServerRpcNotificationRouteResultErr $message))
+
+(= (codex:exec-server-rpc-router-notification-invoke
+      (CodexExecServerRpcNotification $method $params)
+      (CodexExecServerRpcDecodeOutcomeOk $decoded-params)
+      (CodexExecServerRpcNotificationHandlerOk))
+   (CodexExecServerRpcNotificationRouteResultOk))
 
 (= (codex:exec-server-rpc-route-entry $method $handler)
    (CodexExecServerRpcRouteEntry $method $handler))
