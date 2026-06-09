@@ -19,8 +19,10 @@
 ;   preserves the same branch decisions, outbound messages, and shutdown state.
 ;   The `known-routes` helpers below execute the deterministic initialize,
 ;   initialized, and exec/filesystem/http precondition guards directly after
-;   the typed-params decode boundary; async process/filesystem/http operations
-;   remain symbolic until their runtime bridge is present. HTTP stream body
+;   the typed-params decode boundary. The process route-flow helpers accept
+;   symbolic async process outcomes, then preserve the Rust router/processor
+;   response projection and send ordering. Filesystem/http async operations
+;   remain symbolic until their runtime bridges are present. HTTP stream body
 ;   reservation is intentionally left with the handler/runtime slice because
 ;   Rust releases that reservation on later request/serialization/send failure,
 ;   and this processor seam does not yet carry those downstream outcomes.
@@ -387,6 +389,188 @@
          $state
          $outbound
          $send-outcome)))))
+
+(= (codex:exec-server-processor-handler-route-error
+      $state
+      $request-id
+      $handler-state
+      $error
+      $send-outcome)
+   (codex:exec-server-processor-outgoing-send
+     (codex:exec-server-processor-runtime-state-with-handler
+       $state
+       $handler-state)
+     (codex:exec-server-rpc-server-outbound-error $request-id $error)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handler-route-response
+      $state
+      $request-id
+      $handler-state
+      $response-json
+      $send-outcome)
+   (codex:exec-server-processor-outgoing-send
+     (codex:exec-server-processor-runtime-state-with-handler
+       $state
+       $handler-state)
+     (codex:exec-server-rpc-server-outbound-response
+       $request-id
+       $response-json)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-exec-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultErr $handler-state $error)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-error
+     $state
+     $request-id
+     $handler-state
+     $error
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-exec-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultOk $handler-state $response)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-response
+     $state
+     $request-id
+     $handler-state
+     (codex:exec-server-exec-response-json $response)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-exec-read-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultErr $handler-state $error)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-error
+     $state
+     $request-id
+     $handler-state
+     $error
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-exec-read-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultOk $handler-state $response)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-response
+     $state
+     $request-id
+     $handler-state
+     (codex:exec-server-read-response-json $response)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-exec-write-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultErr $handler-state $error)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-error
+     $state
+     $request-id
+     $handler-state
+     $error
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-exec-write-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultOk $handler-state $response)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-response
+     $state
+     $request-id
+     $handler-state
+     (codex:exec-server-write-response-json $response)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-exec-terminate-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultErr $handler-state $error)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-error
+     $state
+     $request-id
+     $handler-state
+     $error
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-exec-terminate-route-result
+      $state
+      $request-id
+      (CodexExecServerHandlerResultOk $handler-state $response)
+      $send-outcome)
+   (codex:exec-server-processor-handler-route-response
+     $state
+     $request-id
+     $handler-state
+     (codex:exec-server-terminate-response-json $response)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-exec-route-flow
+      $state
+      $request-id
+      $process-outcome
+      $send-outcome)
+   (codex:exec-server-processor-handle-exec-route-result
+     $state
+     $request-id
+     (codex:exec-server-handler-exec-flow
+       (codex:exec-server-processor-runtime-state-handler-state
+         $state)
+       $process-outcome)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-exec-read-route-flow
+      $state
+      $request-id
+      $process-outcome
+      $post-read-handler-state
+      $send-outcome)
+   (codex:exec-server-processor-handle-exec-read-route-result
+     $state
+     $request-id
+     (codex:exec-server-handler-exec-read-flow
+       (codex:exec-server-processor-runtime-state-handler-state
+         $state)
+       $process-outcome
+       $post-read-handler-state)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-exec-write-route-flow
+      $state
+      $request-id
+      $process-outcome
+      $send-outcome)
+   (codex:exec-server-processor-handle-exec-write-route-result
+     $state
+     $request-id
+     (codex:exec-server-handler-exec-write-flow
+       (codex:exec-server-processor-runtime-state-handler-state
+         $state)
+       $process-outcome)
+     $send-outcome))
+
+(= (codex:exec-server-processor-handle-exec-terminate-route-flow
+      $state
+      $request-id
+      $process-outcome
+      $send-outcome)
+   (codex:exec-server-processor-handle-exec-terminate-route-result
+     $state
+     $request-id
+     (codex:exec-server-handler-terminate-flow
+       (codex:exec-server-processor-runtime-state-handler-state
+         $state)
+       $process-outcome)
+     $send-outcome))
 
 (= (codex:exec-server-processor-handle-known-request
       $state
