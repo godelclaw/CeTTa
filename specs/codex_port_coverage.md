@@ -28,6 +28,36 @@ Front-ends and infrastructure crates are not part of this phase: `tui`,
 `realtime-webrtc`, `otel`, `analytics`, `v8-poc`, `vendor`,
 `windows-sandbox-rs`, test-support crates.
 
+## Strategy: exact core-loop spine first (decided 2026-06-10)
+
+The port so far built leaves (tools, exec, protocol, policy) without the
+trunk. The next phase ports the CORE LOOP exactly — no simplified or
+"pragmatic" stand-in loop; a hacky loop would make the port meaningless.
+The loop consumes a model-stream abstraction, so fixture streams (as the
+Rust tests use) drive it until client.rs is ported; that keeps the
+algorithm exact while deferring transport.
+
+Spine order (each Rust file split into several small CeTTa modules per
+the evaluator module-size constraint):
+
+1. `core/src/session/turn_context.rs` (737) — the turn's data spine.
+   In progress: records, selection, model_context_window, reasoning
+   midpoint selection, and resolve_path landed 2026-06-10 as
+   `codex/turn_context.metta` (+ `turn_context_parts_a/b`). Deferred
+   methods listed in that module's header land with their collaborators.
+2. `core/src/session/turn.rs` (2284) — THE turn loop: run-turn outer
+   loop, stream drain, response-item handling, tool-call dispatch. Its
+   collaborators (tool router, stream parser, response items, exec) are
+   already ported; this connects them.
+3. `core/src/session/session.rs` (955) — session state and services.
+4. `core/src/tasks/mod.rs` (712) + `tasks/regular.rs` (83) — the task
+   abstraction the loop runs under.
+5. `core/src/session/handlers.rs` (1303) — submission op dispatch.
+6. `core/src/codex_thread.rs` (401) — the outer submission loop.
+7. `core/src/session/mod.rs` (3362) — remaining Session impl, sliced.
+
+Config (below) continues in parallel only as the spine demands fields.
+
 ## Priority gaps (take roughly in this order)
 
 Foundational, unblocks the most downstream behavior:
