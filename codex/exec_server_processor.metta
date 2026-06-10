@@ -124,12 +124,14 @@
 (= (codex:exec-server-processor-run-connection-plan
       $connection-parts
       $runtime-paths)
-   (CodexExecServerProcessorRunConnectionPlan
-     (codex:exec-server-registry-build-router)
-     (codex:exec-server-connection-channel-capacity)
-     (codex:exec-server-processor-runtime-state-new)
-     $connection-parts
-     $runtime-paths))
+   (let $materialized-connection-parts
+     (once (eval $connection-parts))
+     (CodexExecServerProcessorRunConnectionPlan
+       (codex:exec-server-registry-build-router)
+       (codex:exec-server-connection-channel-capacity)
+       (codex:exec-server-processor-runtime-state-new)
+       $materialized-connection-parts
+       $runtime-paths)))
 
 (= (codex:exec-server-processor-run-connection-plan-router
       (CodexExecServerProcessorRunConnectionPlan
@@ -140,6 +142,12 @@
         $runtime-paths))
    $router)
 
+(= (codex:exec-server-processor-run-connection-plan-router
+      (codex:exec-server-processor-run-connection-plan
+        $connection-parts
+        $runtime-paths))
+   (codex:exec-server-registry-build-router))
+
 (= (codex:exec-server-processor-run-connection-plan-channel-capacity
       (CodexExecServerProcessorRunConnectionPlan
         $router
@@ -148,6 +156,12 @@
         $connection-parts
         $runtime-paths))
    $channel-capacity)
+
+(= (codex:exec-server-processor-run-connection-plan-channel-capacity
+      (codex:exec-server-processor-run-connection-plan
+        $connection-parts
+        $runtime-paths))
+   (codex:exec-server-connection-channel-capacity))
 
 (= (codex:exec-server-processor-run-connection-plan-runtime-state
       (CodexExecServerProcessorRunConnectionPlan
@@ -158,6 +172,12 @@
         $runtime-paths))
    $runtime-state)
 
+(= (codex:exec-server-processor-run-connection-plan-runtime-state
+      (codex:exec-server-processor-run-connection-plan
+        $connection-parts
+        $runtime-paths))
+   (codex:exec-server-processor-runtime-state-new))
+
 (= (codex:exec-server-processor-run-connection-plan-connection-parts
       (CodexExecServerProcessorRunConnectionPlan
         $router
@@ -167,11 +187,23 @@
         $runtime-paths))
    $connection-parts)
 
+(= (codex:exec-server-processor-run-connection-plan-connection-parts
+      (codex:exec-server-processor-run-connection-plan
+        $connection-parts
+        $runtime-paths))
+   $connection-parts)
+
 (= (codex:exec-server-processor-run-connection-plan-runtime-paths
       (CodexExecServerProcessorRunConnectionPlan
         $router
         $channel-capacity
         $runtime-state
+        $connection-parts
+        $runtime-paths))
+   $runtime-paths)
+
+(= (codex:exec-server-processor-run-connection-plan-runtime-paths
+      (codex:exec-server-processor-run-connection-plan
         $connection-parts
         $runtime-paths))
    $runtime-paths)
@@ -259,30 +291,43 @@
       $route-outcome
       $send-outcome)
    (let $route
-     (codex:exec-server-rpc-router-request-route $router $method)
-     (if (== $route CodexAbsent)
-       (codex:exec-server-processor-outgoing-send
-         $state
-         (codex:exec-server-rpc-server-outbound-error
-           $id
-           (codex:exec-server-rpc-method-not-found
-             (format-args
-               "exec-server stub does not implement `{}` yet"
-               ($method))))
-         $send-outcome)
-       (case $route-outcome
-         (((CodexExecServerProcessorRequestRouteOutcomeDisconnected)
-           (codex:exec-server-processor-finish-break
-             $state
-             (CodexExecServerProcessorBreakRequestDisconnected)
-             ()))
-          ((CodexExecServerProcessorRequestRouteOutcomeNone)
-           (CodexExecServerProcessorStepContinue $state ()))
-          ((CodexExecServerProcessorRequestRouteOutcomeSome $outbound)
-           (codex:exec-server-processor-outgoing-send
-             $state
-             $outbound
-             $send-outcome)))))))
+     (collapse
+       (codex:exec-server-rpc-router-request-route $router $method))
+     (case $route
+       ((()
+         (codex:exec-server-processor-outgoing-send
+           $state
+           (codex:exec-server-rpc-server-outbound-error
+             $id
+             (codex:exec-server-rpc-method-not-found
+               (format-args
+                 "exec-server stub does not implement `{}` yet"
+                 ($method))))
+           $send-outcome))
+        ((CodexAbsent)
+         (codex:exec-server-processor-outgoing-send
+           $state
+           (codex:exec-server-rpc-server-outbound-error
+             $id
+             (codex:exec-server-rpc-method-not-found
+               (format-args
+                 "exec-server stub does not implement `{}` yet"
+                 ($method))))
+           $send-outcome))
+        (($found-route)
+         (case $route-outcome
+           (((CodexExecServerProcessorRequestRouteOutcomeDisconnected)
+             (codex:exec-server-processor-finish-break
+               $state
+               (CodexExecServerProcessorBreakRequestDisconnected)
+               ()))
+            ((CodexExecServerProcessorRequestRouteOutcomeNone)
+             (CodexExecServerProcessorStepContinue $state ()))
+            ((CodexExecServerProcessorRequestRouteOutcomeSome $outbound)
+             (codex:exec-server-processor-outgoing-send
+               $state
+               $outbound
+               $send-outcome)))))))))
 
 (= (codex:exec-server-processor-handle-initialize-route
       $state
@@ -1069,42 +1114,70 @@
          $notification-route-outcome
          $send-outcome)))))
 
+(= (codex:exec-server-processor-step-event-attached
+      $state)
+   (codex:exec-server-handler-is-session-attached
+     (codex:exec-server-processor-runtime-state-handler-state
+       $state)))
+
 (= (codex:exec-server-processor-step-event
       $state
       $router
-      $event
+      (CodexExecServerJsonRpcConnectionEventMalformedMessage $reason)
       $request-route-outcome
       $notification-route-outcome
       $send-outcome)
    (if (not
-         (codex:exec-server-handler-is-session-attached
-           (codex:exec-server-processor-runtime-state-handler-state
-             $state)))
+         (codex:exec-server-processor-step-event-attached $state))
        (codex:exec-server-processor-finish-break
          $state
          "exec-server connection evicted after session resume"
          ())
-       (case $event
-         (((CodexExecServerJsonRpcConnectionEventMalformedMessage $reason)
-           (codex:exec-server-processor-outgoing-send
-             $state
-             (codex:exec-server-rpc-server-outbound-error
-               (codex:exec-server-rpc-request-id-integer -1)
-               (codex:exec-server-rpc-invalid-request $reason))
-             $send-outcome))
-          ((CodexExecServerJsonRpcConnectionEventMessage $message)
-           (codex:exec-server-processor-handle-message
-             $state
-             $router
-             $message
-             $request-route-outcome
-             $notification-route-outcome
-             $send-outcome))
-          ((CodexExecServerJsonRpcConnectionEventDisconnected $reason)
-           (codex:exec-server-processor-finish-break
-             $state
-             (CodexExecServerProcessorBreakDisconnected $reason)
-             ()))))))
+       (codex:exec-server-processor-outgoing-send
+         $state
+         (codex:exec-server-rpc-server-outbound-error
+           (codex:exec-server-rpc-request-id-integer -1)
+           (codex:exec-server-rpc-invalid-request $reason))
+         $send-outcome)))
+
+(= (codex:exec-server-processor-step-event
+      $state
+      $router
+      (CodexExecServerJsonRpcConnectionEventMessage $message)
+      $request-route-outcome
+      $notification-route-outcome
+      $send-outcome)
+   (if (not
+         (codex:exec-server-processor-step-event-attached $state))
+       (codex:exec-server-processor-finish-break
+         $state
+         "exec-server connection evicted after session resume"
+         ())
+       (codex:exec-server-processor-handle-message
+         $state
+         $router
+         $message
+         $request-route-outcome
+         $notification-route-outcome
+         $send-outcome)))
+
+(= (codex:exec-server-processor-step-event
+      $state
+      $router
+      (CodexExecServerJsonRpcConnectionEventDisconnected $reason)
+      $request-route-outcome
+      $notification-route-outcome
+      $send-outcome)
+   (if (not
+         (codex:exec-server-processor-step-event-attached $state))
+       (codex:exec-server-processor-finish-break
+         $state
+         "exec-server connection evicted after session resume"
+         ())
+       (codex:exec-server-processor-finish-break
+         $state
+         (CodexExecServerProcessorBreakDisconnected $reason)
+         ())))
 
 (= (codex:exec-server-processor-step-event-known-routes
       $state

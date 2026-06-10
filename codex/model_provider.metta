@@ -131,11 +131,25 @@
       (CodexAmazonBedrockModelProvider $provider-info $aws))
    CodexAbsent)
 
-(= (codex:model-provider-auth-mode-from-auth $auth)
-   (case $auth
-     ((CodexAbsent CodexAbsent)
-      ($materialized-auth
-       (codex:codex-auth-auth-mode $materialized-auth)))))
+(= (codex:model-provider-auth-mode-from-auth CodexAbsent)
+   CodexAbsent)
+
+(= (codex:model-provider-auth-mode-from-auth
+      (CodexAuthApiKey $api-key))
+   (codex:codex-auth-auth-mode (CodexAuthApiKey $api-key)))
+
+(= (codex:model-provider-auth-mode-from-auth
+      (CodexAuthChatgpt $token-data))
+   (codex:codex-auth-auth-mode (CodexAuthChatgpt $token-data)))
+
+(= (codex:model-provider-auth-mode-from-auth
+      (CodexAuthChatgptAuthTokens $token-data))
+   (codex:codex-auth-auth-mode
+     (CodexAuthChatgptAuthTokens $token-data)))
+
+(= (codex:model-provider-auth-mode-from-auth
+      (CodexAuthAgentIdentity $auth))
+   (codex:codex-auth-auth-mode (CodexAuthAgentIdentity $auth)))
 
 (= (codex:model-provider-api-provider
       (CodexConfiguredModelProvider $provider-info $auth-manager))

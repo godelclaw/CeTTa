@@ -68,6 +68,10 @@
    (CodexExecServerLocalFsResultOk
      (CodexExecServerLocalFsUnit)))
 
+(= (assert-value-equal $value $expected)
+   (let $actual $value
+     (assertEqual $actual $expected)))
+
 !(assertEqual
   (codex:exec-server-local-fs-max-read-file-bytes)
   536870912)
@@ -474,13 +478,13 @@
   (CodexExecServerLocalFsResultOk
     "/real/repo/missing/child.txt"))
 
-!(assertEqual
+!(assert-value-equal
   (codex:exec-server-local-fs-destination-is-same-or-descendant
     "/repo/source"
     "/repo/source/nested")
   True)
 
-!(assertEqual
+!(assert-value-equal
   (codex:exec-server-local-fs-destination-is-same-or-descendant
     "/repo/source"
     "/repo/source-other")

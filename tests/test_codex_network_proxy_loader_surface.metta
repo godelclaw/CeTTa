@@ -107,6 +107,10 @@
        $layers
        $exec-policy)))
 
+(= (assert-value-equal $value $expected)
+   (let $actual $value
+     (assertEqual $actual $expected)))
+
 !(assertEqual
   (codex:network-proxy-loader-is-user-controlled-layer
     (codex:config-layer-source-user "/home/me/.codex/config.toml"))
@@ -145,12 +149,12 @@
        (overlay-lower-tables))
      (overlay-higher-tables)))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-allowed-domains
     (overlay-config))
   ("lower.example.com" "higher.example.com"))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-denied-domains
     (overlay-config))
   ("blocked.example.com"))
@@ -173,12 +177,12 @@
        (override-lower-tables))
      (override-higher-tables)))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-allowed-domains
     (override-config))
   ("other.example.com" "shared.example.com"))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-denied-domains
     (override-config))
   CodexAbsent)
@@ -201,12 +205,12 @@
           (codex:network-rule-protocol-http)
           (codex:decision-forbidden))))))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-allowed-domains
     (exec-policy-overlay-config))
   ("config.example.com" "blocked.example.com"))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-denied-domains
     (exec-policy-overlay-config))
   ("api.example.com"))
@@ -227,12 +231,12 @@
            ((allow-entry "managed.example.com")))))
      (codex:network-proxy-constraints-default)))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-constraints-allowed-domains
     (managed-allow-constraints))
   ("managed.example.com"))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-constraints-denied-domains
     (managed-allow-constraints))
   CodexAbsent)
@@ -250,12 +254,12 @@
              ((deny-entry "blocked.example.com")))))
        (codex:network-proxy-constraints-default))))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-constraints-allowed-domains
     (constraint-overlay))
   ("api.example.com"))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-constraints-denied-domains
     (constraint-overlay))
   ("blocked.example.com"))
@@ -265,53 +269,53 @@
      (codex:network-proxy-config-default)
      (tables-for-network (network-with-scalars))))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-enabled (scalar-config))
   True)
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-proxy-url (scalar-config))
   "http://127.0.0.1:9000")
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-enable-socks5 (scalar-config))
   False)
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-socks-url (scalar-config))
   "http://127.0.0.1:9001")
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-enable-socks5-udp (scalar-config))
   False)
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-allow-upstream-proxy (scalar-config))
   False)
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-dangerously-allow-non-loopback-proxy
     (scalar-config))
   True)
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-dangerously-allow-all-unix-sockets
     (scalar-config))
   True)
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-mode (scalar-config))
   (codex:network-mode-full))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-allowed-domains (scalar-config))
   ("scalar.example.com"))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-allow-unix-sockets (scalar-config))
   ("/tmp/allow.sock"))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-allow-local-binding (scalar-config))
   True)
 
@@ -335,12 +339,12 @@
             ((deny-entry "managed-blocked.example.com"))))
         False))))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-constraints-allowed-domains
     (trusted-layer-constraints))
   ("managed.example.com"))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-constraints-denied-domains
     (trusted-layer-constraints))
   CodexAbsent)
@@ -364,12 +368,12 @@
           (codex:network-rule-protocol-https)
           (codex:decision-forbidden))))))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-allowed-domains
     (config-from-all-layers))
   ("managed.example.com" "user.example.com"))
 
-!(assertEqual
+!(assert-value-equal
   (codex:network-proxy-config-denied-domains
     (config-from-all-layers))
   ("policy-blocked.example.com"))

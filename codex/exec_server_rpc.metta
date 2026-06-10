@@ -1104,16 +1104,21 @@
       (CodexExecServerRpcRouteEntry $method $handler))
    $handler)
 
-(= (codex:exec-server-rpc-route-lookup () $method)
+(= (codex:exec-server-rpc-route-lookup-materialized () $method)
    CodexAbsent)
 
-(= (codex:exec-server-rpc-route-lookup $routes $method)
+(= (codex:exec-server-rpc-route-lookup-materialized $routes $method)
    (let $head (list:first $routes)
      (if (== (codex:exec-server-rpc-route-entry-method $head) $method)
          (codex:exec-server-rpc-route-entry-handler $head)
-         (codex:exec-server-rpc-route-lookup
+         (codex:exec-server-rpc-route-lookup-materialized
            (list:rest $routes)
            $method))))
+
+(= (codex:exec-server-rpc-route-lookup $routes $method)
+   (codex:exec-server-rpc-route-lookup-materialized
+     (once (eval $routes))
+     $method))
 
 (= (codex:exec-server-rpc-route-upsert () $method $handler)
    (list:cons
@@ -1140,13 +1145,15 @@
 (= (codex:exec-server-rpc-router-new)
    (CodexExecServerRpcRouter () ()))
 
-(= (codex:exec-server-rpc-router-request-routes
-      (CodexExecServerRpcRouter $request-routes $notification-routes))
-   $request-routes)
+(= (codex:exec-server-rpc-router-request-routes $router)
+   (case (once (eval $router))
+     (((CodexExecServerRpcRouter $request-routes $notification-routes)
+       $request-routes))))
 
-(= (codex:exec-server-rpc-router-notification-routes
-      (CodexExecServerRpcRouter $request-routes $notification-routes))
-   $notification-routes)
+(= (codex:exec-server-rpc-router-notification-routes $router)
+   (case (once (eval $router))
+     (((CodexExecServerRpcRouter $request-routes $notification-routes)
+       $notification-routes))))
 
 (= (codex:exec-server-rpc-router-request
       (CodexExecServerRpcRouter $request-routes $notification-routes)

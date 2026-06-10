@@ -733,17 +733,56 @@
         $mitm))
    $allow-local-binding)
 
-(= (codex:network-proxy-settings-allowed-domains $settings)
-   (codex:network-domain-permissions-allowed-domains
-     (codex:network-proxy-settings-domains $settings)))
+(= (codex:network-proxy-settings-allowed-domains
+      (CodexNetworkProxySettings
+        $enabled
+        $proxy-url
+        $enable-socks5
+        $socks-url
+        $enable-socks5-udp
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $mode
+        $domains
+        $unix-sockets
+        $allow-local-binding
+        $mitm))
+   (codex:network-domain-permissions-allowed-domains $domains))
 
-(= (codex:network-proxy-settings-denied-domains $settings)
-   (codex:network-domain-permissions-denied-domains
-     (codex:network-proxy-settings-domains $settings)))
+(= (codex:network-proxy-settings-denied-domains
+      (CodexNetworkProxySettings
+        $enabled
+        $proxy-url
+        $enable-socks5
+        $socks-url
+        $enable-socks5-udp
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $mode
+        $domains
+        $unix-sockets
+        $allow-local-binding
+        $mitm))
+   (codex:network-domain-permissions-denied-domains $domains))
 
-(= (codex:network-proxy-settings-allow-unix-sockets $settings)
-   (codex:network-unix-socket-permissions-allow-unix-sockets
-     (codex:network-proxy-settings-unix-sockets $settings)))
+(= (codex:network-proxy-settings-allow-unix-sockets
+      (CodexNetworkProxySettings
+        $enabled
+        $proxy-url
+        $enable-socks5
+        $socks-url
+        $enable-socks5-udp
+        $allow-upstream-proxy
+        $dangerously-allow-non-loopback-proxy
+        $dangerously-allow-all-unix-sockets
+        $mode
+        $domains
+        $unix-sockets
+        $allow-local-binding
+        $mitm))
+   (codex:network-unix-socket-permissions-allow-unix-sockets $unix-sockets))
 
 (= (codex:network-proxy-settings-set-domains
       (CodexNetworkProxySettings
@@ -934,23 +973,80 @@
 
 (= (codex:network-proxy-config-allowed-domains $config)
    (case (collapse $config)
-     ((((CodexNetworkProxyConfig $network))
-       (codex:network-proxy-settings-allowed-domains $network)))))
+     ((((CodexNetworkProxyConfig
+           (CodexNetworkProxySettings
+             $enabled
+             $proxy-url
+             $enable-socks5
+             $socks-url
+             $enable-socks5-udp
+             $allow-upstream-proxy
+             $dangerously-allow-non-loopback-proxy
+             $dangerously-allow-all-unix-sockets
+             $mode
+             $domains
+             $unix-sockets
+             $allow-local-binding
+             $mitm)))
+       (codex:network-domain-permissions-allowed-domains $domains)))))
 
 (= (codex:network-proxy-config-denied-domains $config)
    (case (collapse $config)
-     ((((CodexNetworkProxyConfig $network))
-       (codex:network-proxy-settings-denied-domains $network)))))
+     ((((CodexNetworkProxyConfig
+           (CodexNetworkProxySettings
+             $enabled
+             $proxy-url
+             $enable-socks5
+             $socks-url
+             $enable-socks5-udp
+             $allow-upstream-proxy
+             $dangerously-allow-non-loopback-proxy
+             $dangerously-allow-all-unix-sockets
+             $mode
+             $domains
+             $unix-sockets
+             $allow-local-binding
+             $mitm)))
+       (codex:network-domain-permissions-denied-domains $domains)))))
 
 (= (codex:network-proxy-config-allow-unix-sockets $config)
    (case (collapse $config)
-     ((((CodexNetworkProxyConfig $network))
-       (codex:network-proxy-settings-allow-unix-sockets $network)))))
+     ((((CodexNetworkProxyConfig
+           (CodexNetworkProxySettings
+             $enabled
+             $proxy-url
+             $enable-socks5
+             $socks-url
+             $enable-socks5-udp
+             $allow-upstream-proxy
+             $dangerously-allow-non-loopback-proxy
+             $dangerously-allow-all-unix-sockets
+             $mode
+             $domains
+             $unix-sockets
+             $allow-local-binding
+             $mitm)))
+       (codex:network-unix-socket-permissions-allow-unix-sockets
+         $unix-sockets)))))
 
 (= (codex:network-proxy-config-unix-sockets $config)
    (case (collapse $config)
-     ((((CodexNetworkProxyConfig $network))
-       (codex:network-proxy-settings-unix-sockets $network)))))
+     ((((CodexNetworkProxyConfig
+           (CodexNetworkProxySettings
+             $enabled
+             $proxy-url
+             $enable-socks5
+             $socks-url
+             $enable-socks5-udp
+             $allow-upstream-proxy
+             $dangerously-allow-non-loopback-proxy
+             $dangerously-allow-all-unix-sockets
+             $mode
+             $domains
+             $unix-sockets
+             $allow-local-binding
+             $mitm)))
+       $unix-sockets))))
 
 (= (codex:network-proxy-config-set-enabled
       (CodexNetworkProxyConfig

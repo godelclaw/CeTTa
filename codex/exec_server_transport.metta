@@ -69,13 +69,15 @@
 (= (codex:exec-server-transport-parse-err $error)
    (CodexExecServerTransportParseErr $error))
 
-(= (codex:exec-server-transport-parse-result-socket-addr
-      (CodexExecServerTransportParseOk $socket-addr))
-   $socket-addr)
+(= (codex:exec-server-transport-parse-result-socket-addr $result)
+   (case (collapse $result)
+     ((((CodexExecServerTransportParseOk $socket-addr))
+       $socket-addr))))
 
-(= (codex:exec-server-transport-parse-result-error
-      (CodexExecServerTransportParseErr $error))
-   $error)
+(= (codex:exec-server-transport-parse-result-error $result)
+   (case (collapse $result)
+     ((((CodexExecServerTransportParseErr $error))
+       $error))))
 
 (= (codex:exec-server-transport-parse-error-unsupported-listen-url
       $listen-url)
@@ -329,11 +331,21 @@
                      (CodexExecServerTransportSocketAddrParseErr)))
                (CodexExecServerTransportSocketAddrParseErr))))))))
 
+(= (codex:exec-server-transport-parse-socket-addr-for-family
+      True
+      $socket-text)
+   (codex:exec-server-transport-parse-bracketed-ipv6-socket-addr
+     $socket-text))
+
+(= (codex:exec-server-transport-parse-socket-addr-for-family
+      False
+      $socket-text)
+   (codex:exec-server-transport-parse-ipv4-socket-addr $socket-text))
+
 (= (codex:exec-server-transport-parse-socket-addr $socket-text)
-   (if (codex:exec-server-transport-starts-with $socket-text "[")
-       (codex:exec-server-transport-parse-bracketed-ipv6-socket-addr
-         $socket-text)
-       (codex:exec-server-transport-parse-ipv4-socket-addr $socket-text)))
+   (codex:exec-server-transport-parse-socket-addr-for-family
+     (codex:exec-server-transport-starts-with $socket-text "[")
+     $socket-text))
 
 (= (codex:exec-server-transport-parse-listen-url $listen-url)
    (if (codex:exec-server-transport-starts-with $listen-url "ws://")

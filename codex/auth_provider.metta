@@ -85,14 +85,17 @@
            $rest))
        $headers))
 
-(= (codex:headers-get $headers $name)
+(= (codex:headers-get-materialized $headers $name)
    (if (== $headers ())
        CodexAbsent
        (let ($head $tail) (decons-atom $headers)
          (if (codex:header-name-eq (codex:header-name $head) $name)
              (codex:header-value $head)
-             (case (codex:headers-get $tail $name)
+             (case (codex:headers-get-materialized $tail $name)
                (($found $found)))))))
+
+(= (codex:headers-get $headers $name)
+   (codex:headers-get-materialized (once (eval $headers)) $name))
 
 (= (codex:headers-contains-key $headers $name)
    (if (== (codex:headers-get $headers $name) CodexAbsent)
@@ -111,9 +114,13 @@
    $name)
 
 (= (codex:auth-header-telemetry-from-headers $headers)
-   (if (codex:headers-contains-key $headers "authorization")
-       (codex:auth-header-telemetry True "authorization")
-       (codex:auth-header-telemetry False CodexAbsent)))
+   (case (collapse (codex:headers-get $headers "authorization"))
+     ((()
+       (codex:auth-header-telemetry False CodexAbsent))
+      ((CodexAbsent)
+       (codex:auth-header-telemetry False CodexAbsent))
+      (($value)
+       (codex:auth-header-telemetry True "authorization")))))
 
 (= (codex:auth-header-telemetry $auth-provider)
    (codex:auth-header-telemetry-from-headers

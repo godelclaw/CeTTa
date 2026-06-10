@@ -33,13 +33,15 @@
 (= (codex:network-proxy-loader-result-error $message)
    (CodexNetworkProxyLoaderError $message))
 
-(= (codex:network-proxy-loader-result-value
-      (CodexNetworkProxyLoaderOk $value))
-   $value)
+(= (codex:network-proxy-loader-result-value $result)
+   (case (collapse $result)
+     ((((CodexNetworkProxyLoaderOk $value))
+       $value))))
 
-(= (codex:network-proxy-loader-result-error-message
-      (CodexNetworkProxyLoaderError $message))
-   $message)
+(= (codex:network-proxy-loader-result-error-message $result)
+   (case (collapse $result)
+     ((((CodexNetworkProxyLoaderError $message))
+       $message))))
 
 (= (codex:config-layer-source-system $file)
    (CodexConfigLayerSourceSystem $file))

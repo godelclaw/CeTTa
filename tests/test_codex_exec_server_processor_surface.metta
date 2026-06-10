@@ -14,6 +14,13 @@
 (= (test:processor-state)
    (codex:exec-server-processor-runtime-state-new))
 
+(= (test:processor-connection-parts)
+   (codex:exec-server-json-rpc-connection-parts
+     (CodexProcessorTestOutgoing "stdio")
+     (CodexProcessorTestIncoming "stdio")
+     (CodexProcessorTestDisconnected "stdio")
+     2))
+
 (= (test:processor-detached-state)
    (codex:exec-server-processor-runtime-state-with-handler
      (test:processor-state)
@@ -139,14 +146,14 @@
 !(assertEqual
   (codex:exec-server-processor-run-connection-plan-channel-capacity
     (codex:exec-server-processor-run-connection-plan
-      (CodexConnectionParts "stdio")
+      (test:processor-connection-parts)
       (CodexRuntimePaths "root")))
   128)
 
 !(assertEqual
   (codex:exec-server-processor-run-connection-plan-runtime-state
     (codex:exec-server-processor-run-connection-plan
-      (CodexConnectionParts "stdio")
+      (test:processor-connection-parts)
       (CodexRuntimePaths "root")))
   (test:processor-state))
 
@@ -154,7 +161,7 @@
   (codex:exec-server-rpc-router-request-route
     (codex:exec-server-processor-run-connection-plan-router
       (codex:exec-server-processor-run-connection-plan
-        (CodexConnectionParts "stdio")
+        (test:processor-connection-parts)
         (CodexRuntimePaths "root")))
     "initialize")
   (CodexExecServerRegistryHandlerInitialize))
@@ -252,8 +259,12 @@
 
 !(assertEqual
   (codex:exec-server-processor-step-result-outbound
-    (test:processor-step-default
-      (test:processor-request-event 5 "missing/method")))
+    (codex:exec-server-processor-handle-request
+      (test:processor-state)
+      (codex:exec-server-registry-build-router)
+      (test:processor-request 5 "missing/method")
+      (codex:exec-server-processor-request-route-outcome-none)
+      (codex:exec-server-processor-send-outcome-ok)))
   ((CodexExecServerRpcServerOutboundError
      (CodexExecServerRpcRequestIdInteger 5)
      (CodexExecServerRpcErrorError
