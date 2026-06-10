@@ -34,6 +34,10 @@ Foundational, unblocks the most downstream behavior:
 
 1. `core/src/config/mod.rs` (~2600 LOC) — agent settings model; the single
    largest missing piece. Slice it: defaults, overrides, profile resolution.
+   In progress: ConfigOverrides and MultiAgentV2Config landed 2026-06-10 as
+   `codex/config_overrides.metta` and `codex/config_multi_agent.metta`;
+   next sub-slices are the Config field-group records, ConfigBuilder, and
+   the override application flow.
 2. `core/src/config_loader` (~300 LOC) — layered config file loading;
    pairs with the network proxy loader already ported.
 3. `core/src/session/session.rs` (~950 LOC) and `session/handlers`
