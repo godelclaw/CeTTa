@@ -49,6 +49,17 @@ the evaluator module-size constraint):
    loop, stream drain, response-item handling, tool-call dispatch. Its
    collaborators (tool router, stream parser, response items, exec) are
    already ported; this connects them.
+   In progress per the approved 6-slice plan
+   (~/.claude/plans/please-go-work-on-tender-dragonfly.md):
+   - Slice 1 landed 2026-06-10 (`response_event.metta`,
+     `model_stream.metta`, `turn_error.metta`): ResponseEvent family,
+     swappable fixture stream/client session, turn-loop CodexErr
+     variants + is_retryable.
+   - Slice 2 landed 2026-06-11 (`turn_session_state{,_record,_update}`,
+     `turn_effects.metta`): CodexTurnSessionState + exact sess.*
+     transitions, CodexTurnWorld/services/effects log.
+   - Next: slice 3 (event fold, non-plan-mode), then plan mode, retry +
+     prompt, outer loop + run_turn + tasks_regular.
 3. `core/src/session/session.rs` (955) — session state and services.
 4. `core/src/tasks/mod.rs` (712) + `tasks/regular.rs` (83) — the task
    abstraction the loop runs under.
