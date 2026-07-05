@@ -63,8 +63,8 @@ typedef struct {
     X(order, "order") \
     X(native, "native") \
     X(mork_text, "mork") \
-    X(mork_get_atoms_surface, "mork:get-atoms") \
-    X(mork_match_surface, "mork:match") \
+    X(mork_get_atoms_interface, "mork:get-atoms") \
+    X(mork_match_interface, "mork:match") \
     X(reverse, "reverse") \
     X(lex, "lex") \
     X(shortlex, "shortlex") \
@@ -227,7 +227,7 @@ typedef struct {
     X(minimal_foldl_llist, "_minimal-foldl-llist") \
     X(minimal_space_contains_exact, "_minimal-space-contains-exact") \
     X(collapse_add_next, "_collapse-add-next-atom-from-collapse-bind-result") \
-    X(cetta_surface_available, "__cetta_surface-available") \
+    X(cetta_interface_available, "__cetta_interface-available") \
     /* ── Python FFI ── */ \
     X(py_atom, "py-atom") \
     X(py_call, "py-call") \

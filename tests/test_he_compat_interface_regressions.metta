@@ -1,4 +1,4 @@
-; Regression coverage for translated HE/PeTTa surfaces that rely on the
+; Regression coverage for translated HE/PeTTa interfaces that rely on the
 ; standard identity equation, let-as-unify semantics, alpha-stable removal,
 ; and value-tuple type inference.
 

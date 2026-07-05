@@ -4,10 +4,10 @@
 !(mork:add-atom &live (edge a b))
 !(mork:add-atom &live (edge a c))
 !(assertEqual
-  (mork:dump! &live "../runtime/test_mork_full_pipeline_surface.act")
+  (mork:dump! &live "../runtime/test_mork_full_pipeline_interface.act")
   ())
 
-!(bind! &compiled (mork:open-act "../runtime/test_mork_full_pipeline_surface.act"))
+!(bind! &compiled (mork:open-act "../runtime/test_mork_full_pipeline_interface.act"))
 !(assertEqualToResult
   (get-type &compiled)
   (MorkSpace))
@@ -17,7 +17,7 @@
 
 !(bind! &loaded (mork:new-space))
 !(assertEqual
-  (mork:load-act! &loaded "../runtime/test_mork_full_pipeline_surface.act")
+  (mork:load-act! &loaded "../runtime/test_mork_full_pipeline_interface.act")
   ())
 !(assertEqualToResult
   (mork:size &loaded)

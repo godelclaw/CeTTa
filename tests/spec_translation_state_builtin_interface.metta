@@ -1,4 +1,4 @@
-; Shared builtin state surface:
+; Shared builtin state interface:
 ; new-state, get-state, change-state!.
 ;
 ; Positive example:

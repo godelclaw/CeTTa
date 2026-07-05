@@ -43,9 +43,9 @@
    "solo"))
 
 !(assertEqual
-  (mork:dump! &ws "../runtime/test_mork_encoding_boundary_surface.act")
+  (mork:dump! &ws "../runtime/test_mork_encoding_boundary_interface.act")
   ())
-!(bind! &compiled (mork:open-act "../runtime/test_mork_encoding_boundary_surface.act"))
+!(bind! &compiled (mork:open-act "../runtime/test_mork_encoding_boundary_interface.act"))
 !(assertEqualToResult
   (mork:size &compiled)
   (4))

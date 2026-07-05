@@ -798,7 +798,7 @@ static Atom *grounded_repr(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     return atom_string(a, atom_to_parseable_string(a, args[0]));
 }
 
-/* Text parsing deliberately has two surfaces:
+/* Text parsing deliberately has two interfaces:
    - parse is strict: the string must contain exactly one atom, with only
      whitespace/comments around it. This is the safer PeTTa-style default.
    - parse-first is stream-like: it returns the first parsed atom and ignores

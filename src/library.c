@@ -1786,13 +1786,13 @@ static Atom *library_atoms_from_text(Arena *a, const uint8_t *bytes, size_t len,
     return library_atoms_from_text_impl(a, bytes, len, call, true);
 }
 
-static char *library_mm2_surface_text(Arena *a, Atom *atom) {
+static char *library_mm2_interface_text(Arena *a, Atom *atom) {
     if (atom && atom->kind == ATOM_EXPR && atom->expr.len == 2 &&
         atom->expr.elems[0]->kind == ATOM_SYMBOL &&
         atom_is_symbol_id(atom->expr.elems[0], g_builtin_syms.quote)) {
         atom = atom->expr.elems[1];
     }
-    return cetta_mm2_atom_to_surface_string(a, atom);
+    return cetta_mm2_atom_to_interface_string(a, atom);
 }
 
 static Atom *library_unquote_atom(Atom *atom) {
@@ -5520,7 +5520,7 @@ static bool library_mork_atoms_visit_row(Atom *atom, void *ctx) {
     return library_mork_atom_rows_push((LibraryMorkAtomRows *)ctx, atom);
 }
 
-static Atom *mork_space_surface_native(CettaLibraryContext *ctx,
+static Atom *mork_space_interface_native(CettaLibraryContext *ctx,
                                        Arena *a, Atom *head, Atom **args,
                                        uint32_t nargs, SymbolId which) {
     CettaMorkSpaceResource *target = NULL;
@@ -5940,7 +5940,7 @@ static Atom *mork_space_surface_native(CettaLibraryContext *ctx,
     }
 
     return atom_error(a, library_call_expr(a, head, args, nargs),
-                      atom_string(a, "unknown mork surface helper"));
+                      atom_string(a, "unknown mork interface helper"));
 }
 
 static Atom *mork_space_include_native(CettaLibraryContext *ctx, Arena *a,
@@ -7212,7 +7212,7 @@ static Atom *cetta_library_dispatch_mork(CettaLibraryContext *ctx, Arena *a,
         head_id == g_builtin_syms.lib_mork_space_size ||
         head_id == g_builtin_syms.lib_mork_space_count_atoms ||
         head_id == g_builtin_syms.lib_mork_space_match) {
-        return mork_space_surface_native(ctx, a, head, args, nargs, head_id);
+        return mork_space_interface_native(ctx, a, head, args, nargs, head_id);
     }
     if (head_id == g_builtin_syms.lib_mork_join ||
         head_id == g_builtin_syms.lib_mork_meet ||
@@ -7479,7 +7479,7 @@ static Atom *mm2_program_add_native(CettaLibraryContext *ctx, Arena *a,
         return library_signature_error(a, head, args, nargs,
                                        "expected mork-program handle as first argument");
     }
-    text = library_mm2_surface_text(a, args[1]);
+    text = library_mm2_interface_text(a, args[1]);
     if (!cetta_mork_bridge_program_add_sexpr(program, (const uint8_t *)text,
                                              strlen(text), NULL)) {
         return library_mm2_bridge_error(a, head, args, nargs,
@@ -7531,16 +7531,16 @@ static Atom *mm2_load_file_native(CettaLibraryContext *ctx, Arena *a,
     }
 
     for (int i = 0; i < n; i++) {
-        char *surface = cetta_mm2_atom_to_surface_string(&parse_arena, atoms[i]);
+        char *interface = cetta_mm2_atom_to_interface_string(&parse_arena, atoms[i]);
         bool ok;
         if (cetta_mm2_atom_is_exec_rule(atoms[i])) {
             ok = cetta_mork_bridge_program_add_sexpr(program,
-                                                     (const uint8_t *)surface,
-                                                     strlen(surface), NULL);
+                                                     (const uint8_t *)interface,
+                                                     strlen(interface), NULL);
         } else {
             ok = cetta_mork_bridge_context_add_sexpr(context,
-                                                     (const uint8_t *)surface,
-                                                     strlen(surface), NULL);
+                                                     (const uint8_t *)interface,
+                                                     strlen(interface), NULL);
         }
         if (!ok) {
             error = library_mm2_bridge_error(
@@ -7686,7 +7686,7 @@ static Atom *mm2_context_add_like_native(CettaLibraryContext *ctx, Arena *a,
         return library_signature_error(a, head, args, nargs,
                                        "expected mork-context handle as first argument");
     }
-    text = library_mm2_surface_text(a, args[1]);
+    text = library_mm2_interface_text(a, args[1]);
     if (remove_mode) {
         ok = cetta_mork_bridge_context_remove_sexpr(context, (const uint8_t *)text,
                                                     strlen(text), NULL);

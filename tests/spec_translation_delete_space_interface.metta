@@ -1,4 +1,4 @@
-; Audit: delete-space lifecycle surface after a populated named space.
+; Audit: delete-space lifecycle interface after a populated named space.
 
 !(bind! &bag (new-space))
 !(add-atom &bag doomed)

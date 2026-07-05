@@ -1,4 +1,4 @@
-surface_id	direction	kind	payload_shape	benchmark	status	notes
+interface_id	direction	kind	payload_shape	benchmark	status	notes
 add-singular-lowered	host->rust	mutation	singular expr lowered in C	./runtime/bench_mork_bridge_add	implemented	Measures lowering plus one expr-byte bridge call per atom.
 add-singular-preencoded	host->rust	mutation	singular expr already encoded	./runtime/bench_mork_bridge_add	implemented	Measures low-level bridge call plus PathMap insert without C lowering.
 add-batch-lowered	host->rust	mutation	length-prefixed batch lowered in C	./runtime/bench_mork_bridge_add	implemented	Measures lowered batch packet build plus one batch bridge call.
@@ -34,13 +34,13 @@ cursor-child-bytes-root	rust->host	cursor	read root child bytes	./runtime/bench_
 cursor-child-bytes-branch	rust->host	cursor	read branch child bytes	./runtime/bench_mork_bridge_scalar_cursor	implemented	Measures child-label return cost one level above streamed values.
 snapshot-dump-packet	rust->host	snapshot	space dump to bridge packet	./runtime/bench_mork_bridge_space_ops	implemented	Separates snapshot packet return from ACT file I/O.
 act-dump	rust->host	snapshot	space dump to ACT bytes/file	./runtime/bench_mork_bridge_space_ops	implemented	Measures ACT snapshot export cost to a stable file path.
-act-open	host->rust	snapshot	open attached ACT handle	-	planned	Not directly exposed on the low-level bridge; measure at the higher-level MORK surface if needed.
+act-open	host->rust	snapshot	open attached ACT handle	-	planned	Not directly exposed on the low-level bridge; measure at the higher-level MORK interface if needed.
 act-load	host->rust	snapshot	load ACT into live space	./runtime/bench_mork_bridge_space_ops	implemented	Measures materialized ACT startup latency into a fresh live bridge space.
 space-join-new	host->rust	algebra	join two bridge spaces into new handle	./runtime/bench_mork_bridge_space_ops	implemented	Measures algebra allocation plus join work without mutating the input handles.
-space-join-into	host->rust	algebra	join rhs into destination handle	./runtime/bench_mork_bridge_space_ops	implemented	Matches the mutating surface CeTTa currently exposes at the language layer.
+space-join-into	host->rust	algebra	join rhs into destination handle	./runtime/bench_mork_bridge_space_ops	implemented	Matches the mutating interface CeTTa currently exposes at the language layer.
 space-meet-new	host->rust	algebra	meet two bridge spaces into new handle	./runtime/bench_mork_bridge_space_ops	implemented	Measures algebra allocation plus meet work without mutating the input handles.
-space-meet-into	host->rust	algebra	meet rhs into destination handle	./runtime/bench_mork_bridge_space_ops	implemented	Matches the mutating surface CeTTa currently exposes at the language layer.
+space-meet-into	host->rust	algebra	meet rhs into destination handle	./runtime/bench_mork_bridge_space_ops	implemented	Matches the mutating interface CeTTa currently exposes at the language layer.
 space-subtract-new	host->rust	algebra	subtract one bridge space from another into new handle	./runtime/bench_mork_bridge_space_ops	implemented	Measures algebra allocation plus subtraction work without mutating the input handles.
-space-subtract-into	host->rust	algebra	subtract rhs from destination handle	./runtime/bench_mork_bridge_space_ops	implemented	Matches the mutating surface CeTTa currently exposes at the language layer.
+space-subtract-into	host->rust	algebra	subtract rhs from destination handle	./runtime/bench_mork_bridge_space_ops	implemented	Matches the mutating interface CeTTa currently exposes at the language layer.
 space-restrict-new	host->rust	algebra	restrict one bridge space by another into new handle	./runtime/bench_mork_bridge_space_ops	implemented	Measures algebra allocation plus prefix restriction without mutating the input handles.
-space-restrict-into	host->rust	algebra	restrict destination by rhs selector	./runtime/bench_mork_bridge_space_ops	implemented	Matches the mutating surface CeTTa currently exposes at the language layer.
+space-restrict-into	host->rust	algebra	restrict destination by rhs selector	./runtime/bench_mork_bridge_space_ops	implemented	Matches the mutating interface CeTTa currently exposes at the language layer.

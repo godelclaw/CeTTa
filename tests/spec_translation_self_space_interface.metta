@@ -1,8 +1,8 @@
-; Shared default-atomspace surface:
+; Shared default-atomspace interface:
 ; add-atom &self, match &self, remove-atom &self.
 ;
 ; Positive example:
-; - translator should preserve this surface and CeTTa/PeTTa should agree.
+; - translator should preserve this interface and CeTTa/PeTTa should agree.
 ;
 ; Negative example:
 ; - this does not exercise named spaces or get-atoms &self bag contents.

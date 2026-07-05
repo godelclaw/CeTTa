@@ -1,2 +1,2 @@
-; HE surfaces missing register-module! arguments directly.
+; HE interfaces missing register-module! arguments directly.
 !(register-module!)

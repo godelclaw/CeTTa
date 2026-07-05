@@ -150,18 +150,18 @@ last_payload="$(awk '
 ' "$logfile")"
 last_payload="${last_payload//$'\t'/ }"
 
-first_surface_error="$(awk '
+first_interface_error="$(awk '
     /^[A-Z_]+=/{next}
     index($0, "(Error ") > 0 { print; exit }
 ' "$logfile")"
-first_surface_error="${first_surface_error//$'\t'/ }"
+first_interface_error="${first_interface_error//$'\t'/ }"
 
 status_reason="exit-status"
 if [[ "$status" == "timeout" ]]; then
     status_reason="timeout"
-elif [[ "$status" == "pass" && -n "$first_surface_error" ]]; then
+elif [[ "$status" == "pass" && -n "$first_interface_error" ]]; then
     status="fail"
-    status_reason="surface-error-payload"
+    status_reason="interface-error-payload"
 fi
 
 printf 'NAME=%s\n' "$witness_name"
@@ -178,7 +178,7 @@ printf 'RSS_KB=%s\n' "${rss_kib:-unknown}"
 printf 'COMMAND=%s\n' "$run_command"
 printf 'NOTES=%s\n' "$notes"
 printf 'LAST_PAYLOAD=%s\n' "${last_payload:-}"
-printf 'FIRST_SURFACE_ERROR=%s\n' "${first_surface_error:-}"
+printf 'FIRST_INTERFACE_ERROR=%s\n' "${first_interface_error:-}"
 printf 'TSV_RECORD=%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$witness_name" \
     "$commit" \

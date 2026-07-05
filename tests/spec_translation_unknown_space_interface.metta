@@ -1,4 +1,4 @@
-; Audit: unknown-space error surface for the core space operations.
+; Audit: unknown-space error interface for the core space operations.
 
 !(get-atoms &fresh)
 !(add-atom &fresh token)

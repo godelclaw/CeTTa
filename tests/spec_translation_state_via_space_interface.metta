@@ -5,7 +5,7 @@
 ;   future theorem bridge for state atoms.
 ;
 ; Negative example:
-; - it is not the builtin new-state/get-state/change-state! surface.
+; - it is not the builtin new-state/get-state/change-state! interface.
 
 !(bind! &statebox (new-space))
 !(add-atom &statebox (state-value 0))

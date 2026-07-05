@@ -1,6 +1,6 @@
 //! C FFI bridge between CeTTa and the MORK/PathMap substrate.
 //!
-//! The exported surface is intentionally split into a few families:
+//! The exported interface is intentionally split into a few families:
 //! - space lifecycle, mutation, algebra, and query entry points
 //! - cursor/product-cursor/overlay-cursor read-side inspection
 //! - program/context helpers for ACT-oriented execution
@@ -82,7 +82,7 @@ struct BridgeSpace {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum BridgeStorageMode {
-    // Raw expression storage for explicit lib_mork / `mork:` surfaces.
+    // Raw expression storage for explicit lib_mork / `mork:` interfaces.
     RawExprs,
     // CeTTa-owned counted storage for generic `(new-space pathmap)`.
     CountedPathmap,
@@ -1095,7 +1095,7 @@ fn bridge_stored_atom_count(bridge: &BridgeSpace) -> u64 {
     bridge.inner.btm.val_count() as u64
 }
 
-// Same-handle algebra is valid at the CeTTa surface. Clone the source view first so the
+// Same-handle algebra is valid at the CeTTa interface. Clone the source view first so the
 // native mutator never observes aliased mutable/immutable borrows of the same bridge space.
 unsafe fn bridge_space_mutate_from_raw(
     dst: *mut MorkSpace,
@@ -5644,7 +5644,7 @@ mod tests {
     }
 
     #[test]
-    fn add_text_dump_canonicalizes_surface_spacing() {
+    fn add_text_dump_canonicalizes_interface_spacing() {
         let _guard = test_guard();
         let raw = mork_space_new();
         assert!(!raw.is_null());
@@ -5681,7 +5681,7 @@ mod tests {
     }
 
     #[test]
-    fn expr_bytes_mutation_matches_text_surface_roundtrip() {
+    fn expr_bytes_mutation_matches_text_interface_roundtrip() {
         let _guard = test_guard();
         let raw = mork_space_new();
         assert!(!raw.is_null());
@@ -5946,7 +5946,7 @@ mod tests {
     }
 
     #[test]
-    fn query_debug_surfaces_candidate_variable_match() {
+    fn query_debug_interfaces_candidate_variable_match() {
         let _guard = test_guard();
         let raw = mork_space_new();
         assert!(!raw.is_null());

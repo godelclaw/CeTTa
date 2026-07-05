@@ -1,4 +1,4 @@
-; he-compat exposes Rust HE core semantics, not CeTTa core-surface extensions.
+; he-compat exposes Rust HE core semantics, not CeTTa core-interface extensions.
 
 !(foldl-atom (1 2 3) 0 $a $b (eval (+ $a $b)))
 

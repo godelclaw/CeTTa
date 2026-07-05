@@ -1,2 +1,2 @@
-; HE surfaces missing import! arguments directly.
+; HE interfaces missing import! arguments directly.
 !(import!)

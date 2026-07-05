@@ -417,8 +417,8 @@ static int run_mm2_program_via_mork(Arena *arena, Atom **atoms, int n,
     }
 
     for (int i = 0; i < n; i++) {
-        char *surface = cetta_mm2_atom_to_surface_string(arena, atoms[i]);
-        bool ok = cetta_mork_bridge_space_add_text(space, surface, &ignored);
+        char *interface = cetta_mm2_atom_to_interface_string(arena, atoms[i]);
+        bool ok = cetta_mork_bridge_space_add_text(space, interface, &ignored);
         if (!ok) {
             fprintf(stderr, "error: MM2 runtime could not load atom into live space: %s\n",
                     cetta_mork_bridge_last_error());
@@ -1852,7 +1852,7 @@ int main(int argc, char **argv) {
             }
 
             /* Otherwise: add to space */
-            /* MM2 lowering still owns this mutable surface. */
+            /* MM2 lowering still owns this mutable interface. */
             space_add(&space, at);
             i++;
             continue;

@@ -5,10 +5,10 @@
 !(mork:add-atom &src (edge a b))
 !(mork:add-atom &src (edge b c))
 !(assertEqual
-  (mork:dump! &src "../runtime/test_mork_open_act_surface.act")
+  (mork:dump! &src "../runtime/test_mork_open_act_interface.act")
   ())
 
-!(bind! &compiled (mork:open-act "../runtime/test_mork_open_act_surface.act"))
+!(bind! &compiled (mork:open-act "../runtime/test_mork_open_act_interface.act"))
 !(assertEqualToResult
   (get-type &compiled)
   (MorkSpace))

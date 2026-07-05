@@ -1,7 +1,7 @@
 {
   "generated_on": "2026-03-25",
   "scope": [
-    "HE MinimalMeTTa / RuntimeContract surfaces",
+    "HE MinimalMeTTa / RuntimeContract interfaces",
     "selected HE 0.2.10 oracle probes",
     "CeTTa builtin heads and dedicated tests"
   ],
@@ -140,7 +140,7 @@
         "test_decons_atom_extra_args_error.metta"
       ],
       "status": "covered",
-      "notes": "Positive and negative coverage now matches the live HE CLI surface."
+      "notes": "Positive and negative coverage now matches the live HE CLI interface."
     },
     {
       "head": "function / return",
@@ -154,7 +154,7 @@
         "test_no_return_error.metta"
       ],
       "status": "covered",
-      "notes": "Return and NoReturn surfaces both exercised."
+      "notes": "Return and NoReturn interfaces both exercised."
     },
     {
       "head": "superpose",
@@ -186,10 +186,10 @@
       "implemented_in_cetta": true,
       "positive_tests": [],
       "negative_tests": [
-        "test_call_native_surface.metta"
+        "test_call_native_interface.metta"
       ],
       "status": "covered",
-      "notes": "CeTTa now explicitly fences direct user-level call-native with the same error surface observed in local HE. Positive native dispatch remains intentionally unsupported from user MeTTa because the docs mark it internal-only."
+      "notes": "CeTTa now explicitly fences direct user-level call-native with the same error interface observed in local HE. Positive native dispatch remains intentionally unsupported from user MeTTa because the docs mark it internal-only."
     },
     {
       "head": "evalc",
@@ -278,7 +278,7 @@
         "test_unknown_space_count.metta"
       ],
       "status": "extension",
-      "notes": "CeTTa-only space-cardinality extension used by overlap benchmarks. It is not present in the local HE docs/stdlib/spec stack, so it should not be counted as part of the HE-compatible core surface."
+      "notes": "CeTTa-only space-cardinality extension used by overlap benchmarks. It is not present in the local HE docs/stdlib/spec stack, so it should not be counted as part of the HE-compatible core interface."
     },
     {
       "head": "register-module! / import!",
@@ -293,7 +293,7 @@
         "test_import_partial_arity.metta"
       ],
       "status": "covered",
-      "notes": "Positive path covered plus dedicated import-surface wrong-arity regressions."
+      "notes": "Positive path covered plus dedicated import-interface wrong-arity regressions."
     },
     {
       "head": "git-module!",
@@ -354,7 +354,7 @@
         "test_pragma_max_stack_depth_error.metta"
       ],
       "status": "covered",
-      "notes": "CeTTa covers the documented directives (`type-check auto`, `interpreter bare-minimal`, `max-stack-depth` with non-negative validation), wrong-arity and key-type errors, and HE's generic symbol-key setting surface outside bare-minimal. The implementation now routes these through a session-local evaluator-options seam rather than evaluator globals, which is a cleaner base for future dialect/DSL settings. Remaining divergence is intentionally documented rather than treated as compatibility debt: exact host-runtime-specific `StackOverflow` surfacing under low stack limits is an engineering policy question, not core language debt."
+      "notes": "CeTTa covers the documented directives (`type-check auto`, `interpreter bare-minimal`, `max-stack-depth` with non-negative validation), wrong-arity and key-type errors, and HE's generic symbol-key setting interface outside bare-minimal. The implementation now routes these through a session-local evaluator-options seam rather than evaluator globals, which is a cleaner base for future dialect/DSL settings. Remaining divergence is intentionally documented rather than treated as compatibility debt: exact host-runtime-specific `StackOverflow` surfacing under low stack limits is an engineering policy question, not core language debt."
     },
     {
       "head": "foldl-atom",
@@ -366,7 +366,7 @@
       ],
       "negative_tests": [],
       "status": "covered",
-      "notes": "CeTTa covers the public HE fold surface directly. Current HE oracle still mis-evaluates the specific `chain (collapse ...) -> foldl-atom` composition; see tests/DISCREPANCIES.md."
+      "notes": "CeTTa covers the public HE fold interface directly. Current HE oracle still mis-evaluates the specific `chain (collapse ...) -> foldl-atom` composition; see tests/DISCREPANCIES.md."
     },
     {
       "head": "get-doc",

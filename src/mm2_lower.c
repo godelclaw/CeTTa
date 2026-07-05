@@ -324,7 +324,7 @@ Atom *cetta_mm2_raise_atom(Arena *a, Atom *atom) {
     return mm2_raise_atom_impl(a, atom, &syms);
 }
 
-char *cetta_mm2_atom_to_surface_string(Arena *a, Atom *atom) {
+char *cetta_mm2_atom_to_interface_string(Arena *a, Atom *atom) {
     Atom *raised = cetta_mm2_raise_atom(a, atom);
     return atom_to_string(a, raised);
 }

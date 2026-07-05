@@ -42,7 +42,7 @@
      (rho:send (rho:quote rho:nil) (rho:drop $x)))))
 
 ; lib/rho is constructor-level vocabulary only. Malformed constructor shapes
-; remain inert surface syntax here rather than being validated eagerly.
+; remain inert interface syntax here rather than being validated eagerly.
 !(assertEqualToResult
   (rho:send a b c)
   ((rho:send a b c)))

@@ -1,4 +1,4 @@
-; Text surface choices:
+; Text interface choices:
 ; - repr receives data through Atom, so it renders expressions before evaluating
 ;   them unless the caller explicitly evaluates first.
 ; - parse is strict and accepts exactly one atom, with delimiter text around it.

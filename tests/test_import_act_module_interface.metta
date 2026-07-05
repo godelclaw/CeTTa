@@ -5,10 +5,10 @@
 !(mork:add-atom &src (edge a b))
 !(mork:add-atom &src (edge b c))
 !(assertEqual
-  (mork:dump! &src "../runtime/test_import_act_module_surface.act")
+  (mork:dump! &src "../runtime/test_import_act_module_interface.act")
   ())
 
-!(import! &compiled "../runtime/test_import_act_module_surface.act")
+!(import! &compiled "../runtime/test_import_act_module_interface.act")
 !(assertEqualToResult
   (get-type &compiled)
   ((Space pathmap)))
@@ -20,7 +20,7 @@
   (hit))
 
 (base)
-!(import! &self "../runtime/test_import_act_module_surface.act")
+!(import! &self "../runtime/test_import_act_module_interface.act")
 !(assertEqualToResult
   (match &self (base) hit)
   (hit))
@@ -28,7 +28,7 @@
   (match &self (edge a b) hit)
   (hit))
 
-!(bind! &mod (mod-space! "../runtime/test_import_act_module_surface.act"))
+!(bind! &mod (mod-space! "../runtime/test_import_act_module_interface.act"))
 !(assertEqualToResult
   (get-type &mod)
   ((Space pathmap)))

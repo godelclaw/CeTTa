@@ -245,8 +245,8 @@ def main() -> int:
     args = parser.parse_args()
 
     catalog = load_catalog(args.catalog)
-    if not catalog.get("no_runtime_trace_or_certificate_surface", False):
-        raise RuntimeError("catalog must explicitly forbid runtime trace/certificate surface")
+    if not catalog.get("no_runtime_trace_or_certificate_interface", False):
+        raise RuntimeError("catalog must explicitly forbid runtime trace/certificate interface")
 
     run_mettapedia_oracle(args.results, args.scratch_dir)
     check_catalog_tier0_1(catalog, args.cetta)

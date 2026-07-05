@@ -1,8 +1,8 @@
-; Named-space shared-handle operational surface:
+; Named-space shared-handle operational interface:
 ; new-space, add-atom, match, get-atoms, remove-atom.
 ;
 ; Positive example:
-; - gives an empirical cross-runtime check for the explicit-space surface.
+; - gives an empirical cross-runtime check for the explicit-space interface.
 ; - the handle-bound atomspace ops are the intended next bridge target beyond &self.
 ;
 ; Negative example:

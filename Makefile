@@ -329,27 +329,27 @@ HE_COMPAT_GENERATED_DIR = tests/generated/he_compat
 HE_COMPAT_CATALOG = $(HE_COMPAT_GENERATED_DIR)/he_compat_cases_2026-06-25.json
 HE_NATIVE_CONTRACTS = $(HE_COMPAT_GENERATED_DIR)/he_native_contracts_2026-06-25.json
 TEST_MANIFEST = tests/test_manifest.tsv
-PYTHON_TESTS = tests/test_py_ops_surface.metta tests/test_import_foreign_python_file.metta tests/test_import_foreign_pkg_error.metta tests/test_namespace_sugar_guardrails.metta
+PYTHON_TESTS = tests/test_py_ops_interface.metta tests/test_import_foreign_python_file.metta tests/test_import_foreign_pkg_error.metta tests/test_namespace_sugar_guardrails.metta
 PATHMAP_REQUIRED_TESTS = \
 	tests/test_space_type.metta \
 	tests/test_space_engine_backend.metta \
 	tests/test_add_atom_nodup_pathmap_alpha_regression.metta \
 	tests/test_bigint_bridge_roundtrip_regression.metta \
 	tests/test_rational_bridge_roundtrip_regression.metta \
-	tests/test_import_act_module_surface.metta \
+	tests/test_import_act_module_interface.metta \
 	tests/test_include_mm2_space_target.metta \
 	tests/test_module_inventory_act_registered_root.metta \
 	tests/test_mork_act_roundtrip.metta \
-	tests/test_pathmap_counted_space_surface.metta \
+	tests/test_pathmap_counted_space_interface.metta \
 	tests/test_pathmap_contextual_var_projection_remove.metta \
 	tests/test_space_batch_copy_optimizer_guards.metta \
 	tests/test_pathmap_backend_primary_growth_regression.metta \
 	tests/test_pathmap_fc_depth3_count_regression.metta \
 	tests/test_pathmap_match_copy_var_identity_regression.metta \
-	tests/test_pathmap_typed_query_surface.metta \
+	tests/test_pathmap_typed_query_interface.metta \
 	tests/test_match_chain_cross_space_pathmap_regression.metta \
 	tests/test_effect_append_batch_fastpath.metta \
-	tests/test_space_batch_copy_surfaces.metta \
+	tests/test_space_batch_copy_interfaces.metta \
 	tests/test_rational_bridge_roundtrip_regression.metta \
 	tests/test_mork_fc_depth3_witness_regression.metta \
 	tests/test_mork_recursive_bc_micro_regression.metta \
@@ -382,7 +382,7 @@ RUNTIME_STATS_METTA_TESTS = \
 	tests/test_rhometta_payload_new_space_affine_runtime_stats.metta \
 	tests/test_rhometta_payload_scratch_discard_runtime_stats.metta \
 	tests/test_rhometta_threaded_runtime_stats.metta \
-	tests/test_runtime_stats_surface.metta \
+	tests/test_runtime_stats_interface.metta \
 	tests/test_table_delayed_query_replay_regression.metta \
 	tests/test_table_delayed_single_tail_reenter_regression.metta \
 	tests/test_table_incremental_stage.metta \
@@ -402,9 +402,9 @@ BACKEND_DEDICATED_TESTS = \
 	tests/test_closed_stream_fastpath.metta \
 	tests/test_closed_stream_runtime_stats.metta \
 	$(RUNTIME_STATS_METTA_TESTS) \
-	tests/test_pretty_vars_surface.metta \
-	tests/test_import_act_module_surface.metta \
-	tests/test_import_mm2_module_surface.metta \
+	tests/test_pretty_vars_interface.metta \
+	tests/test_import_act_module_interface.metta \
+	tests/test_import_mm2_module_interface.metta \
 	tests/test_include_mm2_space_target.metta \
 	tests/test_mm2_kiss_add_remove.metta \
 	tests/test_mm2_kiss_fractal_priority.metta \
@@ -413,27 +413,27 @@ BACKEND_DEDICATED_TESTS = \
 	tests/test_module_inventory_act_registered_root.metta \
 	tests/test_mork_act_roundtrip.metta \
 	tests/test_mork_attached_exact_match_regression.metta \
-	tests/test_mork_algebra_surface.metta \
-	tests/test_mork_counterexample_loom_surface.metta \
-	tests/test_mork_encoding_boundary_surface.metta \
-	tests/test_mork_full_pipeline_surface.metta \
-	tests/test_mork_handle_errors_surface.metta \
+	tests/test_mork_algebra_interface.metta \
+	tests/test_mork_counterexample_loom_interface.metta \
+	tests/test_mork_encoding_boundary_interface.metta \
+	tests/test_mork_full_pipeline_interface.metta \
+	tests/test_mork_handle_errors_interface.metta \
 	tests/test_mork_kiss_examples.metta \
-	tests/test_mork_lib_surface.metta \
-	tests/test_mork_long_string_surface.metta \
+	tests/test_mork_lib_interface.metta \
+	tests/test_mork_long_string_interface.metta \
 	tests/test_mork_native_handle_fresh_id_regression.metta \
 	tests/test_mork_add_atoms_runtime_stats.metta \
 	tests/test_mm2_match_order_is_unordered.metta \
 	tests/test_mork_mm2_metta_showcase.metta \
-	tests/test_mork_open_act_surface.metta \
-	tests/test_mork_overlay_zipper_surface.metta \
-	tests/test_mork_product_zipper_surface.metta \
-	tests/test_mork_zipper_surface.metta \
+	tests/test_mork_open_act_interface.metta \
+	tests/test_mork_overlay_zipper_interface.metta \
+	tests/test_mork_product_zipper_interface.metta \
+	tests/test_mork_zipper_interface.metta \
 	tests/test_import_mm2_mork_session_lowering.metta \
 	tests/test_mork_runtime_stats_isolation.metta \
 	tests/test_pathmap_direct_store_runtime_stats.metta \
-	tests/test_new_space_mork_surface.metta \
-	tests/test_step_space_surface.metta
+	tests/test_new_space_mork_interface.metta \
+	tests/test_step_space_interface.metta
 
 BACKEND_HEAVY_GOLDEN_TESTS = \
 	tests/test_bio_bc_let_hidden_env_regression.metta \
@@ -1175,7 +1175,7 @@ test-git-module: $(BIN) prepare-git-test-fixture
 test-git-module-profiles: test-git-module $(BIN) prepare-git-test-fixture
 	@pass=0; fail=0; \
 	printf '%s\n' \
-		'; he-compat should still expose the public HE git-module! surface.' \
+		'; he-compat should still expose the public HE git-module! interface.' \
 		'!(git-module! "$(GIT_TEST_URL)")' \
 		'!(import! &gitdb git_module_fixture)' \
 		'!(assertEqualToResult (match &gitdb (git-root $$x) $$x) (loaded))' \
@@ -1183,9 +1183,9 @@ test-git-module-profiles: test-git-module $(BIN) prepare-git-test-fixture
 	result=$$(CETTA_GIT_MODULE_CACHE_DIR="$(GIT_TEST_CACHE_DIR)" $(CETTA_BIN_INVOKE) --profile he-compat --lang he "$(GIT_TEST_COMPAT_DYNAMIC)" 2>&1); \
 	expected=$$'[()]\n[()]\n[()]'; \
 	if [ "$$result" = "$$expected" ]; then \
-		echo "PASS: he-compat git-module! surface"; pass=$$((pass + 1)); \
+		echo "PASS: he-compat git-module! interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: he-compat git-module! surface"; \
+		echo "FAIL: he-compat git-module! interface"; \
 		diff <(printf '%s\n' "$$expected") <(printf '%s\n' "$$result") | head -20; \
 		fail=$$((fail + 1)); \
 	fi; \
@@ -1242,7 +1242,7 @@ test: $(BIN) test-manifest-strict test-git-module test-symbolid-guard test-varia
 	for f in tests/test_*.metta tests/spec_*.metta tests/he_*.metta; do \
 		[ -f "$$f" ] || continue; \
 		if [ "$(ENABLE_PYTHON)" != "1" ] && \
-		   { [ "$$f" = "tests/test_py_ops_surface.metta" ] || \
+		   { [ "$$f" = "tests/test_py_ops_interface.metta" ] || \
 		     [ "$$f" = "tests/test_import_foreign_python_file.metta" ] || \
 		     [ "$$f" = "tests/test_import_foreign_pkg_error.metta" ] || \
 		     [ "$$f" = "tests/test_namespace_sugar_guardrails.metta" ]; }; then \
@@ -1352,7 +1352,7 @@ test-stdlib-growth-memory-regression: $(BIN)
 	@$(CETTA_SCRIPT_RUN_ENV) ./tests/test_stdlib_growth_memory_regression.sh "$(CETTA_SCRIPT_BIN)"
 
 # Differential soundness audit for the rhometta quiet-frontier macro step:
-# generate a corpus saturating the payload/effect/space-sharing surface, run
+# generate a corpus saturating the payload/effect/space-sharing interface, run
 # each program macro-on vs CETTA_RHO_NO_MACRO=1 (the exact reference oracle),
 # and assert the may-sets coincide.  Any divergence = the macro optimization is
 # unsound on that program.  This is the permanent backstop behind the C3 gate.
@@ -1521,7 +1521,7 @@ test-rhocalc: $(BIN)
 	         tests/rhocalc/open_name_variable_roundtrip_h7.mrho \
 	         tests/rhocalc/open_quoted_name_roundtrip_h7.mrho \
 	         tests/rhocalc/free_drop_is_stuck_h4.mrho \
-	         tests/rhocalc/surface_open_name_variable.rho; do \
+	         tests/rhocalc/interface_open_name_variable.rho; do \
 		exp="$${f%.*}.expected"; \
 		result=$$($(CETTA_BIN_INVOKE) --lang rhocalc "$$f" 2>&1); \
 		status=$$?; \
@@ -1694,14 +1694,14 @@ test-rhocalc: $(BIN)
 	else \
 		echo "SKIP: rhocalc M3 rholang-cli overlap (set RHOLANG_CLI or install rholang-cli)"; \
 	fi; \
-	for f in tests/test_lts_surface.metta tests/test_rho_lib_surface.metta tests/test_rho_lib_hygiene_surface.metta tests/test_rhometta_lib_surface.metta tests/test_rhometta_isolation_oracle.metta tests/test_rhometta_demo_dedfarm.metta tests/test_rhometta_demo_revision.metta tests/test_rhometta_demo_mayset.metta tests/test_rhometta_demo_ecan.metta tests/test_lts_rho_surface.metta tests/test_lts_rho_cost_surface.metta; do \
+	for f in tests/test_lts_interface.metta tests/test_rho_lib_interface.metta tests/test_rho_lib_hygiene_interface.metta tests/test_rhometta_lib_interface.metta tests/test_rhometta_isolation_oracle.metta tests/test_rhometta_demo_dedfarm.metta tests/test_rhometta_demo_revision.metta tests/test_rhometta_demo_mayset.metta tests/test_rhometta_demo_ecan.metta tests/test_lts_rho_interface.metta tests/test_lts_rho_cost_interface.metta; do \
 		exp="$${f%.metta}.expected"; \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "$$f" 2>&1); \
 		if [ "$$result" = "$$(cat "$$exp")" ]; then \
-			echo "PASS: rhocalc lib/rho surface $$f"; \
+			echo "PASS: rhocalc lib/rho interface $$f"; \
 			pass=$$((pass + 1)); \
 		else \
-			echo "FAIL: rhocalc lib/rho surface $$f"; \
+			echo "FAIL: rhocalc lib/rho interface $$f"; \
 			diff <(cat "$$exp") <(echo "$$result") | head -20; \
 			fail=$$((fail + 1)); \
 		fi; \
@@ -1786,27 +1786,27 @@ test-rhocalc: $(BIN)
 		fail=$$((fail + 1)); \
 	fi; \
 	if ! rg -n 'rhocalc_one_step|rhocalc_steps_atom|RHO_STEPS|rho[.:]steps' src lib tests scripts benchmarks >/dev/null; then \
-		echo "PASS: rhocalc old step surface purged"; \
+		echo "PASS: rhocalc old step interface purged"; \
 		pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: rhocalc old step surface purged"; \
+		echo "FAIL: rhocalc old step interface purged"; \
 		rg -n 'rhocalc_one_step|rhocalc_steps_atom|RHO_STEPS|rho[.:]steps' src lib tests scripts benchmarks || true; \
 		fail=$$((fail + 1)); \
 	fi; \
-expected_allow_files=$$(printf '%s\n' lib/rho.metta tests/test_rho_lib_hygiene_surface.metta | sort); \
+expected_allow_files=$$(printf '%s\n' lib/rho.metta tests/test_rho_lib_hygiene_interface.metta | sort); \
 	actual_allow_files=$$(rg -l 'rho[.:](step|frontier|reduce|eval)([^[:alnum:]_-]|$$)' lib tests src scripts benchmarks | sort); \
 	if [ "$$actual_allow_files" = "$$expected_allow_files" ]; then \
-		echo "PASS: rhocalc de-step allow-list surface"; \
+		echo "PASS: rhocalc de-step allow-list interface"; \
 		pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: rhocalc de-step allow-list surface"; \
+		echo "FAIL: rhocalc de-step allow-list interface"; \
 		printf '%s\n' '--- expected files ---'; \
 		printf '%s\n' "$$expected_allow_files"; \
 		printf '%s\n' '--- actual files ---'; \
 		printf '%s\n' "$$actual_allow_files"; \
 		fail=$$((fail + 1)); \
 	fi; \
-	result=$$($(CETTA_BIN_INVOKE) --translate --syntax rho --lang rhocalc --lang rhocalc --syntax mrho tests/rhocalc/pure_surface.rho 2>&1); \
+	result=$$($(CETTA_BIN_INVOKE) --translate --syntax rho --lang rhocalc --lang rhocalc --syntax mrho tests/rhocalc/pure_interface.rho 2>&1); \
 	if [ "$$result" = "$$(cat tests/rhocalc/translate_rho_to_mrho.expected)" ]; then \
 		echo "PASS: rhocalc translate rho -> mrho"; \
 		pass=$$((pass + 1)); \
@@ -1842,7 +1842,7 @@ expected_allow_files=$$(printf '%s\n' lib/rho.metta tests/test_rho_lib_hygiene_s
 		diff <(cat tests/rhocalc/translate_mrho_alpha_to_rho.expected) <(echo "$$result") | head -20; \
 		fail=$$((fail + 1)); \
 	fi; \
-	result=$$($(CETTA_BIN_INVOKE) --translate --syntax rho --lang rhocalc --lang rhocalc --syntax mrho tests/rhocalc/surface_shadowing.rho 2>&1); \
+	result=$$($(CETTA_BIN_INVOKE) --translate --syntax rho --lang rhocalc --lang rhocalc --syntax mrho tests/rhocalc/interface_shadowing.rho 2>&1); \
 	if [ "$$result" = "$$(cat tests/rhocalc/translate_rho_shadow_to_mrho.expected)" ]; then \
 		echo "PASS: rhocalc translate shadow rho -> mrho"; \
 		pass=$$((pass + 1)); \
@@ -2092,10 +2092,10 @@ test-lib-parse-python-shadow-audit:
 	fi
 	@cd "$(CURDIR)" && \
 	if rg -n 'python3 scripts/lib_parse_(generalized_cli|generalized_audit|metamath_generalized_compare|rho_generalized_compare)\.py' Makefile; then \
-		echo "FAIL: lib_parse python integration-surface audit"; \
+		echo "FAIL: lib_parse python integration-interface audit"; \
 		exit 1; \
 	else \
-		echo "PASS: lib_parse python integration-surface audit"; \
+		echo "PASS: lib_parse python integration-interface audit"; \
 	fi
 	@cd "$(CURDIR)" && \
 	if rg -n 'subprocess\.run' scripts/lib_parse_*py scripts/metamath_mmlean4_summary_oracle.py | grep -v 'scripts/lib_parse_metamath_native_probe_support.py'; then \
@@ -2114,7 +2114,7 @@ test-lib-parse-python-shadow-audit:
 	@cd "$(CURDIR)" && \
 	retired='scripts/lib_parse_metamath_lr_runtime.py scripts/lib_parse_metamath_lr_summary_oracle.py scripts/lib_parse_shared_witness.py scripts/lib_parse_gparse_native_runtime.py scripts/lib_parse_generalized_runtime.py scripts/lib_parse_generalized_backend_runtime.py scripts/lib_parse_generalized_cli.py scripts/lib_parse_generalized_audit.py scripts/lib_parse_metamath_generalized_compare.py scripts/lib_parse_metamath_frontier_probe.py scripts/lib_parse_metamath_prefix_frontier.py scripts/lib_parse_metamath_stmt_prefix_frontier.py scripts/lib_parse_metamath_theorem_length_ladder.py scripts/lib_parse_metamath_context_ladder.py scripts/lib_parse_metamath_context_theorem_matrix.py scripts/lib_parse_metamath_defs_theorem_length_ladder.py scripts/lib_parse_metamath_defs_component_ladder.py scripts/lib_parse_metamath_plus_weq_variant_matrix.py scripts/lib_parse_gparse_native_grammar.py scripts/lib_parse_native_replay_bridge.py scripts/lib_parse_metta_lexer_bridge.py scripts/lib_parse_rho_generalized_compare.py scripts/lib_parse_generalized_adapters.py scripts/lib_parse_generalized_adapter_examples.py scripts/lib_parse_metamath_token_adapter.py scripts/lib_parse_rho_token_adapter.py scripts/metta_payload_io.py'; \
 	for f in $$retired; do \
-		if ! rg -n 'Retired compatibility module|Retired Python prototype module|Retired Python integration surface|Retired CLI|Retired audit wrapper|Retired comparison wrapper|Retired oracle wrapper|Retired adapter' "$$f" >/dev/null; then \
+		if ! rg -n 'Retired compatibility module|Retired Python prototype module|Retired Python integration interface|Retired CLI|Retired audit wrapper|Retired comparison wrapper|Retired oracle wrapper|Retired adapter' "$$f" >/dev/null; then \
 			echo "FAIL: lib_parse retired python stubs ($$f)"; \
 			exit 1; \
 		elif ! rg -n 'RETIRED_MESSAGE' "$$f" >/dev/null; then \
@@ -2227,7 +2227,7 @@ test-lib-parse-generalized: $(BIN)
 	else \
 		exit 1; \
 	fi
-	@result=$$("$(CETTA_SCRIPT_BIN)" -e "!(import! &self ./tests/support/rhocalc_lib_parse_translator_v3.metta)" -e "!(import! &self gparse)" -e "!(println! (gparse:glr-class \"tests/support/rhocalc_lib_parse_translator_v3.metta\" rho-g proc (rho-lex-file->toks \"tests/rhocalc/surface_shadowing.rho\")))" 2>&1 | grep -v '^Failed to create stream fd:'); \
+	@result=$$("$(CETTA_SCRIPT_BIN)" -e "!(import! &self ./tests/support/rhocalc_lib_parse_translator_v3.metta)" -e "!(import! &self gparse)" -e "!(println! (gparse:glr-class \"tests/support/rhocalc_lib_parse_translator_v3.metta\" rho-g proc (rho-lex-file->toks \"tests/rhocalc/interface_shadowing.rho\")))" 2>&1 | grep -v '^Failed to create stream fd:'); \
 	if echo "$$result" | grep -q '^Unique$$'; then \
 		echo "PASS: lib_parse generalized native corpus (rho glr unique shadowing)"; \
 	else \
@@ -2235,7 +2235,7 @@ test-lib-parse-generalized: $(BIN)
 		echo "$$result"; \
 		exit 1; \
 	fi
-	@result=$$("$(CETTA_SCRIPT_BIN)" -e "!(import! &self ./tests/support/rhocalc_lib_parse_translator_v3.metta)" -e "!(import! &self gparse)" -e "!(println! (gparse:gll-parse-shared \"tests/support/rhocalc_lib_parse_translator_v3.metta\" rho-g proc (rho-lex-file->toks \"tests/rhocalc/surface_shadowing.rho\")))" 2>&1 | grep -v '^Failed to create stream fd:'); \
+	@result=$$("$(CETTA_SCRIPT_BIN)" -e "!(import! &self ./tests/support/rhocalc_lib_parse_translator_v3.metta)" -e "!(import! &self gparse)" -e "!(println! (gparse:gll-parse-shared \"tests/support/rhocalc_lib_parse_translator_v3.metta\" rho-g proc (rho-lex-file->toks \"tests/rhocalc/interface_shadowing.rho\")))" 2>&1 | grep -v '^Failed to create stream fd:'); \
 	if echo "$$result" | grep -q '^(Unique '; then \
 		echo "PASS: lib_parse generalized native corpus (rho gll unique shadowing)"; \
 	else \
@@ -2243,7 +2243,7 @@ test-lib-parse-generalized: $(BIN)
 		echo "$$result"; \
 		exit 1; \
 	fi
-	@result=$$("$(CETTA_SCRIPT_BIN)" -e "!(import! &self ./tests/support/rhocalc_lib_parse_translator_v3.metta)" -e "!(import! &self gparse)" -e "!(println! (gparse:glr-class \"tests/support/rhocalc_lib_parse_translator_v3.metta\" rho-g proc (rho-lex-file->toks \"tests/rhocalc/surface_name_output.rho\")))" 2>&1 | grep -v '^Failed to create stream fd:'); \
+	@result=$$("$(CETTA_SCRIPT_BIN)" -e "!(import! &self ./tests/support/rhocalc_lib_parse_translator_v3.metta)" -e "!(import! &self gparse)" -e "!(println! (gparse:glr-class \"tests/support/rhocalc_lib_parse_translator_v3.metta\" rho-g proc (rho-lex-file->toks \"tests/rhocalc/interface_name_output.rho\")))" 2>&1 | grep -v '^Failed to create stream fd:'); \
 	if echo "$$result" | grep -q '^Unique$$'; then \
 		echo "PASS: lib_parse generalized native corpus (rho glr unique name-output)"; \
 	else \
@@ -2251,7 +2251,7 @@ test-lib-parse-generalized: $(BIN)
 		echo "$$result"; \
 		exit 1; \
 	fi
-	@result=$$("$(CETTA_SCRIPT_BIN)" -e "!(import! &self ./tests/support/rhocalc_lib_parse_translator_v3.metta)" -e "!(import! &self gparse)" -e "!(println! (gparse:gll-parse-shared \"tests/support/rhocalc_lib_parse_translator_v3.metta\" rho-g proc (rho-lex-file->toks \"tests/rhocalc/surface_name_output.rho\")))" 2>&1 | grep -v '^Failed to create stream fd:'); \
+	@result=$$("$(CETTA_SCRIPT_BIN)" -e "!(import! &self ./tests/support/rhocalc_lib_parse_translator_v3.metta)" -e "!(import! &self gparse)" -e "!(println! (gparse:gll-parse-shared \"tests/support/rhocalc_lib_parse_translator_v3.metta\" rho-g proc (rho-lex-file->toks \"tests/rhocalc/interface_name_output.rho\")))" 2>&1 | grep -v '^Failed to create stream fd:'); \
 	if echo "$$result" | grep -q '^(Unique '; then \
 		echo "PASS: lib_parse generalized native corpus (rho gll unique name-output)"; \
 	else \
@@ -2681,35 +2681,35 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		printf '%s\n' "$$rhocalc_cost"; \
 		fail=$$((fail + 1)); \
 	fi; \
-	he_lts=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/test_lts_he_surface.metta 2>&1); \
-	if [ "$$he_lts" = "$$(cat tests/test_lts_he_surface.expected)" ]; then \
-		echo "PASS: he-extended lts:he surface"; pass=$$((pass + 1)); \
+	he_lts=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/test_lts_he_interface.metta 2>&1); \
+	if [ "$$he_lts" = "$$(cat tests/test_lts_he_interface.expected)" ]; then \
+		echo "PASS: he-extended lts:he interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: he-extended lts:he surface"; \
-		diff <(cat tests/test_lts_he_surface.expected) <(echo "$$he_lts") | head -20; \
+		echo "FAIL: he-extended lts:he interface"; \
+		diff <(cat tests/test_lts_he_interface.expected) <(echo "$$he_lts") | head -20; \
 		fail=$$((fail + 1)); \
 	fi; \
 	formal_eval=$$($(CETTA_BIN_INVOKE) --profile he --lang he tests/test_eval_grounded.metta 2>&1); \
 	if [ "$$formal_eval" = "$$(cat tests/test_eval_grounded.expected)" ]; then \
-		echo "PASS: formal he eval surface"; pass=$$((pass + 1)); \
+		echo "PASS: formal he eval interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: formal he eval surface"; \
+		echo "FAIL: formal he eval interface"; \
 		diff <(cat tests/test_eval_grounded.expected) <(echo "$$formal_eval") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
 	formal_no_return=$$($(CETTA_BIN_INVOKE) --profile he --lang he tests/test_no_return_error.metta 2>&1); \
 	if [ "$$formal_no_return" = "$$(cat tests/test_no_return_error.expected)" ]; then \
-		echo "PASS: formal he no-return surface"; pass=$$((pass + 1)); \
+		echo "PASS: formal he no-return interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: formal he no-return surface"; \
+		echo "FAIL: formal he no-return interface"; \
 		diff <(cat tests/test_no_return_error.expected) <(echo "$$formal_no_return") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
 	formal_docs=$$($(CETTA_BIN_INVOKE) --profile he --lang he tests/he_g1_docs.metta 2>&1); \
 	if [ "$$formal_docs" = "$$(cat tests/he_g1_docs.expected)" ]; then \
-		echo "PASS: formal he documentation surface"; pass=$$((pass + 1)); \
+		echo "PASS: formal he documentation interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: formal he documentation surface"; \
+		echo "FAIL: formal he documentation interface"; \
 		diff <(cat tests/he_g1_docs.expected) <(echo "$$formal_docs") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
@@ -2733,9 +2733,9 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 	fi; \
 	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/spec_profile_count_atoms.metta 2>&1); \
 	if printf '%s\n' "$$result" | grep -Fq "(count-atoms "; then \
-		echo "PASS: he-compat count-atoms Rust-inert surface"; pass=$$((pass + 1)); \
+		echo "PASS: he-compat count-atoms Rust-inert interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: he-compat count-atoms Rust-inert surface"; \
+		echo "FAIL: he-compat count-atoms Rust-inert interface"; \
 		printf '%s\n' "$$result"; \
 		fail=$$((fail + 1)); \
 	fi; \
@@ -2770,12 +2770,12 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		diff <(cat tests/support/profile_new_space_kind_extended.expected) <(echo "$$result") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
-	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/support/profile_core_surface_compat.metta 2>&1); \
-	if [ "$$result" = "$$(cat tests/support/profile_core_surface_compat.expected)" ]; then \
-		echo "PASS: he-compat core-surface extensions are hidden"; pass=$$((pass + 1)); \
+	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/support/profile_core_interface_compat.metta 2>&1); \
+	if [ "$$result" = "$$(cat tests/support/profile_core_interface_compat.expected)" ]; then \
+		echo "PASS: he-compat core-interface extensions are hidden"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: he-compat core-surface extensions are hidden"; \
-		diff <(cat tests/support/profile_core_surface_compat.expected) <(echo "$$result") | head -10; \
+		echo "FAIL: he-compat core-interface extensions are hidden"; \
+		diff <(cat tests/support/profile_core_interface_compat.expected) <(echo "$$result") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
 	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/support/profile_filter_atom_compat_error.metta 2>&1); \
@@ -2794,12 +2794,12 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		diff <(cat tests/support/profile_include_space_target_compat_error.expected) <(echo "$$result") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
-	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/support/profile_include_compat_surface.metta 2>&1); \
-	if [ "$$result" = "$$(cat tests/support/profile_include_compat_surface.expected)" ]; then \
-		echo "PASS: he-compat include Rust result surface"; pass=$$((pass + 1)); \
+	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/support/profile_include_compat_interface.metta 2>&1); \
+	if [ "$$result" = "$$(cat tests/support/profile_include_compat_interface.expected)" ]; then \
+		echo "PASS: he-compat include Rust result interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: he-compat include Rust result surface"; \
-		diff <(cat tests/support/profile_include_compat_surface.expected) <(echo "$$result") | head -10; \
+		echo "FAIL: he-compat include Rust result interface"; \
+		diff <(cat tests/support/profile_include_compat_interface.expected) <(echo "$$result") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
 	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/support/profile_if_compat_arity.metta 2>&1); \
@@ -2826,44 +2826,44 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		diff <(cat tests/support/profile_math_domain_compat.expected) <(echo "$$result") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
-	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/support/profile_parse_compat_surface.metta 2>&1); \
-	if [ "$$result" = "$$(cat tests/support/profile_parse_compat_surface.expected)" ]; then \
-		echo "PASS: he-compat parse Rust surface"; pass=$$((pass + 1)); \
+	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/support/profile_parse_compat_interface.metta 2>&1); \
+	if [ "$$result" = "$$(cat tests/support/profile_parse_compat_interface.expected)" ]; then \
+		echo "PASS: he-compat parse Rust interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: he-compat parse Rust surface"; \
-		diff <(cat tests/support/profile_parse_compat_surface.expected) <(echo "$$result") | head -10; \
+		echo "FAIL: he-compat parse Rust interface"; \
+		diff <(cat tests/support/profile_parse_compat_interface.expected) <(echo "$$result") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
 	result=$$($(CETTA_BIN_INVOKE) --profile he --lang he tests/support/profile_numeric_formal.metta 2>&1); \
 	if [ "$$result" = "$$(cat tests/support/profile_numeric_formal.expected)" ]; then \
-		echo "PASS: formal he numeric surface"; pass=$$((pass + 1)); \
+		echo "PASS: formal he numeric interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: formal he numeric surface"; \
+		echo "FAIL: formal he numeric interface"; \
 		diff <(cat tests/support/profile_numeric_formal.expected) <(echo "$$result") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
-	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/support/profile_get_doc_compat_surface.metta 2>&1); \
-	if [ "$$result" = "$$(cat tests/support/profile_get_doc_compat_surface.expected)" ]; then \
-		echo "PASS: he-compat get-doc Rust surface"; pass=$$((pass + 1)); \
+	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/support/profile_get_doc_compat_interface.metta 2>&1); \
+	if [ "$$result" = "$$(cat tests/support/profile_get_doc_compat_interface.expected)" ]; then \
+		echo "PASS: he-compat get-doc Rust interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: he-compat get-doc Rust surface"; \
-		diff <(cat tests/support/profile_get_doc_compat_surface.expected) <(echo "$$result") | head -10; \
+		echo "FAIL: he-compat get-doc Rust interface"; \
+		diff <(cat tests/support/profile_get_doc_compat_interface.expected) <(echo "$$result") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
-	result=$$($(CETTA_BIN_INVOKE) --profile he --lang he tests/support/profile_get_doc_formal_surface.metta 2>&1); \
-	if [ "$$result" = "$$(cat tests/support/profile_get_doc_surface.expected)" ]; then \
-		echo "PASS: formal he get-doc surface"; pass=$$((pass + 1)); \
+	result=$$($(CETTA_BIN_INVOKE) --profile he --lang he tests/support/profile_get_doc_formal_interface.metta 2>&1); \
+	if [ "$$result" = "$$(cat tests/support/profile_get_doc_interface.expected)" ]; then \
+		echo "PASS: formal he get-doc interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: formal he get-doc surface"; \
-		diff <(cat tests/support/profile_get_doc_surface.expected) <(echo "$$result") | head -10; \
+		echo "FAIL: formal he get-doc interface"; \
+		diff <(cat tests/support/profile_get_doc_interface.expected) <(echo "$$result") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
-	result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/support/profile_get_doc_extended_surface.metta 2>&1); \
-	if [ "$$result" = "$$(cat tests/support/profile_get_doc_surface.expected)" ]; then \
-		echo "PASS: he-extended get-doc surface"; pass=$$((pass + 1)); \
+	result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/support/profile_get_doc_extended_interface.metta 2>&1); \
+	if [ "$$result" = "$$(cat tests/support/profile_get_doc_interface.expected)" ]; then \
+		echo "PASS: he-extended get-doc interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: he-extended get-doc surface"; \
-		diff <(cat tests/support/profile_get_doc_surface.expected) <(echo "$$result") | head -10; \
+		echo "FAIL: he-extended get-doc interface"; \
+		diff <(cat tests/support/profile_get_doc_interface.expected) <(echo "$$result") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
 	result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/spec_profile_size_extension.metta 2>&1); \
@@ -2876,9 +2876,9 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 	fi; \
 	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/spec_profile_size_extension.metta 2>&1); \
 	if printf '%s\n' "$$result" | grep -Fq "(size "; then \
-		echo "PASS: he-compat size Rust-inert surface"; pass=$$((pass + 1)); \
+		echo "PASS: he-compat size Rust-inert interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: he-compat size Rust-inert surface"; \
+		echo "FAIL: he-compat size Rust-inert interface"; \
 		printf '%s\n' "$$result"; \
 		fail=$$((fail + 1)); \
 	fi; \
@@ -2904,17 +2904,17 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 	fi; \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/spec_profile_foldl_extension.metta 2>&1); \
 		if printf '%s\n' "$$result" | grep -Fq "(foldl-atom-in-space "; then \
-			echo "PASS: he-compat foldl-atom-in-space Rust-inert surface"; pass=$$((pass + 1)); \
+			echo "PASS: he-compat foldl-atom-in-space Rust-inert interface"; pass=$$((pass + 1)); \
 		else \
-			echo "FAIL: he-compat foldl-atom-in-space Rust-inert surface"; \
+			echo "FAIL: he-compat foldl-atom-in-space Rust-inert interface"; \
 		printf '%s\n' "$$result"; \
 		fail=$$((fail + 1)); \
 	fi; \
 	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/spec_profile_foldl_public.metta 2>&1); \
 	if [ "$$result" = "$$(cat tests/spec_profile_foldl_public.expected)" ]; then \
-		echo "PASS: he-compat foldl-atom Rust core surface"; pass=$$((pass + 1)); \
+		echo "PASS: he-compat foldl-atom Rust core interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: he-compat foldl-atom Rust core surface"; \
+		echo "FAIL: he-compat foldl-atom Rust core interface"; \
 		diff <(cat tests/spec_profile_foldl_public.expected) <(echo "$$result") | head -10; \
 		fail=$$((fail + 1)); \
 	fi; \
@@ -2928,9 +2928,9 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		fi; \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/spec_profile_collect_extension.metta 2>&1); \
 		if printf '%s\n' "$$result" | grep -Fq "(collect "; then \
-			echo "PASS: he-compat collect Rust-inert surface"; pass=$$((pass + 1)); \
+			echo "PASS: he-compat collect Rust-inert interface"; pass=$$((pass + 1)); \
 		else \
-			echo "FAIL: he-compat collect Rust-inert surface"; \
+			echo "FAIL: he-compat collect Rust-inert interface"; \
 			printf '%s\n' "$$result"; \
 			fail=$$((fail + 1)); \
 		fi; \
@@ -2944,9 +2944,9 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		fi; \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/spec_profile_select_extension.metta 2>&1); \
 		if printf '%s\n' "$$result" | grep -Fq "(select "; then \
-			echo "PASS: he-compat select Rust-inert surface"; pass=$$((pass + 1)); \
+			echo "PASS: he-compat select Rust-inert interface"; pass=$$((pass + 1)); \
 		else \
-			echo "FAIL: he-compat select Rust-inert surface"; \
+			echo "FAIL: he-compat select Rust-inert interface"; \
 			printf '%s\n' "$$result"; \
 			fail=$$((fail + 1)); \
 		fi; \
@@ -2960,9 +2960,9 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		fi; \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/spec_profile_fold_extension.metta 2>&1); \
 		if printf '%s\n' "$$result" | grep -Fq "(fold "; then \
-			echo "PASS: he-compat fold Rust-inert surface"; pass=$$((pass + 1)); \
+			echo "PASS: he-compat fold Rust-inert interface"; pass=$$((pass + 1)); \
 		else \
-			echo "FAIL: he-compat fold Rust-inert surface"; \
+			echo "FAIL: he-compat fold Rust-inert interface"; \
 			printf '%s\n' "$$result"; \
 			fail=$$((fail + 1)); \
 		fi; \
@@ -2976,9 +2976,9 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		fi; \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/spec_profile_fold_by_key_extension.metta 2>&1); \
 		if printf '%s\n' "$$result" | grep -Fq "(fold-by-key "; then \
-			echo "PASS: he-compat fold-by-key Rust-inert surface"; pass=$$((pass + 1)); \
+			echo "PASS: he-compat fold-by-key Rust-inert interface"; pass=$$((pass + 1)); \
 		else \
-			echo "FAIL: he-compat fold-by-key Rust-inert surface"; \
+			echo "FAIL: he-compat fold-by-key Rust-inert interface"; \
 			printf '%s\n' "$$result"; \
 			fail=$$((fail + 1)); \
 		fi; \
@@ -2992,9 +2992,9 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		fi; \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/spec_profile_reduce_extension.metta 2>&1); \
 		if printf '%s\n' "$$result" | grep -Fq "(reduce "; then \
-			echo "PASS: he-compat reduce Rust-inert surface"; pass=$$((pass + 1)); \
+			echo "PASS: he-compat reduce Rust-inert interface"; pass=$$((pass + 1)); \
 		else \
-			echo "FAIL: he-compat reduce Rust-inert surface"; \
+			echo "FAIL: he-compat reduce Rust-inert interface"; \
 			printf '%s\n' "$$result"; \
 			fail=$$((fail + 1)); \
 		fi; \
@@ -3008,9 +3008,9 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		fi; \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/support/profile_runtime_stats_runtime.metta 2>&1); \
 		if printf '%s\n' "$$result" | grep -Fq "(runtime-stats!)"; then \
-			echo "PASS: he-compat runtime-stats Rust-inert surface"; pass=$$((pass + 1)); \
+			echo "PASS: he-compat runtime-stats Rust-inert interface"; pass=$$((pass + 1)); \
 		else \
-			echo "FAIL: he-compat runtime-stats Rust-inert surface"; \
+			echo "FAIL: he-compat runtime-stats Rust-inert interface"; \
 			printf '%s\n' "$$result"; \
 			fail=$$((fail + 1)); \
 		fi; \
@@ -3024,9 +3024,9 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		fi; \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/spec_profile_once_alias_extension.metta 2>&1); \
 		if printf '%s\n' "$$result" | grep -Fq "(once "; then \
-			echo "PASS: he-compat once Rust-inert surface"; pass=$$((pass + 1)); \
+			echo "PASS: he-compat once Rust-inert interface"; pass=$$((pass + 1)); \
 		else \
-			echo "FAIL: he-compat once Rust-inert surface"; \
+			echo "FAIL: he-compat once Rust-inert interface"; \
 			fail=$$((fail + 1)); \
 		fi; \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/spec_profile_hyperpose_extension.metta 2>&1); \
@@ -3103,9 +3103,9 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		fi; \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/spec_profile_search_policy_extension.metta 2>&1); \
 		if printf '%s\n' "$$result" | grep -Fq "(search-policy "; then \
-			echo "PASS: he-compat search-policy Rust-inert surface"; pass=$$((pass + 1)); \
+			echo "PASS: he-compat search-policy Rust-inert interface"; pass=$$((pass + 1)); \
 		else \
-			echo "FAIL: he-compat search-policy Rust-inert surface"; \
+			echo "FAIL: he-compat search-policy Rust-inert interface"; \
 			printf '%s\n' "$$result"; \
 			fail=$$((fail + 1)); \
 		fi; \
@@ -3131,9 +3131,9 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 		fi; \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/spec_profile_space_set_match_backend_extension.metta 2>&1); \
 		if printf '%s\n' "$$result" | grep -Fq "(space-set-"; then \
-			echo "PASS: he-compat space-set-match-backend! Rust-inert surface"; pass=$$((pass + 1)); \
+			echo "PASS: he-compat space-set-match-backend! Rust-inert interface"; pass=$$((pass + 1)); \
 		else \
-			echo "FAIL: he-compat space-set-match-backend! Rust-inert surface"; \
+			echo "FAIL: he-compat space-set-match-backend! Rust-inert interface"; \
 			printf '%s\n' "$$result"; \
 			fail=$$((fail + 1)); \
 		fi; \
@@ -3243,9 +3243,9 @@ test-profiles: $(BIN) test-manifest test-forbidden-availability-errors test-git-
 	fi; \
 	result=$$($(CETTA_BIN_INVOKE) --profile he-compat --lang he tests/support/profile_module_inventory_runtime.metta 2>&1); \
 	if printf '%s\n' "$$result" | grep -Fq "(module-inventory!)"; then \
-		echo "PASS: he-compat module-inventory Rust-inert surface"; pass=$$((pass + 1)); \
+		echo "PASS: he-compat module-inventory Rust-inert interface"; pass=$$((pass + 1)); \
 	else \
-		echo "FAIL: he-compat module-inventory Rust-inert surface"; \
+		echo "FAIL: he-compat module-inventory Rust-inert interface"; \
 		printf '%s\n' "$$result"; \
 		fail=$$((fail + 1)); \
 	fi; \
@@ -3782,7 +3782,7 @@ ifeq ($(MORK_BRIDGE_ACTIVE),1)
 		diff <(cat tests/mm2_kiss_fractal_priority.step1.expected) <(echo "$$step_result") | head -20; \
 		fail=$$((fail + 1)); \
 	fi; \
-	for stem in test_import_mm2_module_surface; do \
+	for stem in test_import_mm2_module_interface; do \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "tests/$$stem.metta" 2>&1); \
 		if [ "$$result" = "$$(cat "tests/$$stem.expected")" ]; then \
 			echo "PASS: $$stem"; \
@@ -3812,26 +3812,26 @@ else
 	$(call reexec_mork_bridge_or_skip,mm2 KISS raw example suite,$@)
 endif
 
-test-mork-surface-suite: $(BIN)
+test-mork-interface-suite: $(BIN)
 ifeq ($(MORK_BRIDGE_ACTIVE),1)
 	@pass=0; fail=0; \
 	for stem in \
-		test_mork_counterexample_loom_surface \
-		test_mork_algebra_surface \
+		test_mork_counterexample_loom_interface \
+		test_mork_algebra_interface \
 		test_mork_attached_exact_match_regression \
-		test_mork_encoding_boundary_surface \
-		test_mork_full_pipeline_surface \
-		test_mork_handle_errors_surface \
+		test_mork_encoding_boundary_interface \
+		test_mork_full_pipeline_interface \
+		test_mork_handle_errors_interface \
 		test_mork_kiss_examples \
-		test_mork_lib_surface \
+		test_mork_lib_interface \
 		test_mork_mm2_metta_showcase \
 		test_mork_native_handle_fresh_id_regression \
-		test_mork_open_act_surface \
-		test_mork_overlay_zipper_surface \
-		test_mork_product_zipper_surface \
-		test_mork_zipper_surface \
-		test_new_space_mork_surface \
-		test_step_space_surface; do \
+		test_mork_open_act_interface \
+		test_mork_overlay_zipper_interface \
+		test_mork_product_zipper_interface \
+		test_mork_zipper_interface \
+		test_new_space_mork_interface \
+		test_step_space_interface; do \
 		result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "tests/$$stem.metta" 2>&1); \
 		if [ "$$result" = "$$(cat "tests/$$stem.expected")" ]; then \
 			echo "PASS: $$stem"; \
@@ -3846,7 +3846,7 @@ ifeq ($(MORK_BRIDGE_ACTIVE),1)
 	echo "$$pass passed, $$fail failed"; \
 	[ $$fail -eq 0 ]
 else
-	$(call reexec_mork_bridge_or_skip,mork surface suite,$@)
+	$(call reexec_mork_bridge_or_skip,mork interface suite,$@)
 endif
 
 test-mork-runtime-stats-isolation:
@@ -4089,12 +4089,12 @@ endif
 test-mork-open-act: $(BIN)
 ifeq ($(MORK_BRIDGE_ACTIVE),1)
 	@ \
-	result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/test_mork_open_act_surface.metta 2>&1); \
-	if [ "$$result" = "$$(cat tests/test_mork_open_act_surface.expected)" ]; then \
+	result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/test_mork_open_act_interface.metta 2>&1); \
+	if [ "$$result" = "$$(cat tests/test_mork_open_act_interface.expected)" ]; then \
 		echo "PASS: mork open-act probe"; \
 	else \
 		echo "FAIL: mork open-act probe"; \
-		diff <(cat tests/test_mork_open_act_surface.expected) <(echo "$$result") | head -20; \
+		diff <(cat tests/test_mork_open_act_interface.expected) <(echo "$$result") | head -20; \
 		exit 1; \
 	fi
 else
@@ -4102,9 +4102,9 @@ else
 endif
 
 test-pretty-vars-flags: $(BIN)
-	@raw_result=$$($(CETTA_BIN_INVOKE) --raw-vars --profile he-extended --lang he tests/test_pretty_vars_surface.metta 2>&1); \
-	default_result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/test_pretty_vars_surface.metta 2>&1); \
-	pretty_result=$$($(CETTA_BIN_INVOKE) --pretty-vars --profile he-extended --lang he tests/test_pretty_vars_surface.metta 2>&1); \
+	@raw_result=$$($(CETTA_BIN_INVOKE) --raw-vars --profile he-extended --lang he tests/test_pretty_vars_interface.metta 2>&1); \
+	default_result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/test_pretty_vars_interface.metta 2>&1); \
+	pretty_result=$$($(CETTA_BIN_INVOKE) --pretty-vars --profile he-extended --lang he tests/test_pretty_vars_interface.metta 2>&1); \
 	if printf '%s\n' "$$raw_result" | grep -Fq '#'; then \
 		:; \
 	else \
@@ -4119,18 +4119,18 @@ test-pretty-vars-flags: $(BIN)
 		diff <(echo "$$raw_result") <(echo "$$default_result") | head -20; \
 		exit 1; \
 	fi; \
-	if [ "$$pretty_result" = "$$(cat tests/test_pretty_vars_surface.pretty.expected)" ]; then \
+	if [ "$$pretty_result" = "$$(cat tests/test_pretty_vars_interface.pretty.expected)" ]; then \
 		echo "PASS: pretty-vars flags"; \
 	else \
 		echo "FAIL: pretty-vars output mismatch"; \
-		diff <(cat tests/test_pretty_vars_surface.pretty.expected) <(echo "$$pretty_result") | head -20; \
+		diff <(cat tests/test_pretty_vars_interface.pretty.expected) <(echo "$$pretty_result") | head -20; \
 		exit 1; \
 	fi
 
 test-pretty-namespaces-flags: $(BIN)
-	@raw_result=$$($(CETTA_BIN_INVOKE) --raw-namespaces --profile he-extended --lang he tests/test_pretty_namespaces_surface.metta 2>&1); \
-	default_result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/test_pretty_namespaces_surface.metta 2>&1); \
-	pretty_result=$$($(CETTA_BIN_INVOKE) --pretty-namespaces --profile he-extended --lang he tests/test_pretty_namespaces_surface.metta 2>&1); \
+	@raw_result=$$($(CETTA_BIN_INVOKE) --raw-namespaces --profile he-extended --lang he tests/test_pretty_namespaces_interface.metta 2>&1); \
+	default_result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/test_pretty_namespaces_interface.metta 2>&1); \
+	pretty_result=$$($(CETTA_BIN_INVOKE) --pretty-namespaces --profile he-extended --lang he tests/test_pretty_namespaces_interface.metta 2>&1); \
 	if printf '%s\n' "$$raw_result" | grep -Fq 'mork:open-act' && \
 	   printf '%s\n' "$$raw_result" | grep -Fq 'runtime:test-module' && \
 	   printf '%s\n' "$$raw_result" | grep -Fq '$mork:space'; then \
@@ -4147,11 +4147,11 @@ test-pretty-namespaces-flags: $(BIN)
 		diff <(echo "$$raw_result") <(echo "$$default_result") | head -20; \
 		exit 1; \
 	fi; \
-	if [ "$$pretty_result" = "$$(cat tests/test_pretty_namespaces_surface.pretty.expected)" ]; then \
+	if [ "$$pretty_result" = "$$(cat tests/test_pretty_namespaces_interface.pretty.expected)" ]; then \
 		echo "PASS: pretty-namespaces flags"; \
 	else \
 		echo "FAIL: pretty-namespaces output mismatch"; \
-		diff <(cat tests/test_pretty_namespaces_surface.pretty.expected) <(echo "$$pretty_result") | head -20; \
+		diff <(cat tests/test_pretty_namespaces_interface.pretty.expected) <(echo "$$pretty_result") | head -20; \
 		exit 1; \
 	fi
 
@@ -4299,7 +4299,7 @@ oracle-refresh:
 	@for f in tests/test_*.metta tests/he_*.metta; do \
 		[ -f "$$f" ] || continue; \
 		if [ "$(ENABLE_PYTHON)" != "1" ] && \
-		   { [ "$$f" = "tests/test_py_ops_surface.metta" ] || \
+		   { [ "$$f" = "tests/test_py_ops_interface.metta" ] || \
 		     [ "$$f" = "tests/test_import_foreign_python_file.metta" ] || \
 		     [ "$$f" = "tests/test_import_foreign_pkg_error.metta" ] || \
 		     [ "$$f" = "tests/test_namespace_sugar_guardrails.metta" ]; }; then \

@@ -1,3 +1,3 @@
-; HE-backed destructor surface: extra arguments raise IncorrectNumberOfArguments.
+; HE-backed destructor interface: extra arguments raise IncorrectNumberOfArguments.
 
 !(decons-atom (a) (b))
