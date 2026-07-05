@@ -15,14 +15,23 @@
 #include <dirent.h>
 #include <errno.h>
 #include <limits.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/select.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#if CETTA_BUILD_WITH_HTTP
+#include <curl/curl.h>
+#endif
 
 enum {
     CETTA_LIBRARY_SYSTEM = 1u << 0,
@@ -31,7 +40,13 @@ enum {
     CETTA_LIBRARY_LTS = 1u << 3,
     CETTA_LIBRARY_MORK = 1u << 4,
     CETTA_LIBRARY_RHO = 1u << 5,
-    CETTA_LIBRARY_RHOMETTA = 1u << 6
+    CETTA_LIBRARY_RHOMETTA = 1u << 6,
+    CETTA_LIBRARY_TIME = 1u << 7,
+    CETTA_LIBRARY_PROCESS = 1u << 8,
+    CETTA_LIBRARY_JSON = 1u << 9,
+    CETTA_LIBRARY_HTTP = 1u << 10,
+    CETTA_LIBRARY_VEC = 1u << 11,
+    CETTA_LIBRARY_WEB = 1u << 12
 };
 
 typedef struct {
@@ -47,6 +62,12 @@ static const CettaLibrarySpec CETTA_LIBRARIES[] = {
     {"mork", CETTA_LIBRARY_MORK},
     {"rho", CETTA_LIBRARY_RHO},
     {"rhometta", CETTA_LIBRARY_RHOMETTA},
+    {"time", CETTA_LIBRARY_TIME},
+    {"process", CETTA_LIBRARY_PROCESS},
+    {"json", CETTA_LIBRARY_JSON},
+    {"http", CETTA_LIBRARY_HTTP},
+    {"vec", CETTA_LIBRARY_VEC},
+    {"web", CETTA_LIBRARY_WEB},
 };
 
 static const char *CETTA_MM2_PROGRAM_HANDLE_KIND = "mork-program";
@@ -2051,6 +2072,72 @@ static Atom *system_monotonic_ns(Arena *a, Atom *head, Atom **args,
     return atom_int(a, (int64_t)ns);
 }
 
+/* Full-range int check: library_int_arg truncates int64 -> int32, which
+ * would silently turn e.g. 2^32 into a zero-length sleep. Reject instead. */
+static bool time_int_arg_checked(Atom *arg, int *out) {
+    if (!arg || arg->kind != ATOM_GROUNDED || arg->ground.gkind != GV_INT) {
+        return false;
+    }
+    if (arg->ground.ival < 0 || arg->ground.ival > INT_MAX) return false;
+    *out = (int)arg->ground.ival;
+    return true;
+}
+
+static Atom *time_sleep_ms(Arena *a, Atom *head, Atom **args,
+                             uint32_t nargs) {
+    int ms = 0;
+    struct timespec req;
+    if (nargs != 1 || !time_int_arg_checked(args[0], &ms)) {
+        return library_signature_error(
+            a, head, args, nargs,
+            "expected: (time:sleep-ms non-negative-integer)");
+    }
+    req.tv_sec = ms / 1000;
+    req.tv_nsec = (long)(ms % 1000) * 1000000L;
+    while (nanosleep(&req, &req) != 0 && errno == EINTR) {
+    }
+    return atom_true(a);
+}
+
+static Atom *time_unix_time_ms(Arena *a, Atom *head, Atom **args,
+                                 uint32_t nargs) {
+    struct timespec ts;
+    if (!system_zero_arg_ok(args, nargs)) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected: (time:unix-time-ms)");
+    }
+    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "cannot read realtime clock");
+    }
+    return atom_int(a, (int64_t)ts.tv_sec * 1000 +
+                           (int64_t)(ts.tv_nsec / 1000000L));
+}
+
+static Atom *time_now_string(Arena *a, Atom *head, Atom **args,
+                                uint32_t nargs) {
+    const char *fmt = "%Y-%m-%d %H:%M:%S";
+    char buf[256];
+    time_t now;
+    struct tm tm_now;
+    if (system_zero_arg_ok(args, nargs)) {
+        /* default format */
+    } else if (nargs == 1 && library_text_arg(args[0])) {
+        fmt = library_text_arg(args[0]);
+    } else {
+        return library_signature_error(
+            a, head, args, nargs,
+            "expected: (time:time-string) or (time:time-string strftime-format)");
+    }
+    now = time(NULL);
+    if (!localtime_r(&now, &tm_now) ||
+        strftime(buf, sizeof(buf), fmt, &tm_now) == 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "cannot format time");
+    }
+    return atom_string(a, buf);
+}
+
 static Atom *cetta_library_dispatch_system(const CettaLibraryContext *ctx,
                                            Arena *a, Atom *head,
                                            Atom **args, uint32_t nargs) {
@@ -2082,6 +2169,2018 @@ static Atom *cetta_library_dispatch_system(const CettaLibraryContext *ctx,
     }
     if (head_id == g_builtin_syms.lib_system_monotonic_ns) {
         return system_monotonic_ns(a, head, args, nargs);
+    }
+    return NULL;
+}
+
+static Atom *cetta_library_dispatch_time(Arena *a, Atom *head,
+                                         Atom **args, uint32_t nargs) {
+    if (head->kind != ATOM_SYMBOL) return NULL;
+    SymbolId head_id = head->sym_id;
+    if (head_id == g_builtin_syms.lib_time_sleep_ms) {
+        return time_sleep_ms(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_time_unix_time_ms) {
+        return time_unix_time_ms(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_time_time_string) {
+        return time_now_string(a, head, args, nargs);
+    }
+    return NULL;
+}
+
+
+/* ── process library (run-to-completion subset, ported from the codex lane) ── */
+
+static bool process_set_nonblocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0) return false;
+    return fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
+}
+
+static void process_close_fd(int *fd) {
+    if (*fd >= 0) {
+        close(*fd);
+        *fd = -1;
+    }
+}
+
+static int process_exit_code_from_status(int status) {
+    if (WIFEXITED(status)) return WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+    return -1;
+}
+
+static uint64_t process_duration_ms(uint64_t start_ns, uint64_t end_ns) {
+    if (end_ns < start_ns) return 0;
+    return (end_ns - start_ns) / 1000000ull;
+}
+
+static Atom *process_result_atom(Arena *a,
+                                 int exit_code,
+                                 const CettaStringBuf *stdout_buf,
+                                 const CettaStringBuf *stderr_buf,
+                                 const CettaStringBuf *aggregated_buf,
+                                 uint64_t duration_ms,
+                                 bool timed_out) {
+    if (duration_ms > (uint64_t)INT64_MAX) duration_ms = (uint64_t)INT64_MAX;
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "ProcessResult"),
+        atom_int(a, exit_code),
+        atom_string(a, stdout_buf->buf ? stdout_buf->buf : ""),
+        atom_string(a, stderr_buf->buf ? stderr_buf->buf : ""),
+        atom_string(a, aggregated_buf->buf ? aggregated_buf->buf : ""),
+        atom_int(a, (int64_t)duration_ms),
+        timed_out ? atom_true(a) : atom_false(a),
+    }, 7);
+}
+
+static void process_append_capped(CettaStringBuf *sb, const char *data, size_t len,
+                                  size_t max_bytes);
+
+static void process_append_read(int fd,
+                                CettaStringBuf *stream_buf,
+                                CettaStringBuf *aggregated_buf,
+                                bool *open_flag,
+                                size_t max_bytes) {
+    char chunk[4096];
+    for (;;) {
+        ssize_t nread = read(fd, chunk, sizeof(chunk));
+        if (nread > 0) {
+            process_append_capped(stream_buf, chunk, (size_t)nread, max_bytes);
+            if (aggregated_buf) {
+                process_append_capped(aggregated_buf, chunk, (size_t)nread, max_bytes);
+            }
+            continue;
+        }
+        if (nread == 0) {
+            *open_flag = false;
+            return;
+        }
+        // PTY masters can report EIO during startup or after child-side state
+        // transitions before output is readable. Treat it like a transient
+        // no-data condition here and let waitpid-driven exit tracking decide
+        // when the session is actually done.
+        if (errno == EAGAIN || errno == EWOULDBLOCK ||
+            errno == EINTR || errno == EIO) {
+            return;
+        }
+        *open_flag = false;
+        return;
+    }
+}
+
+static void process_kill_group(pid_t pid) {
+    if (pid <= 0) return;
+    if (kill(-pid, SIGTERM) != 0 && errno == ESRCH) return;
+    usleep(100000);
+    kill(-pid, SIGKILL);
+}
+
+static void process_append_capped(CettaStringBuf *sb, const char *data, size_t len,
+                                  size_t max_bytes) {
+    if (max_bytes > 0) {
+        if (sb->len >= max_bytes) return;
+        size_t remaining = max_bytes - sb->len;
+        if (len > remaining) len = remaining;
+    }
+    if (len > 0) cetta_sb_append_n(sb, data, len);
+}
+
+static void process_aggregate_output(CettaStringBuf *out,
+                                     const CettaStringBuf *stdout_buf,
+                                     const CettaStringBuf *stderr_buf,
+                                     size_t max_bytes) {
+    size_t stdout_len = stdout_buf->len;
+    size_t stderr_len = stderr_buf->len;
+    size_t total_len;
+    /* Unreachable in practice; pins length ranges below the fortify bound so
+       -Werror=stringop-overflow accepts the inlined memcpy calls. */
+    if (stdout_len > (size_t)INT64_MAX || stderr_len > (size_t)INT64_MAX) return;
+    total_len = stdout_len + stderr_len;
+
+    if (max_bytes == 0 || total_len <= max_bytes) {
+        if (stdout_len > 0) cetta_sb_append_n(out, stdout_buf->buf, stdout_len);
+        if (stderr_len > 0) cetta_sb_append_n(out, stderr_buf->buf, stderr_len);
+        return;
+    }
+
+    size_t want_stdout = stdout_len < (max_bytes / 3u) ? stdout_len : (max_bytes / 3u);
+    size_t stderr_take = stderr_len < (max_bytes - want_stdout)
+                         ? stderr_len
+                         : (max_bytes - want_stdout);
+    size_t remaining = max_bytes - want_stdout - stderr_take;
+    size_t stdout_extra = stdout_len > want_stdout ? stdout_len - want_stdout : 0;
+    size_t stdout_take = want_stdout + (remaining < stdout_extra ? remaining : stdout_extra);
+
+    /* Redundant clamps: keep gcc's value-range analysis from inferring a
+       SIZE_MAX memcpy bound under -Werror=stringop-overflow. */
+    if (stdout_take > stdout_len) stdout_take = stdout_len;
+    if (stderr_take > stderr_len) stderr_take = stderr_len;
+
+    if (stdout_take > 0) cetta_sb_append_n(out, stdout_buf->buf, stdout_take);
+    if (stderr_take > 0) cetta_sb_append_n(out, stderr_buf->buf, stderr_take);
+}
+
+typedef struct {
+    const char *key;
+    const char *value;
+} ProcessEnvPair;
+
+static bool process_expr_head_name(Atom *atom, const char *name) {
+    return atom && atom->kind == ATOM_EXPR && atom->expr.len > 0 &&
+           atom->expr.elems[0]->kind == ATOM_SYMBOL &&
+           strcmp(atom_name_cstr(atom->expr.elems[0]), name) == 0;
+}
+
+static bool process_valid_env_key(const char *key) {
+    return key && key[0] != '\0' && strchr(key, '=') == NULL;
+}
+
+static bool process_parse_argv(Arena *a, Atom *arg, char ***argv_out) {
+    char **argv;
+    if (!arg || arg->kind != ATOM_EXPR || arg->expr.len == 0) return false;
+    argv = arena_alloc(a, sizeof(char *) * ((size_t)arg->expr.len + 1u));
+    for (uint32_t i = 0; i < arg->expr.len; i++) {
+        const char *item = library_text_arg(arg->expr.elems[i]);
+        if (!item || item[0] == '\0') return false;
+        argv[i] = (char *)item;
+    }
+    argv[arg->expr.len] = NULL;
+    *argv_out = argv;
+    return true;
+}
+
+static bool process_parse_env_pairs(Arena *a, Atom *arg,
+                                    ProcessEnvPair **pairs_out,
+                                    uint32_t *count_out) {
+    ProcessEnvPair *pairs;
+    if (!arg || arg->kind != ATOM_EXPR) return false;
+    pairs = arena_alloc(a, sizeof(ProcessEnvPair) *
+                           (arg->expr.len ? arg->expr.len : 1u));
+    for (uint32_t i = 0; i < arg->expr.len; i++) {
+        Atom *pair = arg->expr.elems[i];
+        const char *key;
+        const char *value;
+        if (!process_expr_head_name(pair, "Env") || pair->expr.len != 3 ||
+            !(key = library_text_arg(pair->expr.elems[1])) ||
+            !(value = library_text_arg(pair->expr.elems[2])) ||
+            !process_valid_env_key(key)) {
+            return false;
+        }
+        pairs[i].key = key;
+        pairs[i].value = value;
+    }
+    *pairs_out = pairs;
+    *count_out = arg->expr.len;
+    return true;
+}
+
+static void process_apply_child_env(const ProcessEnvPair *env_pairs,
+                                    uint32_t env_count) {
+    if (clearenv() != 0) {
+        dprintf(STDERR_FILENO, "clearenv: %s\n", strerror(errno));
+        _exit(125);
+    }
+    for (uint32_t i = 0; i < env_count; i++) {
+        if (setenv(env_pairs[i].key, env_pairs[i].value, 1) != 0) {
+            dprintf(STDERR_FILENO, "setenv(%s): %s\n",
+                    env_pairs[i].key, strerror(errno));
+            _exit(125);
+        }
+    }
+}
+
+static Atom *process_run_exec_impl(Arena *a,
+                                   Atom *head,
+                                   Atom **args,
+                                   uint32_t nargs,
+                                   char *const argv[],
+                                   const char *cwd,
+                                   const ProcessEnvPair *env_pairs,
+                                   uint32_t env_count,
+                                   bool use_explicit_env,
+                                   const char *stdin_text,
+                                   int timeout_ms,
+                                   int max_bytes) {
+    int stdin_pipe[2] = {-1, -1};
+    int stdout_pipe[2] = {-1, -1};
+    int stderr_pipe[2] = {-1, -1};
+    CettaStringBuf stdout_buf;
+    CettaStringBuf stderr_buf;
+    CettaStringBuf aggregated_buf;
+    Atom *result = NULL;
+    pid_t pid;
+    bool stdout_open = true;
+    bool stderr_open = true;
+    bool timed_out = false;
+    int status = 0;
+    int exit_code = -1;
+    uint64_t start_ns = 0;
+    uint64_t end_ns = 0;
+    uint64_t timeout_ns = timeout_ms > 0 ? (uint64_t)timeout_ms * 1000000ull : 0;
+    const char *input = stdin_text ? stdin_text : "";
+    size_t input_len = strlen(input);
+    size_t input_written = 0;
+    bool stdin_open = stdin_text != NULL;
+    /* volatile: defeats an over-eager interprocedural constant fold (seen
+       with gcc 15.2 -O3) that cloned process_append_read with max_bytes==0,
+       silently disabling the per-stream output cap. */
+    volatile size_t output_cap = max_bytes > 0 ? (size_t)max_bytes : 0;
+
+    cetta_sb_init(&stdout_buf);
+    cetta_sb_init(&stderr_buf);
+    cetta_sb_init(&aggregated_buf);
+
+    if ((stdin_open && pipe(stdin_pipe) != 0) ||
+        pipe(stdout_pipe) != 0 || pipe(stderr_pipe) != 0) {
+        process_close_fd(&stdin_pipe[0]);
+        process_close_fd(&stdin_pipe[1]);
+        process_close_fd(&stdout_pipe[0]);
+        process_close_fd(&stdout_pipe[1]);
+        process_close_fd(&stderr_pipe[0]);
+        process_close_fd(&stderr_pipe[1]);
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, strerror(errno)));
+    }
+
+    start_ns = library_monotonic_ns();
+    pid = fork();
+    if (pid < 0) {
+        process_close_fd(&stdin_pipe[0]);
+        process_close_fd(&stdin_pipe[1]);
+        process_close_fd(&stdout_pipe[0]);
+        process_close_fd(&stdout_pipe[1]);
+        process_close_fd(&stderr_pipe[0]);
+        process_close_fd(&stderr_pipe[1]);
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, strerror(errno)));
+    }
+
+    if (pid == 0) {
+        setpgid(0, 0);
+        if (stdin_open) {
+            close(stdin_pipe[1]);
+        }
+        close(stdout_pipe[0]);
+        close(stderr_pipe[0]);
+        if ((stdin_open && dup2(stdin_pipe[0], STDIN_FILENO) < 0) ||
+            dup2(stdout_pipe[1], STDOUT_FILENO) < 0 ||
+            dup2(stderr_pipe[1], STDERR_FILENO) < 0) {
+            _exit(126);
+        }
+        if (stdin_open) close(stdin_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[1]);
+        if (cwd && cwd[0] != '\0' && chdir(cwd) != 0) {
+            dprintf(STDERR_FILENO, "chdir(%s): %s\n", cwd, strerror(errno));
+            _exit(125);
+        }
+        if (use_explicit_env) {
+            process_apply_child_env(env_pairs, env_count);
+        }
+        execvp(argv[0], argv);
+        _exit(127);
+    }
+
+    setpgid(pid, pid);
+    process_close_fd(&stdin_pipe[0]);
+    process_close_fd(&stdout_pipe[1]);
+    process_close_fd(&stderr_pipe[1]);
+    if ((stdin_open && !process_set_nonblocking(stdin_pipe[1])) ||
+        !process_set_nonblocking(stdout_pipe[0]) ||
+        !process_set_nonblocking(stderr_pipe[0])) {
+        process_kill_group(pid);
+        process_close_fd(&stdin_pipe[1]);
+        process_close_fd(&stdout_pipe[0]);
+        process_close_fd(&stderr_pipe[0]);
+        waitpid(pid, &status, 0);
+        result = atom_error(a, library_call_expr(a, head, args, nargs),
+                            atom_string(a, strerror(errno)));
+        goto cleanup;
+    }
+
+    if (stdin_open && input_len == 0) {
+        process_close_fd(&stdin_pipe[1]);
+        stdin_open = false;
+    }
+
+    while (stdin_open || stdout_open || stderr_open) {
+        fd_set readfds;
+        fd_set writefds;
+        int max_fd = -1;
+        int ready;
+        struct timeval tv;
+        struct timeval *tv_ptr = NULL;
+
+        if (timeout_ns > 0 && !timed_out) {
+            uint64_t now_ns = library_monotonic_ns();
+            uint64_t elapsed_ns = now_ns >= start_ns ? now_ns - start_ns : 0;
+            if (elapsed_ns >= timeout_ns) {
+                timed_out = true;
+                process_kill_group(pid);
+            } else {
+                uint64_t remaining_ns = timeout_ns - elapsed_ns;
+                tv.tv_sec = (time_t)(remaining_ns / 1000000000ull);
+                tv.tv_usec = (suseconds_t)((remaining_ns % 1000000000ull) / 1000ull);
+                tv_ptr = &tv;
+            }
+        }
+
+        FD_ZERO(&readfds);
+        FD_ZERO(&writefds);
+        if (stdin_open) {
+            FD_SET(stdin_pipe[1], &writefds);
+            if (stdin_pipe[1] > max_fd) max_fd = stdin_pipe[1];
+        }
+        if (stdout_open) {
+            FD_SET(stdout_pipe[0], &readfds);
+            if (stdout_pipe[0] > max_fd) max_fd = stdout_pipe[0];
+        }
+        if (stderr_open) {
+            FD_SET(stderr_pipe[0], &readfds);
+            if (stderr_pipe[0] > max_fd) max_fd = stderr_pipe[0];
+        }
+        if (max_fd < 0) break;
+
+        ready = select(max_fd + 1, &readfds, &writefds, NULL, tv_ptr);
+        if (ready < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        if (ready == 0) continue;
+
+        if (stdin_open && FD_ISSET(stdin_pipe[1], &writefds)) {
+            ssize_t wrote = write(stdin_pipe[1],
+                                  input + input_written,
+                                  input_len - input_written);
+            if (wrote > 0) {
+                input_written += (size_t)wrote;
+                if (input_written >= input_len) {
+                    process_close_fd(&stdin_pipe[1]);
+                    stdin_open = false;
+                }
+            } else if (wrote < 0 &&
+                       errno != EAGAIN && errno != EWOULDBLOCK &&
+                       errno != EINTR) {
+                process_close_fd(&stdin_pipe[1]);
+                stdin_open = false;
+            }
+        }
+        if (stdout_open && FD_ISSET(stdout_pipe[0], &readfds)) {
+            process_append_read(stdout_pipe[0], &stdout_buf, NULL,
+                                &stdout_open, output_cap);
+        }
+        if (stderr_open && FD_ISSET(stderr_pipe[0], &readfds)) {
+            process_append_read(stderr_pipe[0], &stderr_buf, NULL,
+                                &stderr_open, output_cap);
+        }
+    }
+
+    process_close_fd(&stdin_pipe[1]);
+    process_close_fd(&stdout_pipe[0]);
+    process_close_fd(&stderr_pipe[0]);
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno == EINTR) continue;
+        status = -1;
+        break;
+    }
+    end_ns = library_monotonic_ns();
+    exit_code = status >= 0 ? process_exit_code_from_status(status) : -1;
+    process_aggregate_output(&aggregated_buf, &stdout_buf, &stderr_buf, output_cap);
+    result = process_result_atom(a, exit_code, &stdout_buf, &stderr_buf,
+                                 &aggregated_buf,
+                                 process_duration_ms(start_ns, end_ns),
+                                 timed_out);
+
+cleanup:
+    cetta_sb_free(&stdout_buf);
+    cetta_sb_free(&stderr_buf);
+    cetta_sb_free(&aggregated_buf);
+    return result;
+}
+
+static Atom *process_run_shell(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *command;
+    char *shell_argv[4];
+    if (nargs != 1 || !(command = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected shell command");
+    }
+    shell_argv[0] = (char *)"/bin/sh";
+    shell_argv[1] = (char *)"-lc";
+    shell_argv[2] = (char *)command;
+    shell_argv[3] = NULL;
+    return process_run_exec_impl(a, head, args, nargs, shell_argv, NULL,
+                                 NULL, 0, false, NULL, 0, 0);
+}
+
+static Atom *process_run_shell_timeout_ms(Arena *a,
+                                          Atom *head,
+                                          Atom **args,
+                                          uint32_t nargs) {
+    const char *command;
+    char *shell_argv[4];
+    int timeout_ms = 0;
+    if (nargs != 2 || !(command = library_text_arg(args[0])) ||
+        !library_int_arg(args[1], &timeout_ms) || timeout_ms < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected shell command and non-negative timeout ms");
+    }
+    shell_argv[0] = (char *)"/bin/sh";
+    shell_argv[1] = (char *)"-lc";
+    shell_argv[2] = (char *)command;
+    shell_argv[3] = NULL;
+    return process_run_exec_impl(a, head, args, nargs, shell_argv, NULL,
+                                 NULL, 0, false, NULL, timeout_ms, 0);
+}
+
+static Atom *process_run_shell_cwd_timeout_ms(Arena *a,
+                                              Atom *head,
+                                              Atom **args,
+                                              uint32_t nargs) {
+    const char *command;
+    const char *cwd;
+    char *shell_argv[4];
+    int timeout_ms = 0;
+    if (nargs != 3 || !(command = library_text_arg(args[0])) ||
+        !(cwd = library_text_arg(args[1])) ||
+        !library_int_arg(args[2], &timeout_ms) || timeout_ms < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected shell command, cwd, and non-negative timeout ms");
+    }
+    shell_argv[0] = (char *)"/bin/sh";
+    shell_argv[1] = (char *)"-lc";
+    shell_argv[2] = (char *)command;
+    shell_argv[3] = NULL;
+    return process_run_exec_impl(a, head, args, nargs, shell_argv, cwd,
+                                 NULL, 0, false, NULL, timeout_ms, 0);
+}
+
+static Atom *process_run_shell_cwd_timeout_cap_bytes(Arena *a,
+                                                     Atom *head,
+                                                     Atom **args,
+                                                     uint32_t nargs) {
+    const char *command;
+    const char *cwd;
+    char *shell_argv[4];
+    int timeout_ms = 0;
+    int max_bytes = 0;
+    if (nargs != 4 || !(command = library_text_arg(args[0])) ||
+        !(cwd = library_text_arg(args[1])) ||
+        !library_int_arg(args[2], &timeout_ms) ||
+        !library_int_arg(args[3], &max_bytes) ||
+        timeout_ms < 0 || max_bytes < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected shell command, cwd, non-negative timeout ms, and non-negative max bytes");
+    }
+    shell_argv[0] = (char *)"/bin/sh";
+    shell_argv[1] = (char *)"-lc";
+    shell_argv[2] = (char *)command;
+    shell_argv[3] = NULL;
+    return process_run_exec_impl(a, head, args, nargs, shell_argv, cwd,
+                                 NULL, 0, false, NULL, timeout_ms, max_bytes);
+}
+
+static Atom *process_run_cmd_cwd_env_timeout_cap_bytes(Arena *a,
+                                                       Atom *head,
+                                                       Atom **args,
+                                                       uint32_t nargs) {
+    char **argv;
+    const char *cwd;
+    ProcessEnvPair *env_pairs;
+    uint32_t env_count = 0;
+    int timeout_ms = 0;
+    int max_bytes = 0;
+    if (nargs != 5 || !process_parse_argv(a, args[0], &argv) ||
+        !(cwd = library_text_arg(args[1])) ||
+        !process_parse_env_pairs(a, args[2], &env_pairs, &env_count) ||
+        !library_int_arg(args[3], &timeout_ms) ||
+        !library_int_arg(args[4], &max_bytes) ||
+        timeout_ms < 0 || max_bytes < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected command argv, cwd, env pairs, non-negative timeout ms, and non-negative max bytes");
+    }
+    return process_run_exec_impl(a, head, args, nargs, argv, cwd,
+                                 env_pairs, env_count, true, NULL,
+                                 timeout_ms, max_bytes);
+}
+
+static Atom *process_run_cmd_cwd_env_stdin_timeout_cap_bytes(Arena *a,
+                                                             Atom *head,
+                                                             Atom **args,
+                                                             uint32_t nargs) {
+    char **argv;
+    const char *cwd;
+    const char *stdin_text;
+    ProcessEnvPair *env_pairs;
+    uint32_t env_count = 0;
+    int timeout_ms = 0;
+    int max_bytes = 0;
+    if (nargs != 6 || !process_parse_argv(a, args[0], &argv) ||
+        !(cwd = library_text_arg(args[1])) ||
+        !process_parse_env_pairs(a, args[2], &env_pairs, &env_count) ||
+        !(stdin_text = library_text_arg(args[3])) ||
+        !library_int_arg(args[4], &timeout_ms) ||
+        !library_int_arg(args[5], &max_bytes) ||
+        timeout_ms < 0 || max_bytes < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected command argv, cwd, env pairs, stdin text, non-negative timeout ms, and non-negative max bytes");
+    }
+    return process_run_exec_impl(a, head, args, nargs, argv, cwd,
+                                 env_pairs, env_count, true, stdin_text,
+                                 timeout_ms, max_bytes);
+}
+
+/* Argv form with the parent environment inherited (no clearenv), plus cwd,
+ * timeout, and an output cap: ("/bin/sh" "-c" <cmd>) runs a non-login shell,
+ * while the cap bounds runaway output at read time. */
+static Atom *process_run_cmd_cwd_timeout_cap_bytes(Arena *a,
+                                                   Atom *head,
+                                                   Atom **args,
+                                                   uint32_t nargs) {
+    char **argv;
+    const char *cwd;
+    int timeout_ms = 0;
+    int max_bytes = 0;
+    if (nargs != 4 || !process_parse_argv(a, args[0], &argv) ||
+        !(cwd = library_text_arg(args[1])) ||
+        !library_int_arg(args[2], &timeout_ms) ||
+        !library_int_arg(args[3], &max_bytes) ||
+        timeout_ms < 0 || max_bytes < 0) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected command argv, cwd, non-negative timeout ms, and non-negative max bytes");
+    }
+    return process_run_exec_impl(a, head, args, nargs, argv, cwd,
+                                 NULL, 0, false, NULL, timeout_ms, max_bytes);
+}
+
+static Atom *cetta_library_dispatch_process(Arena *a, Atom *head,
+                                            Atom **args, uint32_t nargs) {
+    if (head->kind != ATOM_SYMBOL) return NULL;
+    SymbolId head_id = head->sym_id;
+    if (head_id == g_builtin_syms.lib_process_run_shell) {
+        return process_run_shell(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_run_shell_timeout_ms) {
+        return process_run_shell_timeout_ms(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_run_shell_cwd_timeout_ms) {
+        return process_run_shell_cwd_timeout_ms(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_run_shell_cwd_timeout_cap_bytes) {
+        return process_run_shell_cwd_timeout_cap_bytes(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_run_cmd_cwd_env_timeout_cap_bytes) {
+        return process_run_cmd_cwd_env_timeout_cap_bytes(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_run_cmd_cwd_env_stdin_timeout_cap_bytes) {
+        return process_run_cmd_cwd_env_stdin_timeout_cap_bytes(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_process_run_cmd_cwd_timeout_cap_bytes) {
+        return process_run_cmd_cwd_timeout_cap_bytes(a, head, args, nargs);
+    }
+    return NULL;
+}
+
+/* ── json library (ported from the codex lane) ── */
+
+typedef struct {
+    const char *text;
+    size_t len;
+    size_t pos;
+    const char *error;
+} CettaJsonParser;
+
+static void json_skip_ws(CettaJsonParser *p) {
+    while (p->pos < p->len &&
+           (p->text[p->pos] == ' ' || p->text[p->pos] == '\n' ||
+            p->text[p->pos] == '\r' || p->text[p->pos] == '\t')) {
+        p->pos++;
+    }
+}
+
+static bool json_match(CettaJsonParser *p, const char *literal) {
+    size_t n = strlen(literal);
+    if (p->pos + n > p->len) return false;
+    if (memcmp(p->text + p->pos, literal, n) != 0) return false;
+    p->pos += n;
+    return true;
+}
+
+static int json_hex_digit(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+static bool json_parse_hex4(CettaJsonParser *p, uint32_t *out) {
+    uint32_t value = 0;
+    if (p->pos + 4 > p->len) return false;
+    for (int i = 0; i < 4; i++) {
+        int digit = json_hex_digit(p->text[p->pos + (size_t)i]);
+        if (digit < 0) return false;
+        value = (value << 4) | (uint32_t)digit;
+    }
+    p->pos += 4;
+    *out = value;
+    return true;
+}
+
+static void json_append_utf8(CettaStringBuf *out, uint32_t cp) {
+    char bytes[4];
+    if (cp <= 0x7fu) {
+        bytes[0] = (char)cp;
+        cetta_sb_append_n(out, bytes, 1);
+    } else if (cp <= 0x7ffu) {
+        bytes[0] = (char)(0xc0u | (cp >> 6));
+        bytes[1] = (char)(0x80u | (cp & 0x3fu));
+        cetta_sb_append_n(out, bytes, 2);
+    } else if (cp <= 0xffffu) {
+        bytes[0] = (char)(0xe0u | (cp >> 12));
+        bytes[1] = (char)(0x80u | ((cp >> 6) & 0x3fu));
+        bytes[2] = (char)(0x80u | (cp & 0x3fu));
+        cetta_sb_append_n(out, bytes, 3);
+    } else {
+        bytes[0] = (char)(0xf0u | (cp >> 18));
+        bytes[1] = (char)(0x80u | ((cp >> 12) & 0x3fu));
+        bytes[2] = (char)(0x80u | ((cp >> 6) & 0x3fu));
+        bytes[3] = (char)(0x80u | (cp & 0x3fu));
+        cetta_sb_append_n(out, bytes, 4);
+    }
+}
+
+static bool json_parse_string_buf(CettaJsonParser *p, CettaStringBuf *out) {
+    if (p->pos >= p->len || p->text[p->pos] != '"') {
+        p->error = "expected JSON string";
+        return false;
+    }
+    p->pos++;
+    while (p->pos < p->len) {
+        unsigned char c = (unsigned char)p->text[p->pos++];
+        if (c == '"') return true;
+        if (c < 0x20u) {
+            p->error = "control character in JSON string";
+            return false;
+        }
+        if (c != '\\') {
+            cetta_sb_append_n(out, (const char *)&c, 1);
+            continue;
+        }
+        if (p->pos >= p->len) {
+            p->error = "unterminated JSON escape";
+            return false;
+        }
+        c = (unsigned char)p->text[p->pos++];
+        switch (c) {
+        case '"': cetta_sb_append(out, "\""); break;
+        case '\\': cetta_sb_append(out, "\\"); break;
+        case '/': cetta_sb_append(out, "/"); break;
+        case 'b': cetta_sb_append_n(out, "\b", 1); break;
+        case 'f': cetta_sb_append_n(out, "\f", 1); break;
+        case 'n': cetta_sb_append(out, "\n"); break;
+        case 'r': cetta_sb_append(out, "\r"); break;
+        case 't': cetta_sb_append(out, "\t"); break;
+        case 'u': {
+            uint32_t cp;
+            if (!json_parse_hex4(p, &cp)) {
+                p->error = "invalid JSON unicode escape";
+                return false;
+            }
+            if (cp >= 0xd800u && cp <= 0xdbffu) {
+                uint32_t low;
+                if (p->pos + 6 > p->len || p->text[p->pos] != '\\' ||
+                    p->text[p->pos + 1] != 'u') {
+                    p->error = "missing JSON low surrogate";
+                    return false;
+                }
+                p->pos += 2;
+                if (!json_parse_hex4(p, &low) || low < 0xdc00u || low > 0xdfffu) {
+                    p->error = "invalid JSON low surrogate";
+                    return false;
+                }
+                cp = 0x10000u + (((cp - 0xd800u) << 10) | (low - 0xdc00u));
+            } else if (cp >= 0xdc00u && cp <= 0xdfffu) {
+                p->error = "unpaired JSON low surrogate";
+                return false;
+            }
+            json_append_utf8(out, cp);
+            break;
+        }
+        default:
+            p->error = "invalid JSON escape";
+            return false;
+        }
+    }
+    p->error = "unterminated JSON string";
+    return false;
+}
+
+static Atom *json_parse_value(CettaJsonParser *p, Arena *a, int depth);
+
+static Atom *json_wrap1(Arena *a, const char *head, Atom *value) {
+    return atom_expr(a, (Atom *[]){atom_symbol(a, head), value}, 2);
+}
+
+static Atom *json_parse_number(CettaJsonParser *p, Arena *a) {
+    size_t start = p->pos;
+    char *raw;
+    Atom *result;
+    if (p->pos < p->len && p->text[p->pos] == '-') p->pos++;
+    if (p->pos >= p->len) {
+        p->error = "invalid JSON number";
+        return NULL;
+    }
+    if (p->text[p->pos] == '0') {
+        p->pos++;
+    } else if (p->text[p->pos] >= '1' && p->text[p->pos] <= '9') {
+        while (p->pos < p->len && isdigit((unsigned char)p->text[p->pos])) p->pos++;
+    } else {
+        p->error = "invalid JSON number";
+        return NULL;
+    }
+    if (p->pos < p->len && p->text[p->pos] == '.') {
+        p->pos++;
+        if (p->pos >= p->len || !isdigit((unsigned char)p->text[p->pos])) {
+            p->error = "invalid JSON number fraction";
+            return NULL;
+        }
+        while (p->pos < p->len && isdigit((unsigned char)p->text[p->pos])) p->pos++;
+    }
+    if (p->pos < p->len && (p->text[p->pos] == 'e' || p->text[p->pos] == 'E')) {
+        p->pos++;
+        if (p->pos < p->len && (p->text[p->pos] == '+' || p->text[p->pos] == '-')) p->pos++;
+        if (p->pos >= p->len || !isdigit((unsigned char)p->text[p->pos])) {
+            p->error = "invalid JSON number exponent";
+            return NULL;
+        }
+        while (p->pos < p->len && isdigit((unsigned char)p->text[p->pos])) p->pos++;
+    }
+    raw = cetta_malloc(p->pos - start + 1);
+    memcpy(raw, p->text + start, p->pos - start);
+    raw[p->pos - start] = '\0';
+    result = json_wrap1(a, "JsonNumber", atom_string(a, raw));
+    free(raw);
+    return result;
+}
+
+static Atom *json_parse_array(CettaJsonParser *p, Arena *a, int depth) {
+    Atom **items = NULL;
+    uint32_t nitems = 0;
+    uint32_t cap = 0;
+    Atom *list;
+    Atom *result;
+    p->pos++;
+    json_skip_ws(p);
+    if (p->pos < p->len && p->text[p->pos] == ']') {
+        p->pos++;
+        return json_wrap1(a, "JsonArray", atom_expr(a, NULL, 0));
+    }
+    for (;;) {
+        Atom *item = json_parse_value(p, a, depth + 1);
+        if (!item) {
+            free(items);
+            return NULL;
+        }
+        if (nitems >= cap) {
+            cap = cap ? cap * 2 : 8;
+            items = cetta_realloc(items, sizeof(Atom *) * cap);
+        }
+        items[nitems++] = item;
+        json_skip_ws(p);
+        if (p->pos >= p->len) {
+            free(items);
+            p->error = "unterminated JSON array";
+            return NULL;
+        }
+        if (p->text[p->pos] == ']') {
+            p->pos++;
+            break;
+        }
+        if (p->text[p->pos] != ',') {
+            free(items);
+            p->error = "expected comma in JSON array";
+            return NULL;
+        }
+        p->pos++;
+        json_skip_ws(p);
+    }
+    list = atom_expr(a, items, nitems);
+    result = json_wrap1(a, "JsonArray", list);
+    free(items);
+    return result;
+}
+
+static Atom *json_parse_object(CettaJsonParser *p, Arena *a, int depth) {
+    Atom **pairs = NULL;
+    uint32_t npairs = 0;
+    uint32_t cap = 0;
+    Atom *list;
+    Atom *result;
+    p->pos++;
+    json_skip_ws(p);
+    if (p->pos < p->len && p->text[p->pos] == '}') {
+        p->pos++;
+        return json_wrap1(a, "JsonObject", atom_expr(a, NULL, 0));
+    }
+    for (;;) {
+        CettaStringBuf key;
+        Atom *value;
+        Atom *pair;
+        cetta_sb_init(&key);
+        if (!json_parse_string_buf(p, &key)) {
+            cetta_sb_free(&key);
+            free(pairs);
+            return NULL;
+        }
+        json_skip_ws(p);
+        if (p->pos >= p->len || p->text[p->pos] != ':') {
+            cetta_sb_free(&key);
+            free(pairs);
+            p->error = "expected colon in JSON object";
+            return NULL;
+        }
+        p->pos++;
+        value = json_parse_value(p, a, depth + 1);
+        if (!value) {
+            cetta_sb_free(&key);
+            free(pairs);
+            return NULL;
+        }
+        pair = atom_expr(a, (Atom *[]){
+            atom_symbol(a, "JsonPair"),
+            atom_string(a, key.buf ? key.buf : ""),
+            value,
+        }, 3);
+        cetta_sb_free(&key);
+        if (npairs >= cap) {
+            cap = cap ? cap * 2 : 8;
+            pairs = cetta_realloc(pairs, sizeof(Atom *) * cap);
+        }
+        pairs[npairs++] = pair;
+        json_skip_ws(p);
+        if (p->pos >= p->len) {
+            free(pairs);
+            p->error = "unterminated JSON object";
+            return NULL;
+        }
+        if (p->text[p->pos] == '}') {
+            p->pos++;
+            break;
+        }
+        if (p->text[p->pos] != ',') {
+            free(pairs);
+            p->error = "expected comma in JSON object";
+            return NULL;
+        }
+        p->pos++;
+        json_skip_ws(p);
+    }
+    list = atom_expr(a, pairs, npairs);
+    result = json_wrap1(a, "JsonObject", list);
+    free(pairs);
+    return result;
+}
+
+static Atom *json_parse_value(CettaJsonParser *p, Arena *a, int depth) {
+    if (depth > 512) {
+        p->error = "JSON nesting too deep";
+        return NULL;
+    }
+    json_skip_ws(p);
+    if (p->pos >= p->len) {
+        p->error = "expected JSON value";
+        return NULL;
+    }
+    if (p->text[p->pos] == '"') {
+        CettaStringBuf text;
+        Atom *result;
+        cetta_sb_init(&text);
+        if (!json_parse_string_buf(p, &text)) {
+            cetta_sb_free(&text);
+            return NULL;
+        }
+        result = json_wrap1(a, "JsonString", atom_string(a, text.buf ? text.buf : ""));
+        cetta_sb_free(&text);
+        return result;
+    }
+    if (p->text[p->pos] == '[') return json_parse_array(p, a, depth);
+    if (p->text[p->pos] == '{') return json_parse_object(p, a, depth);
+    if (p->text[p->pos] == '-' || isdigit((unsigned char)p->text[p->pos])) {
+        return json_parse_number(p, a);
+    }
+    if (json_match(p, "true")) return json_wrap1(a, "JsonBool", atom_true(a));
+    if (json_match(p, "false")) return json_wrap1(a, "JsonBool", atom_false(a));
+    if (json_match(p, "null")) return atom_symbol(a, "JsonNull");
+    p->error = "invalid JSON value";
+    return NULL;
+}
+
+static Atom *json_parse(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *text;
+    CettaJsonParser p;
+    Atom *result;
+    if (nargs != 1 || !(text = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected JSON text");
+    }
+    p.text = text;
+    p.len = strlen(text);
+    p.pos = 0;
+    p.error = NULL;
+    result = json_parse_value(&p, a, 0);
+    if (!result) {
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, p.error ? p.error : "invalid JSON"));
+    }
+    json_skip_ws(&p);
+    if (p.pos != p.len) {
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, "trailing data after JSON value"));
+    }
+    return result;
+}
+
+static bool json_bool_atom(Atom *atom, bool *out) {
+    if (!atom || !out) return false;
+    if (atom->kind == ATOM_GROUNDED && atom->ground.gkind == GV_BOOL) {
+        *out = atom->ground.bval;
+        return true;
+    }
+    if (atom_is_symbol_id(atom, g_builtin_syms.true_text)) {
+        *out = true;
+        return true;
+    }
+    if (atom_is_symbol_id(atom, g_builtin_syms.false_text)) {
+        *out = false;
+        return true;
+    }
+    return false;
+}
+
+static bool json_expr_head(Atom *atom, const char *head_name) {
+    return atom && atom->kind == ATOM_EXPR && atom->expr.len > 0 &&
+           atom->expr.elems[0]->kind == ATOM_SYMBOL &&
+           atom_is_symbol(atom->expr.elems[0], head_name);
+}
+
+static void json_append_escaped_string(CettaStringBuf *out, const char *text) {
+    static const char hex[] = "0123456789abcdef";
+    cetta_sb_append(out, "\"");
+    for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
+        unsigned char c = *p;
+        switch (c) {
+        case '"': cetta_sb_append(out, "\\\""); break;
+        case '\\': cetta_sb_append(out, "\\\\"); break;
+        case '\b': cetta_sb_append(out, "\\b"); break;
+        case '\f': cetta_sb_append(out, "\\f"); break;
+        case '\n': cetta_sb_append(out, "\\n"); break;
+        case '\r': cetta_sb_append(out, "\\r"); break;
+        case '\t': cetta_sb_append(out, "\\t"); break;
+        default:
+            if (c < 0x20u) {
+                char esc[6] = {'\\', 'u', '0', '0', hex[c >> 4], hex[c & 0xfu]};
+                cetta_sb_append_n(out, esc, sizeof(esc));
+            } else {
+                cetta_sb_append_n(out, (const char *)&c, 1);
+            }
+            break;
+        }
+    }
+    cetta_sb_append(out, "\"");
+}
+
+static bool json_stringify_atom(Atom *atom, CettaStringBuf *out,
+                                const char **error_out, int depth);
+
+static bool json_stringify_number_atom(Atom *atom, CettaStringBuf *out) {
+    char buf[64];
+    const char *text = library_text_arg(atom);
+    if (text) {
+        cetta_sb_append(out, text);
+        return true;
+    }
+    if (atom && atom->kind == ATOM_GROUNDED && atom->ground.gkind == GV_INT) {
+        snprintf(buf, sizeof(buf), "%lld", (long long)atom->ground.ival);
+        cetta_sb_append(out, buf);
+        return true;
+    }
+    if (atom && atom->kind == ATOM_GROUNDED && atom->ground.gkind == GV_FLOAT) {
+        snprintf(buf, sizeof(buf), "%.17g", atom->ground.fval);
+        cetta_sb_append(out, buf);
+        return true;
+    }
+    return false;
+}
+
+static bool json_stringify_array_items(Atom *items, CettaStringBuf *out,
+                                       const char **error_out, int depth) {
+    if (!items || items->kind != ATOM_EXPR) {
+        *error_out = "JsonArray expects an expression of items";
+        return false;
+    }
+    cetta_sb_append(out, "[");
+    for (uint32_t i = 0; i < items->expr.len; i++) {
+        if (i) cetta_sb_append(out, ",");
+        if (!json_stringify_atom(items->expr.elems[i], out, error_out, depth + 1)) {
+            return false;
+        }
+    }
+    cetta_sb_append(out, "]");
+    return true;
+}
+
+static bool json_stringify_object_pairs(Atom *pairs, CettaStringBuf *out,
+                                        const char **error_out, int depth) {
+    if (!pairs || pairs->kind != ATOM_EXPR) {
+        *error_out = "JsonObject expects an expression of JsonPair entries";
+        return false;
+    }
+    cetta_sb_append(out, "{");
+    for (uint32_t i = 0; i < pairs->expr.len; i++) {
+        Atom *pair = pairs->expr.elems[i];
+        const char *key;
+        if (!json_expr_head(pair, "JsonPair") || pair->expr.len != 3 ||
+            !(key = library_text_arg(pair->expr.elems[1]))) {
+            *error_out = "JsonObject entry must be (JsonPair key value)";
+            return false;
+        }
+        if (i) cetta_sb_append(out, ",");
+        json_append_escaped_string(out, key);
+        cetta_sb_append(out, ":");
+        if (!json_stringify_atom(pair->expr.elems[2], out, error_out, depth + 1)) {
+            return false;
+        }
+    }
+    cetta_sb_append(out, "}");
+    return true;
+}
+
+static bool json_stringify_atom(Atom *atom, CettaStringBuf *out,
+                                const char **error_out, int depth) {
+    bool bool_value;
+    if (depth > 512) {
+        *error_out = "JSON nesting too deep";
+        return false;
+    }
+    if (!atom) {
+        *error_out = "missing JSON value";
+        return false;
+    }
+    if (atom_is_symbol(atom, "JsonNull")) {
+        cetta_sb_append(out, "null");
+        return true;
+    }
+    if (json_expr_head(atom, "JsonString") && atom->expr.len == 2) {
+        const char *text = library_text_arg(atom->expr.elems[1]);
+        if (!text) {
+            *error_out = "JsonString expects text";
+            return false;
+        }
+        json_append_escaped_string(out, text);
+        return true;
+    }
+    if (json_expr_head(atom, "JsonNumber") && atom->expr.len == 2) {
+        if (!json_stringify_number_atom(atom->expr.elems[1], out)) {
+            *error_out = "JsonNumber expects number text or numeric atom";
+            return false;
+        }
+        return true;
+    }
+    if (json_expr_head(atom, "JsonBool") && atom->expr.len == 2) {
+        if (!json_bool_atom(atom->expr.elems[1], &bool_value)) {
+            *error_out = "JsonBool expects True or False";
+            return false;
+        }
+        cetta_sb_append(out, bool_value ? "true" : "false");
+        return true;
+    }
+    if (json_expr_head(atom, "JsonArray") && atom->expr.len == 2) {
+        return json_stringify_array_items(atom->expr.elems[1], out, error_out, depth);
+    }
+    if (json_expr_head(atom, "JsonObject") && atom->expr.len == 2) {
+        return json_stringify_object_pairs(atom->expr.elems[1], out, error_out, depth);
+    }
+    if (atom->kind == ATOM_GROUNDED) {
+        switch (atom->ground.gkind) {
+        case GV_STRING:
+            json_append_escaped_string(out, atom->ground.sval ? atom->ground.sval : "");
+            return true;
+        case GV_INT:
+        case GV_FLOAT:
+            return json_stringify_number_atom(atom, out);
+        case GV_BOOL:
+            cetta_sb_append(out, atom->ground.bval ? "true" : "false");
+            return true;
+        default:
+            break;
+        }
+    }
+    if (json_bool_atom(atom, &bool_value)) {
+        cetta_sb_append(out, bool_value ? "true" : "false");
+        return true;
+    }
+    if (atom->kind == ATOM_SYMBOL) {
+        json_append_escaped_string(out, atom_name_cstr(atom));
+        return true;
+    }
+    if (atom->kind == ATOM_EXPR) {
+        return json_stringify_array_items(atom, out, error_out, depth);
+    }
+    *error_out = "unsupported JSON atom";
+    return false;
+}
+
+static Atom *json_stringify(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    CettaStringBuf out;
+    const char *error = NULL;
+    Atom *result;
+    if (nargs != 1) {
+        return library_signature_error(a, head, args, nargs, "expected JSON value");
+    }
+    cetta_sb_init(&out);
+    if (!json_stringify_atom(args[0], &out, &error, 0)) {
+        cetta_sb_free(&out);
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, error ? error : "cannot stringify JSON"));
+    }
+    result = atom_string(a, out.buf ? out.buf : "");
+    cetta_sb_free(&out);
+    return result;
+}
+
+static Atom *json_object_get(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    Atom *pairs;
+    const char *key;
+    if (nargs != 2 || !json_expr_head(args[0], "JsonObject") ||
+        args[0]->expr.len != 2 || args[0]->expr.elems[1]->kind != ATOM_EXPR ||
+        !(key = library_text_arg(args[1]))) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected JsonObject and key");
+    }
+    pairs = args[0]->expr.elems[1];
+    for (uint32_t i = 0; i < pairs->expr.len; i++) {
+        Atom *pair = pairs->expr.elems[i];
+        const char *pair_key;
+        if (!json_expr_head(pair, "JsonPair") || pair->expr.len != 3 ||
+            !(pair_key = library_text_arg(pair->expr.elems[1]))) {
+            continue;
+        }
+        if (strcmp(pair_key, key) == 0) {
+            return atom_deep_copy(a, pair->expr.elems[2]);
+        }
+    }
+    return atom_symbol(a, "JsonNull");
+}
+
+static Atom *cetta_library_dispatch_json(Arena *a, Atom *head,
+                                         Atom **args, uint32_t nargs) {
+    if (head->kind != ATOM_SYMBOL) return NULL;
+    SymbolId head_id = head->sym_id;
+    if (head_id == g_builtin_syms.lib_json_parse) {
+        return json_parse(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_json_stringify) {
+        return json_stringify(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_json_object_get) {
+        return json_object_get(a, head, args, nargs);
+    }
+    return NULL;
+}
+
+/* ── vec library: exact cosine over embedding-bearing JSONL rows ───────── */
+
+typedef struct {
+    double score;
+    const char *id;
+    const char *time;
+    const char *content;
+} VecMemoryHit;
+
+static Atom *json_object_lookup_borrowed(Atom *object, const char *key) {
+    Atom *pairs;
+    if (!json_expr_head(object, "JsonObject") || object->expr.len != 2 ||
+        object->expr.elems[1]->kind != ATOM_EXPR) {
+        return NULL;
+    }
+    pairs = object->expr.elems[1];
+    for (uint32_t i = 0; i < pairs->expr.len; i++) {
+        Atom *pair = pairs->expr.elems[i];
+        const char *pair_key;
+        if (!json_expr_head(pair, "JsonPair") || pair->expr.len != 3 ||
+            !(pair_key = library_text_arg(pair->expr.elems[1]))) {
+            continue;
+        }
+        if (strcmp(pair_key, key) == 0)
+            return pair->expr.elems[2];
+    }
+    return NULL;
+}
+
+static const char *json_string_payload(Atom *value) {
+    if (json_expr_head(value, "JsonString") && value->expr.len == 2)
+        return library_text_arg(value->expr.elems[1]);
+    return library_text_arg(value);
+}
+
+static bool json_number_payload_double(Atom *value, double *out) {
+    const char *text;
+    char *end = NULL;
+    double number;
+    if (!value || !out) return false;
+    if (json_expr_head(value, "JsonNumber") && value->expr.len == 2) {
+        value = value->expr.elems[1];
+    }
+    if (value->kind == ATOM_GROUNDED && value->ground.gkind == GV_INT) {
+        *out = (double)value->ground.ival;
+        return true;
+    }
+    if (value->kind == ATOM_GROUNDED && value->ground.gkind == GV_FLOAT) {
+        *out = value->ground.fval;
+        return true;
+    }
+    text = library_text_arg(value);
+    if (!text) return false;
+    errno = 0;
+    number = strtod(text, &end);
+    if (errno != 0 || end == text || (end && *end != '\0')) return false;
+    *out = number;
+    return true;
+}
+
+static bool json_array_to_double_vector(Atom *array, double **out,
+                                        size_t *out_len) {
+    Atom *items;
+    double *vec;
+    if (!json_expr_head(array, "JsonArray") || array->expr.len != 2 ||
+        array->expr.elems[1]->kind != ATOM_EXPR || !out || !out_len) {
+        return false;
+    }
+    items = array->expr.elems[1];
+    vec = cetta_malloc(sizeof(double) * (size_t)items->expr.len);
+    for (uint32_t i = 0; i < items->expr.len; i++) {
+        if (!json_number_payload_double(items->expr.elems[i], &vec[i])) {
+            free(vec);
+            return false;
+        }
+    }
+    *out = vec;
+    *out_len = (size_t)items->expr.len;
+    return true;
+}
+
+static double vec_norm(const double *vec, size_t len) {
+    double sum = 0.0;
+    for (size_t i = 0; i < len; i++)
+        sum += vec[i] * vec[i];
+    return sqrt(sum);
+}
+
+static double vec_cosine(const double *a_vec, const double *b_vec, size_t len,
+                         double a_norm, double b_norm) {
+    double dot = 0.0;
+    if (a_norm <= 0.0 || b_norm <= 0.0) return -2.0;
+    for (size_t i = 0; i < len; i++)
+        dot += a_vec[i] * b_vec[i];
+    return dot / (a_norm * b_norm);
+}
+
+static void vec_hit_insert(VecMemoryHit *hits, int *hit_len, int k,
+                           VecMemoryHit hit) {
+    int pos;
+    if (k <= 0) return;
+    if (*hit_len < k) {
+        pos = (*hit_len)++;
+    } else if (hit.score > hits[*hit_len - 1].score) {
+        pos = *hit_len - 1;
+    } else {
+        return;
+    }
+    hits[pos] = hit;
+    while (pos > 0 && hits[pos].score > hits[pos - 1].score) {
+        VecMemoryHit tmp = hits[pos - 1];
+        hits[pos - 1] = hits[pos];
+        hits[pos] = tmp;
+        pos--;
+    }
+}
+
+static Atom *vec_parse_json_line(Arena *a, const char *line, size_t len) {
+    CettaJsonParser p;
+    Atom *result;
+    p.text = line;
+    p.len = len;
+    p.pos = 0;
+    p.error = NULL;
+    result = json_parse_value(&p, a, 0);
+    if (!result) return NULL;
+    json_skip_ws(&p);
+    if (p.pos != p.len) return NULL;
+    return result;
+}
+
+static Atom *vec_topk_jsonl(Arena *a, Atom *head, Atom **args,
+                            uint32_t nargs) {
+    const char *path;
+    int k;
+    struct stat st;
+    CettaStringBuf text;
+    char errbuf[160];
+    double *query_vec = NULL;
+    size_t query_len = 0;
+    double query_norm;
+    VecMemoryHit *hits;
+    int hit_len = 0;
+    Atom **out;
+
+    if (nargs != 3 || !(path = library_text_arg(args[0])) ||
+        !json_array_to_double_vector(args[1], &query_vec, &query_len) ||
+        !library_int_arg(args[2], &k) || k <= 0) {
+        free(query_vec);
+        return library_signature_error(
+            a, head, args, nargs,
+            "expected filename, JsonArray embedding, and positive k");
+    }
+    query_norm = vec_norm(query_vec, query_len);
+    hits = cetta_malloc(sizeof(VecMemoryHit) * (size_t)k);
+
+    if (stat(path, &st) != 0 && errno == ENOENT) {
+        free(query_vec);
+        free(hits);
+        return atom_expr(a, NULL, 0);
+    }
+    if (!library_read_text_file(path, &text, errbuf, sizeof(errbuf))) {
+        free(query_vec);
+        free(hits);
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, errbuf));
+    }
+
+    for (size_t start = 0; start <= text.len;) {
+        size_t end = start;
+        Atom *row;
+        Atom *embedding_atom;
+        double *row_vec = NULL;
+        size_t row_len = 0;
+        const char *id;
+        const char *time;
+        const char *content;
+        while (end < text.len && text.buf[end] != '\n') end++;
+        if (end > start && text.buf[end - 1] == '\r') end--;
+        if (end > start) {
+            row = vec_parse_json_line(a, text.buf + start, end - start);
+            if (row) {
+                id = json_string_payload(json_object_lookup_borrowed(row, "id"));
+                time = json_string_payload(json_object_lookup_borrowed(row, "time"));
+                content = json_string_payload(json_object_lookup_borrowed(row, "content"));
+                embedding_atom = json_object_lookup_borrowed(row, "embedding");
+                if (id && time && content && embedding_atom &&
+                    json_array_to_double_vector(embedding_atom, &row_vec, &row_len) &&
+                    row_len == query_len) {
+                    double row_norm = vec_norm(row_vec, row_len);
+                    double score = vec_cosine(query_vec, row_vec, query_len,
+                                              query_norm, row_norm);
+                    if (score >= -1.0)
+                        vec_hit_insert(hits, &hit_len, k,
+                                       (VecMemoryHit){score, id, time, content});
+                }
+                free(row_vec);
+            }
+        }
+        if (end >= text.len) break;
+        start = end + 1;
+    }
+
+    out = hit_len > 0 ? arena_alloc(a, sizeof(Atom *) * (size_t)hit_len) : NULL;
+    for (int i = 0; i < hit_len; i++) {
+        out[i] = atom_expr(a, (Atom *[]){
+            atom_symbol(a, "MemoryHit"),
+            atom_float(a, hits[i].score),
+            atom_string(a, hits[i].id),
+            atom_string(a, hits[i].time),
+            atom_string(a, hits[i].content),
+        }, 5);
+    }
+    cetta_sb_free(&text);
+    free(query_vec);
+    free(hits);
+    return atom_expr(a, out, (CettaExprLen)hit_len);
+}
+
+static Atom *cetta_library_dispatch_vec(Arena *a, Atom *head,
+                                        Atom **args, uint32_t nargs) {
+    if (head->kind != ATOM_SYMBOL) return NULL;
+    if (head->sym_id == g_builtin_syms.lib_vec_topk_jsonl) {
+        return vec_topk_jsonl(a, head, args, nargs);
+    }
+    return NULL;
+}
+
+/* ── http library (libcurl-backed) ── */
+
+#if CETTA_BUILD_WITH_HTTP
+
+typedef struct {
+    CettaStringBuf *buf;
+    size_t max_bytes;
+} HttpWriteSink;
+
+/* Cap is enforced here, at receive time: past the cap we keep draining so
+ * the transfer completes, but the buffer never grows beyond max_bytes. */
+static size_t http_write_cb(char *data, size_t size, size_t nmemb,
+                            void *userdata) {
+    HttpWriteSink *sink = (HttpWriteSink *)userdata;
+    size_t total = size * nmemb;
+    if (sink->max_bytes > 0) {
+        if (sink->buf->len < sink->max_bytes) {
+            size_t remaining = sink->max_bytes - sink->buf->len;
+            cetta_sb_append_n(sink->buf, data,
+                              total > remaining ? remaining : total);
+        }
+    } else {
+        cetta_sb_append_n(sink->buf, data, total);
+    }
+    return total;
+}
+
+static bool http_parse_headers(Arena *a, Atom *arg, struct curl_slist **out) {
+    struct curl_slist *list = NULL;
+    if (!arg || arg->kind != ATOM_EXPR) return false;
+    for (uint32_t i = 0; i < arg->expr.len; i++) {
+        Atom *pair = arg->expr.elems[i];
+        const char *key;
+        const char *value;
+        size_t klen;
+        size_t vlen;
+        char *line;
+        struct curl_slist *next;
+        if (!process_expr_head_name(pair, "Header") || pair->expr.len != 3 ||
+            !(key = library_text_arg(pair->expr.elems[1])) ||
+            !(value = library_text_arg(pair->expr.elems[2]))) {
+            curl_slist_free_all(list);
+            return false;
+        }
+        klen = strlen(key);
+        vlen = strlen(value);
+        line = arena_alloc(a, klen + vlen + 3);
+        memcpy(line, key, klen);
+        line[klen] = ':';
+        line[klen + 1] = ' ';
+        memcpy(line + klen + 2, value, vlen);
+        line[klen + 2 + vlen] = '\0';
+        next = curl_slist_append(list, line);
+        if (!next) {
+            curl_slist_free_all(list);
+            return false;
+        }
+        list = next;
+    }
+    *out = list;
+    return true;
+}
+
+/* (method url ((Header k v) ...) body timeout-ms max-bytes)
+ * -> (HttpResult status body) | (Error call reason)
+ * Bodies are text-only (NUL truncates, like the process natives).
+ * Protocols are restricted to http/https (+ file for hermetic tests);
+ * redirects may only lead to http/https. */
+static Atom *http_request(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    static bool curl_ready = false;
+    const char *method;
+    const char *url;
+    const char *body;
+    int timeout_ms = 0;
+    int max_bytes = 0;
+    struct curl_slist *headers = NULL;
+    CURL *curl;
+    CettaStringBuf body_buf;
+    HttpWriteSink sink;
+    CURLcode rc;
+    Atom *result;
+
+    if (nargs != 6 || !(method = library_text_arg(args[0])) ||
+        !(url = library_text_arg(args[1])) ||
+        !(body = library_text_arg(args[3])) ||
+        !library_int_arg(args[4], &timeout_ms) ||
+        !library_int_arg(args[5], &max_bytes) ||
+        timeout_ms < 0 || max_bytes < 0 ||
+        !http_parse_headers(a, args[2], &headers)) {
+        return library_signature_error(
+            a, head, args, nargs,
+            "expected method, url, ((Header key value) ...), body, "
+            "non-negative timeout ms, and non-negative max bytes");
+    }
+
+    if (!curl_ready) {
+        if (curl_global_init(CURL_GLOBAL_DEFAULT) != 0) {
+            curl_slist_free_all(headers);
+            return atom_error(a, library_call_expr(a, head, args, nargs),
+                              atom_string(a, "curl_global_init failed"));
+        }
+        curl_ready = true;
+    }
+    curl = curl_easy_init();
+    if (!curl) {
+        curl_slist_free_all(headers);
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, "curl_easy_init failed"));
+    }
+
+    cetta_sb_init(&body_buf);
+    sink.buf = &body_buf;
+    sink.max_bytes = max_bytes > 0 ? (size_t)max_bytes : 0;
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, http_write_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &sink);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 8L);
+    curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "http,https,file");
+    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
+    curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
+    if (timeout_ms > 0) {
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)timeout_ms);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, (long)timeout_ms);
+    }
+    if (headers) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    if (strcmp(method, "GET") == 0) {
+        curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+    } else {
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
+        if (body[0] != '\0') {
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE,
+                             (long)strlen(body));
+        }
+    }
+
+    rc = curl_easy_perform(curl);
+    if (rc != CURLE_OK) {
+        result = atom_error(a, library_call_expr(a, head, args, nargs),
+                            atom_string(a, curl_easy_strerror(rc)));
+    } else {
+        long status = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+        result = atom_expr(a, (Atom *[]){
+            atom_symbol(a, "HttpResult"),
+            atom_int(a, (int64_t)status),
+            atom_string(a, body_buf.buf ? body_buf.buf : ""),
+        }, 3);
+    }
+
+    curl_easy_cleanup(curl);
+    curl_slist_free_all(headers);
+    cetta_sb_free(&body_buf);
+    return result;
+}
+
+#else /* !CETTA_BUILD_WITH_HTTP */
+
+static Atom *http_request(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    return atom_error(a, library_call_expr(a, head, args, nargs),
+                      atom_string(a, "cetta built without http support "
+                                     "(rebuild with ENABLE_HTTP=1)"));
+}
+
+#endif /* CETTA_BUILD_WITH_HTTP */
+
+static Atom *cetta_library_dispatch_http(Arena *a, Atom *head,
+                                         Atom **args, uint32_t nargs) {
+    if (head->kind != ATOM_SYMBOL) return NULL;
+    if (head->sym_id == g_builtin_syms.lib_http_request) {
+        return http_request(a, head, args, nargs);
+    }
+    return NULL;
+}
+
+/* ── web helpers: URL encoding + DuckDuckGo HTML result extraction ─────── */
+
+static bool web_url_unreserved(unsigned char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+           (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+           c == '.' || c == '~';
+}
+
+static char *web_url_encode_alloc(const char *text) {
+    static const char hex[] = "0123456789ABCDEF";
+    CettaStringBuf out;
+    cetta_sb_init(&out);
+    for (const unsigned char *p = (const unsigned char *)text; p && *p; p++) {
+        if (web_url_unreserved(*p)) {
+            cetta_sb_append_n(&out, (const char *)p, 1);
+        } else if (*p == ' ') {
+            cetta_sb_append(&out, "+");
+        } else {
+            char enc[3] = {'%', hex[(*p >> 4) & 0x0fu], hex[*p & 0x0fu]};
+            cetta_sb_append_n(&out, enc, sizeof(enc));
+        }
+    }
+    return out.buf ? out.buf : strdup("");
+}
+
+static Atom *web_url_encode(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *text;
+    char *encoded;
+    Atom *result;
+    if (nargs != 1 || !(text = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected text");
+    }
+    encoded = web_url_encode_alloc(text);
+    result = atom_string(a, encoded);
+    free(encoded);
+    return result;
+}
+
+static int web_hex_digit(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+static char *web_percent_decode_alloc(const char *text, size_t len) {
+    CettaStringBuf out;
+    cetta_sb_init(&out);
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)text[i];
+        if (c == '%' && i + 2 < len) {
+            int hi = web_hex_digit(text[i + 1]);
+            int lo = web_hex_digit(text[i + 2]);
+            if (hi >= 0 && lo >= 0) {
+                char decoded = (char)((hi << 4) | lo);
+                cetta_sb_append_n(&out, &decoded, 1);
+                i += 2;
+                continue;
+            }
+        }
+        if (c == '+') {
+            cetta_sb_append(&out, " ");
+        } else {
+            cetta_sb_append_n(&out, (const char *)&c, 1);
+        }
+    }
+    return out.buf ? out.buf : strdup("");
+}
+
+static char *web_html_decode_segment_alloc(const char *text, size_t len) {
+    CettaStringBuf out;
+    cetta_sb_init(&out);
+    for (size_t i = 0; i < len; i++) {
+        if (text[i] == '&') {
+            size_t semi = i + 1;
+            while (semi < len && semi - i <= 16 && text[semi] != ';') semi++;
+            if (semi < len && text[semi] == ';') {
+                size_t n = semi - i - 1;
+                const char *ent = text + i + 1;
+                if (n == 3 && strncasecmp(ent, "amp", 3) == 0) {
+                    cetta_sb_append(&out, "&");
+                    i = semi;
+                    continue;
+                }
+                if (n == 2 && strncasecmp(ent, "lt", 2) == 0) {
+                    cetta_sb_append(&out, "<");
+                    i = semi;
+                    continue;
+                }
+                if (n == 2 && strncasecmp(ent, "gt", 2) == 0) {
+                    cetta_sb_append(&out, ">");
+                    i = semi;
+                    continue;
+                }
+                if (n == 4 && strncasecmp(ent, "quot", 4) == 0) {
+                    cetta_sb_append(&out, "\"");
+                    i = semi;
+                    continue;
+                }
+                if (n == 4 && strncasecmp(ent, "apos", 4) == 0) {
+                    cetta_sb_append(&out, "'");
+                    i = semi;
+                    continue;
+                }
+                if (n == 4 && strncasecmp(ent, "nbsp", 4) == 0) {
+                    cetta_sb_append(&out, " ");
+                    i = semi;
+                    continue;
+                }
+                if (n == 3 && strncasecmp(ent, "#39", 3) == 0) {
+                    cetta_sb_append(&out, "'");
+                    i = semi;
+                    continue;
+                }
+                if (n > 1 && ent[0] == '#') {
+                    uint32_t cp = 0;
+                    bool ok = true;
+                    size_t j = 1;
+                    int base = 10;
+                    if (j < n && (ent[j] == 'x' || ent[j] == 'X')) {
+                        base = 16;
+                        j++;
+                    }
+                    for (; j < n; j++) {
+                        int d = base == 16 ? web_hex_digit(ent[j])
+                                           : (isdigit((unsigned char)ent[j])
+                                                  ? ent[j] - '0'
+                                                  : -1);
+                        if (d < 0 || d >= base) {
+                            ok = false;
+                            break;
+                        }
+                        cp = cp * (uint32_t)base + (uint32_t)d;
+                    }
+                    if (ok) {
+                        json_append_utf8(&out, cp);
+                        i = semi;
+                        continue;
+                    }
+                }
+            }
+        }
+        cetta_sb_append_n(&out, text + i, 1);
+    }
+    return out.buf ? out.buf : strdup("");
+}
+
+static char *web_clean_text_alloc(const char *text) {
+    CettaStringBuf out;
+    bool in_space = false;
+    const unsigned char *p = (const unsigned char *)(text ? text : "");
+    while (*p && isspace(*p)) p++;
+    cetta_sb_init(&out);
+    for (; *p; p++) {
+        if (isspace(*p)) {
+            in_space = true;
+            continue;
+        }
+        if (in_space && out.len > 0) cetta_sb_append(&out, " ");
+        in_space = false;
+        cetta_sb_append_n(&out, (const char *)p, 1);
+    }
+    return out.buf ? out.buf : strdup("");
+}
+
+static bool web_tag_name_is(const char *tag, const char *name, bool *is_end_out) {
+    const char *p = tag;
+    size_t name_len = strlen(name);
+    bool is_end = false;
+    if (!p || *p != '<') return false;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p == '/') {
+        is_end = true;
+        p++;
+        while (*p && isspace((unsigned char)*p)) p++;
+    }
+    if (strncasecmp(p, name, name_len) != 0) return false;
+    p += name_len;
+    if (*p && !isspace((unsigned char)*p) && *p != '>' && *p != '/') {
+        return false;
+    }
+    if (is_end_out) *is_end_out = is_end;
+    return true;
+}
+
+static char *web_tag_attr_value_alloc(const char *tag, const char *attr) {
+    size_t attr_len = strlen(attr);
+    const char *p = tag ? tag : "";
+    while (*p) {
+        if ((p == tag || isspace((unsigned char)p[-1]) || p[-1] == '<') &&
+            strncasecmp(p, attr, attr_len) == 0) {
+            const char *q = p + attr_len;
+            while (*q && isspace((unsigned char)*q)) q++;
+            if (*q != '=') {
+                p++;
+                continue;
+            }
+            q++;
+            while (*q && isspace((unsigned char)*q)) q++;
+            if (*q == '"' || *q == '\'') {
+                char quote = *q++;
+                const char *start = q;
+                while (*q && *q != quote) q++;
+                return web_html_decode_segment_alloc(start, (size_t)(q - start));
+            } else {
+                const char *start = q;
+                while (*q && !isspace((unsigned char)*q) && *q != '>') q++;
+                return web_html_decode_segment_alloc(start, (size_t)(q - start));
+            }
+        }
+        p++;
+    }
+    return NULL;
+}
+
+static char *web_ddg_decode_url_alloc(const char *href) {
+    const char *raw = href ? href : "";
+    const char *uddg = strstr(raw, "uddg=");
+    if (uddg) {
+        const char *start = uddg + 5;
+        const char *end = start;
+        while (*end && *end != '&') end++;
+        return web_percent_decode_alloc(start, (size_t)(end - start));
+    }
+    if (strncmp(raw, "//", 2) == 0) {
+        size_t len = strlen(raw) + strlen("https:") + 1;
+        char *prefixed = cetta_malloc(len);
+        snprintf(prefixed, len, "https:%s", raw);
+        return prefixed;
+    }
+    return web_html_decode_segment_alloc(raw, strlen(raw));
+}
+
+static Atom *web_json_pair(Arena *a, const char *key, const char *value) {
+    return atom_expr(a, (Atom *[]){
+        atom_symbol(a, "JsonPair"),
+        atom_string(a, key),
+        json_wrap1(a, "JsonString", atom_string(a, value ? value : "")),
+    }, 3);
+}
+
+static void web_ddg_add_result(Arena *a, Atom ***items, uint32_t *count,
+                               uint32_t *cap, int max_results,
+                               CettaStringBuf *title, char **url,
+                               CettaStringBuf *snippet) {
+    char *clean_title;
+    char *clean_snippet;
+    Atom *pairs;
+    if ((int)*count >= max_results) return;
+    clean_title = web_clean_text_alloc(title->buf ? title->buf : "");
+    clean_snippet = web_clean_text_alloc(snippet->buf ? snippet->buf : "");
+    if (!clean_title[0] || !clean_snippet[0]) {
+        free(clean_title);
+        free(clean_snippet);
+        return;
+    }
+    if (*count >= *cap) {
+        *cap = *cap ? *cap * 2 : 8;
+        *items = cetta_realloc(*items, sizeof(Atom *) * (*cap));
+    }
+    pairs = atom_expr(a, (Atom *[]){
+        web_json_pair(a, "title", clean_title),
+        web_json_pair(a, "url", *url ? *url : ""),
+        web_json_pair(a, "snippet", clean_snippet),
+    }, 3);
+    (*items)[(*count)++] = json_wrap1(a, "JsonObject", pairs);
+    free(clean_title);
+    free(clean_snippet);
+}
+
+static void web_ddg_reset_result(CettaStringBuf *title, char **url,
+                                 CettaStringBuf *snippet) {
+    cetta_sb_free(title);
+    cetta_sb_init(title);
+    free(*url);
+    *url = NULL;
+    cetta_sb_free(snippet);
+    cetta_sb_init(snippet);
+}
+
+static Atom *web_ddg_results_from_html(Arena *a, Atom *head, Atom **args,
+                                       uint32_t nargs) {
+    const char *html;
+    int max_results;
+    const char *p;
+    const char *data_start;
+    bool in_title = false;
+    bool in_snippet = false;
+    CettaStringBuf title;
+    CettaStringBuf snippet;
+    char *url = NULL;
+    Atom **items = NULL;
+    uint32_t count = 0;
+    uint32_t cap = 0;
+    Atom *result;
+
+    if (nargs != 2 || !(html = library_text_arg(args[0])) ||
+        !library_int_arg(args[1], &max_results)) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected HTML text and max results");
+    }
+    if (max_results < 0) max_results = 0;
+    if (max_results > 50) max_results = 50;
+
+    cetta_sb_init(&title);
+    cetta_sb_init(&snippet);
+    p = html;
+    data_start = p;
+    while (*p && count < (uint32_t)max_results) {
+        if (*p != '<') {
+            p++;
+            continue;
+        }
+        if ((in_title || in_snippet) && p > data_start) {
+            char *decoded =
+                web_html_decode_segment_alloc(data_start, (size_t)(p - data_start));
+            if (in_title) cetta_sb_append(&title, decoded);
+            if (in_snippet) cetta_sb_append(&snippet, decoded);
+            free(decoded);
+        }
+
+        const char *gt = strchr(p, '>');
+        if (!gt) break;
+        size_t tag_len = (size_t)(gt - p + 1);
+        char *tag = cetta_malloc(tag_len + 1);
+        memcpy(tag, p, tag_len);
+        tag[tag_len] = '\0';
+
+        bool is_end_a = false;
+        bool is_end_td = false;
+        bool tag_a = web_tag_name_is(tag, "a", &is_end_a);
+        bool tag_td = web_tag_name_is(tag, "td", &is_end_td);
+        if ((tag_a && !is_end_a) || (tag_td && !is_end_td)) {
+            char *classes = web_tag_attr_value_alloc(tag, "class");
+            if (classes && tag_a &&
+                (strstr(classes, "result__a") ||
+                 strstr(classes, "result-link"))) {
+                web_ddg_reset_result(&title, &url, &snippet);
+                in_title = true;
+                char *href = web_tag_attr_value_alloc(tag, "href");
+                url = web_ddg_decode_url_alloc(href ? href : "");
+                free(href);
+            } else if (classes &&
+                       (strstr(classes, "result__snippet") ||
+                        strstr(classes, "result-snippet"))) {
+                cetta_sb_free(&snippet);
+                cetta_sb_init(&snippet);
+                in_snippet = true;
+            }
+            free(classes);
+        } else if (tag_a && is_end_a) {
+            if (in_title) in_title = false;
+            if (in_snippet) {
+                web_ddg_add_result(a, &items, &count, &cap, max_results,
+                                   &title, &url, &snippet);
+                web_ddg_reset_result(&title, &url, &snippet);
+                in_snippet = false;
+                in_title = false;
+            }
+        } else if (tag_td && is_end_td && in_snippet) {
+            web_ddg_add_result(a, &items, &count, &cap, max_results,
+                               &title, &url, &snippet);
+            web_ddg_reset_result(&title, &url, &snippet);
+            in_snippet = false;
+            in_title = false;
+        }
+
+        free(tag);
+        p = gt + 1;
+        data_start = p;
+    }
+
+    result = json_wrap1(a, "JsonArray", atom_expr(a, items, count));
+    free(items);
+    web_ddg_reset_result(&title, &url, &snippet);
+    return result;
+}
+
+static Atom *cetta_library_dispatch_web(Arena *a, Atom *head,
+                                        Atom **args, uint32_t nargs) {
+    if (head->kind != ATOM_SYMBOL) return NULL;
+    if (head->sym_id == g_builtin_syms.lib_web_url_encode) {
+        return web_url_encode(a, head, args, nargs);
+    }
+    if (head->sym_id == g_builtin_syms.lib_web_ddg_results_from_html) {
+        return web_ddg_results_from_html(a, head, args, nargs);
     }
     return NULL;
 }
@@ -2334,6 +4433,8 @@ static Atom *fs_exists(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     return stat(path, &st) == 0 ? atom_true(a) : atom_false(a);
 }
 
+static Atom *fs_error_data(Arena *a, const char *message);
+
 static Atom *fs_read_text(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     const char *path;
     CettaStringBuf text;
@@ -2343,11 +4444,15 @@ static Atom *fs_read_text(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
         return library_signature_error(a, head, args, nargs, "expected filename");
     }
     if (!library_read_text_file(path, &text, errbuf, sizeof(errbuf))) {
-        return atom_error(a, library_call_expr(a, head, args, nargs), atom_string(a, errbuf));
+        return fs_error_data(a, errbuf);
     }
     result = atom_string(a, text.buf ? text.buf : "");
     cetta_sb_free(&text);
     return result;
+}
+
+static Atom *fs_error_data(Arena *a, const char *message) {
+    return atom_expr2(a, atom_symbol(a, "FsError"), atom_string(a, message));
 }
 
 static Atom *fs_write_like(Arena *a, Atom *head, Atom **args, uint32_t nargs, bool append) {
@@ -2360,7 +4465,45 @@ static Atom *fs_write_like(Arena *a, Atom *head, Atom **args, uint32_t nargs, bo
                                        "expected filename and text");
     }
     if (!library_write_text_file(path, text, append, errbuf, sizeof(errbuf))) {
-        return atom_error(a, library_call_expr(a, head, args, nargs), atom_string(a, errbuf));
+        return fs_error_data(a, errbuf);
+    }
+    return atom_unit(a);
+}
+
+static Atom *fs_write_new_text(Arena *a, Atom *head, Atom **args,
+                               uint32_t nargs) {
+    const char *path;
+    const char *text;
+    int fd;
+    size_t len;
+    size_t written = 0;
+    if (nargs != 2 || !(path = library_text_arg(args[0])) ||
+        !(text = library_text_arg(args[1]))) {
+        return library_signature_error(a, head, args, nargs,
+                                       "expected filename and text");
+    }
+    fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0660);
+    if (fd < 0) {
+        if (errno == EEXIST) return atom_symbol(a, "AlreadyExists");
+        return fs_error_data(a, strerror(errno));
+    }
+    len = strlen(text);
+    while (written < len) {
+        ssize_t n = write(fd, text + written, len - written);
+        if (n < 0) {
+            int saved = errno;
+            close(fd);
+            errno = saved;
+            return fs_error_data(a, strerror(errno));
+        }
+        if (n == 0) {
+            close(fd);
+            return fs_error_data(a, "short write");
+        }
+        written += (size_t)n;
+    }
+    if (close(fd) != 0) {
+        return fs_error_data(a, strerror(errno));
     }
     return atom_unit(a);
 }
@@ -2371,6 +4514,17 @@ static Atom *fs_write_text(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
 
 static Atom *fs_append_text(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     return fs_write_like(a, head, args, nargs, true);
+}
+
+static Atom *fs_remove(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *path;
+    if (nargs != 1 || !(path = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected filename");
+    }
+    if (unlink(path) != 0) {
+        return fs_error_data(a, strerror(errno));
+    }
+    return atom_unit(a);
 }
 
 static Atom *fs_read_lines(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
@@ -2434,6 +4588,17 @@ static Atom *fs_read_lines(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     return result;
 }
 
+static Atom *fs_mkdirs(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *path;
+    if (nargs != 1 || !(path = library_text_arg(args[0]))) {
+        return library_signature_error(a, head, args, nargs, "expected directory path");
+    }
+    if (!ensure_directory_path(path)) {
+        return fs_error_data(a, "cannot create directory path");
+    }
+    return atom_unit(a);
+}
+
 static Atom *cetta_library_dispatch_fs(Arena *a, Atom *head,
                                        Atom **args, uint32_t nargs) {
     if (head->kind != ATOM_SYMBOL) return NULL;
@@ -2447,11 +4612,20 @@ static Atom *cetta_library_dispatch_fs(Arena *a, Atom *head,
     if (head_id == g_builtin_syms.lib_fs_write_text) {
         return fs_write_text(a, head, args, nargs);
     }
+    if (head_id == g_builtin_syms.lib_fs_write_new_text) {
+        return fs_write_new_text(a, head, args, nargs);
+    }
     if (head_id == g_builtin_syms.lib_fs_append_text) {
         return fs_append_text(a, head, args, nargs);
     }
+    if (head_id == g_builtin_syms.lib_fs_remove) {
+        return fs_remove(a, head, args, nargs);
+    }
     if (head_id == g_builtin_syms.lib_fs_read_lines) {
         return fs_read_lines(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_fs_mkdirs) {
+        return fs_mkdirs(a, head, args, nargs);
     }
     return NULL;
 }
@@ -6884,6 +9058,30 @@ Atom *cetta_library_dispatch_native(CettaLibraryContext *ctx, Space *space,
     }
     if (ctx->active_mask & CETTA_LIBRARY_STR) {
         Atom *result = cetta_library_dispatch_str(a, head, args, nargs);
+        if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_TIME) {
+        Atom *result = cetta_library_dispatch_time(a, head, args, nargs);
+        if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_PROCESS) {
+        Atom *result = cetta_library_dispatch_process(a, head, args, nargs);
+        if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_JSON) {
+        Atom *result = cetta_library_dispatch_json(a, head, args, nargs);
+        if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_VEC) {
+        Atom *result = cetta_library_dispatch_vec(a, head, args, nargs);
+        if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_HTTP) {
+        Atom *result = cetta_library_dispatch_http(a, head, args, nargs);
+        if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_WEB) {
+        Atom *result = cetta_library_dispatch_web(a, head, args, nargs);
         if (result) return result;
     }
     if (ctx->active_mask & CETTA_LIBRARY_RHOMETTA) {

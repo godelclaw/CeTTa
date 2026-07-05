@@ -1,0 +1,16 @@
+!(import! &self petta_compat)
+
+!(assertEqual (atomic_list_concat ("a" "b" "c") "/") "a/b/c")
+!(assertEqual (split_string "a::b::c" "::" "") ("a" "b" "c"))
+!(assertEqual (string_concat "foo" "bar") "foobar")
+!(assertEqual (string_concat foo "bar") "foobar")
+!(assertEqual (string_length "abcd") 4)
+!(assertEqual (string-replace "a-b-c" "-" "+") "a+b+c")
+!(assertEqual (string-safe "a\"b\nc'd") "a_quote_b_newline_c_apostrophe_d")
+!(assertEqual (last_chars "abcdef" 3) "def")
+!(assertEqual (last_chars "abc" 10) "abc")
+!(assertEqual (newline) "\n")
+!(assertEqualToResult
+  (let $s (get_time_as_string)
+    (and (== (get-type $s) String) (== (string_length $s) 19)))
+  (True))

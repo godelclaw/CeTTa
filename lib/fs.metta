@@ -8,9 +8,19 @@
      (case (__cetta_lib_fs_write_text $path $text)
        (($result (return $result))))))
 
+(= (fs:write-new-text $path $text)
+   (function
+     (case (__cetta_lib_fs_write_new_text $path $text)
+       (($result (return $result))))))
+
 (= (fs:append-text $path $text)
    (function
      (case (__cetta_lib_fs_append_text $path $text)
+       (($result (return $result))))))
+
+(= (fs:remove $path)
+   (function
+     (case (__cetta_lib_fs_remove $path)
        (($result (return $result))))))
 
 (= (fs:exists $path)
@@ -21,4 +31,9 @@
 (= (fs:read-lines $path)
    (function
      (case (__cetta_lib_fs_read_lines $path)
+       (($result (return $result))))))
+
+(= (fs:mkdirs $path)
+   (function
+     (case (__cetta_lib_fs_mkdirs $path)
        (($result (return $result))))))

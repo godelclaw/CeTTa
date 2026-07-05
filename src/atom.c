@@ -652,8 +652,12 @@ static bool atom_is_hash_stable(const Atom *atom) {
 }
 
 static bool atom_expr_is_contextual(const Atom *atom) {
-    return atom && atom->kind == ATOM_EXPR && atom->expr.len > 0 &&
-           atom_is_symbol_id(atom->expr.elems[0], g_builtin_syms.native_handle);
+    if (!atom || atom->kind != ATOM_EXPR || atom->expr.len == 0)
+        return false;
+    Atom *head = atom->expr.elems[0];
+    return atom_is_symbol_id(head, g_builtin_syms.native_handle) ||
+           (head && head->kind == ATOM_SYMBOL &&
+            symbol_eq_cstr(g_symbols, head->sym_id, "NativeHandle"));
 }
 
 static bool atom_can_hashcons(const Atom *atom) {

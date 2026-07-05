@@ -26,6 +26,7 @@ ENABLE_PYTHON := 0
 ENABLE_MORK_STATIC := 0
 ENABLE_PATHMAP_SPACE := 0
 ENABLE_GMP ?= 1
+ENABLE_HTTP ?= 1
 ENABLE_RUNTIME_STATS ?= 0
 ENABLE_RUNTIME_TIMING ?= 0
 ENABLE_SANITIZERS ?= 0
@@ -42,6 +43,9 @@ $(error RHO_BENCH_GENERATED_SIZE_MODE must be smallest or largest)
 endif
 ifneq ($(filter $(ENABLE_GMP),0 1),$(ENABLE_GMP))
 $(error ENABLE_GMP must be 0 or 1)
+endif
+ifneq ($(filter $(ENABLE_HTTP),0 1),$(ENABLE_HTTP))
+$(error ENABLE_HTTP must be 0 or 1)
 endif
 ifneq ($(filter $(ENABLE_SANITIZERS),0 1),$(ENABLE_SANITIZERS))
 $(error ENABLE_SANITIZERS must be 0 or 1)
@@ -191,6 +195,13 @@ else
 GMP_CFLAGS =
 GMP_LDFLAGS =
 endif
+ifeq ($(ENABLE_HTTP),1)
+HTTP_CFLAGS ?= $(shell pkg-config --cflags libcurl 2>/dev/null)
+HTTP_LDFLAGS ?= $(shell pkg-config --libs libcurl 2>/dev/null || printf '%s' -lcurl)
+else
+HTTP_CFLAGS =
+HTTP_LDFLAGS =
+endif
 ifeq ($(ENABLE_PYTHON),1)
 PYTHON_CONFIG := $(strip $(shell command -v python3-config 2>/dev/null))
 ifeq ($(PYTHON_CONFIG),)
@@ -207,6 +218,9 @@ comma := ,
 BUILD_OBJ_TAG = $(BUILD_CANON)
 ifeq ($(ENABLE_GMP),0)
 BUILD_OBJ_TAG := $(BUILD_CANON).nogmp
+endif
+ifeq ($(ENABLE_HTTP),0)
+BUILD_OBJ_TAG := $(BUILD_OBJ_TAG).nohttp
 endif
 ifeq ($(ENABLE_SANITIZERS),1)
 SANITIZER_TAG := $(subst $(comma),-,$(subst $(space),_,$(SANITIZERS)))
@@ -237,10 +251,10 @@ PROVENANCE_CPPFLAGS =
 ifeq ($(CETTA_PROVENANCE_ASSERT),1)
 PROVENANCE_CPPFLAGS = -DCETTA_PROVENANCE_ASSERT=1
 endif
-CPPFLAGS = -Isrc -I. $(BRIDGE_CFLAGS) $(PY_CFLAGS) $(GMP_CFLAGS) $(PROVENANCE_CPPFLAGS) -include $(BUILD_CONFIG_HEADER)
+CPPFLAGS = -Isrc -I. $(BRIDGE_CFLAGS) $(PY_CFLAGS) $(GMP_CFLAGS) $(HTTP_CFLAGS) $(PROVENANCE_CPPFLAGS) -include $(BUILD_CONFIG_HEADER)
 CFLAGS = -O3 -Wall -Werror -std=c11 -pthread
 DEPFLAGS = -MMD -MP
-LDFLAGS = $(BRIDGE_LDFLAGS) -ldl -lm -pthread $(GMP_LDFLAGS) $(PY_LDFLAGS) $(PY_RPATH)
+LDFLAGS = $(BRIDGE_LDFLAGS) -ldl -lm -pthread $(GMP_LDFLAGS) $(HTTP_LDFLAGS) $(PY_LDFLAGS) $(PY_RPATH)
 ifeq ($(ENABLE_SANITIZERS),1)
 CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=$(SANITIZERS) -fno-sanitize-recover=all -Wall -Werror -std=c11 -pthread
 LDFLAGS += -fsanitize=$(SANITIZERS) -fno-sanitize-recover=all
@@ -877,6 +891,7 @@ $(BUILD_CONFIG_STAMP): $(BUILD_CONFIG_INPUTS)
 	printf '#define CETTA_BUILD_WITH_MORK_STATIC %s\n' "$(ENABLE_MORK_STATIC)" >> "$$tmp_cfg"; \
 	printf '#define CETTA_BUILD_WITH_PATHMAP_SPACE %s\n' "$(ENABLE_PATHMAP_SPACE)" >> "$$tmp_cfg"; \
 	printf '#define CETTA_BUILD_WITH_GMP %s\n' "$(ENABLE_GMP)" >> "$$tmp_cfg"; \
+	printf '#define CETTA_BUILD_WITH_HTTP %s\n' "$(ENABLE_HTTP)" >> "$$tmp_cfg"; \
 	printf '#define CETTA_BUILD_WITH_RUNTIME_STATS %s\n' "$(ENABLE_RUNTIME_STATS)" >> "$$tmp_cfg"; \
 	printf '#define CETTA_BUILD_WITH_RUNTIME_TIMING %s\n' "$(ENABLE_RUNTIME_TIMING)" >> "$$tmp_cfg"; \
 	if [ -f "$(BUILD_CONFIG_HEADER)" ] && cmp -s "$$tmp_cfg" "$(BUILD_CONFIG_HEADER)"; then \
@@ -898,6 +913,7 @@ $(STAGE0_BUILD_CONFIG_STAMP): $(BUILD_CONFIG_INPUTS)
 	printf '#define CETTA_BUILD_WITH_MORK_STATIC %s\n' "$(ENABLE_MORK_STATIC)" >> "$$tmp_cfg"; \
 	printf '#define CETTA_BUILD_WITH_PATHMAP_SPACE %s\n' "$(ENABLE_PATHMAP_SPACE)" >> "$$tmp_cfg"; \
 	printf '#define CETTA_BUILD_WITH_GMP %s\n' "$(ENABLE_GMP)" >> "$$tmp_cfg"; \
+	printf '#define CETTA_BUILD_WITH_HTTP %s\n' "$(ENABLE_HTTP)" >> "$$tmp_cfg"; \
 	printf '#define CETTA_BUILD_WITH_RUNTIME_STATS 0\n' >> "$$tmp_cfg"; \
 	printf '#define CETTA_BUILD_WITH_RUNTIME_TIMING 0\n' >> "$$tmp_cfg"; \
 	if [ -f "$(STAGE0_BUILD_CONFIG_HEADER)" ] && cmp -s "$$tmp_cfg" "$(STAGE0_BUILD_CONFIG_HEADER)"; then \

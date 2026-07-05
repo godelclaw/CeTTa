@@ -19,8 +19,12 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <errno.h>
+#include <ctype.h>
+#include <float.h>
 #include <time.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 #include <assert.h>
 #include "eval_gc.h"
 
@@ -9639,6 +9643,533 @@ static void metta_eval_bind(Space *s, Arena *a, Atom *atom, int fuel, OutcomeSet
     outcome_set_normalize_visible_frontier(a, os);
 }
 
+static bool translate_predicate_arg_value(Space *s, Arena *a, Atom *arg,
+                                          int fuel, const Bindings *env,
+                                          Atom **out) {
+    Atom *applied = bindings_apply_if_vars((Bindings *)env, a, arg);
+    if (!applied)
+        return false;
+
+    OutcomeSet vals;
+    outcome_set_init(&vals);
+    metta_eval_bind(s, a, applied, fuel, &vals);
+    for (CettaCount i = 0; i < vals.len; i++) {
+        Atom *value = outcome_atom_materialize(a, &vals.items[i]);
+        if (!value || atom_is_empty(value) || atom_is_error(value))
+            continue;
+        *out = value;
+        outcome_set_free(&vals);
+        return true;
+    }
+    outcome_set_free(&vals);
+    return false;
+}
+
+static bool translate_predicate_numeric_bool(Space *s, Arena *a, SymbolId op,
+                                             Atom *lhs, Atom *rhs, bool *out) {
+    Atom *head = atom_symbol_id(a, op);
+    Atom *native_args[] = { lhs, rhs };
+    Atom *result = dispatch_native_op(s, a, head, native_args, 2);
+    if (!result || atom_is_error(result) ||
+        result->kind != ATOM_GROUNDED || result->ground.gkind != GV_BOOL) {
+        return false;
+    }
+    *out = result->ground.bval;
+    return true;
+}
+
+static bool translate_predicate_minmax_value(Space *s, Arena *a, bool is_max,
+                                             Atom *lhs, Atom *rhs,
+                                             Atom **out) {
+    bool wins = false;
+    if (!translate_predicate_numeric_bool(
+            s, a, is_max ? g_builtin_syms.op_gt : g_builtin_syms.op_lt,
+            lhs, rhs, &wins)) {
+        return false;
+    }
+    if (wins) {
+        *out = lhs;
+        return true;
+    }
+
+    bool equal = false;
+    if (!translate_predicate_numeric_bool(s, a, g_builtin_syms.numeric_eq,
+                                          lhs, rhs, &equal)) {
+        return false;
+    }
+    *out = equal ? lhs : rhs;
+    return true;
+}
+
+static const char *translate_predicate_text_atom(Atom *atom) {
+    if (!atom)
+        return NULL;
+    if (atom->kind == ATOM_SYMBOL)
+        return atom_name_cstr(atom);
+    if (atom->kind == ATOM_GROUNDED && atom->ground.gkind == GV_STRING)
+        return atom->ground.sval;
+    return NULL;
+}
+
+static bool translate_predicate_atomic_text(Atom *atom, char *buf,
+                                            size_t buf_len,
+                                            const char **out) {
+    if (!atom || !buf || buf_len == 0 || !out)
+        return false;
+    if (atom->kind == ATOM_SYMBOL) {
+        *out = atom_name_cstr(atom);
+        return true;
+    }
+    if (atom->kind != ATOM_GROUNDED)
+        return false;
+    switch (atom->ground.gkind) {
+    case GV_STRING:
+        *out = atom->ground.sval;
+        return true;
+    case GV_INT:
+        snprintf(buf, buf_len, "%" PRId64, atom->ground.ival);
+        *out = buf;
+        return true;
+    case GV_FLOAT:
+        snprintf(buf, buf_len, "%.*g", DBL_DECIMAL_DIG, atom->ground.fval);
+        *out = buf;
+        return true;
+    case GV_BOOL:
+        *out = atom->ground.bval ? "true" : "false";
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool translate_predicate_atom_string_value(Arena *a, Atom *atom,
+                                                  Atom **out) {
+    char buf[128];
+    const char *text = NULL;
+    if (!translate_predicate_atomic_text(atom, buf, sizeof(buf), &text))
+        return false;
+    *out = atom_string(a, text);
+    return true;
+}
+
+static bool translate_predicate_int_atom(Atom *atom, int64_t *out) {
+    if (!atom || !out)
+        return false;
+    if (atom->kind == ATOM_GROUNDED && atom->ground.gkind == GV_INT) {
+        *out = atom->ground.ival;
+        return true;
+    }
+    return false;
+}
+
+static bool translate_predicate_parse_i64(const char *text, int64_t *out) {
+    char *end = NULL;
+    long long value;
+    if (!text || !out)
+        return false;
+    while (isspace((unsigned char)*text))
+        text++;
+    if (*text == '\0')
+        return false;
+    errno = 0;
+    value = strtoll(text, &end, 10);
+    if (errno != 0 || end == text)
+        return false;
+    while (end && isspace((unsigned char)*end))
+        end++;
+    if (!end || *end != '\0')
+        return false;
+    *out = (int64_t)value;
+    return true;
+}
+
+static Atom *translate_predicate_int_string(Arena *a, int64_t value) {
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%" PRId64, value);
+    return atom_string(a, buf);
+}
+
+static bool translate_predicate_string_concat_value(Arena *a, Atom *lhs,
+                                                    Atom *rhs, Atom **out) {
+    const char *ltext = translate_predicate_text_atom(lhs);
+    const char *rtext = translate_predicate_text_atom(rhs);
+    size_t llen;
+    size_t rlen;
+    char *joined;
+    if (!ltext || !rtext || !out)
+        return false;
+    llen = strlen(ltext);
+    rlen = strlen(rtext);
+    joined = malloc(llen + rlen + 1);
+    if (!joined)
+        return false;
+    memcpy(joined, ltext, llen);
+    memcpy(joined + llen, rtext, rlen);
+    joined[llen + rlen] = '\0';
+    *out = atom_string(a, joined);
+    free(joined);
+    return true;
+}
+
+static bool translate_predicate_atomics_to_string_value(Arena *a, Atom *items,
+                                                        Atom **out) {
+    char *joined = NULL;
+    size_t len = 0;
+    size_t cap = 0;
+    Atom **elems = NULL;
+    CettaExprLen count = 0;
+
+    if (!a || !items || !out || items->kind != ATOM_EXPR)
+        return false;
+    elems = items->expr.elems;
+    count = items->expr.len;
+
+    for (CettaExprIndex i = 0; i < count; i++) {
+        char inline_buf[128];
+        const char *piece = NULL;
+        size_t piece_len;
+        size_t needed;
+        size_t next_cap;
+        char *next;
+        if (!translate_predicate_atomic_text(elems[i], inline_buf,
+                                             sizeof(inline_buf), &piece)) {
+            free(joined);
+            return false;
+        }
+        piece_len = strlen(piece);
+        if (piece_len > SIZE_MAX - len - 1u) {
+            free(joined);
+            return false;
+        }
+        needed = len + piece_len + 1u;
+        if (needed > cap) {
+            next_cap = cap ? cap * 2u : 64u;
+            while (next_cap < needed) {
+                if (next_cap > SIZE_MAX / 2u) {
+                    next_cap = needed;
+                    break;
+                }
+                next_cap *= 2u;
+            }
+            next = realloc(joined, next_cap);
+            if (!next) {
+                free(joined);
+                return false;
+            }
+            joined = next;
+            cap = next_cap;
+        }
+        memcpy(joined + len, piece, piece_len);
+        len += piece_len;
+        joined[len] = '\0';
+    }
+
+    if (!joined) {
+        joined = malloc(1u);
+        if (!joined)
+            return false;
+        joined[0] = '\0';
+    }
+    *out = atom_string(a, joined);
+    free(joined);
+    return true;
+}
+
+static bool translate_predicate_optional_int_arg(Space *s, Arena *a, Atom *arg,
+                                                 int fuel, const Bindings *env,
+                                                 bool *known, int64_t *out) {
+    Atom *value = NULL;
+    if (!known || !out)
+        return false;
+    *known = false;
+    if (!translate_predicate_arg_value(s, a, arg, fuel, env, &value))
+        return true;
+    if (value->kind == ATOM_VAR)
+        return true;
+    if (!translate_predicate_int_atom(value, out))
+        return false;
+    *known = true;
+    return true;
+}
+
+static bool translate_predicate_optional_text_arg(Space *s, Arena *a, Atom *arg,
+                                                  int fuel, const Bindings *env,
+                                                  bool *known,
+                                                  const char **out) {
+    Atom *value = NULL;
+    if (!known || !out)
+        return false;
+    *known = false;
+    if (!translate_predicate_arg_value(s, a, arg, fuel, env, &value))
+        return true;
+    if (value->kind == ATOM_VAR)
+        return true;
+    *out = translate_predicate_text_atom(value);
+    if (!*out)
+        return false;
+    *known = true;
+    return true;
+}
+
+static Atom *translate_predicate_text_slice(Arena *a, const char *text,
+                                            int64_t before, int64_t length) {
+    char *slice;
+    Atom *out;
+    if (!text || before < 0 || length < 0)
+        return NULL;
+    slice = malloc((size_t)length + 1u);
+    if (!slice)
+        return NULL;
+    memcpy(slice, text + before, (size_t)length);
+    slice[length] = '\0';
+    out = atom_string(a, slice);
+    free(slice);
+    return out;
+}
+
+static Atom *translate_predicate_codes_from_text(Arena *a, const char *text) {
+    size_t len;
+    Atom **elems;
+    if (!a || !text)
+        return NULL;
+    len = strlen(text);
+    if (!cetta_expr_len_fits_size((CettaExprLen)len))
+        return NULL;
+    elems = len ? arena_alloc(a, len * sizeof(Atom *)) : NULL;
+    for (size_t i = 0; i < len; i++)
+        elems[i] = atom_int(a, (int64_t)(unsigned char)text[i]);
+    return atom_expr(a, elems, (CettaExprLen)len);
+}
+
+static bool translate_predicate_atom_from_codes(Arena *a, Atom *codes,
+                                                Atom **out) {
+    char *buf;
+    if (!a || !codes || !out || codes->kind != ATOM_EXPR)
+        return false;
+    if (codes->expr.len > (CettaExprLen)(SIZE_MAX - 1u) ||
+        !cetta_expr_len_mul_fits_size(codes->expr.len, sizeof(char))) {
+        return false;
+    }
+    buf = malloc((size_t)codes->expr.len + 1u);
+    if (!buf)
+        return false;
+    for (CettaExprIndex i = 0; i < codes->expr.len; i++) {
+        int64_t code = 0;
+        if (!translate_predicate_int_atom(codes->expr.elems[i], &code) ||
+            code <= 0 || code > 255) {
+            free(buf);
+            return false;
+        }
+        buf[i] = (char)(unsigned char)code;
+    }
+    buf[codes->expr.len] = '\0';
+    *out = atom_symbol(a, buf);
+    free(buf);
+    return true;
+}
+
+static bool translate_predicate_sub_string(Arena *a, const char *text,
+                                           bool before_known, int64_t before,
+                                           bool length_known, int64_t length,
+                                           bool after_known, int64_t after,
+                                           bool sub_known, const char *sub_text,
+                                           Atom *before_pat, Atom *length_pat,
+                                           Atom *after_pat, Atom *sub_pat,
+                                           BindingsBuilder *bb) {
+    int64_t text_len;
+    int missing = 0;
+    Atom *sub_atom = NULL;
+    bool ok;
+
+    if (!text || !bb || strlen(text) > (size_t)INT64_MAX)
+        return false;
+    text_len = (int64_t)strlen(text);
+
+    if (sub_known) {
+        if (strlen(sub_text) > (size_t)INT64_MAX)
+            return false;
+        if (length_known && length != (int64_t)strlen(sub_text))
+            return false;
+        if (!length_known) {
+            length = (int64_t)strlen(sub_text);
+            length_known = true;
+        }
+    }
+
+    missing += before_known ? 0 : 1;
+    missing += length_known ? 0 : 1;
+    missing += after_known ? 0 : 1;
+    if (missing > 1)
+        return false;
+
+    if (!before_known) {
+        before = text_len - length - after;
+        before_known = true;
+    } else if (!length_known) {
+        length = text_len - before - after;
+        length_known = true;
+    } else if (!after_known) {
+        after = text_len - before - length;
+        after_known = true;
+    }
+
+    if (!before_known || !length_known || !after_known)
+        return false;
+    if (before < 0 || length < 0 || after < 0)
+        return false;
+    if (before > text_len || length > text_len - before)
+        return false;
+    if (before + length + after != text_len)
+        return false;
+
+    sub_atom = translate_predicate_text_slice(a, text, before, length);
+    if (!sub_atom)
+        return false;
+    if (sub_known && strcmp(sub_text, sub_atom->ground.sval) != 0)
+        return false;
+
+    ok = match_atoms_builder(before_pat, atom_int(a, before), bb) &&
+         match_atoms_builder(length_pat, atom_int(a, length), bb) &&
+         match_atoms_builder(after_pat, atom_int(a, after), bb) &&
+         match_atoms_builder(sub_pat, sub_atom, bb);
+    return ok;
+}
+
+static bool translate_predicate_file_exists_path(const char *path) {
+    struct stat st;
+    return path && stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static bool translate_predicate_read_file_text(Arena *a, const char *path,
+                                               Atom **out) {
+    FILE *fp = NULL;
+    char *buf = NULL;
+    size_t len = 0;
+    size_t cap = 0;
+    if (!a || !path || !out)
+        return false;
+    fp = fopen(path, "rb");
+    if (!fp)
+        return false;
+    for (;;) {
+        size_t nread;
+        if (len + 4096u + 1u > cap) {
+            size_t next_cap = cap ? cap * 2u : 8192u;
+            char *next;
+            while (next_cap < len + 4096u + 1u)
+                next_cap *= 2u;
+            next = realloc(buf, next_cap);
+            if (!next) {
+                free(buf);
+                fclose(fp);
+                return false;
+            }
+            buf = next;
+            cap = next_cap;
+        }
+        nread = fread(buf + len, 1u, 4096u, fp);
+        len += nread;
+        if (nread < 4096u) {
+            if (ferror(fp)) {
+                free(buf);
+                fclose(fp);
+                return false;
+            }
+            break;
+        }
+    }
+    fclose(fp);
+    if (!buf) {
+        buf = malloc(1u);
+        if (!buf)
+            return false;
+    }
+    buf[len] = '\0';
+    *out = atom_string(a, buf);
+    free(buf);
+    return true;
+}
+
+static Atom *translate_predicate_format_time_target(Arena *a,
+                                                    const Bindings *env,
+                                                    Atom *arg) {
+    Atom *applied = bindings_apply_if_vars((Bindings *)env, a, arg);
+    Atom *inner;
+    if (!applied || applied->kind != ATOM_EXPR || applied->expr.len != 2 ||
+        applied->expr.elems[0]->kind != ATOM_SYMBOL ||
+        strcmp(atom_name_cstr(applied->expr.elems[0]), "Predicate") != 0)
+        return NULL;
+    inner = applied->expr.elems[1];
+    if (!inner || inner->kind != ATOM_EXPR || inner->expr.len != 2 ||
+        inner->expr.elems[0]->kind != ATOM_SYMBOL ||
+        strcmp(atom_name_cstr(inner->expr.elems[0]), "string") != 0)
+        return NULL;
+    return inner->expr.elems[1];
+}
+
+static bool translate_predicate_time_seconds_atom(Atom *atom, double *out) {
+    if (!atom || !out || atom->kind != ATOM_GROUNDED)
+        return false;
+    if (atom->ground.gkind == GV_INT) {
+        *out = (double)atom->ground.ival;
+        return true;
+    }
+    if (atom->ground.gkind == GV_FLOAT) {
+        *out = atom->ground.fval;
+        return true;
+    }
+    return false;
+}
+
+static bool translate_predicate_get_time_expr(Atom *atom) {
+    return atom && atom->kind == ATOM_EXPR && atom->expr.len == 1 &&
+           atom->expr.elems[0]->kind == ATOM_SYMBOL &&
+           strcmp(atom_name_cstr(atom->expr.elems[0]), "get_time") == 0;
+}
+
+static bool translate_predicate_time_arg(Space *s, Arena *a, Atom *arg,
+                                         int fuel, const Bindings *env,
+                                         double *out) {
+    Atom *applied;
+    Atom *value = NULL;
+    if (!out)
+        return false;
+    applied = bindings_apply_if_vars((Bindings *)env, a, arg);
+    if (translate_predicate_get_time_expr(applied)) {
+        *out = (double)time(NULL);
+        return true;
+    }
+    if (!translate_predicate_arg_value(s, a, arg, fuel, env, &value))
+        return false;
+    return translate_predicate_time_seconds_atom(value, out);
+}
+
+static Atom *translate_predicate_format_time(Arena *a, const char *fmt,
+                                             double seconds) {
+    char buf[256];
+    time_t ts = (time_t)seconds;
+    struct tm tm_value;
+    if (!fmt || !localtime_r(&ts, &tm_value) ||
+        strftime(buf, sizeof(buf), fmt, &tm_value) == 0)
+        return NULL;
+    return atom_string(a, buf);
+}
+
+static bool translate_predicate_sleep_seconds(double seconds) {
+    struct timespec req;
+    if (seconds < 0)
+        return false;
+    req.tv_sec = (time_t)seconds;
+    req.tv_nsec = (long)((seconds - (double)req.tv_sec) * 1000000000.0);
+    if (req.tv_nsec < 0)
+        req.tv_nsec = 0;
+    if (req.tv_nsec > 999999999L)
+        req.tv_nsec = 999999999L;
+    while (nanosleep(&req, &req) != 0 && errno == EINTR) {
+    }
+    return true;
+}
+
 static void metta_eval_bind_typed(Space *s, Arena *a, Atom *type, Atom *atom, int fuel, OutcomeSet *os) {
     __attribute__((cleanup(eval_c_stack_guard_leave)))
     EvalCStackGuard stack_guard = {0};
@@ -13669,6 +14200,386 @@ tail_call: ;
         if (inner.len == 0)
             outcome_set_add(os, atom_empty(a), &_empty);
         outcome_set_free(&inner);
+        return;
+    }
+
+    /* ── translatePredicate (PeTTa deterministic relation compatibility) ─ */
+    if (head_id == g_builtin_syms.translatePredicate) {
+        if (nargs != 1) {
+            outcome_set_add(os,
+                atom_error(a, atom, atom_symbol(a, "IncorrectNumberOfArguments")),
+                &_empty);
+            return;
+        }
+        Atom *goal = bindings_apply_if_vars(CURRENT_ENV, a, expr_arg(atom, 0));
+        if (!goal || goal->kind != ATOM_EXPR || goal->expr.len == 0 ||
+            goal->expr.elems[0]->kind != ATOM_SYMBOL) {
+            outcome_set_add(os,
+                atom_error(a, atom, atom_symbol(a, "PredicateExpressionExpected")),
+                &_empty);
+            return;
+        }
+
+        Atom *pred = goal->expr.elems[0];
+        uint32_t pred_nargs = goal->expr.len - 1;
+        const char *pred_name = atom_name_cstr(pred);
+
+        BindingsBuilder bb;
+        if (!bindings_builder_init(&bb, CURRENT_ENV))
+            return;
+        bool ok = false;
+        bool handled = false;
+
+        if (pred_name && strcmp(pred_name, "is") == 0 && pred_nargs == 2) {
+            handled = true;
+            Atom *rhs_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                              fuel, CURRENT_ENV, &rhs_value))
+                ok = match_atoms_builder(goal->expr.elems[1], rhs_value, &bb);
+        } else if (pred_name && strcmp(pred_name, "=") == 0 && pred_nargs == 2) {
+            handled = true;
+            ok = match_atoms_builder(goal->expr.elems[1], goal->expr.elems[2], &bb);
+        } else if (pred_nargs == 3 && pred->sym_id == g_builtin_syms.equals) {
+            handled = true;
+            Atom *lhs_value = NULL;
+            Atom *rhs_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &lhs_value) &&
+                translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                              fuel, CURRENT_ENV, &rhs_value)) {
+                Atom *result = atom_bool(a, atom_alpha_eq(lhs_value, rhs_value));
+                ok = match_atoms_builder(goal->expr.elems[3], result, &bb);
+            }
+        } else if (pred_name && pred_nargs == 3 &&
+                   (strcmp(pred_name, "#<") == 0 ||
+                    strcmp(pred_name, "#>") == 0 ||
+                    strcmp(pred_name, "#=") == 0)) {
+            handled = true;
+            Atom *lhs_value = NULL;
+            Atom *rhs_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &lhs_value) &&
+                translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                              fuel, CURRENT_ENV, &rhs_value)) {
+                SymbolId relation =
+                    strcmp(pred_name, "#<") == 0 ? g_builtin_syms.op_lt :
+                    strcmp(pred_name, "#>") == 0 ? g_builtin_syms.op_gt :
+                                                   g_builtin_syms.numeric_eq;
+                Atom *rel_head = atom_symbol_id(a, relation);
+                Atom *native_args[] = { lhs_value, rhs_value };
+                Atom *result = dispatch_native_op(s, a, rel_head, native_args, 2);
+                if (result && !atom_is_error(result))
+                    ok = match_atoms_builder(goal->expr.elems[3], result, &bb);
+            }
+        } else if (pred_name && pred_nargs == 3 &&
+                   strcmp(pred_name, "#+") == 0) {
+            handled = true;
+            Atom *lhs_value = NULL;
+            Atom *rhs_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &lhs_value) &&
+                translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                              fuel, CURRENT_ENV, &rhs_value)) {
+                Atom *plus_head = atom_symbol_id(a, g_builtin_syms.op_plus);
+                Atom *native_args[] = { lhs_value, rhs_value };
+                Atom *result = dispatch_native_op(s, a, plus_head, native_args, 2);
+                if (result && !atom_is_error(result))
+                    ok = match_atoms_builder(goal->expr.elems[3], result, &bb);
+            }
+        } else if (pred_name && pred_nargs == 3 &&
+                   (strcmp(pred_name, "#-") == 0 ||
+                    strcmp(pred_name, "#*") == 0 ||
+                    strcmp(pred_name, "#div") == 0 ||
+                    strcmp(pred_name, "#//") == 0 ||
+                    strcmp(pred_name, "#mod") == 0)) {
+            handled = true;
+            Atom *lhs_value = NULL;
+            Atom *rhs_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &lhs_value) &&
+                translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                              fuel, CURRENT_ENV, &rhs_value)) {
+                SymbolId relation =
+                    strcmp(pred_name, "#-") == 0 ? g_builtin_syms.op_minus :
+                    strcmp(pred_name, "#*") == 0 ? g_builtin_syms.op_mul :
+                    strcmp(pred_name, "#mod") == 0 ? g_builtin_syms.op_mod :
+                                                     g_builtin_syms.op_floor_div;
+                Atom *rel_head = atom_symbol_id(a, relation);
+                Atom *native_args[] = { lhs_value, rhs_value };
+                Atom *result = dispatch_native_op(s, a, rel_head, native_args, 2);
+                if (result && !atom_is_error(result))
+                    ok = match_atoms_builder(goal->expr.elems[3], result, &bb);
+            }
+        } else if (pred_name && pred_nargs == 3 &&
+                   strcmp(pred_name, "#\\=") == 0) {
+            handled = true;
+            Atom *lhs_value = NULL;
+            Atom *rhs_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &lhs_value) &&
+                translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                              fuel, CURRENT_ENV, &rhs_value)) {
+                Atom *eq_head = atom_symbol_id(a, g_builtin_syms.numeric_eq);
+                Atom *native_args[] = { lhs_value, rhs_value };
+                Atom *result = dispatch_native_op(s, a, eq_head, native_args, 2);
+                if (result && !atom_is_error(result) &&
+                    result->kind == ATOM_GROUNDED && result->ground.gkind == GV_BOOL) {
+                    Atom *not_equal = atom_bool(a, !result->ground.bval);
+                    ok = match_atoms_builder(goal->expr.elems[3], not_equal, &bb);
+                }
+            }
+        } else if (pred_name && pred_nargs == 3 &&
+                   (strcmp(pred_name, "#min") == 0 ||
+                    strcmp(pred_name, "#max") == 0)) {
+            handled = true;
+            Atom *lhs_value = NULL;
+            Atom *rhs_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &lhs_value) &&
+                translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                              fuel, CURRENT_ENV, &rhs_value)) {
+                Atom *result = NULL;
+                if (translate_predicate_minmax_value(
+                        s, a, strcmp(pred_name, "#max") == 0,
+                        lhs_value, rhs_value, &result) && result) {
+                    ok = match_atoms_builder(goal->expr.elems[3], result, &bb);
+                }
+            }
+        } else if (pred_name && pred_nargs == 3 &&
+                   strcmp(pred_name, "string_concat") == 0) {
+            handled = true;
+            Atom *lhs_value = NULL;
+            Atom *rhs_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &lhs_value) &&
+                translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                              fuel, CURRENT_ENV, &rhs_value)) {
+                Atom *result = NULL;
+                if (translate_predicate_string_concat_value(
+                        a, lhs_value, rhs_value, &result) && result) {
+                    ok = match_atoms_builder(goal->expr.elems[3], result, &bb);
+                }
+            }
+        } else if (pred_name && pred_nargs == 2 &&
+                   strcmp(pred_name, "atomics_to_string") == 0) {
+            handled = true;
+            Atom *items_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &items_value)) {
+                Atom *result = NULL;
+                if (translate_predicate_atomics_to_string_value(
+                        a, items_value, &result) && result) {
+                    ok = match_atoms_builder(goal->expr.elems[2], result, &bb);
+                }
+            }
+        } else if (pred_name && pred_nargs == 2 &&
+                   strcmp(pred_name, "string_length") == 0) {
+            handled = true;
+            Atom *text_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &text_value)) {
+                const char *text = translate_predicate_text_atom(text_value);
+                if (text) {
+                    Atom *result = atom_int(a, (int64_t)strlen(text));
+                    ok = match_atoms_builder(goal->expr.elems[2], result, &bb);
+                }
+            }
+        } else if (pred_name && pred_nargs == 2 &&
+                   strcmp(pred_name, "number_string") == 0) {
+            handled = true;
+            Atom *number_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &number_value)) {
+                int64_t number = 0;
+                if (translate_predicate_int_atom(number_value, &number)) {
+                    Atom *result = translate_predicate_int_string(a, number);
+                    ok = match_atoms_builder(goal->expr.elems[2], result, &bb);
+                }
+            }
+            if (!ok) {
+                Atom *string_value = NULL;
+                if (translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                                  fuel, CURRENT_ENV, &string_value)) {
+                    const char *text = translate_predicate_text_atom(string_value);
+                    int64_t number = 0;
+                    if (translate_predicate_parse_i64(text, &number)) {
+                        Atom *result = atom_int(a, number);
+                        ok = match_atoms_builder(goal->expr.elems[1], result, &bb);
+                    }
+                }
+            }
+        } else if (pred_name && pred_nargs == 2 &&
+                   strcmp(pred_name, "atom_number") == 0) {
+            handled = true;
+            Atom *text_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &text_value)) {
+                const char *text = translate_predicate_text_atom(text_value);
+                int64_t number = 0;
+                if (translate_predicate_parse_i64(text, &number)) {
+                    Atom *result = atom_int(a, number);
+                    ok = match_atoms_builder(goal->expr.elems[2], result, &bb);
+                }
+            }
+        } else if (pred_name && pred_nargs == 1 &&
+                   strcmp(pred_name, "exists_file") == 0) {
+            handled = true;
+            Atom *path_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &path_value)) {
+                const char *path = translate_predicate_text_atom(path_value);
+                ok = translate_predicate_file_exists_path(path);
+            }
+        } else if (pred_name && pred_nargs == 3 &&
+                   strcmp(pred_name, "read_file_to_string") == 0) {
+            handled = true;
+            Atom *path_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &path_value)) {
+                const char *path = translate_predicate_text_atom(path_value);
+                Atom *content = NULL;
+                if (translate_predicate_read_file_text(a, path, &content) &&
+                    content) {
+                    ok = match_atoms_builder(goal->expr.elems[2], content, &bb);
+                }
+            }
+        } else if (pred_name && pred_nargs == 1 &&
+                   strcmp(pred_name, "sleep") == 0) {
+            handled = true;
+            double seconds = 0.0;
+            if (translate_predicate_time_arg(s, a, goal->expr.elems[1],
+                                             fuel, CURRENT_ENV, &seconds)) {
+                ok = translate_predicate_sleep_seconds(seconds);
+            }
+        } else if (pred_name && pred_nargs == 3 &&
+                   strcmp(pred_name, "format_time") == 0) {
+            handled = true;
+            Atom *format_value = NULL;
+            Atom *target =
+                translate_predicate_format_time_target(a, CURRENT_ENV,
+                                                       goal->expr.elems[1]);
+            if (target &&
+                translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                              fuel, CURRENT_ENV, &format_value)) {
+                const char *fmt = translate_predicate_text_atom(format_value);
+                double seconds = 0.0;
+                if (fmt &&
+                    translate_predicate_time_arg(s, a, goal->expr.elems[3],
+                                                 fuel, CURRENT_ENV, &seconds)) {
+                    Atom *formatted =
+                        translate_predicate_format_time(a, fmt, seconds);
+                    if (formatted)
+                        ok = match_atoms_builder(target, formatted, &bb);
+                }
+            }
+        } else if (pred_name && pred_nargs == 2 &&
+                   strcmp(pred_name, "atom_string") == 0) {
+            handled = true;
+            Atom *atom_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &atom_value)) {
+                Atom *text_atom = NULL;
+                if (translate_predicate_atom_string_value(a, atom_value,
+                                                          &text_atom)) {
+                    ok = match_atoms_builder(goal->expr.elems[2], text_atom,
+                                             &bb);
+                }
+            }
+            if (!ok) {
+                Atom *string_value = NULL;
+                if (translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                                  fuel, CURRENT_ENV, &string_value)) {
+                    const char *text = translate_predicate_text_atom(string_value);
+                    if (text) {
+                        ok = match_atoms_builder(goal->expr.elems[1],
+                                                 atom_symbol(a, text), &bb);
+                    }
+                }
+            }
+        } else if (pred_name && pred_nargs == 2 &&
+                   strcmp(pred_name, "atom_codes") == 0) {
+            handled = true;
+            Atom *atom_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &atom_value)) {
+                const char *text = translate_predicate_text_atom(atom_value);
+                if (text) {
+                    Atom *codes = translate_predicate_codes_from_text(a, text);
+                    if (codes)
+                        ok = match_atoms_builder(goal->expr.elems[2],
+                                                 codes, &bb);
+                }
+            }
+            if (!ok) {
+                Atom *codes_value = NULL;
+                if (translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                                  fuel, CURRENT_ENV, &codes_value)) {
+                    Atom *atom = NULL;
+                    if (translate_predicate_atom_from_codes(a, codes_value,
+                                                            &atom) && atom) {
+                        ok = match_atoms_builder(goal->expr.elems[1],
+                                                 atom, &bb);
+                    }
+                }
+            }
+        } else if (pred_name && pred_nargs == 5 &&
+                   strcmp(pred_name, "sub_string") == 0) {
+            handled = true;
+            Atom *text_value = NULL;
+            bool before_known = false;
+            bool length_known = false;
+            bool after_known = false;
+            bool sub_known = false;
+            int64_t before = 0;
+            int64_t length = 0;
+            int64_t after = 0;
+            const char *sub_text = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &text_value)) {
+                const char *text = translate_predicate_text_atom(text_value);
+                if (text &&
+                    translate_predicate_optional_int_arg(
+                        s, a, goal->expr.elems[2], fuel, CURRENT_ENV,
+                        &before_known, &before) &&
+                    translate_predicate_optional_int_arg(
+                        s, a, goal->expr.elems[3], fuel, CURRENT_ENV,
+                        &length_known, &length) &&
+                    translate_predicate_optional_int_arg(
+                        s, a, goal->expr.elems[4], fuel, CURRENT_ENV,
+                        &after_known, &after) &&
+                    translate_predicate_optional_text_arg(
+                        s, a, goal->expr.elems[5], fuel, CURRENT_ENV,
+                        &sub_known, &sub_text)) {
+                    ok = translate_predicate_sub_string(
+                        a, text, before_known, before, length_known, length,
+                        after_known, after, sub_known, sub_text,
+                        goal->expr.elems[2], goal->expr.elems[3],
+                        goal->expr.elems[4], goal->expr.elems[5], &bb);
+                }
+            }
+        } else if (pred_nargs == 3 && is_grounded_op(pred->sym_id)) {
+            handled = true;
+            Atom *lhs_value = NULL;
+            Atom *rhs_value = NULL;
+            if (translate_predicate_arg_value(s, a, goal->expr.elems[1],
+                                              fuel, CURRENT_ENV, &lhs_value) &&
+                translate_predicate_arg_value(s, a, goal->expr.elems[2],
+                                              fuel, CURRENT_ENV, &rhs_value)) {
+                Atom *native_args[] = { lhs_value, rhs_value };
+                Atom *result = dispatch_native_op(s, a, pred, native_args, 2);
+                if (result && !atom_is_error(result))
+                    ok = match_atoms_builder(goal->expr.elems[3], result, &bb);
+            }
+        }
+
+        if (ok) {
+            outcome_set_add(os, atom_true(a), bindings_builder_bindings(&bb));
+        } else if (!handled) {
+            outcome_set_add(os,
+                atom_error(a, atom, atom_symbol(a, "UnsupportedTranslatePredicate")),
+                &_empty);
+        }
+        bindings_builder_free(&bb);
         return;
     }
 

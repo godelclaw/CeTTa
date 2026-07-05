@@ -158,6 +158,7 @@ typedef struct {
     X(interpreter, "interpreter") \
     X(bare_minimal, "bare-minimal") \
     X(max_stack_depth, "max-stack-depth") \
+    X(translatePredicate, "translatePredicate") \
     /* ── Grounded arithmetic/comparison operators ── */ \
     X(op_plus, "+") \
     X(op_minus, "-") \
@@ -241,11 +242,31 @@ typedef struct {
     X(lib_system_exit_with_code, "__cetta_lib_system_exit_with_code") \
     X(lib_system_cwd, "__cetta_lib_system_cwd") \
     X(lib_system_monotonic_ns, "__cetta_lib_system_monotonic_ns") \
+    X(lib_time_sleep_ms, "__cetta_lib_time_sleep_ms") \
+    X(lib_time_unix_time_ms, "__cetta_lib_time_unix_time_ms") \
+    X(lib_time_time_string, "__cetta_lib_time_time_string") \
+    X(lib_process_run_shell, "__cetta_lib_process_run_shell") \
+    X(lib_process_run_shell_timeout_ms, "__cetta_lib_process_run_shell_timeout_ms") \
+    X(lib_process_run_shell_cwd_timeout_ms, "__cetta_lib_process_run_shell_cwd_timeout_ms") \
+    X(lib_process_run_shell_cwd_timeout_cap_bytes, "__cetta_lib_process_run_shell_cwd_timeout_cap_bytes") \
+    X(lib_process_run_cmd_cwd_env_timeout_cap_bytes, "__cetta_lib_process_run_cmd_cwd_env_timeout_cap_bytes") \
+    X(lib_process_run_cmd_cwd_env_stdin_timeout_cap_bytes, "__cetta_lib_process_run_cmd_cwd_env_stdin_timeout_cap_bytes") \
+    X(lib_process_run_cmd_cwd_timeout_cap_bytes, "__cetta_lib_process_run_cmd_cwd_timeout_cap_bytes") \
+    X(lib_json_parse, "__cetta_lib_json_parse") \
+    X(lib_json_stringify, "__cetta_lib_json_stringify") \
+    X(lib_json_object_get, "__cetta_lib_json_object_get") \
+    X(lib_vec_topk_jsonl, "__cetta_lib_vec_topk_jsonl") \
     X(lib_fs_exists, "__cetta_lib_fs_exists") \
     X(lib_fs_read_text, "__cetta_lib_fs_read_text") \
     X(lib_fs_write_text, "__cetta_lib_fs_write_text") \
+    X(lib_fs_write_new_text, "__cetta_lib_fs_write_new_text") \
     X(lib_fs_append_text, "__cetta_lib_fs_append_text") \
+    X(lib_fs_remove, "__cetta_lib_fs_remove") \
     X(lib_fs_read_lines, "__cetta_lib_fs_read_lines") \
+    X(lib_fs_mkdirs, "__cetta_lib_fs_mkdirs") \
+    X(lib_http_request, "__cetta_lib_http_request") \
+    X(lib_web_url_encode, "__cetta_lib_web_url_encode") \
+    X(lib_web_ddg_results_from_html, "__cetta_lib_web_ddg_results_from_html") \
     X(lib_str_length, "__cetta_lib_str_length") \
     X(lib_str_concat, "__cetta_lib_str_concat") \
     X(lib_str_split, "__cetta_lib_str_split") \
