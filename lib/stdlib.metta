@@ -40,6 +40,8 @@
 (: collect (-> Atom Expression))
 (: fold (-> Atom Atom Variable Variable Atom %Undefined%))
 (: fold-by-key (-> Atom Atom Variable Variable Atom Atom %Undefined%))
+(: group-fold (-> Atom Atom Atom Variable Variable Atom Atom %Undefined%))
+(: fs:stream-atom-lines (-> String Atom))
 (: reduce (-> Atom Atom Variable Variable Atom %Undefined%))
 (: once (-> Atom %Undefined%))
 (: search-policy (-> Atom Atom))
@@ -203,6 +205,24 @@
     (@param "Key expression that yields the grouping key for the current item")
     (@param "Step expression that yields the next accumulator for the current item's key")))
   (@return "Grouped fold results as two-element expressions of key and final accumulator"))
+
+(@doc group-fold
+  (@desc "Deterministic grouped streaming fold with a mode-driven ordering contract and a canonical audit for every group. The form is (group-fold mode results init $acc $item key step). The results expression must support CeTTa's direct visitor lane; unsupported expressions fail with GroupFoldStreamingSourceRequired instead of being silently materialized. Mode ordered requires ground canonical keys in nondecreasing bytewise canonical-text order and retains one active accumulator in addition to the completed result frontier. Mode (external-merge run-size) accepts unordered ground canonical input, writes stable sorted runs of at most run-size records, and merges them before using the same ordered reducer. Equal-key items retain their encounter order. Each result is (group-result key accumulator (group-audit count sha256)); sha256 covers the encounter-ordered canonical item encodings with an unsigned 64-bit length prefix per item. Completed group results remain live until the call returns, so memory is bounded by the explicitly sharded call rather than by one active group alone. Existing fold-by-key semantics are unchanged.")
+  (@params (
+    (@param "Mode: ordered or (external-merge positive-run-size)")
+    (@param "Result expression to consume")
+    (@param "Initial accumulator value for each key")
+    (@param "Accumulator binder")
+    (@param "Current item binder")
+    (@param "Key expression yielding one ground canonical key")
+    (@param "Step expression yielding one next accumulator")))
+  (@return "group-result values in canonical key order, each carrying count and SHA-256 audit"))
+
+(@doc fs:stream-atom-lines
+  (@desc "Direct-visitor source for incremental record ingestion. The file contains one complete MeTTa atom per nonblank line; blank and comment-only lines are skipped. Streaming consumers such as group-fold parse and release one source line at a time, so source-reader memory is O(maximum line length); consumer accumulators and returned results have their own documented bounds. Parse and I/O failures are emitted transactionally by group-fold: no partial grouped result frontier is returned.")
+  (@params (
+    (@param "Path to an atom-lines file")))
+  (@return "A native-order stream of parsed atoms"))
 
 (@doc reduce
   (@desc "Compatibility alias for fold. Prefer (fold results init $acc $item step) in new code. The policy form (reduce (search-policy lane) results init $acc $item step) remains supported for legacy call sites.")

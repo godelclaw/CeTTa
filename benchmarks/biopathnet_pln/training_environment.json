@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "python": "3.10.20",
+  "pytorch_cuda": "13.0",
+  "reference_gpu": {
+    "name": "NVIDIA GeForce RTX 5090",
+    "compute_capability": "12.0"
+  },
+  "packages": {
+    "numpy": "1.26.4",
+    "ogb": "1.3.6",
+    "pyyaml": "6.0.3",
+    "scikit-learn": "1.7.2",
+    "scipy": "1.15.3",
+    "torch": "2.12.1+cu130",
+    "torch-cluster": "1.6.3",
+    "torch-scatter": "2.1.2+pt212cu130",
+    "torch-sparse": "0.6.18+pt212cu130",
+    "torchdrug": "0.2.1"
+  },
+  "package_sources": {
+    "pytorch": "https://download.pytorch.org/whl/cu130",
+    "pyg": "https://data.pyg.org/whl/torch-2.12.0+cu130.html",
+    "torchdrug": "https://github.com/DeepGraphLearning/torchdrug"
+  },
+  "source_builds": {
+    "biopathnet": {
+      "commit": "b051a9003a1363b5655cdb7dfdad60609c0e4fe3",
+      "compatibility_patch": "biopathnet_symmetric_candidates.patch",
+      "compatibility_patch_sha256": "2e23c300dcc388751b4e99c7408534880538289f003eed135c9d99751ea06224",
+      "patched_file_sha256": {
+        "biopathnet/model.py": "f7c9d25b2c33f65cd60b48b7fb3ccd1e64ae421d845ecef1624e7d609c01e646"
+      }
+    },
+    "torch-cluster": {
+      "cuda_arch_list": "12.0",
+      "wheel_sha256": "3b96622471c3d3c3ecb5838c9c7eee09ecfd140066cc112cb1d3cb6706520a98"
+    },
+    "torchdrug": {
+      "commit": "6066fbd82360abb5f270cba1eca560af01b8cc90",
+      "compatibility_patch": "torchdrug_pytorch212.patch",
+      "compatibility_patch_sha256": "54245f16aa39b6ae5efa07c6cda390343d9695be084bba4e9ad885ea44be08a6",
+      "patched_file_sha256": {
+        "torchdrug/layers/functional/extension/rspmm.h": "9b81df1b5630818f18a48bba7780e98968085716ad78c8e8f374e7ad256f4ee2",
+        "torchdrug/layers/functional/extension/spmm.h": "991720a1b51ce15793d05fb045788ee52c4d586f59b6ec552f72a04f318f662e",
+        "torchdrug/utils/torch.py": "19b18524518402e606a7179eb27ee5e77eb9ff7abba070d6463ecb7ffeef49fa"
+      }
+    }
+  }
+}

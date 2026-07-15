@@ -416,6 +416,7 @@ BACKEND_DEDICATED_TESTS = \
 BACKEND_HEAVY_GOLDEN_TESTS = \
 	tests/test_bio_bc_let_hidden_env_regression.metta \
 	benchmarks/bc_depth10_spine_regression.metta \
+	benchmarks/cafa5_pln/test_cafa5_goal_chainer.metta \
 	benchmarks/genomic_pln/bench_drug_hypothesis_1m.metta \
 	benchmarks/genomic_pln/test_proof_route_convergence.metta \
 	benchmarks/genomic_pln/test_stv_revision.metta \
@@ -467,8 +468,20 @@ BACKEND_HEAVY_TESTS = \
 	$(BACKEND_HEAVY_DIAGNOSTIC_TESTS)
 
 BACKEND_DIAGNOSTIC_TESTS = \
+	tests/test_group_fold_mork_cursor.metta \
 	tests/test_mm2_match_order_fragile.metta \
 	tests/test_print_nondet_probe.metta
+
+GROUP_FOLD_GOLDEN_TESTS = \
+	tests/test_group_fold.metta \
+	tests/test_group_fold_atom_lines.metta \
+	tests/test_group_fold_atom_lines_malformed.metta \
+	tests/test_group_fold_external_multipass.metta \
+	tests/test_group_fold_invalid_mode.metta \
+	tests/test_group_fold_item_contract.metta \
+	tests/test_group_fold_key_contract.metta \
+	tests/test_group_fold_streaming_contract.metta \
+	tests/test_group_fold_out_of_order.metta
 
 BACKEND_PENDING_CORRECTNESS_TESTS =
 
@@ -1165,7 +1178,7 @@ define require_runtime_stats_or_reexec
 	fi
 endef
 
-test: $(BIN) test-manifest-strict test-git-module test-symbolid-guard test-variant-shape-roundtrip test-rhometta-payload-map-capacity-c test-space-term-universe-membership test-help-flags test-rhocalc test-he-contract-suite test-closed-stream-fastpath test-parse-depth-guard test-stdlib-growth-memory-regression test-rhometta-macro-audit test-eval-gc-adversarial
+test: $(BIN) test-manifest-strict test-git-module test-symbolid-guard test-variant-shape-roundtrip test-rhometta-payload-map-capacity-c test-space-term-universe-membership test-help-flags test-rhocalc test-he-contract-suite test-closed-stream-fastpath test-parse-depth-guard test-stdlib-growth-memory-regression test-rhometta-macro-audit test-eval-gc-adversarial test-group-fold-native
 	@pass=0; fail=0; skip=0; no_exp=0; \
 	cache_dir="$(GIT_TEST_CACHE_DIR)"; mkdir -p "$$cache_dir"; export CETTA_GIT_MODULE_CACHE_DIR="$$cache_dir"; \
 	for f in tests/test_*.metta tests/spec_*.metta tests/he_*.metta; do \
@@ -2411,6 +2424,69 @@ test-heavy-golden: $(BIN)
 	echo "---"; \
 	echo "$$pass passed, $$fail failed"; \
 	[ $$fail -eq 0 ]
+
+test-cafa5-pln: $(BIN)
+	@$(CETTA_SCRIPT_RUN_ENV) python3 benchmarks/cafa5_pln/test_cafa5_suite.py
+	@result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he benchmarks/cafa5_pln/test_cafa5_goal_chainer.metta 2>&1); \
+	if [ "$$result" = "$$(cat benchmarks/cafa5_pln/test_cafa5_goal_chainer.expected)" ]; then \
+		echo "PASS: CAFA5 PLN goal-chainer golden regression"; \
+	else \
+		echo "FAIL: CAFA5 PLN goal-chainer golden regression"; \
+		diff <(cat benchmarks/cafa5_pln/test_cafa5_goal_chainer.expected) <(echo "$$result") | head -20; \
+		exit 1; \
+	fi
+
+test-cafa5-pln-scale: $(BIN)
+	@$(CETTA_SCRIPT_RUN_ENV) python3 tests/test_cafa5_stream_scale.py "$(CETTA_SCRIPT_BIN)"
+
+test-group-fold-native: $(BIN)
+	@$(CC) -Isrc -O2 -Wall -Werror -std=c11 tests/test_sha256.c -o runtime/test_sha256
+	@runtime/test_sha256
+	@$(CETTA_SCRIPT_RUN_ENV) python3 tests/test_group_fold_cleanup.py "$(CETTA_SCRIPT_BIN)"
+	@$(CETTA_SCRIPT_RUN_ENV) python3 tests/test_atom_line_stream.py "$(CETTA_SCRIPT_BIN)"
+
+test-group-fold: $(BIN) test-group-fold-native
+	@pass=0; fail=0; \
+	for f in $(GROUP_FOLD_GOLDEN_TESTS); do \
+		exp="$${f%.metta}.expected"; \
+		result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "$$f" 2>&1); \
+		if [ "$$result" = "$$(cat "$$exp")" ]; then \
+			echo "PASS: $$f"; pass=$$((pass + 1)); \
+		else \
+			echo "FAIL: $$f"; diff <(cat "$$exp") <(echo "$$result") | head -20; \
+			fail=$$((fail + 1)); \
+		fi; \
+	done; \
+	echo "---"; echo "$$pass passed, $$fail failed"; [ $$fail -eq 0 ]
+
+test-group-fold-scale: $(BIN)
+	@$(CETTA_SCRIPT_RUN_ENV) python3 tests/test_group_fold_scale.py --binary "$(CETTA_SCRIPT_BIN)"
+
+test-biopathnet-pln:
+	@python3 -m py_compile benchmarks/biopathnet_pln/*.py
+	@python3 benchmarks/biopathnet_pln/test_biopathnet_suite.py
+	@python3 benchmarks/biopathnet_pln/test_pln_path_batch.py
+	@python3 benchmarks/biopathnet_pln/pln_path_model.py synthetic-smoke
+
+test-biopathnet-control-compat:
+	@test -n "$(BIOPATHNET_SOURCE)" || { \
+		echo "BIOPATHNET_SOURCE must name the pinned, patched BioPathNet checkout"; \
+		exit 2; \
+	}
+	@python3 benchmarks/biopathnet_pln/control_runner.py verify-environment "$(BIOPATHNET_SOURCE)"
+	@python3 benchmarks/biopathnet_pln/test_biopathnet_symmetric.py "$(BIOPATHNET_SOURCE)"
+
+test-evidence-types: $(BIN)
+	@result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he tests/test_evidence_types.metta 2>&1); \
+	if [ "$$result" = "$$(cat tests/test_evidence_types.expected)" ]; then \
+		echo "PASS: typed evidence semantics"; \
+	else \
+		echo "FAIL: typed evidence semantics"; \
+		diff <(cat tests/test_evidence_types.expected) <(echo "$$result") | head -20; \
+		exit 1; \
+	fi
+
+test-bio-pln: test-group-fold test-evidence-types test-cafa5-pln test-biopathnet-pln
 
 list-heavy-diagnostics:
 	@echo "heavy golden tests:"; \
@@ -4478,7 +4554,8 @@ refresh-he-matrices:
 	@python3 -m json.tool specs/he_runtime_3layer_matrix.json > /dev/null
 	@echo "refreshed HE runtime parity matrices"
 
-.PHONY: list bench-index FORCE all core python mork main pathmap full profile clean bridge-setup doctor-bridge doctor-gmp test-bigint-no-gmp-fallback test-rational-no-gmp-fallback test test-light test-correctness test-heavy test-heavy-golden list-heavy-diagnostics probe-heavy-diagnostics test-correctness-all test-manifest test-manifest-check test-manifest-sync test-runtime-stats test-runtime-stats-lane test-runtime-stats-metta-suite test-backends test-he-contract-suite refresh-he-contract-tests refresh-he-compat-catalog test-he-compat-semantic-suite probe-he-compat-tier2 probe-he-compat-runnable-corpus test-mork-lane test-mork-lane-core test-mork-basic-pathmap-guard test-mork-runtime-stats-lane test-mork-runtime-stats-isolation test-closed-stream-fastpath test-closed-stream-runtime-stats test-parse-depth-guard test-stdlib-growth-memory-regression test-asan test-asan-main test-asan-mork test-pathmap-lane test-pathmap-lane-body test-pathmap-runtime-stats-lane test-pathmap-runtime-stats-lane-body test-mm2-lowering-core test-mm2-mork-program-space test-mm2-exec-basic test-mm2-kiss-suite test-mm2-conformance-var-binding test-mm2-conformance-lean-suite test-mm2-sink-suite test-pathmap-bridge-v2 test-pathmap-long-string-regression test-pathmap-match-chain test-mork-lib-pathmap test-mork-open-act test-pretty-vars-flags test-pretty-namespaces-flags test-help-flags test-rhocalc test-lib-parse-oracles test-rhocalc-lib-parse-reference test-lib-parse-shared-cert test-lib-parse-native-gparse test-lib-parse-generalized-native-integration test-lib-parse-generalized-cli test-lib-parse-generalized test-lib-parse-bounded test-rhocalc-runtime-stats test-variant-shape-roundtrip test-rhometta-payload-map-capacity-c test-space-term-universe-membership test-term-universe-store-abi test-term-universe-backend-add-abi test-pathmap-backend-primary-destructive-abi test-pathmap-backend-primary-replace-abi test-pathmap-typed-query-abi test-fallback-eval-session test-import-modes bench bench-light bench-correctness bench-performance-light bench-optional-bridge-light bench-capacity bench-heavy prepare-bio-eqtl-act bench-bio-eqtl-act-modes prepare-bio-1m-act bench-bio-1m-act-attach bench-bio-1m-act-modes test-duplicate-multiplicity-backends oracle-refresh bench-d3 bench-d3-backends bench-d3-nodup bench-d3-nodup-backends probe-d3-nodup probe-d3-nodup-backends probe-fc-native-memory bench-conj-backends bench-conj12-backends bench-dup-conj-backends bench-d4 bench-d4-nodup bench-d4-backends bench-d4-nodup-backends bench-rho-fanout bench-rho-comm-frontier bench-rho-comm-contention bench-rho-pipeline-forward bench-rho-route-synthesis bench-rho-demand-index bench-rho-indexed-demand bench-rho-route-policy bench-rho-certificate-quorum bench-compare-petta bench-mork-add-interface bench-mork-add-interface-timing bench-mork-bridge-add bench-mork-bridge-query bench-mork-bridge-scalar-cursor bench-mork-bridge-space-ops bench-answer-ref-demand bench-space-backend-matrix bench-space-transfer-matrix bench-space-scale-ladder bench-ffi-friction-light bench-ffi-friction-basic bench-ffi-friction-stress bench-ffi-friction-heavy bench-closed-stream-fastpath bench-weird-audit tail-recursion-check compile-test refresh-he-matrices promote-runtime perf-list perf-show-baselines perf-capacity-tu perf-bench-tu perf-compare-tu probe-epoch-runtime-witness
+.PHONY: list bench-index FORCE all core python mork main pathmap full profile clean bridge-setup doctor-bridge doctor-gmp test-bigint-no-gmp-fallback test-rational-no-gmp-fallback test test-light test-correctness test-heavy test-heavy-golden test-cafa5-pln list-heavy-diagnostics probe-heavy-diagnostics test-correctness-all test-manifest test-manifest-check test-manifest-sync test-runtime-stats test-runtime-stats-lane test-runtime-stats-metta-suite test-backends test-he-contract-suite refresh-he-contract-tests refresh-he-compat-catalog test-he-compat-semantic-suite probe-he-compat-tier2 probe-he-compat-runnable-corpus test-mork-lane test-mork-lane-core test-mork-basic-pathmap-guard test-mork-runtime-stats-lane test-mork-runtime-stats-isolation test-closed-stream-fastpath test-closed-stream-runtime-stats test-parse-depth-guard test-stdlib-growth-memory-regression test-asan test-asan-main test-asan-mork test-pathmap-lane test-pathmap-lane-body test-pathmap-runtime-stats-lane test-pathmap-runtime-stats-lane-body test-mm2-lowering-core test-mm2-mork-program-space test-mm2-exec-basic test-mm2-kiss-suite test-mm2-conformance-var-binding test-mm2-conformance-lean-suite test-mm2-sink-suite test-pathmap-bridge-v2 test-pathmap-long-string-regression test-pathmap-match-chain test-mork-lib-pathmap test-mork-open-act test-pretty-vars-flags test-pretty-namespaces-flags test-help-flags test-rhocalc test-lib-parse-oracles test-rhocalc-lib-parse-reference test-lib-parse-shared-cert test-lib-parse-native-gparse test-lib-parse-generalized-native-integration test-lib-parse-generalized-cli test-lib-parse-generalized test-lib-parse-bounded test-rhocalc-runtime-stats test-variant-shape-roundtrip test-rhometta-payload-map-capacity-c test-space-term-universe-membership test-term-universe-store-abi test-term-universe-backend-add-abi test-pathmap-backend-primary-destructive-abi test-pathmap-backend-primary-replace-abi test-pathmap-typed-query-abi test-fallback-eval-session test-import-modes bench bench-light bench-correctness bench-performance-light bench-optional-bridge-light bench-capacity bench-heavy prepare-bio-eqtl-act bench-bio-eqtl-act-modes prepare-bio-1m-act bench-bio-1m-act-attach bench-bio-1m-act-modes test-duplicate-multiplicity-backends oracle-refresh bench-d3 bench-d3-backends bench-d3-nodup bench-d3-nodup-backends probe-d3-nodup probe-d3-nodup-backends probe-fc-native-memory bench-conj-backends bench-conj12-backends bench-dup-conj-backends bench-d4 bench-d4-nodup bench-d4-backends bench-d4-nodup-backends bench-rho-fanout bench-rho-comm-frontier bench-rho-comm-contention bench-rho-pipeline-forward bench-rho-route-synthesis bench-rho-demand-index bench-rho-indexed-demand bench-rho-route-policy bench-rho-certificate-quorum bench-compare-petta bench-mork-add-interface bench-mork-add-interface-timing bench-mork-bridge-add bench-mork-bridge-query bench-mork-bridge-scalar-cursor bench-mork-bridge-space-ops bench-answer-ref-demand bench-space-backend-matrix bench-space-transfer-matrix bench-space-scale-ladder bench-ffi-friction-light bench-ffi-friction-basic bench-ffi-friction-stress bench-ffi-friction-heavy bench-closed-stream-fastpath bench-weird-audit tail-recursion-check compile-test refresh-he-matrices promote-runtime perf-list perf-show-baselines perf-capacity-tu perf-bench-tu perf-compare-tu probe-epoch-runtime-witness
 .PHONY: refresh-he-native-contracts test-he-compat-catalog-guards test-step-rules
 .PHONY: test-rhometta-macro-audit test-eval-gc-adversarial test-eval-gc-survivor-reset test-eval-gc-asan-selected test-eval-gc-asan-selected-body test-eval-gc-asan-full-differential test-eval-gc-asan-full-differential-body test-tsan test-tsan-main test-tsan-mork bench-rho-rhometta-deduction-farm bench-rho-hot-frontier bench-rho-hot-successors bench-rho-threaded bench-rho-threaded-heavy bench-rho-threaded-corpus bench-rho-threaded-generated bench-rho-threaded-generated-runtime-stats
 .PHONY: test-backends-lanes test-manifest-strict test-mork-lane-core-body test-mork-add-atoms-runtime-stats-body test-mork-bridge-contextual-exact-rows test-mork-cursor-byte-buffer-count-abi test-mork-cursor-expr-row-stream-abi test-mork-query-row-stream-abi probe-core-lane probe-pathmap-lane probe-pathmap-lane-body
+.PHONY: test-group-fold-native test-group-fold test-group-fold-scale test-cafa5-pln-scale test-evidence-types test-biopathnet-pln test-biopathnet-control-compat test-bio-pln

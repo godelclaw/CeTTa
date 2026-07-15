@@ -1,0 +1,49 @@
+diff --git a/biopathnet/model.py b/biopathnet/model.py
+index 98ec262..af599ba 100644
+--- a/biopathnet/model.py
++++ b/biopathnet/model.py
+@@ -27 +27 @@ class NeuralBellmanFordNetwork(nn.Module, core.Configurable):
+-                 num_beam=10, path_topk=10):
++                 num_beam=10, path_topk=10, symmetric_query_chunk_size=32):
+@@ -28,0 +29,2 @@ class NeuralBellmanFordNetwork(nn.Module, core.Configurable):
++        if not isinstance(symmetric_query_chunk_size, int) or symmetric_query_chunk_size <= 0:
++            raise ValueError("symmetric_query_chunk_size must be a positive integer")
+@@ -43,0 +46 @@ class NeuralBellmanFordNetwork(nn.Module, core.Configurable):
++        self.symmetric_query_chunk_size = symmetric_query_chunk_size
+@@ -159,0 +163,28 @@ class NeuralBellmanFordNetwork(nn.Module, core.Configurable):
++    def symmetric_inverse_feature(self, graph, h_index, t_index, r_index):
++        """Compute the inverse-direction feature for every candidate pair.
++
++        A relational training row has one fixed source and multiple candidate
++        tails.  The inverse source therefore varies across the row, so a
++        single Bellman-Ford query per row cannot represent the symmetric
++        score.  Flatten candidate pairs, evaluate them in bounded chunks, and
++        gather the original head for each inverse query.
++        """
++        if not self.num_relation:
++            raise ValueError("symmetric relational scoring requires a positive relation count")
++        inverse_r_index = (r_index + self.num_relation) % (self.num_relation * 2)
++        flat_h_index = h_index.reshape(-1)
++        flat_t_index = t_index.reshape(-1)
++        flat_r_index = inverse_r_index.reshape(-1)
++        inverse_features = []
++        for start in range(0, flat_h_index.numel(), self.symmetric_query_chunk_size):
++            stop = min(start + self.symmetric_query_chunk_size, flat_h_index.numel())
++            output = self.bellmanford(
++                graph,
++                flat_t_index[start:stop],
++                flat_r_index[start:stop],
++            )
++            node_feature = output["node_feature"]
++            query_index = torch.arange(stop - start, device=flat_h_index.device)
++            inverse_features.append(node_feature[flat_h_index[start:stop], query_index])
++        return torch.cat(inverse_features, dim=0).view(*h_index.shape, -1)
++
+@@ -195,6 +226 @@ class NeuralBellmanFordNetwork(nn.Module, core.Configurable):
+-            assert (t_index[:, [0]] == t_index).all()
+-            r_index = (r_index + self.num_relation) % (self.num_relation * 2)
+-            output = self.bellmanford(graph, t_index[:, 0], r_index[:, 0])
+-            inv_feature = output["node_feature"].transpose(0, 1)
+-            index = h_index.unsqueeze(-1).expand(-1, -1, inv_feature.shape[-1])
+-            inv_feature = inv_feature.gather(1, index)
++            inv_feature = self.symmetric_inverse_feature(graph, h_index, t_index, r_index)

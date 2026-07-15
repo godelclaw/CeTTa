@@ -43,9 +43,8 @@
 /bench_pathmap.metta
 
 # Local Python caches
-/scripts/__pycache__/
-/tests/support/__pycache__/
-/tests/support/import_foreign_pkg/plugin/__pycache__/
+__pycache__/
+*.py[cod]
 
 # Native/Rust build products
 /native/*.o

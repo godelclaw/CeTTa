@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "name": "biopathnet-lnc-target-pln",
+  "seeds": [1729, 2718, 31415, 57721, 65537],
+  "models": [
+    "biopathnet-control",
+    "pln-path-evidence",
+    "biopathnet-pln-hybrid"
+  ],
+  "split_policy": {
+    "fact_graph": ["train1.txt", "train2.txt"],
+    "training": ["train2.txt"],
+    "model_selection": ["valid.txt"],
+    "test_once": ["test.txt"],
+    "remove_query_and_inverse_during_path_search": true
+  },
+  "sampled_negatives": {
+    "name": "type-matched sampled negatives",
+    "per_positive": 32,
+    "known_training_positives_excluded": true,
+    "held_out_edges_not_inspected": true,
+    "biological_falsehood_claimed": false,
+    "shortfall_policy": "use all exact-type candidates available and record every shortfall; never broaden target type"
+  },
+  "pln_path_model": {
+    "max_depth_candidates": [2, 3, 4],
+    "minimum_template_support_candidates": [2, 5, 10],
+    "evidence_prior_candidates": [[1, 1], [2, 2]],
+    "path_cap_candidates": [128, 512, 2048],
+    "dependence_group": "shared-first-edge",
+    "within_group_reducer": "maximum-posterior-distance-from-prior"
+  },
+  "hybrid": {
+    "features": ["biopathnet-logit", "pln-evidence-log-odds"],
+    "combiner": "nonnegative-l2-logistic",
+    "l2_candidates": [0.0001, 0.001, 0.01, 0.1],
+    "nonnegative_feature_weights": true,
+    "unconstrained_intercept": true
+  },
+  "selection_metric": "mrr",
+  "test_metrics": ["mr", "mrr", "hits@1", "hits@3", "hits@10"],
+  "paired_bootstrap": {
+    "replicates": 10000,
+    "confidence": 0.95,
+    "unit": "query",
+    "seed": 8675309
+  }
+}

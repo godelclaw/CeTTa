@@ -1,5 +1,6 @@
 path	lang	syntax	profile	build	space_engine	lane	expect	notes
 benchmarks/bc_depth10_spine_regression.metta	he	metta	he-extended	main	native	test-heavy	golden	heavy backend golden regression
+benchmarks/cafa5_pln/test_cafa5_goal_chainer.metta	he	metta	he-extended	main	native	test-heavy	golden	heavy backend golden regression
 benchmarks/genomic_pln/bench_drug_hypothesis_1_4m.metta	he	metta	he-extended	main	native	test-heavy	diagnostic	diagnostic witness without golden oracle
 benchmarks/genomic_pln/bench_drug_hypothesis_1_4m_petta.metta	he	metta	he-extended	main	native	test-heavy	diagnostic	diagnostic witness without golden oracle
 benchmarks/genomic_pln/bench_drug_hypothesis_1m.metta	he	metta	he-extended	main	native	test-heavy	golden	heavy backend golden regression
@@ -148,6 +149,7 @@ tests/test_eval_arity.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_eval_grounded.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_evalc.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_evalc_unknown_space.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_evidence_types.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_fc_native_depth3_count_regression.metta	he	metta	he-extended	runtime-stats	native	test-runtime-stats-lane	golden	runtime-stats lane golden regression
 tests/test_fc_selfjoin_regression.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_filter_atom_function_surface.metta	he	metta	he-extended	main	native	test	golden	-
@@ -205,6 +207,16 @@ tests/test_gparse_native_metamath_plus_weq_variant_matrix.metta	he	metta	he-exte
 tests/test_gparse_native_rho_mrho_text.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_gparse_native_slr_parse_shared.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_gparse_native_slr_summary.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_group_fold.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_group_fold_atom_lines.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_group_fold_atom_lines_malformed.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_group_fold_external_multipass.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_group_fold_invalid_mode.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_group_fold_item_contract.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_group_fold_key_contract.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_group_fold_mork_cursor.metta	he	metta	he-extended	main	native	test	diagnostic	diagnostic witness without golden oracle
+tests/test_group_fold_out_of_order.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_group_fold_streaming_contract.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_hash_space.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_he_compat_surface_regressions.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_he_frontier_algebra_regression.metta	he	metta	he-extended	main	native	test	golden	-

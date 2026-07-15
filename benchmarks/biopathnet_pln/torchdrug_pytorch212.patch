@@ -1,0 +1,43 @@
+diff --git a/torchdrug/layers/functional/extension/rspmm.h b/torchdrug/layers/functional/extension/rspmm.h
+index c09216a..447fcf5 100644
+--- a/torchdrug/layers/functional/extension/rspmm.h
++++ b/torchdrug/layers/functional/extension/rspmm.h
+@@ -6 +6,2 @@
+-#include <ATen/SparseTensorUtils.h>
++#include <ATen/TensorUtils.h>
++#include <ATen/native/SparseTensorUtils.h>
+@@ -85 +86 @@ std::tuple<SparseTensor, Tensor, Tensor> rspmm_max_add_backward_cuda(const Spars
+-} // namespace at
+\ No newline at end of file
++} // namespace at
+diff --git a/torchdrug/layers/functional/extension/spmm.h b/torchdrug/layers/functional/extension/spmm.h
+index 94004d6..7b0093a 100644
+--- a/torchdrug/layers/functional/extension/spmm.h
++++ b/torchdrug/layers/functional/extension/spmm.h
+@@ -6 +6,2 @@
+-#include <ATen/SparseTensorUtils.h>
++#include <ATen/TensorUtils.h>
++#include <ATen/native/SparseTensorUtils.h>
+@@ -85 +86 @@ std::tuple<SparseTensor, Tensor> spmm_max_add_backward_cuda(
+-} // namespace at
+\ No newline at end of file
++} // namespace at
+diff --git a/torchdrug/utils/torch.py b/torchdrug/utils/torch.py
+index ff7088a..3e98293 100644
+--- a/torchdrug/utils/torch.py
++++ b/torchdrug/utils/torch.py
+@@ -30,3 +30,7 @@ class LazyExtensionLoader(object):
+-        return cpp_extension.load(self.name, self.sources, self.extra_cflags, self.extra_cuda_cflags,
+-                                  self.extra_ldflags, self.extra_include_paths, self.build_directory,
+-                                  self.verbose, **self.kwargs)
++        return cpp_extension.load(name=self.name, sources=self.sources,
++                                  extra_cflags=self.extra_cflags,
++                                  extra_cuda_cflags=self.extra_cuda_cflags,
++                                  extra_ldflags=self.extra_ldflags,
++                                  extra_include_paths=self.extra_include_paths,
++                                  build_directory=self.build_directory,
++                                  verbose=self.verbose, **self.kwargs)
+@@ -190 +194 @@ path = os.path.join(os.path.dirname(__file__), "extension")
+-torch_ext = load_extension("torch_ext", [os.path.join(path, "torch_ext.cpp")])
+\ No newline at end of file
++torch_ext = load_extension("torch_ext", [os.path.join(path, "torch_ext.cpp")])

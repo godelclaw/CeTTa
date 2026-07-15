@@ -1,0 +1,1 @@
+[((Error (group-fold ordered (match &self (edge $key $value) ($key $value)) 0 $acc $item (let ($key $value) $item $key) (eval (+ $acc 1))) GroupFoldStreamingSourceRequired))]

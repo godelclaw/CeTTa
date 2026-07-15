@@ -1,0 +1,1 @@
+[(Error (group-fold ordered (superpose ((new-state 1))) 0 $acc $item resource (eval (+ $acc 1))) GroupFoldItemNotCanonicalGround)]

@@ -1,7 +1,7 @@
 {
   "broad_probe": {
     "promoted_case_count": 0,
-    "report_path": "/home/aimama/aihub/hyperon/CeTTa/tests/generated/he_compat/he_compat_broad_corpus_2026-06-25.json",
+    "report_path": "tests/generated/he_compat/he_compat_broad_corpus_2026-06-25.json",
     "status": "missing",
     "triage": []
   },

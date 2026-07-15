@@ -1,0 +1,9 @@
+; External run sizes must be positive integers.
+!(group-fold
+  (external-merge 0)
+  (superpose ((a 1)))
+  0
+  $acc
+  $item
+  (let ($key $value) $item $key)
+  (eval (+ $acc 1)))

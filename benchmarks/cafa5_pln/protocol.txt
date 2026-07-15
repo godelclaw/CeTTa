@@ -1,0 +1,151 @@
+CAFA5 PARTIAL-KNOWLEDGE PROVENANCE AND FUSION PROTOCOL
+
+Pinned references
+-----------------
+Evaluation data and released baselines:
+  https://doi.org/10.5281/zenodo.20186533
+Official partial-knowledge evaluator:
+  https://github.com/claradepaolis/CAFA-evaluator-PK
+CAFA5 analysis preprint:
+  https://doi.org/10.64898/2026.04.27.716980
+
+Exact archive checksums, evaluator revision, and evaluation arguments are in
+benchmark_manifest.json. A run is invalid if pin verification fails.
+
+Scope
+-----
+This suite evaluates whether dependence-aware evidence fusion with inspectable
+provenance improves protein-function prediction on the official CAFA5
+partial-knowledge task. The official CAFA evaluator is the scoring authority.
+CeTTa derives leaf evidence routes and is the load-bearing grouped reducer that
+emits aggregation certificates.
+Leaf-route counts alone remain integration checks and must not be described as
+proofs of fusion correctness; reducer certificates and differential parity are
+separate executable obligations.
+
+Data boundary
+-------------
+Known annotations are frozen at the CAFA5 submission cutoff (2023-08-14).
+Final ground truth consists of newly acquired annotations through 2025-03.
+The final ground-truth file may be read only by target selection and evaluation
+code. It must not be used to fit source calibration, dependence groups, rule
+strengths, thresholds, or fusion parameters.
+
+Prediction packet
+-----------------
+Each source prediction becomes:
+
+  (cafa-prediction SOURCE GROUP PROTEIN GO-TERM SCORE)
+
+SOURCE identifies the concrete predictor and pinned version. GROUP identifies
+a declared dependence class, such as shared embeddings, homology data, training
+annotations, or model family. SCORE must be finite and in [0, 1]. This interval
+does not by itself make a score a probability. Uncalibrated scores remain
+ordinal.
+
+Primary fusion
+--------------
+Within each (protein, term, dependence-group), keep the maximum source score.
+Across dependence groups, also keep the maximum. This conservative-max policy
+is the preregistered primary configuration. It requires no claim that predictor
+scores are probabilities or that source groups are independent.
+
+Calibrated alternative
+----------------------
+Noisy-OR may be evaluated as a named alternative only when every source has a
+pinned calibration artifact fitted without final labels and every cross-group
+pair has an explicit independence declaration:
+
+  1 - product(1 - calibrated_probability[group])
+
+The run records calibration identifiers and artifact hashes. Missing
+calibration or independence evidence is an error, not an implicit assumption.
+The declaration is JSON schema version 1 with policy
+"calibrated-noisy-or", a calibrations object keyed by source, and an
+independent_group_pairs array. Each calibration entry contains calibration_id,
+artifact (a path relative to the declaration), and artifact_sha256. The suite
+reads each artifact, verifies its hash, and applies its executable transform
+before within-group maximum and noisy-OR. A calibration artifact is JSON schema
+version 1 with the same calibration_id, method "logistic", and finite numeric
+slope and intercept; slope must be positive. Placeholder or identity-by-omission
+artifacts are rejected.
+
+Duplicate semantics
+-------------------
+Within one named source, repeated rows for the same protein-term candidate are
+idempotently collapsed only when their scores are identical. Conflicting scores
+for the same source and candidate invalidate the run. Distinct sources remain
+distinct packets, then dependence-group maximum prevents repeated or closely
+related evidence from being counted additively.
+
+Positive example
+----------------
+Two calibrated sources in explicitly declared independent groups support the
+same protein-term pair. Both group maxima may contribute to the named
+calibrated-noisy-OR alternative, and both provenance routes remain inspectable.
+
+Negative example
+----------------
+Two predictors use the same ProtT5 embeddings and annotation snapshot. They
+belong to one dependence group. Adding the lower-scored source must not change
+the fused prediction.
+
+Evaluation and metric naming
+----------------------------
+The official evaluator is run with the pinned ontology, terms of interest,
+information accretion, known annotations, partial-knowledge ground truth,
+ancestor propagation mode "fill", threshold step 0.001, CAFA normalization,
+and orphan exclusion. Raw official TSV outputs are preserved byte-for-byte. A
+separate canonical summary sorts semantic rows before hashing so its digest is
+independent of filesystem traversal order.
+
+The evaluator emits both unweighted s and information-accretion-weighted s_w.
+This suite reports their minima explicitly as unweighted semantic-distance
+minimum and weighted semantic-distance minimum. The weighted result is selected
+directly from s_w; an evaluator file named evaluation_best_s.tsv is not
+relabelled as weighted S-min. Final reporting also includes F-max, weighted
+F-max, coverage, bootstrap intervals over proteins, and separate calibration
+and selective-risk analyses whose positive-unlabelled limitation is stated.
+
+Smoke versus full results
+-------------------------
+The deterministic smoke slice tests data integrity, no-test-label leakage,
+CeTTa leaf-route production, dependence-group behavior, TSV export, and
+evaluator integration. Its scores are not benchmark results. Only a frozen
+run-full evaluation may be reported as biological performance. Published or
+released predictor outputs are input controls, not results of our experiment.
+Learned calibration or fusion components are trained by us using eligible
+pre-final-label data and are evaluated without post-test retuning.
+
+Executable entry points
+-----------------------
+Run the local semantic and regression checks with:
+
+  make BUILD=python test-cafa5-pln
+
+Verify an installed CAFA data/evaluator pair with:
+
+  python3 benchmarks/cafa5_pln/cafa5_suite.py verify \
+    --data-root DATA_ROOT --evaluator-root EVALUATOR_REPOSITORY
+
+The run-smoke command constructs a deterministic real-data slice, checks every
+prediction packet through CeTTa's typed goal chainer, checks single-source
+fusion identity, and invokes the official evaluator. The
+run-multisource-smoke command subsets sources to the same proteins, records
+source-level provenance trails, applies the requested fusion policy, and
+evaluates the source and fused files together.
+
+The run-full command is deliberately separate. It consumes complete frozen
+prediction sources, applies conservative-max by default, evaluates the full
+fused prediction set, and records source hashes. CeTTa group-fold is the
+load-bearing reducer; SQLite remains an independently implemented differential
+oracle. Every CeTTa fusion also compares a deterministic sample of up to 64
+real input proteins against SQLite and fails if candidate keys or scores differ.
+Prediction packets are deterministically partitioned by protein, then read
+through CeTTa's incremental fs:stream-atom-lines direct-visitor source. Each
+shard preserves group-fold count/SHA-256 certificates; Python independently
+checks certificate counts against the packet and group frontiers. Shard outputs
+are merged in canonical candidate order without silently falling back to
+SQLite. The source reader uses O(maximum line length) memory. Reducer results
+and the Python packet map remain O(packets in one shard); the default hard cap is
+500,000 packets and exceeding it fails loudly with guidance to add shards.

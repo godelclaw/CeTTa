@@ -13,7 +13,11 @@
 #include "term_universe.h"
 #include "variant_shape.h"
 #include "langdef_pack.h"
+#include "group_fold_external.h"
+#include "parser.h"
+#include "sha256.h"
 #include <inttypes.h>
+#include <math.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2475,6 +2479,7 @@ static const char *whole_call_extension_surface_name(SymbolId head_id) {
     if (head_id == g_builtin_syms.collect) return "collect";
     if (head_id == g_builtin_syms.fold) return "fold";
     if (head_id == g_builtin_syms.fold_by_key) return "fold-by-key";
+    if (head_id == g_builtin_syms.group_fold) return "group-fold";
     if (head_id == g_builtin_syms.reduce) return "reduce";
     if (head_id == g_builtin_syms.select) return "select";
     if (head_id == g_builtin_syms.once) return "once";
@@ -3737,6 +3742,19 @@ collect_external_pattern_refs_rec(Atom *atom,
         return collect_external_pattern_refs_rec(expr_arg(atom, step_idx), visible, free_vars);
     }
 
+    if (head_id == g_builtin_syms.group_fold && nargs == 7) {
+        if (!collect_external_pattern_refs_rec(expr_arg(atom, 0), visible, free_vars) ||
+            !collect_external_pattern_refs_rec(expr_arg(atom, 1), visible, free_vars) ||
+            !collect_external_pattern_refs_rec(expr_arg(atom, 2), visible, free_vars) ||
+            !collect_external_pattern_visible_vars(expr_arg(atom, 4), visible, free_vars) ||
+            !collect_external_pattern_refs_rec(expr_arg(atom, 5), visible, free_vars) ||
+            !collect_external_pattern_visible_vars(expr_arg(atom, 3), visible, free_vars) ||
+            !collect_external_pattern_visible_vars(expr_arg(atom, 4), visible, free_vars)) {
+            return false;
+        }
+        return collect_external_pattern_refs_rec(expr_arg(atom, 6), visible, free_vars);
+    }
+
     for (CettaExprIndex i = 0; i < atom->expr.len; i++) {
         if (!collect_external_pattern_refs_rec(atom->expr.elems[i], visible, free_vars))
             return false;
@@ -3919,6 +3937,40 @@ static bool collect_free_vars_fold_by_key(Atom *atom, CettaExprLen nargs,
     return true;
 }
 
+static bool collect_free_vars_group_fold(Atom *atom,
+                                         BoundVarStack *bound,
+                                         FreeVarSet *free_vars) {
+    if (!collect_free_vars_rec(expr_arg(atom, 0), bound, free_vars) ||
+        !collect_free_vars_rec(expr_arg(atom, 1), bound, free_vars) ||
+        !collect_free_vars_rec(expr_arg(atom, 2), bound, free_vars)) {
+        return false;
+    }
+
+    if (!collect_bound_pattern_ref_vars(expr_arg(atom, 4), bound, free_vars))
+        return false;
+    CettaExprLen key_mark = bound->len;
+    if (!collect_bound_pattern_vars(expr_arg(atom, 4), bound) ||
+        !collect_free_vars_rec(expr_arg(atom, 5), bound, free_vars)) {
+        bound->len = key_mark;
+        return false;
+    }
+    bound->len = key_mark;
+
+    if (!collect_bound_pattern_ref_vars(expr_arg(atom, 3), bound, free_vars) ||
+        !collect_bound_pattern_ref_vars(expr_arg(atom, 4), bound, free_vars)) {
+        return false;
+    }
+    CettaExprLen step_mark = bound->len;
+    if (!collect_bound_pattern_vars(expr_arg(atom, 3), bound) ||
+        !collect_bound_pattern_vars(expr_arg(atom, 4), bound) ||
+        !collect_free_vars_rec(expr_arg(atom, 6), bound, free_vars)) {
+        bound->len = step_mark;
+        return false;
+    }
+    bound->len = step_mark;
+    return true;
+}
+
 static bool collect_free_vars_rec(Atom *atom, BoundVarStack *bound, FreeVarSet *free_vars) {
     if (!atom)
         return true;
@@ -4029,6 +4081,9 @@ static bool collect_free_vars_rec(Atom *atom, BoundVarStack *bound, FreeVarSet *
 
     if (head_id == g_builtin_syms.fold_by_key && (nargs == 6 || nargs == 7))
         return collect_free_vars_fold_by_key(atom, nargs, bound, free_vars);
+
+    if (head_id == g_builtin_syms.group_fold && nargs == 7)
+        return collect_free_vars_group_fold(atom, bound, free_vars);
 
     for (CettaExprIndex i = 0; i < atom->expr.len; i++) {
         if (!collect_free_vars_rec(atom->expr.elems[i], bound, free_vars))
@@ -5268,6 +5323,94 @@ static bool direct_outcome_walk_mork_match_supported(Arena *a, Atom *atom) {
                                                      &bridge) && bridge;
 }
 
+static bool direct_outcome_walk_atom_lines_supported(Atom *atom) {
+    return atom && atom->kind == ATOM_EXPR && atom->expr.len == 2 &&
+           atom_is_symbol_id(atom->expr.elems[0],
+                             g_builtin_syms.fs_stream_atom_lines) &&
+           active_surface_allowed("fs:stream-atom-lines");
+}
+
+static bool direct_outcome_walk_atom_lines(Arena *a, Atom *atom,
+                                           OrderedOutcomeVisitor visitor,
+                                           void *ctx, CettaCount *visited) {
+    if (!direct_outcome_walk_atom_lines_supported(atom))
+        return false;
+
+    Atom *path_atom = atom->expr.elems[1];
+    const char *path = NULL;
+    if (path_atom && path_atom->kind == ATOM_GROUNDED &&
+        path_atom->ground.gkind == GV_STRING) {
+        path = path_atom->ground.sval;
+    }
+    Bindings empty;
+    bindings_init(&empty);
+    if (!path) {
+        (*visited)++;
+        return visitor(a,
+                       atom_error(a, atom,
+                                  atom_symbol(a, "AtomLinesPathNotString")),
+                       &empty, ctx);
+    }
+
+    FILE *file = fopen(path, "r");
+    if (!file) {
+        (*visited)++;
+        return visitor(a,
+                       atom_error(a, atom,
+                                  atom_symbol(a, "AtomLinesOpenFailed")),
+                       &empty, ctx);
+    }
+
+    char *line = NULL;
+    size_t line_cap = 0;
+    ssize_t line_len;
+    bool ok = true;
+    while ((line_len = getline(&line, &line_cap, file)) >= 0) {
+        (void)line_len;
+        ArenaMark mark = arena_mark(a);
+        size_t pos = 0;
+        Atom *record = parser_text_well_formed(line)
+            ? parse_sexpr(a, line, &pos)
+            : NULL;
+        bool parse_error = false;
+        if (!record) {
+            if (parser_text_well_formed(line) &&
+                parser_rest_is_delimiters(line, &pos)) {
+                arena_reset(a, mark);
+                continue;
+            }
+            record = atom_error(a, atom,
+                                atom_symbol(a, "AtomLinesParseFailed"));
+            parse_error = true;
+        } else if (!parser_rest_is_delimiters(line, &pos)) {
+            record = atom_error(a, atom,
+                                atom_symbol(a, "AtomLinesMultipleAtoms"));
+            parse_error = true;
+        }
+        (*visited)++;
+        ok = visitor(a, record, &empty, ctx);
+        arena_reset(a, mark);
+        if (!ok || parse_error)
+            break;
+    }
+    if (ok && ferror(file)) {
+        (*visited)++;
+        ok = visitor(a,
+                     atom_error(a, atom,
+                                atom_symbol(a, "AtomLinesReadFailed")),
+                     &empty, ctx);
+    }
+    free(line);
+    if (fclose(file) != 0 && ok) {
+        (*visited)++;
+        ok = visitor(a,
+                     atom_error(a, atom,
+                                atom_symbol(a, "AtomLinesCloseFailed")),
+                     &empty, ctx);
+    }
+    return ok;
+}
+
 static bool direct_outcome_walk_visit_inner(DirectWalkVisitorCtx *walk,
                                             Arena *a,
                                             OutcomeSet *inner) {
@@ -5372,7 +5515,7 @@ static void direct_walk_stack_free(DirectWalkStack *stack) {
     stack->cap = 0;
 }
 
-static bool direct_walk_stack_push_superpose(DirectWalkStack *stack, Atom *list) {
+static bool direct_walk_stack_push_branches(DirectWalkStack *stack, Atom *list) {
     for (CettaExprIndex i = list->expr.len; i > 0; i--) {
         if (!direct_walk_stack_push(stack, list->expr.elems[i - 1]))
             return false;
@@ -5410,17 +5553,27 @@ static bool direct_outcome_walk_supported(Space *s, Arena *a, Atom *atom, int fu
         }
         if (direct_outcome_walk_mork_match_supported(a, current))
             continue;
-        if ((expr_head_is_id(current, g_builtin_syms.superpose) &&
-             expr_nargs(current) == 1) ||
-            hyperpose_static_branch_list(current, NULL)) {
+        if (direct_outcome_walk_atom_lines_supported(current))
+            continue;
+        if (expr_head_is_id(current, g_builtin_syms.superpose) &&
+            expr_nargs(current) == 1) {
             Atom *list = expr_arg(current, 0);
-            if (expr_head_is_id(current, g_builtin_syms.hyperpose) &&
-                !active_surface_allowed("hyperpose")) {
+            if (list->kind != ATOM_EXPR) {
+                direct_walk_stack_free(&stack);
+                return false;
+            }
+            /* Static superpose branches are evaluated one at a time by the
+             * direct walker, so support does not depend on branch shape. */
+            continue;
+        }
+        if (hyperpose_static_branch_list(current, NULL)) {
+            Atom *list = expr_arg(current, 0);
+            if (!active_surface_allowed("hyperpose")) {
                 direct_walk_stack_free(&stack);
                 return false;
             }
             if (list->kind != ATOM_EXPR ||
-                !direct_walk_stack_push_superpose(&stack, list)) {
+                !direct_walk_stack_push_branches(&stack, list)) {
                 direct_walk_stack_free(&stack);
                 return false;
             }
@@ -5468,17 +5621,50 @@ static bool direct_outcome_walk(Space *s, Arena *a, Atom *atom, int fuel,
             }
             continue;
         }
-        if ((expr_head_is_id(current, g_builtin_syms.superpose) &&
-             expr_nargs(current) == 1) ||
-            hyperpose_static_branch_list(current, NULL)) {
+        if (direct_outcome_walk_atom_lines_supported(current)) {
+            if (!direct_outcome_walk_atom_lines(a, current, visitor, ctx,
+                                                visited)) {
+                direct_walk_stack_free(&stack);
+                return false;
+            }
+            continue;
+        }
+        if (expr_head_is_id(current, g_builtin_syms.superpose) &&
+            expr_nargs(current) == 1) {
             Atom *list = expr_arg(current, 0);
-            if (expr_head_is_id(current, g_builtin_syms.hyperpose) &&
-                !active_surface_allowed("hyperpose")) {
+            if (list->kind != ATOM_EXPR) {
+                direct_walk_stack_free(&stack);
+                return false;
+            }
+            DirectWalkVisitorCtx walk = {
+                .visitor = visitor,
+                .ctx = ctx,
+                .visited = visited,
+                .stopped = false,
+            };
+            for (CettaExprIndex i = 0; i < list->expr.len; i++) {
+                OutcomeSet branch;
+                outcome_set_init(&branch);
+                eval_for_caller(s, a, NULL, list->expr.elems[i], fuel,
+                                &empty, false, &branch);
+                bool keep_going =
+                    direct_outcome_walk_visit_inner(&walk, a, &branch);
+                outcome_set_free(&branch);
+                if (!keep_going) {
+                    direct_walk_stack_free(&stack);
+                    return false;
+                }
+            }
+            continue;
+        }
+        if (hyperpose_static_branch_list(current, NULL)) {
+            Atom *list = expr_arg(current, 0);
+            if (!active_surface_allowed("hyperpose")) {
                 direct_walk_stack_free(&stack);
                 return false;
             }
             if (list->kind != ATOM_EXPR ||
-                !direct_walk_stack_push_superpose(&stack, list)) {
+                !direct_walk_stack_push_branches(&stack, list)) {
                 direct_walk_stack_free(&stack);
                 return false;
             }
@@ -6780,6 +6966,431 @@ fold_by_key_stream_results(Space *s, Arena *a, Arena *work_a,
     }
     fold_by_key_table_free(&table);
     return true;
+}
+
+typedef enum {
+    GROUP_FOLD_MODE_INVALID = 0,
+    GROUP_FOLD_MODE_ORDERED,
+    GROUP_FOLD_MODE_EXTERNAL_MERGE,
+} GroupFoldModeKind;
+
+typedef struct {
+    GroupFoldModeKind kind;
+    size_t run_size;
+} GroupFoldMode;
+
+static bool group_fold_symbol_is(Atom *atom, const char *wanted) {
+    if (!atom || atom->kind != ATOM_SYMBOL)
+        return false;
+    const char *actual = symbol_bytes(g_symbols, atom->sym_id);
+    return actual && strcmp(actual, wanted) == 0;
+}
+
+static GroupFoldMode group_fold_parse_mode(Atom *mode) {
+    if (group_fold_symbol_is(mode, "ordered"))
+        return (GroupFoldMode){ .kind = GROUP_FOLD_MODE_ORDERED };
+    if (!mode || mode->kind != ATOM_EXPR || mode->expr.len != 2 ||
+        !group_fold_symbol_is(mode->expr.elems[0], "external-merge")) {
+        return (GroupFoldMode){0};
+    }
+    Atom *run_size = mode->expr.elems[1];
+    if (!run_size || run_size->kind != ATOM_GROUNDED ||
+        run_size->ground.gkind != GV_INT || run_size->ground.ival <= 0 ||
+        (uint64_t)run_size->ground.ival > SIZE_MAX) {
+        return (GroupFoldMode){0};
+    }
+    return (GroupFoldMode){
+        .kind = GROUP_FOLD_MODE_EXTERNAL_MERGE,
+        .run_size = (size_t)run_size->ground.ival,
+    };
+}
+
+static bool group_fold_atom_is_canonical_ground(Atom *atom) {
+    if (!atom)
+        return false;
+    switch (atom->kind) {
+    case ATOM_SYMBOL:
+        return true;
+    case ATOM_VAR:
+        return false;
+    case ATOM_GROUNDED:
+        return atom->ground.gkind == GV_INT ||
+               (atom->ground.gkind == GV_FLOAT &&
+                isfinite(atom->ground.fval)) ||
+               atom->ground.gkind == GV_BOOL ||
+               atom->ground.gkind == GV_BIGINT ||
+               atom->ground.gkind == GV_RATIONAL ||
+               atom->ground.gkind == GV_STRING;
+    case ATOM_EXPR:
+        for (CettaExprIndex i = 0; i < atom->expr.len; i++) {
+            if (!group_fold_atom_is_canonical_ground(atom->expr.elems[i]))
+                return false;
+        }
+        return true;
+    }
+    return false;
+}
+
+static const char *group_fold_canonical_text(Arena *scratch, Atom *atom) {
+    char *text = atom_to_parseable_string(scratch, atom);
+    size_t pos = 0;
+    Atom *roundtrip = parse_sexpr(scratch, text, &pos);
+    if (!roundtrip || !parser_rest_is_delimiters(text, &pos) ||
+        !atom_eq(atom, roundtrip)) {
+        return NULL;
+    }
+    return text;
+}
+
+typedef struct {
+    Space *s;
+    Arena *a;
+    Arena eval_scratch;
+    Arena canonical_scratch;
+    Atom *call;
+    Atom *init;
+    SymbolId acc_spelling;
+    SymbolId item_spelling;
+    Atom *key_expr;
+    Atom *step_expr;
+    int fuel;
+    Atom *current_key;
+    char *current_key_text;
+    Atom *current_acc;
+    CettaSha256 current_sha;
+    uint64_t current_count;
+    StreamItemBuffer completed;
+    Atom *error;
+    bool has_current;
+    bool ok;
+} GroupFoldOrderedCtx;
+
+static void group_fold_ordered_ctx_init(GroupFoldOrderedCtx *ctx) {
+    arena_init(&ctx->eval_scratch);
+    arena_set_runtime_kind(&ctx->eval_scratch,
+                           CETTA_ARENA_RUNTIME_KIND_SCRATCH);
+    arena_set_hashcons(&ctx->eval_scratch, NULL);
+    arena_init(&ctx->canonical_scratch);
+    arena_set_runtime_kind(&ctx->canonical_scratch,
+                           CETTA_ARENA_RUNTIME_KIND_SCRATCH);
+    arena_set_hashcons(&ctx->canonical_scratch, NULL);
+    ctx->ok = true;
+}
+
+static void group_fold_ordered_ctx_free(GroupFoldOrderedCtx *ctx) {
+    free(ctx->current_key_text);
+    stream_item_buffer_free(&ctx->completed);
+    arena_free(&ctx->canonical_scratch);
+    arena_free(&ctx->eval_scratch);
+}
+
+static bool group_fold_fail(GroupFoldOrderedCtx *ctx, const char *reason) {
+    if (ctx->ok)
+        ctx->error = atom_error(ctx->a, ctx->call, atom_symbol(ctx->a, reason));
+    ctx->ok = false;
+    return false;
+}
+
+static bool group_fold_complete_current(GroupFoldOrderedCtx *ctx) {
+    if (!ctx->has_current)
+        return true;
+    if (ctx->current_count > INT64_MAX)
+        return group_fold_fail(ctx, "GroupFoldCountOverflow");
+    uint8_t digest[32];
+    char digest_hex[65];
+    CettaSha256 final_sha = ctx->current_sha;
+    cetta_sha256_final(&final_sha, digest);
+    cetta_sha256_hex(digest, digest_hex);
+
+    Atom **audit_elems = arena_alloc(ctx->a, sizeof(Atom *) * 3u);
+    audit_elems[0] = atom_symbol(ctx->a, "group-audit");
+    audit_elems[1] = atom_int(ctx->a, (int64_t)ctx->current_count);
+    audit_elems[2] = atom_string(ctx->a, digest_hex);
+    Atom *audit = atom_expr(ctx->a, audit_elems, 3);
+
+    Atom **result_elems = arena_alloc(ctx->a, sizeof(Atom *) * 4u);
+    result_elems[0] = atom_symbol(ctx->a, "group-result");
+    result_elems[1] = ctx->current_key;
+    result_elems[2] = ctx->current_acc;
+    result_elems[3] = audit;
+    if (!stream_item_buffer_push(&ctx->completed,
+                                 atom_expr(ctx->a, result_elems, 4))) {
+        return group_fold_fail(ctx, "GroupFoldAllocationFailed");
+    }
+    return true;
+}
+
+static bool group_fold_process_known(GroupFoldOrderedCtx *ctx,
+                                     Atom *key,
+                                     const char *key_text,
+                                     Atom *item,
+                                     const char *item_text) {
+    int key_order = 0;
+    if (ctx->has_current)
+        key_order = strcmp(key_text, ctx->current_key_text);
+    if (ctx->has_current && key_order < 0)
+        return group_fold_fail(ctx, "GroupFoldKeyOutOfOrder");
+    if (!ctx->has_current || key_order > 0) {
+        if (!group_fold_complete_current(ctx))
+            return false;
+        char *next_key_text = strdup(key_text);
+        if (!next_key_text)
+            return group_fold_fail(ctx, "GroupFoldAllocationFailed");
+        free(ctx->current_key_text);
+        ctx->current_key_text = next_key_text;
+        ctx->current_key = atom_deep_copy(ctx->a, key);
+        ctx->current_acc = ctx->init;
+        ctx->current_count = 0;
+        cetta_sha256_init(&ctx->current_sha);
+        ctx->has_current = true;
+    }
+
+    Atom *next_acc = NULL;
+    Atom *error = NULL;
+    if (!eval_bound_single_with_scratch(ctx->s, ctx->a, &ctx->eval_scratch,
+                                        ctx->call, ctx->step_expr,
+                                        ctx->acc_spelling, ctx->current_acc,
+                                        ctx->item_spelling, item,
+                                        ctx->fuel,
+                                        "ReduceStepNoResult",
+                                        "ReduceStepMultipleResults",
+                                        &next_acc, &error)) {
+        ctx->error = error;
+        ctx->ok = false;
+        return false;
+    }
+    ctx->current_acc = next_acc;
+    if (ctx->current_count == UINT64_MAX)
+        return group_fold_fail(ctx, "GroupFoldCountOverflow");
+    uint64_t item_len = (uint64_t)strlen(item_text);
+    uint8_t length_prefix[8];
+    for (unsigned i = 0; i < 8; i++)
+        length_prefix[7u - i] = (uint8_t)(item_len >> (i * 8u));
+    cetta_sha256_update(&ctx->current_sha, length_prefix,
+                        sizeof(length_prefix));
+    cetta_sha256_update(&ctx->current_sha, item_text, (size_t)item_len);
+    ctx->current_count++;
+    return true;
+}
+
+static bool group_fold_ordered_visit(Arena *visit_a, Atom *item,
+                                     const Bindings *env, void *raw_ctx) {
+    (void)visit_a;
+    (void)env;
+    GroupFoldOrderedCtx *ctx = raw_ctx;
+    if (atom_is_error(item)) {
+        ctx->error = atom_deep_copy(ctx->a, item);
+        ctx->ok = false;
+        return false;
+    }
+    if (!group_fold_atom_is_canonical_ground(item))
+        return group_fold_fail(ctx, "GroupFoldItemNotCanonicalGround");
+
+    Atom *key = NULL;
+    Atom *error = NULL;
+    if (!eval_bound_single_with_scratch(ctx->s, ctx->a, &ctx->eval_scratch,
+                                        ctx->call, ctx->key_expr,
+                                        SYMBOL_ID_NONE, NULL,
+                                        ctx->item_spelling, item,
+                                        ctx->fuel,
+                                        "GroupFoldKeyNoResult",
+                                        "GroupFoldKeyMultipleResults",
+                                        &key, &error)) {
+        ctx->error = error;
+        ctx->ok = false;
+        return false;
+    }
+    if (!group_fold_atom_is_canonical_ground(key))
+        return group_fold_fail(ctx, "GroupFoldKeyNotCanonicalGround");
+
+    ArenaMark mark = arena_mark(&ctx->canonical_scratch);
+    const char *key_text = group_fold_canonical_text(&ctx->canonical_scratch, key);
+    const char *item_text = group_fold_canonical_text(&ctx->canonical_scratch, item);
+    if (!key_text || !item_text) {
+        arena_reset(&ctx->canonical_scratch, mark);
+        return group_fold_fail(ctx, !key_text
+            ? "GroupFoldKeyNotCanonicalGround"
+            : "GroupFoldItemNotCanonicalGround");
+    }
+    bool ok = group_fold_process_known(ctx, key, key_text, item, item_text);
+    arena_reset(&ctx->canonical_scratch, mark);
+    return ok;
+}
+
+typedef struct {
+    GroupFoldOrderedCtx *ordered;
+    CettaGroupFoldRecordBuffer records;
+    CettaGroupFoldRunList runs;
+    size_t run_size;
+    uint64_t next_ordinal;
+} GroupFoldExternalCtx;
+
+static bool group_fold_external_visit(Arena *visit_a, Atom *item,
+                                      const Bindings *env, void *raw_ctx) {
+    (void)visit_a;
+    (void)env;
+    GroupFoldExternalCtx *external = raw_ctx;
+    GroupFoldOrderedCtx *ctx = external->ordered;
+    if (atom_is_error(item)) {
+        ctx->error = atom_deep_copy(ctx->a, item);
+        ctx->ok = false;
+        return false;
+    }
+    if (!group_fold_atom_is_canonical_ground(item))
+        return group_fold_fail(ctx, "GroupFoldItemNotCanonicalGround");
+    if (external->next_ordinal == UINT64_MAX)
+        return group_fold_fail(ctx, "GroupFoldOrdinalOverflow");
+
+    Atom *key = NULL;
+    Atom *error = NULL;
+    if (!eval_bound_single_with_scratch(ctx->s, ctx->a, &ctx->eval_scratch,
+                                        ctx->call, ctx->key_expr,
+                                        SYMBOL_ID_NONE, NULL,
+                                        ctx->item_spelling, item,
+                                        ctx->fuel,
+                                        "GroupFoldKeyNoResult",
+                                        "GroupFoldKeyMultipleResults",
+                                        &key, &error)) {
+        ctx->error = error;
+        ctx->ok = false;
+        return false;
+    }
+    if (!group_fold_atom_is_canonical_ground(key))
+        return group_fold_fail(ctx, "GroupFoldKeyNotCanonicalGround");
+
+    ArenaMark mark = arena_mark(&ctx->canonical_scratch);
+    const char *key_text = group_fold_canonical_text(&ctx->canonical_scratch, key);
+    const char *item_text = group_fold_canonical_text(&ctx->canonical_scratch, item);
+    if (!key_text || !item_text) {
+        arena_reset(&ctx->canonical_scratch, mark);
+        return group_fold_fail(ctx, !key_text
+            ? "GroupFoldKeyNotCanonicalGround"
+            : "GroupFoldItemNotCanonicalGround");
+    }
+    bool ok = cetta_group_fold_record_buffer_push(
+        &external->records, key_text, item_text, external->next_ordinal++);
+    arena_reset(&ctx->canonical_scratch, mark);
+    if (!ok)
+        return group_fold_fail(ctx, "GroupFoldAllocationFailed");
+    if (external->records.len >= external->run_size &&
+        !cetta_group_fold_flush_run(&external->records, &external->runs)) {
+        return group_fold_fail(ctx, "GroupFoldExternalIoError");
+    }
+    return true;
+}
+
+static bool group_fold_parse_record_atom(Arena *arena, const char *text,
+                                         Atom **atom_out) {
+    size_t pos = 0;
+    Atom *atom = parse_sexpr(arena, text, &pos);
+    if (!atom || !parser_rest_is_delimiters(text, &pos))
+        return false;
+    *atom_out = atom;
+    return true;
+}
+
+static bool group_fold_consume_external(GroupFoldExternalCtx *external) {
+    GroupFoldOrderedCtx *ctx = external->ordered;
+    if (external->records.len > 0 &&
+        !cetta_group_fold_flush_run(&external->records, &external->runs)) {
+        return group_fold_fail(ctx, "GroupFoldExternalIoError");
+    }
+    if (external->runs.len == 0)
+        return true;
+    if (!cetta_group_fold_merge_all_runs(&external->runs))
+        return group_fold_fail(ctx, "GroupFoldExternalIoError");
+
+    FILE *file = fopen(external->runs.paths[0], "rb");
+    if (!file)
+        return group_fold_fail(ctx, "GroupFoldExternalIoError");
+    bool ok = true;
+    while (ok) {
+        CettaGroupFoldRecord record = {0};
+        bool at_end = false;
+        if (!cetta_group_fold_read_record(file, &record, &at_end)) {
+            ok = group_fold_fail(ctx, "GroupFoldExternalIoError");
+            break;
+        }
+        if (at_end)
+            break;
+        ArenaMark mark = arena_mark(&ctx->canonical_scratch);
+        Atom *key = NULL;
+        Atom *item = NULL;
+        if (!group_fold_parse_record_atom(&ctx->canonical_scratch, record.key, &key) ||
+            !group_fold_parse_record_atom(&ctx->canonical_scratch, record.item, &item)) {
+            ok = group_fold_fail(ctx, "GroupFoldExternalParseError");
+        } else {
+            ok = group_fold_process_known(ctx, key, record.key, item, record.item);
+        }
+        arena_reset(&ctx->canonical_scratch, mark);
+        cetta_group_fold_record_clear(&record);
+    }
+    if (fclose(file) != 0 && ok)
+        ok = group_fold_fail(ctx, "GroupFoldExternalIoError");
+    return ok;
+}
+
+static bool group_fold_stream_results(Space *s, Arena *a, Arena *work_a,
+                                      Atom *call, GroupFoldMode mode,
+                                      Atom *stream_expr, Atom *init,
+                                      SymbolId acc_spelling,
+                                      SymbolId item_spelling,
+                                      Atom *key_expr, Atom *step_expr,
+                                      int fuel, OutcomeSet *os) {
+    GroupFoldOrderedCtx ordered = {
+        .s = s,
+        .a = a,
+        .call = call,
+        .init = init,
+        .acc_spelling = acc_spelling,
+        .item_spelling = item_spelling,
+        .key_expr = key_expr,
+        .step_expr = step_expr,
+        .fuel = fuel,
+    };
+    group_fold_ordered_ctx_init(&ordered);
+
+    GroupFoldExternalCtx external = {
+        .ordered = &ordered,
+        .run_size = mode.run_size,
+    };
+    if (!direct_outcome_walk_supported(s, work_a, stream_expr, fuel)) {
+        group_fold_fail(&ordered, "GroupFoldStreamingSourceRequired");
+    } else {
+        CettaCount visited = 0;
+        bool walked = direct_outcome_walk(
+            s, work_a, stream_expr, fuel,
+            mode.kind == GROUP_FOLD_MODE_ORDERED
+                ? group_fold_ordered_visit
+                : group_fold_external_visit,
+            mode.kind == GROUP_FOLD_MODE_ORDERED
+                ? (void *)&ordered
+                : (void *)&external,
+            &visited);
+        if (!walked && ordered.ok)
+            group_fold_fail(&ordered, "GroupFoldSourceWalkFailed");
+        if (mode.kind == GROUP_FOLD_MODE_EXTERNAL_MERGE && ordered.ok)
+            group_fold_consume_external(&external);
+    }
+    if (ordered.ok)
+        group_fold_complete_current(&ordered);
+
+    Bindings empty;
+    bindings_init(&empty);
+    if (ordered.ok) {
+        for (CettaCount i = 0; i < ordered.completed.len; i++)
+            outcome_set_add(os, ordered.completed.items[i], &empty);
+    } else {
+        outcome_set_add(os, ordered.error ? ordered.error
+                                          : atom_error(a, call,
+                                              atom_symbol(a, "GroupFoldFailed")),
+                        &empty);
+    }
+
+    cetta_group_fold_record_buffer_clear(&external.records);
+    cetta_group_fold_run_list_clear(&external.runs, true);
+    group_fold_ordered_ctx_free(&ordered);
+    return ordered.ok;
 }
 
 static Atom *resolve_registry_refs_impl(Arena *a, Atom *atom, bool *changed_out) {
@@ -13536,6 +14147,52 @@ tail_call: ;
                 atom_error(a, atom, reason ? reason : atom_symbol(a, "MalformedSearchPolicy")),
                 &_empty);
         }
+        return;
+    }
+
+    /* ── deterministic grouped streaming fold ─────────────────────────── */
+    if (head_id == g_builtin_syms.group_fold) {
+        if (!active_surface_allowed("group-fold"))
+            goto generic_dispatch;
+        if (nargs != 7) {
+            outcome_set_add(os,
+                atom_error(a, atom, atom_symbol(a, "IncorrectNumberOfArguments")),
+                &_empty);
+            return;
+        }
+        GroupFoldMode mode = group_fold_parse_mode(expr_arg(atom, 0));
+        if (mode.kind == GROUP_FOLD_MODE_INVALID) {
+            outcome_set_add(os,
+                atom_error(a, atom, atom_symbol(a, "GroupFoldInvalidMode")),
+                &_empty);
+            return;
+        }
+        Atom *acc_var = expr_arg(atom, 3);
+        Atom *item_var = expr_arg(atom, 4);
+        if (!acc_var || acc_var->kind != ATOM_VAR) {
+            outcome_set_add(os,
+                bad_arg_type_error(s, a, atom, 4, atom_variable_type(a), acc_var),
+                &_empty);
+            return;
+        }
+        if (!item_var || item_var->kind != ATOM_VAR) {
+            outcome_set_add(os,
+                bad_arg_type_error(s, a, atom, 5, atom_variable_type(a), item_var),
+                &_empty);
+            return;
+        }
+
+        Arena stream_scratch;
+        arena_init(&stream_scratch);
+        arena_set_runtime_kind(&stream_scratch,
+                               CETTA_ARENA_RUNTIME_KIND_SCRATCH);
+        arena_set_hashcons(&stream_scratch, NULL);
+        group_fold_stream_results(s, a, &stream_scratch, atom, mode,
+                                  expr_arg(atom, 1), expr_arg(atom, 2),
+                                  acc_var->sym_id, item_var->sym_id,
+                                  expr_arg(atom, 5), expr_arg(atom, 6),
+                                  fuel, os);
+        arena_free(&stream_scratch);
         return;
     }
 

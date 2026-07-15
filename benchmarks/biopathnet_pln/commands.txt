@@ -1,0 +1,123 @@
+BioPathNet / PLN command sequence
+=================================
+
+Set these shell variables to a pinned BioPathNet checkout, its official
+lnctardppi data directory, an untracked run directory, and this suite:
+
+  BIOPATHNET_SOURCE=...
+  BIOPATHNET_DATA=...
+  RUN_ROOT=...
+  SUITE=benchmarks/biopathnet_pln
+
+Verify the source commit, all six data hashes, exact split disjointness, entity
+coverage, and pinned relation counts:
+
+  python3 "$SUITE/biopathnet_suite.py" verify-upstream "$BIOPATHNET_SOURCE"
+
+Apply the pinned TorchDrug compatibility patch to the pinned TorchDrug source
+checkout and the symmetric-candidate correction to the pinned BioPathNet
+source checkout.  Install TorchDrug into the training environment, then verify
+every package, source commit, patched-file hash, and CUDA runtime before
+training:
+
+  git -C TORCHDRUG_SOURCE apply --unidiff-zero \
+    "$SUITE/torchdrug_pytorch212.patch"
+  git -C "$BIOPATHNET_SOURCE" apply --unidiff-zero \
+    "$SUITE/biopathnet_symmetric_candidates.patch"
+  python -m pip install -e TORCHDRUG_SOURCE
+  python3 "$SUITE/control_runner.py" verify-environment "$BIOPATHNET_SOURCE"
+
+Create the deterministic fifteen-job plan and a selection-only data view.  The
+view substitutes validation bytes for the upstream loader's test filename, so
+control training cannot read the real test split:
+
+  python3 "$SUITE/biopathnet_suite.py" generate-plan "$RUN_ROOT/plan"
+  python3 "$SUITE/biopathnet_suite.py" stage-selection-data \
+    "$BIOPATHNET_DATA" "$RUN_ROOT/selection-data"
+
+For each frozen seed, freshly train and select the official control without a
+real-test evaluation:
+
+  python3 "$SUITE/control_runner.py" train-select \
+    "$BIOPATHNET_SOURCE" "$RUN_ROOT/plan/configs/biopathnet-control.yaml" \
+    "$RUN_ROOT/selection-data" "$RUN_ROOT/control-SEED" --seed SEED --gpus '[0]'
+
+Before a full training campaign, the executable GPU smoke performs exactly one
+optimizer step and evaluates one held-out validation batch with sampled
+negatives.  This is a mechanics check, not a ranking result:
+
+  python3 "$SUITE/control_runner.py" train-smoke \
+    "$BIOPATHNET_SOURCE" "$SUITE/biopathnet-control-smoke.yaml" \
+    "$RUN_ROOT/selection-data" "$RUN_ROOT/control-smoke-SEED" \
+    --seed SEED --gpus '[0]'
+
+The symmetric-candidate compatibility regression compares the bounded batched
+implementation exactly against scalar candidate-wise evaluation for positive,
+tail-negative, and head-negative cases:
+
+  python3 "$SUITE/test_biopathnet_symmetric.py" "$BIOPATHNET_SOURCE"
+
+Train the PLN relation-path model from train1+train2 only.  Hyperparameter
+candidate runs are compared on validation MRR; no test file is an input:
+
+  python3 "$SUITE/pln_path_model.py" train-pln \
+    "$BIOPATHNET_DATA" "$RUN_ROOT/pln-SEED.json" --seed SEED \
+    --max-depth DEPTH --minimum-support SUPPORT --alpha ALPHA --beta BETA \
+    --path-cap PATH_CAP --negatives-per-positive 32
+
+Produce validation candidate scores from both trained systems.  CONTROL_SCORES
+and PLN_FEATURES cover the same filtered tail-target candidates:
+
+  python3 "$SUITE/control_runner.py" score-control \
+    "$BIOPATHNET_SOURCE" "$RUN_ROOT/plan/configs/biopathnet-control.yaml" \
+    "$RUN_ROOT/selection-data" CHECKPOINT CONTROL_SCORES --split valid --gpus '[0]'
+  python3 "$SUITE/biopathnet_suite.py" rank-candidates \
+    CONTROL_SCORES CONTROL_PREDICTIONS --score-field biopathnet_score --seed SEED
+
+  python3 "$SUITE/pln_path_model.py" score-pln \
+    "$RUN_ROOT/pln-SEED.json" "$BIOPATHNET_DATA" \
+    "$BIOPATHNET_DATA/valid.txt" PLN_PREDICTIONS PLN_CERTIFICATES PLN_FEATURES \
+    --split valid
+
+Join aligned candidate scores, fit the nonnegative hybrid on the explicitly
+labelled observed-positive / sampled-negative validation subset, then score all
+validation candidates:
+
+  python3 "$SUITE/pln_path_model.py" join-features \
+    CONTROL_SCORES PLN_FEATURES JOINED_FEATURES
+  python3 "$SUITE/pln_path_model.py" train-hybrid \
+    JOINED_FEATURES HYBRID_MODEL --l2 L2
+  python3 "$SUITE/pln_path_model.py" score-hybrid \
+    JOINED_FEATURES HYBRID_MODEL HYBRID_PREDICTIONS --split valid
+
+After all fifteen validation selections and checkpoint hashes are frozen,
+create the irreversible test lock:
+
+  python3 "$SUITE/biopathnet_suite.py" arm-test \
+    "$RUN_ROOT/plan/run_plan.json" SELECTIONS_JSON TEST_LOCK
+
+Every test scoring command requires its frozen job ID and the lock.  A claim is
+written before test bytes are opened and cannot be reused:
+
+  python3 "$SUITE/control_runner.py" score-control \
+    "$BIOPATHNET_SOURCE" "$RUN_ROOT/plan/configs/biopathnet-control.yaml" \
+    "$BIOPATHNET_DATA" CHECKPOINT CONTROL_TEST_SCORES --split test --gpus '[0]' \
+    --test-lock TEST_LOCK --job-id JOB_ID
+  python3 "$SUITE/biopathnet_suite.py" rank-candidates \
+    CONTROL_TEST_SCORES CONTROL_TEST_PREDICTIONS \
+    --score-field biopathnet_score --seed SEED
+
+  python3 "$SUITE/pln_path_model.py" score-pln \
+    PLN_MODEL "$BIOPATHNET_DATA" "$BIOPATHNET_DATA/test.txt" \
+    PLN_TEST_PREDICTIONS PLN_TEST_CERTIFICATES PLN_TEST_FEATURES --split test \
+    --test-lock TEST_LOCK --job-id JOB_ID
+
+Use paired-bootstrap only on prediction JSONL files with identical query IDs:
+
+  python3 "$SUITE/biopathnet_suite.py" paired-bootstrap \
+    HYBRID_TEST_PREDICTIONS CONTROL_TEST_PREDICTIONS
+
+The CPU-only executable gate is:
+
+  python3 "$SUITE/pln_path_model.py" synthetic-smoke
+  python3 "$SUITE/test_biopathnet_suite.py" -v

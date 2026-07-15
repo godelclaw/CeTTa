@@ -91,6 +91,8 @@ typedef struct {
     X(collect, "collect") \
     X(fold, "fold") \
     X(fold_by_key, "fold-by-key") \
+    X(group_fold, "group-fold") \
+    X(fs_stream_atom_lines, "fs:stream-atom-lines") \
     X(reduce, "reduce") \
     X(select, "select") \
     X(once, "once") \

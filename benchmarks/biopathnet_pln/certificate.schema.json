@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/godelclaw/CeTTa/benchmarks/biopathnet_pln/certificate.schema.json",
+  "title": "BioPathNet PLN prediction certificate",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "prediction_id",
+    "model",
+    "split",
+    "seed",
+    "query",
+    "training_manifest_sha256",
+    "score",
+    "evidence",
+    "aggregation"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "prediction_id": {"type": "string", "minLength": 1},
+    "model": {"enum": ["pln-path-evidence", "biopathnet-pln-hybrid"]},
+    "split": {"enum": ["valid", "test"]},
+    "seed": {"type": "integer"},
+    "query": {
+      "type": "object",
+      "required": ["head", "relation", "tail"],
+      "properties": {
+        "head": {"type": "string", "minLength": 1},
+        "relation": {"type": "string", "minLength": 1},
+        "tail": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "training_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "score": {
+      "type": "object",
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": {"enum": ["pln-evidence-probability", "hybrid-calibrated-probability"]},
+        "value": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["evidence_id", "path", "template", "positive_count", "sampled_negative_count", "dependence_group", "provenance"],
+        "properties": {
+          "evidence_id": {"type": "string", "minLength": 1},
+          "path": {"type": "array", "items": {"type": "string"}, "minItems": 3},
+          "template": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+          "positive_count": {"type": "integer", "minimum": 0},
+          "sampled_negative_count": {"type": "integer", "minimum": 0},
+          "dependence_group": {"type": "string", "minLength": 1},
+          "provenance": {
+            "type": "array",
+            "items": {"type": "object", "required": ["split", "line_sha256"]}
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "aggregation": {
+      "type": "object",
+      "required": ["rule", "input_evidence_ids", "dependence_policy"],
+      "properties": {
+        "rule": {"enum": ["pln-count-revision", "nonnegative-logistic-stack"]},
+        "input_evidence_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "dependence_policy": {"const": "shared-first-edge-max-before-revision"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

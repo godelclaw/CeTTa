@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "source": {
+    "repository": "https://github.com/emyyue/BioPathNet.git",
+    "commit": "b051a9003a1363b5655cdb7dfdad60609c0e4fe3",
+    "release_tag": "v0.1",
+    "release_tag_commit": "80afb3106bd1094e81c8b52c8419b71c3637baea",
+    "license": "MIT",
+    "official_config": {
+      "path": "config/lnctardppi/lnctardppi.yaml",
+      "sha256": "6cad9a595499789c569a151cf8c2113a6ad11cdbfc8e7b6169f22896778e6326"
+    }
+  },
+  "publication": {
+    "title": "Path-based reasoning for biomedical knowledge graphs with BioPathNet",
+    "doi": "10.1038/s41551-025-01598-z"
+  },
+  "task": {
+    "name": "lncRNA-target link prediction",
+    "data_directory": "data/lnctardppi",
+    "files": {
+      "train1.txt": {
+        "role": "background-regulatory-graph",
+        "bytes": 31248591,
+        "lines": 1035133,
+        "unique_triples": 1035133,
+        "relations": 7,
+        "sha256": "9481adba20069ce371c6db03f600112576538003f69059f2bddb7968c866d158"
+      },
+      "train2.txt": {
+        "role": "supervision",
+        "bytes": 161872,
+        "lines": 4867,
+        "unique_triples": 4867,
+        "relations": 6,
+        "sha256": "4c4cf6e75928ae581840e7b749dc65a67150a021a8c4d8e9a3f5897c66dcef02"
+      },
+      "valid.txt": {
+        "role": "model-selection",
+        "bytes": 20196,
+        "lines": 608,
+        "unique_triples": 608,
+        "relations": 6,
+        "sha256": "7b87c1684c105dcbbb25cb90755e9c08cb03d300e3e76193792f974a1c3d6512"
+      },
+      "test.txt": {
+        "role": "test-once",
+        "bytes": 20394,
+        "lines": 609,
+        "unique_triples": 609,
+        "relations": 6,
+        "sha256": "a6917870ab5113ff1d20f4aa4ac1caf7f6d04a89ee1b629c7a94a07532ec17b5"
+      },
+      "entity_names.txt": {
+        "role": "entity-display-names",
+        "bytes": 217150,
+        "lines": 16844,
+        "sha256": "6f741f4390e8894ba1783978d728596598a3a68f83a0f88e451bc25f98ab2bb3"
+      },
+      "entity_types.txt": {
+        "role": "heterogeneous-negative-types",
+        "bytes": 411933,
+        "lines": 16844,
+        "sha256": "3899033994c0bc45700be52eb36a44102b1358b6bc355f267c6d2c284f42969f"
+      }
+    },
+    "supervision_relation_counts": {
+      "train2.txt": {
+        "ceRNA or sponge": 2305,
+        "epigenetic regulation": 272,
+        "expression association": 1530,
+        "interact with mRNA": 43,
+        "interact with protein": 366,
+        "transcriptional regulation": 351
+      },
+      "valid.txt": {
+        "ceRNA or sponge": 275,
+        "epigenetic regulation": 31,
+        "expression association": 208,
+        "interact with mRNA": 2,
+        "interact with protein": 48,
+        "transcriptional regulation": 44
+      },
+      "test.txt": {
+        "ceRNA or sponge": 247,
+        "epigenetic regulation": 28,
+        "expression association": 228,
+        "interact with mRNA": 7,
+        "interact with protein": 47,
+        "transcriptional regulation": 52
+      }
+    }
+  }
+}

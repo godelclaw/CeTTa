@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "benchmark": "CAFA5 partial-knowledge WM-PLN",
+  "dataset": {
+    "record_id": "20186533",
+    "doi": "10.5281/zenodo.20186533",
+    "known_annotations_cutoff": "2023-08-14",
+    "ground_truth_release": "2025-03",
+    "archive": {
+      "name": "full_evaluation.tar.gz",
+      "url": "https://zenodo.org/api/records/20186533/files/full_evaluation.tar.gz/content",
+      "bytes": 24480633,
+      "checksum": "md5:9c205cb107c638a1188203fef4026bd4"
+    },
+    "baseline_archive": {
+      "name": "baselines.tar.gz",
+      "url": "https://zenodo.org/api/records/20186533/files/baselines.tar.gz/content",
+      "bytes": 2970319853,
+      "checksum": "md5:c6358483eefccae7b142bee0ee0bd8f0"
+    },
+    "required_files": [
+      "go-basic.obo",
+      "IA_t0.tsv",
+      "known_t0.tsv",
+      "toi_2025_03.tsv",
+      "eval_terms_partial_2025_03.tsv"
+    ]
+  },
+  "evaluator": {
+    "repository": "https://github.com/claradepaolis/CAFA-evaluator-PK.git",
+    "commit": "e386b085e204ccfbd75a4f52c1a8b25987d8b465",
+    "package_version": "1.2.1"
+  },
+  "official_evaluation_arguments": {
+    "prop": "fill",
+    "threshold_step": 0.001,
+    "exclude_orphans": true,
+    "normalization": "cafa"
+  },
+  "pln_fusion": {
+    "within_dependence_group": "maximum",
+    "primary_between_dependence_groups": "maximum",
+    "primary_policy": "conservative-max",
+    "calibrated_alternative": "logistic-calibration-then-noisy-or-over-declared-independent-groups",
+    "duplicate_semantics": {
+      "same_source_candidate_same_score": "idempotent-collapse",
+      "same_source_candidate_different_score": "reject"
+    },
+    "score_domain": [0.0, 1.0],
+    "primary_reducer": "cetta-group-fold",
+    "sqlite_role": "mandatory-deterministic-real-shaped-sample-oracle-for-cetta-runs"
+  }
+}

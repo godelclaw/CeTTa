@@ -1,0 +1,65 @@
+BioPathNet / PLN lncRNA-target experiment
+========================================
+
+Purpose
+-------
+This is an original matched experiment, not a reproduction claim.  All three
+systems are trained afresh on the same frozen splits and five seeds:
+
+  1. the official BioPathNet architecture as a control;
+  2. a relation-path PLN evidence model;
+  3. a nonnegative logistic hybrid of the two trained models.
+
+Published results are contextual sanity checks only.  Results from this suite
+must identify the source commit, dataset hashes, generated run-plan hash, seed,
+selected validation checkpoint, and the suite-source fingerprint.  The latter
+hashes the executable control, PLN, planning, schema, and compatibility-patch
+files so a run plan cannot silently survive a change to experimental code.
+
+The training manifest pins the complete Python package set, BioPathNet and
+TorchDrug source commits, the PyTorch/CUDA pair, and two narrow source patches.
+The TorchDrug patch updates removed build/header interfaces only; its
+SPMM/RSPMM kernels and mathematics are unchanged.  The BioPathNet patch repairs
+the relational symmetric scorer: each varying candidate tail receives its own
+inverse-direction path computation, evaluated in bounded chunks.  It retains
+the configured symmetric average, relation inversion, strict-negative policy,
+and biological inputs.  Training refuses an environment whose installed
+versions, source files, or patch hash differ.
+
+Data boundary
+-------------
+train1.txt is the background regulatory graph.  train2.txt supplies supervised
+training links and also joins the fact graph, matching the official task.  For
+each supervised query, that exact edge and its inverse are removed while paths
+are collected.  valid.txt is used only for model and hyperparameter selection.
+test.txt is inaccessible to training and selection commands and is evaluated
+only through an armed, one-consumption-per-job test plan.
+
+Negative examples are always called "type-matched sampled negatives".  They
+are optimization and calibration controls in an incomplete knowledge graph;
+they are not assertions that an interaction is biologically false.  Held-out
+edges are not consulted while training negatives are sampled.  If fewer than
+the requested number of exact-type candidates exist, all available candidates
+are used and the shortfall is recorded in the trained artifact.  A singleton
+target type contributes positive evidence but no invented negative evidence;
+the sampler never broadens the biological target type to fill a quota.
+
+PLN evidence
+------------
+Path-template positive and sampled-negative counts are learned from train2.
+Witness paths sharing their first graph edge form one dependence group.  The
+strongest supported template in each group is retained before evidence from
+distinct groups is revised.  Every prediction records the paths, template
+counts, dependence decision, training manifest, and aggregation rule.
+
+Evaluation
+----------
+The primary hypothesis is that the hybrid improves query-level MRR over the
+freshly trained BioPathNet control.  MR, MRR, Hits@1/3/10 and seed-wise results
+are reported.  The primary interval is a paired query bootstrap of the MRR
+difference.  Calibration against sampled negatives is reported with that
+qualification and is not described as population calibration.
+
+The relation "interact with mRNA" has only two validation examples.  No
+relation-stratified split or per-relation tuning is permitted.  Test failures,
+missing seeds, and non-improvements are reported rather than discarded.
