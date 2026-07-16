@@ -1213,6 +1213,7 @@ MORK_MM2_SINK_HEAD_LIMIT := $(MORK_MM2_FIXTURE_DIR)/test_head_limit.mm2
 
 MORK_BRIDGE_ACTIVE := $(if $(filter 1,$(MORK_BUILD_HAS_BRIDGE)),1,$(if $(strip $(CETTA_MORK_SPACE_BRIDGE_LIB)),1,0))
 BRIDGE_REEXEC_BUILD := $(if $(filter 1,$(ENABLE_PYTHON)),main,mork)
+METTAPEDIA_MI_FIXTURE := tests/../../../Mettapedia/MettaKernel/Curriculum/VerifiedMeTTa/05_metta_self_interp.metta
 
 define reexec_mork_bridge_or_skip
 	@if [ -f "$(MORK_BRIDGE_MANIFEST)" ] && [ "$(MORK_BRIDGE_DEPS_READY)" = "1" ]; then \
@@ -1241,6 +1242,12 @@ test: $(BIN) test-manifest-strict test-git-module test-symbolid-guard test-varia
 	cache_dir="$(GIT_TEST_CACHE_DIR)"; mkdir -p "$$cache_dir"; export CETTA_GIT_MODULE_CACHE_DIR="$$cache_dir"; \
 	for f in tests/test_*.metta tests/spec_*.metta tests/he_*.metta; do \
 		[ -f "$$f" ] || continue; \
+		if [ "$$f" = "tests/test_lts_mi_interface.metta" ] && \
+		   [ ! -f "$(METTAPEDIA_MI_FIXTURE)" ]; then \
+			echo "SKIP: $$f (requires the external VerifiedMeTTa self-interpreter fixture)"; \
+			skip=$$((skip + 1)); \
+			continue; \
+		fi; \
 		if [ "$(ENABLE_PYTHON)" != "1" ] && \
 		   { [ "$$f" = "tests/test_py_ops_interface.metta" ] || \
 		     [ "$$f" = "tests/test_import_foreign_python_file.metta" ] || \
