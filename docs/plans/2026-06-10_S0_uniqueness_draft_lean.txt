@@ -283,4 +283,3 @@ theorem selfEval_unique {space : Space} {d : GroundedDispatch}
         1 + sizeOf (op :: e2 :: rest) := by
       simp [Atom.expression.sizeOf_spec]
     omega
-
