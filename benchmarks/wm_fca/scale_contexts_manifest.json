@@ -1,0 +1,524 @@
+{
+  "contexts": {
+    "bob_ross": {
+      "attribute_count": 67,
+      "citation": "FiveThirtyEight, A Statistical Analysis of the Work of Bob Ross",
+      "dependence_group": "bob-ross-published-matrix",
+      "execution_policy": "query-only",
+      "input_sha256": "42045c8b8aaa8296095d6b294927fb9d0f73a57259f59b560c375844c0fe01cf",
+      "matrix_label": "published Bob Ross episode-element matrix",
+      "object_count": 403,
+      "path": "scale_contexts/bob_ross.cxt",
+      "sha256": "30df8ce67cee334673c4cafbd6362de8a72a9e19aaabf98a94e90dd8238e3c6d",
+      "source_path": "bob-ross/elements-by-episode.csv",
+      "true_cell_count": 3221,
+      "upstream": {
+        "commit": "4c1ff5e3aef1816ae04af63218015066e186c147",
+        "license": "CC-BY-4.0",
+        "repository": "https://github.com/fivethirtyeight/data",
+        "source_id": "fivethirtyeight-bob-ross"
+      }
+    },
+    "random_100_10_0.1": {
+      "attribute_count": 10,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_100_10_0.1-generated-matrix",
+      "execution_policy": "exact-enumeration",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 100,
+      "path": "scale_contexts/random_100_10_0.1.cxt",
+      "sha256": "8d2efa7ef662b692de2592288568a7a4468845f8b5b732dc67127e01ad726fc2",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 100,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_100_10_0.5": {
+      "attribute_count": 10,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_100_10_0.5-generated-matrix",
+      "execution_policy": "exact-enumeration",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 100,
+      "path": "scale_contexts/random_100_10_0.5.cxt",
+      "sha256": "18733d6a4f52c50598bc3dd9163644db9ea2600e6b590c71467678a2f9522bee",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 496,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_100_10_0.9": {
+      "attribute_count": 10,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_100_10_0.9-generated-matrix",
+      "execution_policy": "exact-enumeration",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 100,
+      "path": "scale_contexts/random_100_10_0.9.cxt",
+      "sha256": "c648245415a9e34b48a054c6c0cb14077bcf457b57b75f72e0e11251fec41a1f",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 894,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_100_30_0.1": {
+      "attribute_count": 30,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_100_30_0.1-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 100,
+      "path": "scale_contexts/random_100_30_0.1.cxt",
+      "sha256": "04a920f1512534950072012de803fde6912dd8dcbc7529917e90974df819775a",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 294,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_100_30_0.5": {
+      "attribute_count": 30,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_100_30_0.5-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 100,
+      "path": "scale_contexts/random_100_30_0.5.cxt",
+      "sha256": "d9cce8ecf0fa70749ec0212518277fdfe9e49ef714f1f9320d550b75da0c1101",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 1562,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_100_30_0.9": {
+      "attribute_count": 30,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_100_30_0.9-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 100,
+      "path": "scale_contexts/random_100_30_0.9.cxt",
+      "sha256": "293c09e327911deb7e457daed2a17696e81cea0a9df1230bd478d197c52dd8cb",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 2659,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_100_50_0.1": {
+      "attribute_count": 50,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_100_50_0.1-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 100,
+      "path": "scale_contexts/random_100_50_0.1.cxt",
+      "sha256": "b31364be9f86e45002071eb2ffd3733b18b9e6b881f43273467160ecd0a85757",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 481,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_100_50_0.5": {
+      "attribute_count": 50,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_100_50_0.5-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 100,
+      "path": "scale_contexts/random_100_50_0.5.cxt",
+      "sha256": "bcb575a5db1806217abd3d1bf15d11bbdd180a1fa53efa5acc9f9ab717739c3f",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 2462,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_100_50_0.9": {
+      "attribute_count": 50,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_100_50_0.9-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 100,
+      "path": "scale_contexts/random_100_50_0.9.cxt",
+      "sha256": "c3d4322a09e5c34eb9daf0bd01909882b987aae9f91615252184057cc856bc5f",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 4514,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_10_10_0.1": {
+      "attribute_count": 10,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_10_10_0.1-generated-matrix",
+      "execution_policy": "exact-enumeration",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 10,
+      "path": "scale_contexts/random_10_10_0.1.cxt",
+      "sha256": "80691ed9fc243f78fdf91a44160f645211b5e2c2379aca32312a9cc70d9bc411",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 9,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_10_10_0.5": {
+      "attribute_count": 10,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_10_10_0.5-generated-matrix",
+      "execution_policy": "exact-enumeration",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 10,
+      "path": "scale_contexts/random_10_10_0.5.cxt",
+      "sha256": "cc114ca400ce44569a3a742da1361807e471182ea994ec06d3fe24d071ee8a02",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 51,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_10_10_0.9": {
+      "attribute_count": 10,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_10_10_0.9-generated-matrix",
+      "execution_policy": "exact-enumeration",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 10,
+      "path": "scale_contexts/random_10_10_0.9.cxt",
+      "sha256": "a8563b6967a3a3ce12d8aa61fe7b5d52b29f650dc2251bad2071ee7b8166352f",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 90,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_10_30_0.1": {
+      "attribute_count": 30,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_10_30_0.1-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 10,
+      "path": "scale_contexts/random_10_30_0.1.cxt",
+      "sha256": "c5f8163f5023db8144e9031e4fac1d6000069e3659c3bbc0f339d0a5a5378a18",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 39,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_10_30_0.5": {
+      "attribute_count": 30,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_10_30_0.5-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 10,
+      "path": "scale_contexts/random_10_30_0.5.cxt",
+      "sha256": "07a6f52737c97c78ce6078f7c3edd33fa106eaaffc604b7231042e07ef34ca0e",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 139,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_10_30_0.9": {
+      "attribute_count": 30,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_10_30_0.9-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 10,
+      "path": "scale_contexts/random_10_30_0.9.cxt",
+      "sha256": "cd45bcd02b1422b8943147e40bf732deebfbeb41661e7cf4681b5f677b3238b4",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 267,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_10_50_0.1": {
+      "attribute_count": 50,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_10_50_0.1-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 10,
+      "path": "scale_contexts/random_10_50_0.1.cxt",
+      "sha256": "76881c5bb4847eead4832522ea777ae0a0b3b733cb9cfd38ded898778aa81a3f",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 48,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_10_50_0.5": {
+      "attribute_count": 50,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_10_50_0.5-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 10,
+      "path": "scale_contexts/random_10_50_0.5.cxt",
+      "sha256": "3f310ea0174156aefff648e39476f6e7b0f59ae7632b88ec7a110dfea94ad43c",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 255,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_10_50_0.9": {
+      "attribute_count": 50,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_10_50_0.9-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 10,
+      "path": "scale_contexts/random_10_50_0.9.cxt",
+      "sha256": "6c86628962298e5e804144dfaa274a8071a34653d1baddf87b613750571fba61",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 455,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_30_10_0.1": {
+      "attribute_count": 10,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_30_10_0.1-generated-matrix",
+      "execution_policy": "exact-enumeration",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 30,
+      "path": "scale_contexts/random_30_10_0.1.cxt",
+      "sha256": "08654d1f7d2d45fee2cc379971f362064e8172edf78ff99e4e814dd66a3cabc7",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 38,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_30_10_0.5": {
+      "attribute_count": 10,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_30_10_0.5-generated-matrix",
+      "execution_policy": "exact-enumeration",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 30,
+      "path": "scale_contexts/random_30_10_0.5.cxt",
+      "sha256": "3d799814b3044fb43ce3312fee177280e46eb851c21f64e71bd5ba5a58db2a35",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 146,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_30_10_0.9": {
+      "attribute_count": 10,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_30_10_0.9-generated-matrix",
+      "execution_policy": "exact-enumeration",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 30,
+      "path": "scale_contexts/random_30_10_0.9.cxt",
+      "sha256": "2a0cb711a84e7d57bb8c4d0ba85dd269797eb04411df46a5d337deb719845206",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 276,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_30_30_0.1": {
+      "attribute_count": 30,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_30_30_0.1-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 30,
+      "path": "scale_contexts/random_30_30_0.1.cxt",
+      "sha256": "dae913bfebcad2b77c415b5b41dba1d95c77860563d20df0e058c0e03776fac9",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 84,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_30_30_0.5": {
+      "attribute_count": 30,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_30_30_0.5-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 30,
+      "path": "scale_contexts/random_30_30_0.5.cxt",
+      "sha256": "e741867939255b01b67d043ee9f35adda630a18eae1dd430a89aeaf9fb813fce",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 442,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_30_30_0.9": {
+      "attribute_count": 30,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_30_30_0.9-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 30,
+      "path": "scale_contexts/random_30_30_0.9.cxt",
+      "sha256": "a642b05156320b2e90cb57cf3eda3c0ba72627cdcbed6f8916febc8b473f9393",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 809,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_30_50_0.1": {
+      "attribute_count": 50,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_30_50_0.1-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 30,
+      "path": "scale_contexts/random_30_50_0.1.cxt",
+      "sha256": "42af6fbd0682fd51b3c302c0548bcf470ded518a8cbeb6cf57533de94d543671",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 154,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_30_50_0.5": {
+      "attribute_count": 50,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_30_50_0.5-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 30,
+      "path": "scale_contexts/random_30_50_0.5.cxt",
+      "sha256": "b738092516adc5ddef8606b22355efcb754a1274386e285797377412f17e70d8",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 715,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    },
+    "random_30_50_0.9": {
+      "attribute_count": 50,
+      "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+      "dependence_group": "random_30_50_0.9-generated-matrix",
+      "execution_policy": "query-only",
+      "matrix_label": "FCApy controlled random matrix",
+      "object_count": 30,
+      "path": "scale_contexts/random_30_50_0.9.cxt",
+      "sha256": "52914fca78f26ad5aa3b091606e5c536cfdcd9ed96fd8bd60d1ef81901f43cfa",
+      "source_path": "FCA_python_packages/performance_benchmark.py",
+      "true_cell_count": 1361,
+      "upstream": {
+        "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+        "license": "GPL-3.0-only",
+        "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+        "source_id": "fcapy-controlled-random"
+      }
+    }
+  },
+  "protocol_sha256": "fb46ad6fea1c40be6b1ce1d261e1c7a54e79620206b849eeffdf0f808cafc46b",
+  "query_protocol": {
+    "adjacent_pair_stride": 8,
+    "include_all_singletons": true,
+    "include_empty": true,
+    "include_full": true,
+    "prefix_sizes": [
+      2,
+      4,
+      8,
+      16,
+      32
+    ]
+  },
+  "schema": "wm-fca-context-manifest-v1"
+}

@@ -1,0 +1,515 @@
+{
+  "algorithm_counts": {
+    "lectic_logical_closures": 2,
+    "levelwise_candidates": 1
+  },
+  "attribute_count": 1,
+  "attribute_symbols": {
+    "RelStr": "attribute_000_relstr"
+  },
+  "attributes": [
+    "RelStr"
+  ],
+  "canonical_basis": [
+    {
+      "antecedent": [],
+      "consequent": [
+        "attribute_000_relstr"
+      ]
+    }
+  ],
+  "canonical_basis_count": 1,
+  "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article yellow_3.miz.",
+  "concept_count": 1,
+  "concepts": [
+    {
+      "extent": [
+        "object_000_registration_1",
+        "object_001_theorem_2",
+        "object_002_theorem_3",
+        "object_003_theorem_4",
+        "object_004_theorem_5",
+        "object_005_theorem_6",
+        "object_006_theorem_7",
+        "object_007_scheme_2",
+        "object_008_scheme_4",
+        "object_009_definition_3",
+        "object_010_definition_4",
+        "object_011_definition_5",
+        "object_012_definition_6",
+        "object_013_definition_7",
+        "object_014_theorem_11",
+        "object_015_theorem_12",
+        "object_016_theorem_13",
+        "object_017_registration_2",
+        "object_018_registration_3",
+        "object_019_registration_4",
+        "object_020_registration_5",
+        "object_021_registration_6",
+        "object_022_registration_7",
+        "object_023_theorem_14",
+        "object_024_theorem_15",
+        "object_025_theorem_16",
+        "object_026_theorem_17",
+        "object_027_theorem_18",
+        "object_028_theorem_19",
+        "object_029_registration_8",
+        "object_030_theorem_20",
+        "object_031_theorem_21",
+        "object_032_theorem_22",
+        "object_033_registration_9",
+        "object_034_theorem_23",
+        "object_035_theorem_24",
+        "object_036_registration_10",
+        "object_037_theorem_25",
+        "object_038_theorem_26",
+        "object_039_registration_11",
+        "object_040_theorem_27",
+        "object_041_theorem_28",
+        "object_042_definition_8",
+        "object_043_registration_12",
+        "object_044_registration_14",
+        "object_045_registration_15",
+        "object_046_registration_16",
+        "object_047_theorem_29",
+        "object_048_theorem_30",
+        "object_049_theorem_31",
+        "object_050_theorem_32",
+        "object_051_theorem_33",
+        "object_052_theorem_34",
+        "object_053_theorem_35",
+        "object_054_theorem_36",
+        "object_055_theorem_37",
+        "object_056_theorem_38",
+        "object_057_theorem_39",
+        "object_058_theorem_40",
+        "object_059_theorem_41",
+        "object_060_theorem_42",
+        "object_061_theorem_43",
+        "object_062_theorem_44",
+        "object_063_registration_17",
+        "object_064_theorem_45",
+        "object_065_theorem_46",
+        "object_066_theorem_47",
+        "object_067_theorem_48",
+        "object_068_theorem_49",
+        "object_069_scheme_6"
+      ],
+      "intent": [
+        "attribute_000_relstr"
+      ]
+    }
+  ],
+  "context_id": "mizar_yellow_3",
+  "context_name": "",
+  "context_sha256": "4a845cdc6f285be3b561817cbfd25bf38b68fdf7d7df6f663147f0aa24bb8687",
+  "cover_count": 0,
+  "covers": [],
+  "dependence_group": "mizar-yellow-3-extraction",
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "closed_candidate": [
+      "attribute_000_relstr"
+    ],
+    "false_cell": null,
+    "negative_implication": null,
+    "nonclosed_candidate": [],
+    "nonclosed_closure": [
+      "attribute_000_relstr"
+    ],
+    "positive_implication": {
+      "antecedent": [],
+      "consequent": [
+        "attribute_000_relstr"
+      ]
+    },
+    "true_cell": [
+      "object_000_registration_1",
+      "attribute_000_relstr"
+    ]
+  },
+  "false_cell_count": 0,
+  "intents": [
+    [
+      "attribute_000_relstr"
+    ]
+  ],
+  "manifest_sha256": "26b7e2de0a429a5db4949a6da64800e5aa0753c37d6139a00e999848384e0272",
+  "matrix_label": "complete positive-occurrence article context",
+  "object_count": 70,
+  "object_symbols": {
+    "definition_3": "object_009_definition_3",
+    "definition_4": "object_010_definition_4",
+    "definition_5": "object_011_definition_5",
+    "definition_6": "object_012_definition_6",
+    "definition_7": "object_013_definition_7",
+    "definition_8": "object_042_definition_8",
+    "registration_1": "object_000_registration_1",
+    "registration_10": "object_036_registration_10",
+    "registration_11": "object_039_registration_11",
+    "registration_12": "object_043_registration_12",
+    "registration_14": "object_044_registration_14",
+    "registration_15": "object_045_registration_15",
+    "registration_16": "object_046_registration_16",
+    "registration_17": "object_063_registration_17",
+    "registration_2": "object_017_registration_2",
+    "registration_3": "object_018_registration_3",
+    "registration_4": "object_019_registration_4",
+    "registration_5": "object_020_registration_5",
+    "registration_6": "object_021_registration_6",
+    "registration_7": "object_022_registration_7",
+    "registration_8": "object_029_registration_8",
+    "registration_9": "object_033_registration_9",
+    "scheme_2": "object_007_scheme_2",
+    "scheme_4": "object_008_scheme_4",
+    "scheme_6": "object_069_scheme_6",
+    "theorem_11": "object_014_theorem_11",
+    "theorem_12": "object_015_theorem_12",
+    "theorem_13": "object_016_theorem_13",
+    "theorem_14": "object_023_theorem_14",
+    "theorem_15": "object_024_theorem_15",
+    "theorem_16": "object_025_theorem_16",
+    "theorem_17": "object_026_theorem_17",
+    "theorem_18": "object_027_theorem_18",
+    "theorem_19": "object_028_theorem_19",
+    "theorem_2": "object_001_theorem_2",
+    "theorem_20": "object_030_theorem_20",
+    "theorem_21": "object_031_theorem_21",
+    "theorem_22": "object_032_theorem_22",
+    "theorem_23": "object_034_theorem_23",
+    "theorem_24": "object_035_theorem_24",
+    "theorem_25": "object_037_theorem_25",
+    "theorem_26": "object_038_theorem_26",
+    "theorem_27": "object_040_theorem_27",
+    "theorem_28": "object_041_theorem_28",
+    "theorem_29": "object_047_theorem_29",
+    "theorem_3": "object_002_theorem_3",
+    "theorem_30": "object_048_theorem_30",
+    "theorem_31": "object_049_theorem_31",
+    "theorem_32": "object_050_theorem_32",
+    "theorem_33": "object_051_theorem_33",
+    "theorem_34": "object_052_theorem_34",
+    "theorem_35": "object_053_theorem_35",
+    "theorem_36": "object_054_theorem_36",
+    "theorem_37": "object_055_theorem_37",
+    "theorem_38": "object_056_theorem_38",
+    "theorem_39": "object_057_theorem_39",
+    "theorem_4": "object_003_theorem_4",
+    "theorem_40": "object_058_theorem_40",
+    "theorem_41": "object_059_theorem_41",
+    "theorem_42": "object_060_theorem_42",
+    "theorem_43": "object_061_theorem_43",
+    "theorem_44": "object_062_theorem_44",
+    "theorem_45": "object_064_theorem_45",
+    "theorem_46": "object_065_theorem_46",
+    "theorem_47": "object_066_theorem_47",
+    "theorem_48": "object_067_theorem_48",
+    "theorem_49": "object_068_theorem_49",
+    "theorem_5": "object_004_theorem_5",
+    "theorem_6": "object_005_theorem_6",
+    "theorem_7": "object_006_theorem_7"
+  },
+  "objects": [
+    "registration_1",
+    "theorem_2",
+    "theorem_3",
+    "theorem_4",
+    "theorem_5",
+    "theorem_6",
+    "theorem_7",
+    "scheme_2",
+    "scheme_4",
+    "definition_3",
+    "definition_4",
+    "definition_5",
+    "definition_6",
+    "definition_7",
+    "theorem_11",
+    "theorem_12",
+    "theorem_13",
+    "registration_2",
+    "registration_3",
+    "registration_4",
+    "registration_5",
+    "registration_6",
+    "registration_7",
+    "theorem_14",
+    "theorem_15",
+    "theorem_16",
+    "theorem_17",
+    "theorem_18",
+    "theorem_19",
+    "registration_8",
+    "theorem_20",
+    "theorem_21",
+    "theorem_22",
+    "registration_9",
+    "theorem_23",
+    "theorem_24",
+    "registration_10",
+    "theorem_25",
+    "theorem_26",
+    "registration_11",
+    "theorem_27",
+    "theorem_28",
+    "definition_8",
+    "registration_12",
+    "registration_14",
+    "registration_15",
+    "registration_16",
+    "theorem_29",
+    "theorem_30",
+    "theorem_31",
+    "theorem_32",
+    "theorem_33",
+    "theorem_34",
+    "theorem_35",
+    "theorem_36",
+    "theorem_37",
+    "theorem_38",
+    "theorem_39",
+    "theorem_40",
+    "theorem_41",
+    "theorem_42",
+    "theorem_43",
+    "theorem_44",
+    "registration_17",
+    "theorem_45",
+    "theorem_46",
+    "theorem_47",
+    "theorem_48",
+    "theorem_49",
+    "scheme_6"
+  ],
+  "oracle_agreement": {
+    "covers_equal_concepts_0_9_2_neighbors": true,
+    "lectic_basis_equals_levelwise_nextclosures": true,
+    "lectic_intents_equal_concepts_0_9_2": true,
+    "lectic_intents_equals_levelwise_nextclosures": true
+  },
+  "schema": "wm-fca-cxt-oracle-v1",
+  "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/yellow_3.cxt",
+  "true_cell_count": 70,
+  "true_incidence": {
+    "object_000_registration_1": [
+      "attribute_000_relstr"
+    ],
+    "object_001_theorem_2": [
+      "attribute_000_relstr"
+    ],
+    "object_002_theorem_3": [
+      "attribute_000_relstr"
+    ],
+    "object_003_theorem_4": [
+      "attribute_000_relstr"
+    ],
+    "object_004_theorem_5": [
+      "attribute_000_relstr"
+    ],
+    "object_005_theorem_6": [
+      "attribute_000_relstr"
+    ],
+    "object_006_theorem_7": [
+      "attribute_000_relstr"
+    ],
+    "object_007_scheme_2": [
+      "attribute_000_relstr"
+    ],
+    "object_008_scheme_4": [
+      "attribute_000_relstr"
+    ],
+    "object_009_definition_3": [
+      "attribute_000_relstr"
+    ],
+    "object_010_definition_4": [
+      "attribute_000_relstr"
+    ],
+    "object_011_definition_5": [
+      "attribute_000_relstr"
+    ],
+    "object_012_definition_6": [
+      "attribute_000_relstr"
+    ],
+    "object_013_definition_7": [
+      "attribute_000_relstr"
+    ],
+    "object_014_theorem_11": [
+      "attribute_000_relstr"
+    ],
+    "object_015_theorem_12": [
+      "attribute_000_relstr"
+    ],
+    "object_016_theorem_13": [
+      "attribute_000_relstr"
+    ],
+    "object_017_registration_2": [
+      "attribute_000_relstr"
+    ],
+    "object_018_registration_3": [
+      "attribute_000_relstr"
+    ],
+    "object_019_registration_4": [
+      "attribute_000_relstr"
+    ],
+    "object_020_registration_5": [
+      "attribute_000_relstr"
+    ],
+    "object_021_registration_6": [
+      "attribute_000_relstr"
+    ],
+    "object_022_registration_7": [
+      "attribute_000_relstr"
+    ],
+    "object_023_theorem_14": [
+      "attribute_000_relstr"
+    ],
+    "object_024_theorem_15": [
+      "attribute_000_relstr"
+    ],
+    "object_025_theorem_16": [
+      "attribute_000_relstr"
+    ],
+    "object_026_theorem_17": [
+      "attribute_000_relstr"
+    ],
+    "object_027_theorem_18": [
+      "attribute_000_relstr"
+    ],
+    "object_028_theorem_19": [
+      "attribute_000_relstr"
+    ],
+    "object_029_registration_8": [
+      "attribute_000_relstr"
+    ],
+    "object_030_theorem_20": [
+      "attribute_000_relstr"
+    ],
+    "object_031_theorem_21": [
+      "attribute_000_relstr"
+    ],
+    "object_032_theorem_22": [
+      "attribute_000_relstr"
+    ],
+    "object_033_registration_9": [
+      "attribute_000_relstr"
+    ],
+    "object_034_theorem_23": [
+      "attribute_000_relstr"
+    ],
+    "object_035_theorem_24": [
+      "attribute_000_relstr"
+    ],
+    "object_036_registration_10": [
+      "attribute_000_relstr"
+    ],
+    "object_037_theorem_25": [
+      "attribute_000_relstr"
+    ],
+    "object_038_theorem_26": [
+      "attribute_000_relstr"
+    ],
+    "object_039_registration_11": [
+      "attribute_000_relstr"
+    ],
+    "object_040_theorem_27": [
+      "attribute_000_relstr"
+    ],
+    "object_041_theorem_28": [
+      "attribute_000_relstr"
+    ],
+    "object_042_definition_8": [
+      "attribute_000_relstr"
+    ],
+    "object_043_registration_12": [
+      "attribute_000_relstr"
+    ],
+    "object_044_registration_14": [
+      "attribute_000_relstr"
+    ],
+    "object_045_registration_15": [
+      "attribute_000_relstr"
+    ],
+    "object_046_registration_16": [
+      "attribute_000_relstr"
+    ],
+    "object_047_theorem_29": [
+      "attribute_000_relstr"
+    ],
+    "object_048_theorem_30": [
+      "attribute_000_relstr"
+    ],
+    "object_049_theorem_31": [
+      "attribute_000_relstr"
+    ],
+    "object_050_theorem_32": [
+      "attribute_000_relstr"
+    ],
+    "object_051_theorem_33": [
+      "attribute_000_relstr"
+    ],
+    "object_052_theorem_34": [
+      "attribute_000_relstr"
+    ],
+    "object_053_theorem_35": [
+      "attribute_000_relstr"
+    ],
+    "object_054_theorem_36": [
+      "attribute_000_relstr"
+    ],
+    "object_055_theorem_37": [
+      "attribute_000_relstr"
+    ],
+    "object_056_theorem_38": [
+      "attribute_000_relstr"
+    ],
+    "object_057_theorem_39": [
+      "attribute_000_relstr"
+    ],
+    "object_058_theorem_40": [
+      "attribute_000_relstr"
+    ],
+    "object_059_theorem_41": [
+      "attribute_000_relstr"
+    ],
+    "object_060_theorem_42": [
+      "attribute_000_relstr"
+    ],
+    "object_061_theorem_43": [
+      "attribute_000_relstr"
+    ],
+    "object_062_theorem_44": [
+      "attribute_000_relstr"
+    ],
+    "object_063_registration_17": [
+      "attribute_000_relstr"
+    ],
+    "object_064_theorem_45": [
+      "attribute_000_relstr"
+    ],
+    "object_065_theorem_46": [
+      "attribute_000_relstr"
+    ],
+    "object_066_theorem_47": [
+      "attribute_000_relstr"
+    ],
+    "object_067_theorem_48": [
+      "attribute_000_relstr"
+    ],
+    "object_068_theorem_49": [
+      "attribute_000_relstr"
+    ],
+    "object_069_scheme_6": [
+      "attribute_000_relstr"
+    ]
+  },
+  "upstream": {
+    "commit": "f93a93f7d4d62d90e22812295b7e46c036458603",
+    "license": "MIT",
+    "repository": "https://github.com/zariuq/MeTTapedia",
+    "source_id": "mettapedia-mizar-family",
+    "validation_role": "project semantic case study, not independent external validation"
+  }
+}

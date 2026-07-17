@@ -1,0 +1,3305 @@
+{
+  "algorithm_counts": {
+    "lectic_logical_closures": 94,
+    "levelwise_candidates": 303
+  },
+  "attribute_count": 11,
+  "attribute_symbols": {
+    "BooleLatt": "attribute_000_boolelatt",
+    "IT": "attribute_001_it",
+    "LattPOSet": "attribute_002_lattposet",
+    "LattStr": "attribute_003_lattstr",
+    "Lattice": "attribute_004_lattice",
+    "Poset": "attribute_005_poset",
+    "RelStr": "attribute_006_relstr",
+    "is_": "attribute_007_is",
+    "is_less_than": "attribute_008_is_less_than",
+    "with_infima": "attribute_009_with_infima",
+    "with_suprema": "attribute_010_with_suprema"
+  },
+  "attributes": [
+    "BooleLatt",
+    "IT",
+    "LattPOSet",
+    "LattStr",
+    "Lattice",
+    "Poset",
+    "RelStr",
+    "is_",
+    "is_less_than",
+    "with_infima",
+    "with_suprema"
+  ],
+  "canonical_basis": [
+    {
+      "antecedent": [
+        "attribute_000_boolelatt",
+        "attribute_001_it"
+      ],
+      "consequent": [
+        "attribute_003_lattstr"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolelatt",
+        "attribute_002_lattposet"
+      ],
+      "consequent": [
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolelatt",
+        "attribute_003_lattstr"
+      ],
+      "consequent": [
+        "attribute_001_it"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolelatt",
+        "attribute_004_lattice"
+      ],
+      "consequent": [
+        "attribute_002_lattposet"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolelatt",
+        "attribute_005_poset"
+      ],
+      "consequent": [
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolelatt",
+        "attribute_006_relstr"
+      ],
+      "consequent": [
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolelatt",
+        "attribute_007_is"
+      ],
+      "consequent": [
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolelatt",
+        "attribute_009_with_infima"
+      ],
+      "consequent": [
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolelatt",
+        "attribute_010_with_suprema"
+      ],
+      "consequent": [
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_it",
+        "attribute_002_lattposet"
+      ],
+      "consequent": [
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_it",
+        "attribute_005_poset"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_it",
+        "attribute_007_is"
+      ],
+      "consequent": [
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_it",
+        "attribute_008_is_less_than"
+      ],
+      "consequent": [
+        "attribute_003_lattstr"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_it",
+        "attribute_009_with_infima"
+      ],
+      "consequent": [
+        "attribute_006_relstr",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_it",
+        "attribute_010_with_suprema"
+      ],
+      "consequent": [
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_lattposet",
+        "attribute_003_lattstr"
+      ],
+      "consequent": [
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_lattposet",
+        "attribute_005_poset"
+      ],
+      "consequent": [
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_lattposet",
+        "attribute_006_relstr"
+      ],
+      "consequent": [
+        "attribute_005_poset"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_lattposet",
+        "attribute_007_is"
+      ],
+      "consequent": [
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_lattposet",
+        "attribute_008_is_less_than"
+      ],
+      "consequent": [
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_lattposet",
+        "attribute_009_with_infima"
+      ],
+      "consequent": [
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_lattposet",
+        "attribute_010_with_suprema"
+      ],
+      "consequent": [
+        "attribute_009_with_infima"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_lattstr",
+        "attribute_005_poset"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_lattstr",
+        "attribute_006_relstr"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_lattstr",
+        "attribute_007_is"
+      ],
+      "consequent": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_lattstr",
+        "attribute_009_with_infima"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_lattstr",
+        "attribute_010_with_suprema"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_lattice",
+        "attribute_005_poset"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_lattice",
+        "attribute_006_relstr"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_005_poset"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_lattice",
+        "attribute_007_is"
+      ],
+      "consequent": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_lattice",
+        "attribute_009_with_infima"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_lattice",
+        "attribute_010_with_suprema"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_009_with_infima"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_poset",
+        "attribute_007_is"
+      ],
+      "consequent": [
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_poset",
+        "attribute_008_is_less_than"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_poset",
+        "attribute_009_with_infima"
+      ],
+      "consequent": [
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_poset",
+        "attribute_010_with_suprema"
+      ],
+      "consequent": [
+        "attribute_009_with_infima"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_relstr",
+        "attribute_008_is_less_than"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_007_is",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_is",
+        "attribute_009_with_infima"
+      ],
+      "consequent": [
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_is",
+        "attribute_010_with_suprema"
+      ],
+      "consequent": [
+        "attribute_009_with_infima"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_is_less_than",
+        "attribute_010_with_suprema"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_009_with_infima"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_it",
+        "attribute_003_lattstr",
+        "attribute_004_lattice"
+      ],
+      "consequent": [
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_008_is_less_than"
+      ],
+      "consequent": [
+        "attribute_001_it"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_003_lattstr",
+        "attribute_008_is_less_than"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "consequent": [
+        "attribute_002_lattposet"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "consequent": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_008_is_less_than"
+      ]
+    }
+  ],
+  "canonical_basis_count": 46,
+  "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article lattice3.miz.",
+  "concept_count": 48,
+  "concepts": [
+    {
+      "extent": [
+        "object_000_definition_1",
+        "object_001_registration_1",
+        "object_002_registration_2",
+        "object_003_registration_3",
+        "object_004_theorem_3",
+        "object_005_theorem_4",
+        "object_006_registration_4",
+        "object_007_theorem_5",
+        "object_008_definition_2",
+        "object_009_definition_3",
+        "object_010_registration_5",
+        "object_011_theorem_6",
+        "object_012_definition_4",
+        "object_013_definition_5",
+        "object_014_definition_7",
+        "object_015_registration_6",
+        "object_016_registration_7",
+        "object_017_theorem_8",
+        "object_018_definition_8",
+        "object_019_definition_9",
+        "object_020_definition_10",
+        "object_021_notation_1",
+        "object_022_definition_11",
+        "object_023_registration_8",
+        "object_024_theorem_10",
+        "object_025_theorem_11",
+        "object_026_definition_12",
+        "object_027_registration_9",
+        "object_028_theorem_12",
+        "object_029_registration_10",
+        "object_030_definition_13",
+        "object_031_definition_14",
+        "object_032_definition_15",
+        "object_033_definition_16",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_036_theorem_20",
+        "object_037_definition_18",
+        "object_038_notation_2",
+        "object_039_theorem_21",
+        "object_040_theorem_22",
+        "object_041_definition_19",
+        "object_042_theorem_23",
+        "object_043_theorem_24",
+        "object_044_theorem_25",
+        "object_045_registration_11",
+        "object_046_theorem_26",
+        "object_047_theorem_27",
+        "object_048_registration_12",
+        "object_049_theorem_28",
+        "object_050_theorem_29",
+        "object_051_theorem_30",
+        "object_052_theorem_31",
+        "object_053_registration_13",
+        "object_054_definition_20",
+        "object_055_definition_21",
+        "object_056_notation_3",
+        "object_057_theorem_32",
+        "object_058_theorem_33",
+        "object_059_theorem_34",
+        "object_060_theorem_37",
+        "object_061_theorem_38",
+        "object_062_theorem_39",
+        "object_063_theorem_40",
+        "object_064_theorem_41",
+        "object_065_theorem_42",
+        "object_066_theorem_43",
+        "object_067_theorem_44",
+        "object_068_theorem_45",
+        "object_069_theorem_46",
+        "object_070_theorem_47",
+        "object_071_theorem_48",
+        "object_072_theorem_49",
+        "object_073_theorem_51",
+        "object_074_theorem_52",
+        "object_075_theorem_53",
+        "object_076_theorem_54",
+        "object_077_scheme_2",
+        "object_078_theorem_55"
+      ],
+      "intent": []
+    },
+    {
+      "extent": [
+        "object_000_definition_1",
+        "object_001_registration_1",
+        "object_002_registration_2",
+        "object_003_registration_3",
+        "object_004_theorem_3",
+        "object_005_theorem_4",
+        "object_006_registration_4",
+        "object_007_theorem_5",
+        "object_044_theorem_25",
+        "object_045_registration_11",
+        "object_046_theorem_26",
+        "object_047_theorem_27",
+        "object_048_registration_12"
+      ],
+      "intent": [
+        "attribute_000_boolelatt"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_definition_1",
+        "object_022_definition_11",
+        "object_026_definition_12",
+        "object_030_definition_13",
+        "object_031_definition_14",
+        "object_035_definition_17",
+        "object_041_definition_19",
+        "object_054_definition_20"
+      ],
+      "intent": [
+        "attribute_001_it"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_3",
+        "object_010_registration_5",
+        "object_011_theorem_6",
+        "object_012_definition_4",
+        "object_013_definition_5",
+        "object_025_theorem_11",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_036_theorem_20",
+        "object_048_registration_12",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_002_lattposet"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_definition_1",
+        "object_011_theorem_6",
+        "object_034_theorem_19",
+        "object_036_theorem_20",
+        "object_037_definition_18",
+        "object_038_notation_2",
+        "object_041_definition_19",
+        "object_054_definition_20",
+        "object_055_definition_21",
+        "object_056_notation_3"
+      ],
+      "intent": [
+        "attribute_003_lattstr"
+      ]
+    },
+    {
+      "extent": [
+        "object_008_definition_2",
+        "object_009_definition_3",
+        "object_010_registration_5",
+        "object_011_theorem_6",
+        "object_012_definition_4",
+        "object_013_definition_5",
+        "object_025_theorem_11",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_036_theorem_20",
+        "object_039_theorem_21",
+        "object_040_theorem_22",
+        "object_048_registration_12",
+        "object_054_definition_20",
+        "object_056_notation_3",
+        "object_075_theorem_53",
+        "object_076_theorem_54",
+        "object_078_theorem_55"
+      ],
+      "intent": [
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_3",
+        "object_015_registration_6",
+        "object_027_registration_9",
+        "object_029_registration_10",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_005_poset"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_3",
+        "object_014_definition_7",
+        "object_015_registration_6",
+        "object_016_registration_7",
+        "object_017_theorem_8",
+        "object_018_definition_8",
+        "object_019_definition_9",
+        "object_020_definition_10",
+        "object_021_notation_1",
+        "object_022_definition_11",
+        "object_023_registration_8",
+        "object_026_definition_12",
+        "object_027_registration_9",
+        "object_030_definition_13",
+        "object_031_definition_14",
+        "object_032_definition_15",
+        "object_033_definition_16",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "extent": [
+        "object_020_definition_10",
+        "object_021_notation_1",
+        "object_026_definition_12",
+        "object_027_registration_9",
+        "object_028_theorem_12",
+        "object_049_theorem_28",
+        "object_050_theorem_29",
+        "object_051_theorem_30",
+        "object_052_theorem_31",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_007_is"
+      ]
+    },
+    {
+      "extent": [
+        "object_037_definition_18",
+        "object_038_notation_2",
+        "object_039_theorem_21",
+        "object_041_definition_19",
+        "object_042_theorem_23",
+        "object_043_theorem_24",
+        "object_044_theorem_25",
+        "object_046_theorem_26",
+        "object_047_theorem_27",
+        "object_049_theorem_28",
+        "object_050_theorem_29",
+        "object_051_theorem_30",
+        "object_052_theorem_31",
+        "object_053_registration_13",
+        "object_054_definition_20",
+        "object_055_definition_21",
+        "object_057_theorem_32",
+        "object_058_theorem_33",
+        "object_059_theorem_34",
+        "object_060_theorem_37",
+        "object_061_theorem_38",
+        "object_062_theorem_39",
+        "object_063_theorem_40",
+        "object_064_theorem_41",
+        "object_065_theorem_42",
+        "object_066_theorem_43",
+        "object_067_theorem_44",
+        "object_068_theorem_45",
+        "object_069_theorem_46",
+        "object_070_theorem_47",
+        "object_071_theorem_48",
+        "object_072_theorem_49",
+        "object_073_theorem_51",
+        "object_074_theorem_52",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "extent": [
+        "object_022_definition_11",
+        "object_023_registration_8",
+        "object_024_theorem_10",
+        "object_025_theorem_11",
+        "object_028_theorem_12",
+        "object_029_registration_10",
+        "object_031_definition_14",
+        "object_032_definition_15",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_009_with_infima"
+      ]
+    },
+    {
+      "extent": [
+        "object_022_definition_11",
+        "object_023_registration_8",
+        "object_024_theorem_10",
+        "object_025_theorem_11",
+        "object_028_theorem_12",
+        "object_029_registration_10",
+        "object_030_definition_13",
+        "object_031_definition_14",
+        "object_033_definition_16",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_044_theorem_25",
+        "object_046_theorem_26",
+        "object_047_theorem_27"
+      ],
+      "intent": [
+        "attribute_000_boolelatt",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_definition_1",
+        "object_041_definition_19",
+        "object_054_definition_20"
+      ],
+      "intent": [
+        "attribute_001_it",
+        "attribute_003_lattstr"
+      ]
+    },
+    {
+      "extent": [
+        "object_035_definition_17",
+        "object_054_definition_20"
+      ],
+      "intent": [
+        "attribute_001_it",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_022_definition_11",
+        "object_026_definition_12",
+        "object_030_definition_13",
+        "object_031_definition_14",
+        "object_035_definition_17"
+      ],
+      "intent": [
+        "attribute_001_it",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_3",
+        "object_010_registration_5",
+        "object_011_theorem_6",
+        "object_012_definition_4",
+        "object_013_definition_5",
+        "object_025_theorem_11",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_036_theorem_20",
+        "object_048_registration_12"
+      ],
+      "intent": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_011_theorem_6",
+        "object_034_theorem_19",
+        "object_036_theorem_20",
+        "object_054_definition_20",
+        "object_056_notation_3"
+      ],
+      "intent": [
+        "attribute_003_lattstr",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_037_definition_18",
+        "object_038_notation_2",
+        "object_041_definition_19",
+        "object_054_definition_20",
+        "object_055_definition_21"
+      ],
+      "intent": [
+        "attribute_003_lattstr",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "extent": [
+        "object_039_theorem_21",
+        "object_054_definition_20"
+      ],
+      "intent": [
+        "attribute_004_lattice",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_3",
+        "object_015_registration_6",
+        "object_027_registration_9",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "extent": [
+        "object_020_definition_10",
+        "object_021_notation_1",
+        "object_026_definition_12",
+        "object_027_registration_9",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ]
+    },
+    {
+      "extent": [
+        "object_022_definition_11",
+        "object_023_registration_8",
+        "object_031_definition_14",
+        "object_032_definition_15",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_006_relstr",
+        "attribute_009_with_infima"
+      ]
+    },
+    {
+      "extent": [
+        "object_022_definition_11",
+        "object_023_registration_8",
+        "object_030_definition_13",
+        "object_031_definition_14",
+        "object_033_definition_16",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_006_relstr",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_049_theorem_28",
+        "object_050_theorem_29",
+        "object_051_theorem_30",
+        "object_052_theorem_31",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_007_is",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "extent": [
+        "object_022_definition_11",
+        "object_023_registration_8",
+        "object_024_theorem_10",
+        "object_025_theorem_11",
+        "object_028_theorem_12",
+        "object_029_registration_10",
+        "object_031_definition_14",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_definition_1"
+      ],
+      "intent": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_003_lattstr"
+      ]
+    },
+    {
+      "extent": [
+        "object_048_registration_12"
+      ],
+      "intent": [
+        "attribute_000_boolelatt",
+        "attribute_002_lattposet",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_041_definition_19",
+        "object_054_definition_20"
+      ],
+      "intent": [
+        "attribute_001_it",
+        "attribute_003_lattstr",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "extent": [
+        "object_026_definition_12"
+      ],
+      "intent": [
+        "attribute_001_it",
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ]
+    },
+    {
+      "extent": [
+        "object_022_definition_11",
+        "object_030_definition_13",
+        "object_031_definition_14",
+        "object_035_definition_17"
+      ],
+      "intent": [
+        "attribute_001_it",
+        "attribute_006_relstr",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_011_theorem_6",
+        "object_034_theorem_19",
+        "object_036_theorem_20"
+      ],
+      "intent": [
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_3",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "extent": [
+        "object_025_theorem_11",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_002_lattposet",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_027_registration_9",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ]
+    },
+    {
+      "extent": [
+        "object_029_registration_10",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_005_poset",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_022_definition_11",
+        "object_023_registration_8",
+        "object_031_definition_14",
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_028_theorem_12",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_007_is",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_054_definition_20"
+      ],
+      "intent": [
+        "attribute_001_it",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "extent": [
+        "object_022_definition_11",
+        "object_031_definition_14",
+        "object_035_definition_17"
+      ],
+      "intent": [
+        "attribute_001_it",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_3",
+        "object_034_theorem_19",
+        "object_035_definition_17"
+      ],
+      "intent": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "extent": [
+        "object_025_theorem_11",
+        "object_034_theorem_19",
+        "object_035_definition_17"
+      ],
+      "intent": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_034_theorem_19",
+        "object_035_definition_17",
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_034_theorem_19",
+        "object_035_definition_17"
+      ],
+      "intent": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_035_definition_17"
+      ],
+      "intent": [
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_034_theorem_19"
+      ],
+      "intent": [
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [
+        "object_053_registration_13",
+        "object_077_scheme_2"
+      ],
+      "intent": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "extent": [],
+      "intent": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    }
+  ],
+  "context_id": "mizar_lattice3",
+  "context_name": "",
+  "context_sha256": "13941812be5ea09a777407e1dccc61537f9d863eb221e7c41e2b1defb38f60ca",
+  "cover_count": 98,
+  "covers": [
+    {
+      "general": [],
+      "specific": [
+        "attribute_000_boolelatt"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_001_it"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_002_lattposet"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_003_lattstr"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_005_poset"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_007_is"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_009_with_infima"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_boolelatt"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_boolelatt"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_003_lattstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_boolelatt"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_002_lattposet",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_003_lattstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_lattstr"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_003_lattstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_lattstr"
+      ],
+      "specific": [
+        "attribute_003_lattstr",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_lattstr"
+      ],
+      "specific": [
+        "attribute_003_lattstr",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_003_lattstr",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_004_lattice",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_poset"
+      ],
+      "specific": [
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_poset"
+      ],
+      "specific": [
+        "attribute_005_poset",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_relstr"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_relstr"
+      ],
+      "specific": [
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_relstr"
+      ],
+      "specific": [
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_relstr"
+      ],
+      "specific": [
+        "attribute_006_relstr",
+        "attribute_009_with_infima"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_relstr"
+      ],
+      "specific": [
+        "attribute_006_relstr",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_is"
+      ],
+      "specific": [
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_is"
+      ],
+      "specific": [
+        "attribute_007_is",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_is"
+      ],
+      "specific": [
+        "attribute_007_is",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_is_less_than"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_is_less_than"
+      ],
+      "specific": [
+        "attribute_003_lattstr",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_is_less_than"
+      ],
+      "specific": [
+        "attribute_004_lattice",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_is_less_than"
+      ],
+      "specific": [
+        "attribute_007_is",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_with_infima"
+      ],
+      "specific": [
+        "attribute_006_relstr",
+        "attribute_009_with_infima"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_with_infima"
+      ],
+      "specific": [
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_006_relstr",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_boolelatt",
+        "attribute_008_is_less_than"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it",
+        "attribute_003_lattstr"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_003_lattstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it",
+        "attribute_003_lattstr"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_003_lattstr",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it",
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it",
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it",
+        "attribute_006_relstr"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it",
+        "attribute_006_relstr"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_006_relstr",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_002_lattposet",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_lattstr",
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_lattstr",
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_lattstr",
+        "attribute_008_is_less_than"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_003_lattstr",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_lattice",
+        "attribute_008_is_less_than"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ],
+      "specific": [
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ],
+      "specific": [
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_relstr",
+        "attribute_009_with_infima"
+      ],
+      "specific": [
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_relstr",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_006_relstr",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_relstr",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_is",
+        "attribute_008_is_less_than"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_005_poset",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_007_is",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_003_lattstr"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_boolelatt",
+        "attribute_002_lattposet",
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it",
+        "attribute_003_lattstr",
+        "attribute_008_is_less_than"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_008_is_less_than"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it",
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it",
+        "attribute_006_relstr",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_poset",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_is",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_008_is_less_than"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_lattposet",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ],
+      "specific": [
+        "attribute_000_boolelatt",
+        "attribute_001_it",
+        "attribute_002_lattposet",
+        "attribute_003_lattstr",
+        "attribute_004_lattice",
+        "attribute_005_poset",
+        "attribute_006_relstr",
+        "attribute_007_is",
+        "attribute_008_is_less_than",
+        "attribute_009_with_infima",
+        "attribute_010_with_suprema"
+      ]
+    }
+  ],
+  "dependence_group": "mizar-lattice3-extraction",
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "closed_candidate": [
+      "attribute_000_boolelatt"
+    ],
+    "false_cell": [
+      "object_000_definition_1",
+      "attribute_002_lattposet"
+    ],
+    "negative_implication": {
+      "antecedent": [
+        "attribute_000_boolelatt"
+      ],
+      "consequent": [
+        "attribute_001_it"
+      ]
+    },
+    "nonclosed_candidate": [
+      "attribute_000_boolelatt",
+      "attribute_001_it"
+    ],
+    "nonclosed_closure": [
+      "attribute_000_boolelatt",
+      "attribute_001_it",
+      "attribute_003_lattstr"
+    ],
+    "positive_implication": {
+      "antecedent": [
+        "attribute_000_boolelatt",
+        "attribute_001_it"
+      ],
+      "consequent": [
+        "attribute_003_lattstr"
+      ]
+    },
+    "true_cell": [
+      "object_000_definition_1",
+      "attribute_000_boolelatt"
+    ]
+  },
+  "false_cell_count": 708,
+  "intents": [
+    [],
+    [
+      "attribute_000_boolelatt"
+    ],
+    [
+      "attribute_001_it"
+    ],
+    [
+      "attribute_002_lattposet"
+    ],
+    [
+      "attribute_003_lattstr"
+    ],
+    [
+      "attribute_004_lattice"
+    ],
+    [
+      "attribute_005_poset"
+    ],
+    [
+      "attribute_006_relstr"
+    ],
+    [
+      "attribute_007_is"
+    ],
+    [
+      "attribute_008_is_less_than"
+    ],
+    [
+      "attribute_009_with_infima"
+    ],
+    [
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_000_boolelatt",
+      "attribute_008_is_less_than"
+    ],
+    [
+      "attribute_001_it",
+      "attribute_003_lattstr"
+    ],
+    [
+      "attribute_001_it",
+      "attribute_004_lattice"
+    ],
+    [
+      "attribute_001_it",
+      "attribute_006_relstr"
+    ],
+    [
+      "attribute_002_lattposet",
+      "attribute_004_lattice"
+    ],
+    [
+      "attribute_003_lattstr",
+      "attribute_004_lattice"
+    ],
+    [
+      "attribute_003_lattstr",
+      "attribute_008_is_less_than"
+    ],
+    [
+      "attribute_004_lattice",
+      "attribute_008_is_less_than"
+    ],
+    [
+      "attribute_005_poset",
+      "attribute_006_relstr"
+    ],
+    [
+      "attribute_006_relstr",
+      "attribute_007_is"
+    ],
+    [
+      "attribute_006_relstr",
+      "attribute_009_with_infima"
+    ],
+    [
+      "attribute_006_relstr",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_007_is",
+      "attribute_008_is_less_than"
+    ],
+    [
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_000_boolelatt",
+      "attribute_001_it",
+      "attribute_003_lattstr"
+    ],
+    [
+      "attribute_000_boolelatt",
+      "attribute_002_lattposet",
+      "attribute_004_lattice"
+    ],
+    [
+      "attribute_001_it",
+      "attribute_003_lattstr",
+      "attribute_008_is_less_than"
+    ],
+    [
+      "attribute_001_it",
+      "attribute_006_relstr",
+      "attribute_007_is"
+    ],
+    [
+      "attribute_001_it",
+      "attribute_006_relstr",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_002_lattposet",
+      "attribute_003_lattstr",
+      "attribute_004_lattice"
+    ],
+    [
+      "attribute_002_lattposet",
+      "attribute_005_poset",
+      "attribute_006_relstr"
+    ],
+    [
+      "attribute_002_lattposet",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_005_poset",
+      "attribute_006_relstr",
+      "attribute_007_is"
+    ],
+    [
+      "attribute_005_poset",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_006_relstr",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_007_is",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_001_it",
+      "attribute_003_lattstr",
+      "attribute_004_lattice",
+      "attribute_008_is_less_than"
+    ],
+    [
+      "attribute_001_it",
+      "attribute_006_relstr",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_002_lattposet",
+      "attribute_004_lattice",
+      "attribute_005_poset",
+      "attribute_006_relstr"
+    ],
+    [
+      "attribute_002_lattposet",
+      "attribute_004_lattice",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_002_lattposet",
+      "attribute_005_poset",
+      "attribute_006_relstr",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_002_lattposet",
+      "attribute_004_lattice",
+      "attribute_005_poset",
+      "attribute_006_relstr",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_001_it",
+      "attribute_002_lattposet",
+      "attribute_004_lattice",
+      "attribute_005_poset",
+      "attribute_006_relstr",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_002_lattposet",
+      "attribute_003_lattstr",
+      "attribute_004_lattice",
+      "attribute_005_poset",
+      "attribute_006_relstr",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_002_lattposet",
+      "attribute_005_poset",
+      "attribute_006_relstr",
+      "attribute_007_is",
+      "attribute_008_is_less_than",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    [
+      "attribute_000_boolelatt",
+      "attribute_001_it",
+      "attribute_002_lattposet",
+      "attribute_003_lattstr",
+      "attribute_004_lattice",
+      "attribute_005_poset",
+      "attribute_006_relstr",
+      "attribute_007_is",
+      "attribute_008_is_less_than",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ]
+  ],
+  "manifest_sha256": "26b7e2de0a429a5db4949a6da64800e5aa0753c37d6139a00e999848384e0272",
+  "matrix_label": "complete positive-occurrence article context",
+  "object_count": 79,
+  "object_symbols": {
+    "definition_1": "object_000_definition_1",
+    "definition_10": "object_020_definition_10",
+    "definition_11": "object_022_definition_11",
+    "definition_12": "object_026_definition_12",
+    "definition_13": "object_030_definition_13",
+    "definition_14": "object_031_definition_14",
+    "definition_15": "object_032_definition_15",
+    "definition_16": "object_033_definition_16",
+    "definition_17": "object_035_definition_17",
+    "definition_18": "object_037_definition_18",
+    "definition_19": "object_041_definition_19",
+    "definition_2": "object_008_definition_2",
+    "definition_20": "object_054_definition_20",
+    "definition_21": "object_055_definition_21",
+    "definition_3": "object_009_definition_3",
+    "definition_4": "object_012_definition_4",
+    "definition_5": "object_013_definition_5",
+    "definition_7": "object_014_definition_7",
+    "definition_8": "object_018_definition_8",
+    "definition_9": "object_019_definition_9",
+    "notation_1": "object_021_notation_1",
+    "notation_2": "object_038_notation_2",
+    "notation_3": "object_056_notation_3",
+    "registration_1": "object_001_registration_1",
+    "registration_10": "object_029_registration_10",
+    "registration_11": "object_045_registration_11",
+    "registration_12": "object_048_registration_12",
+    "registration_13": "object_053_registration_13",
+    "registration_2": "object_002_registration_2",
+    "registration_3": "object_003_registration_3",
+    "registration_4": "object_006_registration_4",
+    "registration_5": "object_010_registration_5",
+    "registration_6": "object_015_registration_6",
+    "registration_7": "object_016_registration_7",
+    "registration_8": "object_023_registration_8",
+    "registration_9": "object_027_registration_9",
+    "scheme_2": "object_077_scheme_2",
+    "theorem_10": "object_024_theorem_10",
+    "theorem_11": "object_025_theorem_11",
+    "theorem_12": "object_028_theorem_12",
+    "theorem_19": "object_034_theorem_19",
+    "theorem_20": "object_036_theorem_20",
+    "theorem_21": "object_039_theorem_21",
+    "theorem_22": "object_040_theorem_22",
+    "theorem_23": "object_042_theorem_23",
+    "theorem_24": "object_043_theorem_24",
+    "theorem_25": "object_044_theorem_25",
+    "theorem_26": "object_046_theorem_26",
+    "theorem_27": "object_047_theorem_27",
+    "theorem_28": "object_049_theorem_28",
+    "theorem_29": "object_050_theorem_29",
+    "theorem_3": "object_004_theorem_3",
+    "theorem_30": "object_051_theorem_30",
+    "theorem_31": "object_052_theorem_31",
+    "theorem_32": "object_057_theorem_32",
+    "theorem_33": "object_058_theorem_33",
+    "theorem_34": "object_059_theorem_34",
+    "theorem_37": "object_060_theorem_37",
+    "theorem_38": "object_061_theorem_38",
+    "theorem_39": "object_062_theorem_39",
+    "theorem_4": "object_005_theorem_4",
+    "theorem_40": "object_063_theorem_40",
+    "theorem_41": "object_064_theorem_41",
+    "theorem_42": "object_065_theorem_42",
+    "theorem_43": "object_066_theorem_43",
+    "theorem_44": "object_067_theorem_44",
+    "theorem_45": "object_068_theorem_45",
+    "theorem_46": "object_069_theorem_46",
+    "theorem_47": "object_070_theorem_47",
+    "theorem_48": "object_071_theorem_48",
+    "theorem_49": "object_072_theorem_49",
+    "theorem_5": "object_007_theorem_5",
+    "theorem_51": "object_073_theorem_51",
+    "theorem_52": "object_074_theorem_52",
+    "theorem_53": "object_075_theorem_53",
+    "theorem_54": "object_076_theorem_54",
+    "theorem_55": "object_078_theorem_55",
+    "theorem_6": "object_011_theorem_6",
+    "theorem_8": "object_017_theorem_8"
+  },
+  "objects": [
+    "definition_1",
+    "registration_1",
+    "registration_2",
+    "registration_3",
+    "theorem_3",
+    "theorem_4",
+    "registration_4",
+    "theorem_5",
+    "definition_2",
+    "definition_3",
+    "registration_5",
+    "theorem_6",
+    "definition_4",
+    "definition_5",
+    "definition_7",
+    "registration_6",
+    "registration_7",
+    "theorem_8",
+    "definition_8",
+    "definition_9",
+    "definition_10",
+    "notation_1",
+    "definition_11",
+    "registration_8",
+    "theorem_10",
+    "theorem_11",
+    "definition_12",
+    "registration_9",
+    "theorem_12",
+    "registration_10",
+    "definition_13",
+    "definition_14",
+    "definition_15",
+    "definition_16",
+    "theorem_19",
+    "definition_17",
+    "theorem_20",
+    "definition_18",
+    "notation_2",
+    "theorem_21",
+    "theorem_22",
+    "definition_19",
+    "theorem_23",
+    "theorem_24",
+    "theorem_25",
+    "registration_11",
+    "theorem_26",
+    "theorem_27",
+    "registration_12",
+    "theorem_28",
+    "theorem_29",
+    "theorem_30",
+    "theorem_31",
+    "registration_13",
+    "definition_20",
+    "definition_21",
+    "notation_3",
+    "theorem_32",
+    "theorem_33",
+    "theorem_34",
+    "theorem_37",
+    "theorem_38",
+    "theorem_39",
+    "theorem_40",
+    "theorem_41",
+    "theorem_42",
+    "theorem_43",
+    "theorem_44",
+    "theorem_45",
+    "theorem_46",
+    "theorem_47",
+    "theorem_48",
+    "theorem_49",
+    "theorem_51",
+    "theorem_52",
+    "theorem_53",
+    "theorem_54",
+    "scheme_2",
+    "theorem_55"
+  ],
+  "oracle_agreement": {
+    "covers_equal_concepts_0_9_2_neighbors": true,
+    "lectic_basis_equals_levelwise_nextclosures": true,
+    "lectic_intents_equal_concepts_0_9_2": true,
+    "lectic_intents_equals_levelwise_nextclosures": true
+  },
+  "schema": "wm-fca-cxt-oracle-v1",
+  "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/lattice3.cxt",
+  "true_cell_count": 161,
+  "true_incidence": {
+    "object_000_definition_1": [
+      "attribute_000_boolelatt",
+      "attribute_001_it",
+      "attribute_003_lattstr"
+    ],
+    "object_001_registration_1": [
+      "attribute_000_boolelatt"
+    ],
+    "object_002_registration_2": [
+      "attribute_000_boolelatt"
+    ],
+    "object_003_registration_3": [
+      "attribute_000_boolelatt"
+    ],
+    "object_004_theorem_3": [
+      "attribute_000_boolelatt"
+    ],
+    "object_005_theorem_4": [
+      "attribute_000_boolelatt"
+    ],
+    "object_006_registration_4": [
+      "attribute_000_boolelatt"
+    ],
+    "object_007_theorem_5": [
+      "attribute_000_boolelatt"
+    ],
+    "object_008_definition_2": [
+      "attribute_004_lattice"
+    ],
+    "object_009_definition_3": [
+      "attribute_002_lattposet",
+      "attribute_004_lattice",
+      "attribute_005_poset",
+      "attribute_006_relstr"
+    ],
+    "object_010_registration_5": [
+      "attribute_002_lattposet",
+      "attribute_004_lattice"
+    ],
+    "object_011_theorem_6": [
+      "attribute_002_lattposet",
+      "attribute_003_lattstr",
+      "attribute_004_lattice"
+    ],
+    "object_012_definition_4": [
+      "attribute_002_lattposet",
+      "attribute_004_lattice"
+    ],
+    "object_013_definition_5": [
+      "attribute_002_lattposet",
+      "attribute_004_lattice"
+    ],
+    "object_014_definition_7": [
+      "attribute_006_relstr"
+    ],
+    "object_015_registration_6": [
+      "attribute_005_poset",
+      "attribute_006_relstr"
+    ],
+    "object_016_registration_7": [
+      "attribute_006_relstr"
+    ],
+    "object_017_theorem_8": [
+      "attribute_006_relstr"
+    ],
+    "object_018_definition_8": [
+      "attribute_006_relstr"
+    ],
+    "object_019_definition_9": [
+      "attribute_006_relstr"
+    ],
+    "object_020_definition_10": [
+      "attribute_006_relstr",
+      "attribute_007_is"
+    ],
+    "object_021_notation_1": [
+      "attribute_006_relstr",
+      "attribute_007_is"
+    ],
+    "object_022_definition_11": [
+      "attribute_001_it",
+      "attribute_006_relstr",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    "object_023_registration_8": [
+      "attribute_006_relstr",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    "object_024_theorem_10": [
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    "object_025_theorem_11": [
+      "attribute_002_lattposet",
+      "attribute_004_lattice",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    "object_026_definition_12": [
+      "attribute_001_it",
+      "attribute_006_relstr",
+      "attribute_007_is"
+    ],
+    "object_027_registration_9": [
+      "attribute_005_poset",
+      "attribute_006_relstr",
+      "attribute_007_is"
+    ],
+    "object_028_theorem_12": [
+      "attribute_007_is",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    "object_029_registration_10": [
+      "attribute_005_poset",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    "object_030_definition_13": [
+      "attribute_001_it",
+      "attribute_006_relstr",
+      "attribute_010_with_suprema"
+    ],
+    "object_031_definition_14": [
+      "attribute_001_it",
+      "attribute_006_relstr",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    "object_032_definition_15": [
+      "attribute_006_relstr",
+      "attribute_009_with_infima"
+    ],
+    "object_033_definition_16": [
+      "attribute_006_relstr",
+      "attribute_010_with_suprema"
+    ],
+    "object_034_theorem_19": [
+      "attribute_002_lattposet",
+      "attribute_003_lattstr",
+      "attribute_004_lattice",
+      "attribute_005_poset",
+      "attribute_006_relstr",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    "object_035_definition_17": [
+      "attribute_001_it",
+      "attribute_002_lattposet",
+      "attribute_004_lattice",
+      "attribute_005_poset",
+      "attribute_006_relstr",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    "object_036_theorem_20": [
+      "attribute_002_lattposet",
+      "attribute_003_lattstr",
+      "attribute_004_lattice"
+    ],
+    "object_037_definition_18": [
+      "attribute_003_lattstr",
+      "attribute_008_is_less_than"
+    ],
+    "object_038_notation_2": [
+      "attribute_003_lattstr",
+      "attribute_008_is_less_than"
+    ],
+    "object_039_theorem_21": [
+      "attribute_004_lattice",
+      "attribute_008_is_less_than"
+    ],
+    "object_040_theorem_22": [
+      "attribute_004_lattice"
+    ],
+    "object_041_definition_19": [
+      "attribute_001_it",
+      "attribute_003_lattstr",
+      "attribute_008_is_less_than"
+    ],
+    "object_042_theorem_23": [
+      "attribute_008_is_less_than"
+    ],
+    "object_043_theorem_24": [
+      "attribute_008_is_less_than"
+    ],
+    "object_044_theorem_25": [
+      "attribute_000_boolelatt",
+      "attribute_008_is_less_than"
+    ],
+    "object_045_registration_11": [
+      "attribute_000_boolelatt"
+    ],
+    "object_046_theorem_26": [
+      "attribute_000_boolelatt",
+      "attribute_008_is_less_than"
+    ],
+    "object_047_theorem_27": [
+      "attribute_000_boolelatt",
+      "attribute_008_is_less_than"
+    ],
+    "object_048_registration_12": [
+      "attribute_000_boolelatt",
+      "attribute_002_lattposet",
+      "attribute_004_lattice"
+    ],
+    "object_049_theorem_28": [
+      "attribute_007_is",
+      "attribute_008_is_less_than"
+    ],
+    "object_050_theorem_29": [
+      "attribute_007_is",
+      "attribute_008_is_less_than"
+    ],
+    "object_051_theorem_30": [
+      "attribute_007_is",
+      "attribute_008_is_less_than"
+    ],
+    "object_052_theorem_31": [
+      "attribute_007_is",
+      "attribute_008_is_less_than"
+    ],
+    "object_053_registration_13": [
+      "attribute_002_lattposet",
+      "attribute_005_poset",
+      "attribute_006_relstr",
+      "attribute_007_is",
+      "attribute_008_is_less_than",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    "object_054_definition_20": [
+      "attribute_001_it",
+      "attribute_003_lattstr",
+      "attribute_004_lattice",
+      "attribute_008_is_less_than"
+    ],
+    "object_055_definition_21": [
+      "attribute_003_lattstr",
+      "attribute_008_is_less_than"
+    ],
+    "object_056_notation_3": [
+      "attribute_003_lattstr",
+      "attribute_004_lattice"
+    ],
+    "object_057_theorem_32": [
+      "attribute_008_is_less_than"
+    ],
+    "object_058_theorem_33": [
+      "attribute_008_is_less_than"
+    ],
+    "object_059_theorem_34": [
+      "attribute_008_is_less_than"
+    ],
+    "object_060_theorem_37": [
+      "attribute_008_is_less_than"
+    ],
+    "object_061_theorem_38": [
+      "attribute_008_is_less_than"
+    ],
+    "object_062_theorem_39": [
+      "attribute_008_is_less_than"
+    ],
+    "object_063_theorem_40": [
+      "attribute_008_is_less_than"
+    ],
+    "object_064_theorem_41": [
+      "attribute_008_is_less_than"
+    ],
+    "object_065_theorem_42": [
+      "attribute_008_is_less_than"
+    ],
+    "object_066_theorem_43": [
+      "attribute_008_is_less_than"
+    ],
+    "object_067_theorem_44": [
+      "attribute_008_is_less_than"
+    ],
+    "object_068_theorem_45": [
+      "attribute_008_is_less_than"
+    ],
+    "object_069_theorem_46": [
+      "attribute_008_is_less_than"
+    ],
+    "object_070_theorem_47": [
+      "attribute_008_is_less_than"
+    ],
+    "object_071_theorem_48": [
+      "attribute_008_is_less_than"
+    ],
+    "object_072_theorem_49": [
+      "attribute_008_is_less_than"
+    ],
+    "object_073_theorem_51": [
+      "attribute_008_is_less_than"
+    ],
+    "object_074_theorem_52": [
+      "attribute_008_is_less_than"
+    ],
+    "object_075_theorem_53": [
+      "attribute_004_lattice"
+    ],
+    "object_076_theorem_54": [
+      "attribute_004_lattice"
+    ],
+    "object_077_scheme_2": [
+      "attribute_002_lattposet",
+      "attribute_005_poset",
+      "attribute_006_relstr",
+      "attribute_007_is",
+      "attribute_008_is_less_than",
+      "attribute_009_with_infima",
+      "attribute_010_with_suprema"
+    ],
+    "object_078_theorem_55": [
+      "attribute_004_lattice"
+    ]
+  },
+  "upstream": {
+    "commit": "f93a93f7d4d62d90e22812295b7e46c036458603",
+    "license": "MIT",
+    "repository": "https://github.com/zariuq/MeTTapedia",
+    "source_id": "mettapedia-mizar-family",
+    "validation_role": "project semantic case study, not independent external validation"
+  }
+}

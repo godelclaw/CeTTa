@@ -1,0 +1,1155 @@
+{
+  "algorithm_counts": {
+    "lectic_logical_closures": 28,
+    "levelwise_candidates": 65
+  },
+  "attribute_count": 7,
+  "attribute_symbols": {
+    "Function": "attribute_000_function",
+    "Ids": "attribute_001_ids",
+    "IdsMap": "attribute_002_idsmap",
+    "Image": "attribute_003_image",
+    "InclPoset": "attribute_004_inclposet",
+    "SubRelStr": "attribute_005_subrelstr",
+    "SupMap": "attribute_006_supmap"
+  },
+  "attributes": [
+    "Function",
+    "Ids",
+    "IdsMap",
+    "Image",
+    "InclPoset",
+    "SubRelStr",
+    "SupMap"
+  ],
+  "canonical_basis": [
+    {
+      "antecedent": [
+        "attribute_003_image"
+      ],
+      "consequent": [
+        "attribute_000_function"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_inclposet"
+      ],
+      "consequent": [
+        "attribute_001_ids"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_function",
+        "attribute_001_ids"
+      ],
+      "consequent": [
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_function",
+        "attribute_002_idsmap"
+      ],
+      "consequent": [
+        "attribute_001_ids",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_function",
+        "attribute_006_supmap"
+      ],
+      "consequent": [
+        "attribute_001_ids",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_ids",
+        "attribute_002_idsmap"
+      ],
+      "consequent": [
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_ids",
+        "attribute_005_subrelstr"
+      ],
+      "consequent": [
+        "attribute_000_function",
+        "attribute_002_idsmap",
+        "attribute_003_image",
+        "attribute_004_inclposet",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_idsmap",
+        "attribute_005_subrelstr"
+      ],
+      "consequent": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_003_image",
+        "attribute_004_inclposet",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_idsmap",
+        "attribute_006_supmap"
+      ],
+      "consequent": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_003_image",
+        "attribute_004_inclposet",
+        "attribute_005_subrelstr"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_subrelstr",
+        "attribute_006_supmap"
+      ],
+      "consequent": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_003_image",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_003_image",
+        "attribute_004_inclposet"
+      ],
+      "consequent": [
+        "attribute_002_idsmap",
+        "attribute_005_subrelstr",
+        "attribute_006_supmap"
+      ]
+    }
+  ],
+  "canonical_basis_count": 11,
+  "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article yellow_2.miz.",
+  "concept_count": 17,
+  "concepts": [
+    {
+      "extent": [
+        "object_000_theorem_6",
+        "object_001_theorem_7",
+        "object_002_theorem_8",
+        "object_003_definition_1",
+        "object_004_notation_1",
+        "object_005_theorem_9",
+        "object_006_definition_2",
+        "object_007_theorem_10",
+        "object_008_registration_1",
+        "object_009_registration_2",
+        "object_010_theorem_12",
+        "object_011_theorem_13",
+        "object_012_theorem_14",
+        "object_013_theorem_15",
+        "object_014_theorem_16",
+        "object_015_theorem_17",
+        "object_016_theorem_18",
+        "object_017_theorem_19",
+        "object_018_theorem_20",
+        "object_019_theorem_29",
+        "object_020_theorem_30",
+        "object_021_theorem_31",
+        "object_022_theorem_32",
+        "object_023_theorem_33",
+        "object_024_theorem_34",
+        "object_025_theorem_35",
+        "object_026_registration_4",
+        "object_027_theorem_41",
+        "object_028_theorem_42",
+        "object_029_theorem_43",
+        "object_030_registration_5",
+        "object_031_theorem_44",
+        "object_032_registration_6",
+        "object_033_theorem_45",
+        "object_034_theorem_46",
+        "object_035_theorem_47",
+        "object_036_theorem_48",
+        "object_037_registration_7",
+        "object_038_definition_3",
+        "object_039_theorem_49",
+        "object_040_theorem_50",
+        "object_041_theorem_51",
+        "object_042_registration_8",
+        "object_043_definition_4",
+        "object_044_theorem_52",
+        "object_045_registration_9",
+        "object_046_notation_2",
+        "object_047_theorem_53",
+        "object_048_theorem_54",
+        "object_049_theorem_55"
+      ],
+      "intent": []
+    },
+    {
+      "extent": [
+        "object_003_definition_1",
+        "object_004_notation_1",
+        "object_005_theorem_9",
+        "object_006_definition_2",
+        "object_007_theorem_10",
+        "object_009_registration_2",
+        "object_010_theorem_12",
+        "object_011_theorem_13",
+        "object_012_theorem_14",
+        "object_013_theorem_15",
+        "object_014_theorem_16",
+        "object_015_theorem_17",
+        "object_016_theorem_18",
+        "object_017_theorem_19",
+        "object_018_theorem_20",
+        "object_019_theorem_29",
+        "object_022_theorem_32",
+        "object_023_theorem_33",
+        "object_024_theorem_34",
+        "object_025_theorem_35",
+        "object_038_definition_3",
+        "object_043_definition_4",
+        "object_046_notation_2",
+        "object_047_theorem_53",
+        "object_048_theorem_54",
+        "object_049_theorem_55"
+      ],
+      "intent": [
+        "attribute_000_function"
+      ]
+    },
+    {
+      "extent": [
+        "object_026_registration_4",
+        "object_027_theorem_41",
+        "object_028_theorem_42",
+        "object_029_theorem_43",
+        "object_030_registration_5",
+        "object_031_theorem_44",
+        "object_032_registration_6",
+        "object_033_theorem_45",
+        "object_034_theorem_46",
+        "object_035_theorem_47",
+        "object_036_theorem_48",
+        "object_037_registration_7",
+        "object_038_definition_3",
+        "object_039_theorem_49",
+        "object_040_theorem_50",
+        "object_041_theorem_51",
+        "object_043_definition_4",
+        "object_044_theorem_52"
+      ],
+      "intent": [
+        "attribute_001_ids"
+      ]
+    },
+    {
+      "extent": [
+        "object_043_definition_4",
+        "object_044_theorem_52",
+        "object_045_registration_9"
+      ],
+      "intent": [
+        "attribute_002_idsmap"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_theorem_6",
+        "object_001_theorem_7",
+        "object_002_theorem_8",
+        "object_006_definition_2",
+        "object_008_registration_1",
+        "object_019_theorem_29",
+        "object_020_theorem_30",
+        "object_021_theorem_31",
+        "object_022_theorem_32",
+        "object_023_theorem_33",
+        "object_025_theorem_35"
+      ],
+      "intent": [
+        "attribute_005_subrelstr"
+      ]
+    },
+    {
+      "extent": [
+        "object_038_definition_3",
+        "object_039_theorem_49",
+        "object_040_theorem_50",
+        "object_041_theorem_51",
+        "object_042_registration_8"
+      ],
+      "intent": [
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "extent": [
+        "object_005_theorem_9",
+        "object_006_definition_2",
+        "object_007_theorem_10",
+        "object_009_registration_2",
+        "object_022_theorem_32",
+        "object_023_theorem_33",
+        "object_024_theorem_34",
+        "object_025_theorem_35"
+      ],
+      "intent": [
+        "attribute_000_function",
+        "attribute_003_image"
+      ]
+    },
+    {
+      "extent": [
+        "object_006_definition_2",
+        "object_019_theorem_29",
+        "object_022_theorem_32",
+        "object_023_theorem_33",
+        "object_025_theorem_35"
+      ],
+      "intent": [
+        "attribute_000_function",
+        "attribute_005_subrelstr"
+      ]
+    },
+    {
+      "extent": [
+        "object_027_theorem_41",
+        "object_028_theorem_42",
+        "object_029_theorem_43",
+        "object_030_registration_5",
+        "object_031_theorem_44",
+        "object_032_registration_6",
+        "object_034_theorem_46",
+        "object_035_theorem_47",
+        "object_036_theorem_48",
+        "object_037_registration_7",
+        "object_038_definition_3",
+        "object_039_theorem_49",
+        "object_041_theorem_51",
+        "object_043_definition_4",
+        "object_044_theorem_52"
+      ],
+      "intent": [
+        "attribute_001_ids",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "extent": [
+        "object_038_definition_3",
+        "object_039_theorem_49",
+        "object_040_theorem_50",
+        "object_041_theorem_51"
+      ],
+      "intent": [
+        "attribute_001_ids",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "extent": [
+        "object_038_definition_3",
+        "object_043_definition_4"
+      ],
+      "intent": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "extent": [
+        "object_006_definition_2",
+        "object_022_theorem_32",
+        "object_023_theorem_33",
+        "object_025_theorem_35"
+      ],
+      "intent": [
+        "attribute_000_function",
+        "attribute_003_image",
+        "attribute_005_subrelstr"
+      ]
+    },
+    {
+      "extent": [
+        "object_043_definition_4",
+        "object_044_theorem_52"
+      ],
+      "intent": [
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "extent": [
+        "object_038_definition_3",
+        "object_039_theorem_49",
+        "object_041_theorem_51"
+      ],
+      "intent": [
+        "attribute_001_ids",
+        "attribute_004_inclposet",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "extent": [
+        "object_043_definition_4"
+      ],
+      "intent": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "extent": [
+        "object_038_definition_3"
+      ],
+      "intent": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_004_inclposet",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "extent": [],
+      "intent": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_003_image",
+        "attribute_004_inclposet",
+        "attribute_005_subrelstr",
+        "attribute_006_supmap"
+      ]
+    }
+  ],
+  "context_id": "mizar_yellow_2",
+  "context_name": "",
+  "context_sha256": "30621625b97e12042d10292d60d114fc95a67c78d395cc987b94660d69f50188",
+  "cover_count": 26,
+  "covers": [
+    {
+      "general": [],
+      "specific": [
+        "attribute_000_function"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_001_ids"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_002_idsmap"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_005_subrelstr"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_function"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_003_image"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_function"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_005_subrelstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_function"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_ids"
+      ],
+      "specific": [
+        "attribute_001_ids",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_ids"
+      ],
+      "specific": [
+        "attribute_001_ids",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_idsmap"
+      ],
+      "specific": [
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_subrelstr"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_005_subrelstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_supmap"
+      ],
+      "specific": [
+        "attribute_001_ids",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_function",
+        "attribute_003_image"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_003_image",
+        "attribute_005_subrelstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_function",
+        "attribute_005_subrelstr"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_003_image",
+        "attribute_005_subrelstr"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_ids",
+        "attribute_004_inclposet"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_ids",
+        "attribute_004_inclposet"
+      ],
+      "specific": [
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_ids",
+        "attribute_004_inclposet"
+      ],
+      "specific": [
+        "attribute_001_ids",
+        "attribute_004_inclposet",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_ids",
+        "attribute_006_supmap"
+      ],
+      "specific": [
+        "attribute_001_ids",
+        "attribute_004_inclposet",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_004_inclposet"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_004_inclposet"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_004_inclposet",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_function",
+        "attribute_003_image",
+        "attribute_005_subrelstr"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_003_image",
+        "attribute_004_inclposet",
+        "attribute_005_subrelstr",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_004_inclposet"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_004_inclposet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_ids",
+        "attribute_004_inclposet",
+        "attribute_006_supmap"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_004_inclposet",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_004_inclposet"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_003_image",
+        "attribute_004_inclposet",
+        "attribute_005_subrelstr",
+        "attribute_006_supmap"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_004_inclposet",
+        "attribute_006_supmap"
+      ],
+      "specific": [
+        "attribute_000_function",
+        "attribute_001_ids",
+        "attribute_002_idsmap",
+        "attribute_003_image",
+        "attribute_004_inclposet",
+        "attribute_005_subrelstr",
+        "attribute_006_supmap"
+      ]
+    }
+  ],
+  "dependence_group": "mizar-yellow-2-extraction",
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "closed_candidate": [
+      "attribute_000_function"
+    ],
+    "false_cell": [
+      "object_000_theorem_6",
+      "attribute_000_function"
+    ],
+    "negative_implication": {
+      "antecedent": [
+        "attribute_000_function"
+      ],
+      "consequent": [
+        "attribute_001_ids"
+      ]
+    },
+    "nonclosed_candidate": [
+      "attribute_003_image"
+    ],
+    "nonclosed_closure": [
+      "attribute_000_function",
+      "attribute_003_image"
+    ],
+    "positive_implication": {
+      "antecedent": [
+        "attribute_003_image"
+      ],
+      "consequent": [
+        "attribute_000_function"
+      ]
+    },
+    "true_cell": [
+      "object_000_theorem_6",
+      "attribute_005_subrelstr"
+    ]
+  },
+  "false_cell_count": 264,
+  "intents": [
+    [],
+    [
+      "attribute_000_function"
+    ],
+    [
+      "attribute_001_ids"
+    ],
+    [
+      "attribute_002_idsmap"
+    ],
+    [
+      "attribute_005_subrelstr"
+    ],
+    [
+      "attribute_006_supmap"
+    ],
+    [
+      "attribute_000_function",
+      "attribute_003_image"
+    ],
+    [
+      "attribute_000_function",
+      "attribute_005_subrelstr"
+    ],
+    [
+      "attribute_001_ids",
+      "attribute_004_inclposet"
+    ],
+    [
+      "attribute_001_ids",
+      "attribute_006_supmap"
+    ],
+    [
+      "attribute_000_function",
+      "attribute_001_ids",
+      "attribute_004_inclposet"
+    ],
+    [
+      "attribute_000_function",
+      "attribute_003_image",
+      "attribute_005_subrelstr"
+    ],
+    [
+      "attribute_001_ids",
+      "attribute_002_idsmap",
+      "attribute_004_inclposet"
+    ],
+    [
+      "attribute_001_ids",
+      "attribute_004_inclposet",
+      "attribute_006_supmap"
+    ],
+    [
+      "attribute_000_function",
+      "attribute_001_ids",
+      "attribute_002_idsmap",
+      "attribute_004_inclposet"
+    ],
+    [
+      "attribute_000_function",
+      "attribute_001_ids",
+      "attribute_004_inclposet",
+      "attribute_006_supmap"
+    ],
+    [
+      "attribute_000_function",
+      "attribute_001_ids",
+      "attribute_002_idsmap",
+      "attribute_003_image",
+      "attribute_004_inclposet",
+      "attribute_005_subrelstr",
+      "attribute_006_supmap"
+    ]
+  ],
+  "manifest_sha256": "26b7e2de0a429a5db4949a6da64800e5aa0753c37d6139a00e999848384e0272",
+  "matrix_label": "complete positive-occurrence article context",
+  "object_count": 50,
+  "object_symbols": {
+    "definition_1": "object_003_definition_1",
+    "definition_2": "object_006_definition_2",
+    "definition_3": "object_038_definition_3",
+    "definition_4": "object_043_definition_4",
+    "notation_1": "object_004_notation_1",
+    "notation_2": "object_046_notation_2",
+    "registration_1": "object_008_registration_1",
+    "registration_2": "object_009_registration_2",
+    "registration_4": "object_026_registration_4",
+    "registration_5": "object_030_registration_5",
+    "registration_6": "object_032_registration_6",
+    "registration_7": "object_037_registration_7",
+    "registration_8": "object_042_registration_8",
+    "registration_9": "object_045_registration_9",
+    "theorem_10": "object_007_theorem_10",
+    "theorem_12": "object_010_theorem_12",
+    "theorem_13": "object_011_theorem_13",
+    "theorem_14": "object_012_theorem_14",
+    "theorem_15": "object_013_theorem_15",
+    "theorem_16": "object_014_theorem_16",
+    "theorem_17": "object_015_theorem_17",
+    "theorem_18": "object_016_theorem_18",
+    "theorem_19": "object_017_theorem_19",
+    "theorem_20": "object_018_theorem_20",
+    "theorem_29": "object_019_theorem_29",
+    "theorem_30": "object_020_theorem_30",
+    "theorem_31": "object_021_theorem_31",
+    "theorem_32": "object_022_theorem_32",
+    "theorem_33": "object_023_theorem_33",
+    "theorem_34": "object_024_theorem_34",
+    "theorem_35": "object_025_theorem_35",
+    "theorem_41": "object_027_theorem_41",
+    "theorem_42": "object_028_theorem_42",
+    "theorem_43": "object_029_theorem_43",
+    "theorem_44": "object_031_theorem_44",
+    "theorem_45": "object_033_theorem_45",
+    "theorem_46": "object_034_theorem_46",
+    "theorem_47": "object_035_theorem_47",
+    "theorem_48": "object_036_theorem_48",
+    "theorem_49": "object_039_theorem_49",
+    "theorem_50": "object_040_theorem_50",
+    "theorem_51": "object_041_theorem_51",
+    "theorem_52": "object_044_theorem_52",
+    "theorem_53": "object_047_theorem_53",
+    "theorem_54": "object_048_theorem_54",
+    "theorem_55": "object_049_theorem_55",
+    "theorem_6": "object_000_theorem_6",
+    "theorem_7": "object_001_theorem_7",
+    "theorem_8": "object_002_theorem_8",
+    "theorem_9": "object_005_theorem_9"
+  },
+  "objects": [
+    "theorem_6",
+    "theorem_7",
+    "theorem_8",
+    "definition_1",
+    "notation_1",
+    "theorem_9",
+    "definition_2",
+    "theorem_10",
+    "registration_1",
+    "registration_2",
+    "theorem_12",
+    "theorem_13",
+    "theorem_14",
+    "theorem_15",
+    "theorem_16",
+    "theorem_17",
+    "theorem_18",
+    "theorem_19",
+    "theorem_20",
+    "theorem_29",
+    "theorem_30",
+    "theorem_31",
+    "theorem_32",
+    "theorem_33",
+    "theorem_34",
+    "theorem_35",
+    "registration_4",
+    "theorem_41",
+    "theorem_42",
+    "theorem_43",
+    "registration_5",
+    "theorem_44",
+    "registration_6",
+    "theorem_45",
+    "theorem_46",
+    "theorem_47",
+    "theorem_48",
+    "registration_7",
+    "definition_3",
+    "theorem_49",
+    "theorem_50",
+    "theorem_51",
+    "registration_8",
+    "definition_4",
+    "theorem_52",
+    "registration_9",
+    "notation_2",
+    "theorem_53",
+    "theorem_54",
+    "theorem_55"
+  ],
+  "oracle_agreement": {
+    "covers_equal_concepts_0_9_2_neighbors": true,
+    "lectic_basis_equals_levelwise_nextclosures": true,
+    "lectic_intents_equal_concepts_0_9_2": true,
+    "lectic_intents_equals_levelwise_nextclosures": true
+  },
+  "schema": "wm-fca-cxt-oracle-v1",
+  "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/yellow_2.cxt",
+  "true_cell_count": 86,
+  "true_incidence": {
+    "object_000_theorem_6": [
+      "attribute_005_subrelstr"
+    ],
+    "object_001_theorem_7": [
+      "attribute_005_subrelstr"
+    ],
+    "object_002_theorem_8": [
+      "attribute_005_subrelstr"
+    ],
+    "object_003_definition_1": [
+      "attribute_000_function"
+    ],
+    "object_004_notation_1": [
+      "attribute_000_function"
+    ],
+    "object_005_theorem_9": [
+      "attribute_000_function",
+      "attribute_003_image"
+    ],
+    "object_006_definition_2": [
+      "attribute_000_function",
+      "attribute_003_image",
+      "attribute_005_subrelstr"
+    ],
+    "object_007_theorem_10": [
+      "attribute_000_function",
+      "attribute_003_image"
+    ],
+    "object_008_registration_1": [
+      "attribute_005_subrelstr"
+    ],
+    "object_009_registration_2": [
+      "attribute_000_function",
+      "attribute_003_image"
+    ],
+    "object_010_theorem_12": [
+      "attribute_000_function"
+    ],
+    "object_011_theorem_13": [
+      "attribute_000_function"
+    ],
+    "object_012_theorem_14": [
+      "attribute_000_function"
+    ],
+    "object_013_theorem_15": [
+      "attribute_000_function"
+    ],
+    "object_014_theorem_16": [
+      "attribute_000_function"
+    ],
+    "object_015_theorem_17": [
+      "attribute_000_function"
+    ],
+    "object_016_theorem_18": [
+      "attribute_000_function"
+    ],
+    "object_017_theorem_19": [
+      "attribute_000_function"
+    ],
+    "object_018_theorem_20": [
+      "attribute_000_function"
+    ],
+    "object_019_theorem_29": [
+      "attribute_000_function",
+      "attribute_005_subrelstr"
+    ],
+    "object_020_theorem_30": [
+      "attribute_005_subrelstr"
+    ],
+    "object_021_theorem_31": [
+      "attribute_005_subrelstr"
+    ],
+    "object_022_theorem_32": [
+      "attribute_000_function",
+      "attribute_003_image",
+      "attribute_005_subrelstr"
+    ],
+    "object_023_theorem_33": [
+      "attribute_000_function",
+      "attribute_003_image",
+      "attribute_005_subrelstr"
+    ],
+    "object_024_theorem_34": [
+      "attribute_000_function",
+      "attribute_003_image"
+    ],
+    "object_025_theorem_35": [
+      "attribute_000_function",
+      "attribute_003_image",
+      "attribute_005_subrelstr"
+    ],
+    "object_026_registration_4": [
+      "attribute_001_ids"
+    ],
+    "object_027_theorem_41": [
+      "attribute_001_ids",
+      "attribute_004_inclposet"
+    ],
+    "object_028_theorem_42": [
+      "attribute_001_ids",
+      "attribute_004_inclposet"
+    ],
+    "object_029_theorem_43": [
+      "attribute_001_ids",
+      "attribute_004_inclposet"
+    ],
+    "object_030_registration_5": [
+      "attribute_001_ids",
+      "attribute_004_inclposet"
+    ],
+    "object_031_theorem_44": [
+      "attribute_001_ids",
+      "attribute_004_inclposet"
+    ],
+    "object_032_registration_6": [
+      "attribute_001_ids",
+      "attribute_004_inclposet"
+    ],
+    "object_033_theorem_45": [
+      "attribute_001_ids"
+    ],
+    "object_034_theorem_46": [
+      "attribute_001_ids",
+      "attribute_004_inclposet"
+    ],
+    "object_035_theorem_47": [
+      "attribute_001_ids",
+      "attribute_004_inclposet"
+    ],
+    "object_036_theorem_48": [
+      "attribute_001_ids",
+      "attribute_004_inclposet"
+    ],
+    "object_037_registration_7": [
+      "attribute_001_ids",
+      "attribute_004_inclposet"
+    ],
+    "object_038_definition_3": [
+      "attribute_000_function",
+      "attribute_001_ids",
+      "attribute_004_inclposet",
+      "attribute_006_supmap"
+    ],
+    "object_039_theorem_49": [
+      "attribute_001_ids",
+      "attribute_004_inclposet",
+      "attribute_006_supmap"
+    ],
+    "object_040_theorem_50": [
+      "attribute_001_ids",
+      "attribute_006_supmap"
+    ],
+    "object_041_theorem_51": [
+      "attribute_001_ids",
+      "attribute_004_inclposet",
+      "attribute_006_supmap"
+    ],
+    "object_042_registration_8": [
+      "attribute_006_supmap"
+    ],
+    "object_043_definition_4": [
+      "attribute_000_function",
+      "attribute_001_ids",
+      "attribute_002_idsmap",
+      "attribute_004_inclposet"
+    ],
+    "object_044_theorem_52": [
+      "attribute_001_ids",
+      "attribute_002_idsmap",
+      "attribute_004_inclposet"
+    ],
+    "object_045_registration_9": [
+      "attribute_002_idsmap"
+    ],
+    "object_046_notation_2": [
+      "attribute_000_function"
+    ],
+    "object_047_theorem_53": [
+      "attribute_000_function"
+    ],
+    "object_048_theorem_54": [
+      "attribute_000_function"
+    ],
+    "object_049_theorem_55": [
+      "attribute_000_function"
+    ]
+  },
+  "upstream": {
+    "commit": "f93a93f7d4d62d90e22812295b7e46c036458603",
+    "license": "MIT",
+    "repository": "https://github.com/zariuq/MeTTapedia",
+    "source_id": "mettapedia-mizar-family",
+    "validation_role": "project semantic case study, not independent external validation"
+  }
+}

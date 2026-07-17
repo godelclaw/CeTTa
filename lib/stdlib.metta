@@ -64,11 +64,18 @@
 (: get-metatype (-> Atom Atom))
 (: get-type-space (-> SpaceType Atom Atom))
 (: _minimal-foldl-atom (-> Expression Atom Variable Variable Atom SpaceType %Undefined%))
+(: _minimal-foldl-until-atom
+   (-> Expression Atom Variable Variable Atom SpaceType %Undefined%))
 (: _minimal-foldl-llist (-> Atom Atom Variable Variable Atom SpaceType %Undefined%))
 (: _minimal-space-contains-exact (-> Atom Atom Bool))
 (: _collapse-add-next-atom-from-collapse-bind-result (-> Expression Expression Atom))
 (: foldl-atom-in-space (-> Expression Atom Variable Variable Atom SpaceType %Undefined%))
 (: foldl-atom (-> Expression Atom Variable Variable Atom %Undefined%))
+(: FoldControlType Type)
+(: FoldContinue (-> Atom FoldControlType))
+(: FoldStop (-> Atom FoldControlType))
+(: foldl-until-atom
+   (-> Expression Atom Variable Variable Atom %Undefined%))
 (: add-reducts (-> SpaceType %Undefined% (->)))
 (: add-atoms (-> SpaceType Expression (->)))
 (: @doc (-> Atom DocDescription DocInformal))
@@ -133,6 +140,254 @@
 (: range-atom (-> Number Expression))
 (: range-atom (-> Number Number Expression))
 (: repeat-atom (-> Number Atom Expression))
+(: member-atom? (-> Atom Expression Bool))
+(: subset-atom? (-> Expression Expression Bool))
+(: same-set-atom? (-> Expression Expression Bool))
+(: galois-closure-atom
+   (-> Expression Expression Expression Expression Expression))
+(: galois-intents-atom
+   (-> Expression Expression Expression Number Expression))
+(: galois-canonical-basis-atom
+   (-> Expression Expression Expression Number Number Expression))
+(: galois-canonical-basis-next-atom
+   (-> Expression Expression Expression Number Number Expression))
+(: wm-fca-index-columns-atom
+   (-> Expression Expression Expression Atom Atom Expression))
+(: wm-fca-binary-rows-columns-atom
+   (-> Expression Expression Expression Atom Atom Atom Expression))
+(: wm-fca-binary-cell-status-atom
+   (-> Expression Expression Expression Atom Atom Atom Atom Atom))
+(: wm-fca-binary-query-batch-atom
+   (-> Expression Expression Expression Atom Atom Atom Expression Expression))
+(: wm-fca-binary-event-columns-atom
+   (-> Expression Expression Expression Atom Atom Atom Expression Atom Atom
+       Expression))
+(: wm-fca-binary-event-cell-evidence-atom
+   (-> Expression Expression Expression Atom Atom Atom Expression Atom Atom Atom
+       Expression))
+(: wm-fca-binary-event-query-batch-atom
+   (-> Expression Expression Expression Atom Atom Atom Expression Atom Atom
+       Expression Expression))
+(: wm-fca-binary-event-observation-count-atom
+   (-> Expression Expression Expression Atom Atom Atom Expression Number))
+(: wm-fca-evidence-layer-columns-atom
+   (-> Expression Expression Expression Atom Atom Expression))
+(: wm-fca-evidence-layer-cell-evidence-atom
+   (-> Expression Expression Expression Atom Atom Atom Expression))
+(: wm-fca-evidence-layer-query-batch-atom
+   (-> Expression Expression Expression Atom Atom Expression Expression))
+(: wm-fca-evidence-layer-observation-count-atom
+   (-> Expression Expression Expression Number))
+(: subset-cover-relations-atom
+   (-> Expression Number Number Expression))
+
+(@doc member-atom?
+  (@desc "Tests alpha-equivalent membership in a concrete expression, using set rather than multiplicity semantics.")
+  (@params (
+    (@param "Atom to find")
+    (@param "Expression to search")))
+  (@return "True exactly when the expression contains the atom"))
+
+(@doc subset-atom?
+  (@desc "Tests whether every distinct element of the first concrete expression occurs in the second, modulo alpha-equivalence.")
+  (@params (
+    (@param "Candidate subset")
+    (@param "Candidate superset")))
+  (@return "True exactly when the first expression denotes a subset of the second"))
+
+(@doc same-set-atom?
+  (@desc "Tests mutual set inclusion of two concrete expressions, ignoring order and duplicate multiplicity and respecting alpha-equivalence.")
+  (@params (
+    (@param "First set expression")
+    (@param "Second set expression")))
+  (@return "True exactly when the expressions denote the same set"))
+
+(@doc galois-closure-atom
+  (@desc "Computes attribute double derivation in a finite binary context. The first argument lists objects, the second lists attributes, the third contains one object-membership expression per aligned attribute, and the fourth is the queried attribute set. Out-of-domain query attributes select no column, matching indexed finite-context semantics.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Object-membership columns aligned with the attributes")
+    (@param "Attribute set to close")))
+  (@return "The closed attribute set in universe order"))
+
+(@doc galois-intents-atom
+  (@desc "Enumerates every closed attribute set of a finite binary context with Ganter's Next-Closure algorithm. The explicit positive concept limit is a fail-loud semantic bound: if another concept exists beyond it, the operation returns GaloisEnumerationLimitExceeded rather than a partial lattice.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Object-membership columns aligned with the attributes")
+    (@param "Positive integer maximum number of concepts to emit")))
+  (@return "All closed attribute sets in lectic order, or an explicit limit error"))
+
+(@doc wm-fca-index-columns-atom
+  (@desc "Compiles a finite WM/FCA observation state into attribute-aligned incidence columns in one native pass. It implements exact-status, positive-observation, distinct-source, and distinct-dependence-group gates while preserving object and attribute universe order. Malformed observations or unsupported gates fail explicitly.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Provenance-bearing WMFCAObservation expressions")
+    (@param "Selected context")
+    (@param "WM/FCA extraction gate")))
+  (@return "One WMFCAColumn per attribute, aligned with the attribute universe"))
+
+(@doc wm-fca-binary-rows-columns-atom
+  (@desc "Compiles a complete binary WM/FCA matrix into ordered incidence columns without materializing one observation expression per cell. Rows must be aligned WMFCABinaryRow records containing an object and an exact-width 0/1 string. Exact-status and positive-evidence gates retain the same semantics as a single provenance packet per matrix cell.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Aligned WMFCABinaryRow records")
+    (@param "Context represented by the matrix")
+    (@param "Selected query context")
+    (@param "WM/FCA extraction gate")))
+  (@return "One WMFCAColumn per attribute, aligned with the attribute universe"))
+
+(@doc wm-fca-binary-cell-status-atom
+  (@desc "Reads one four-valued cell status from an aligned complete binary matrix. A context mismatch or an out-of-universe coordinate is WMMissing; an in-domain 1 is WMTrue and an in-domain 0 is WMFalse. Malformed rows fail explicitly.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Aligned WMFCABinaryRow records")
+    (@param "Context represented by the matrix")
+    (@param "Selected query context")
+    (@param "Queried object")
+    (@param "Queried attribute")))
+  (@return "WMTrue, WMFalse, WMMissing, or an explicit row-validation error"))
+
+(@doc wm-fca-binary-query-batch-atom
+  (@desc "Compiles a complete binary WM/FCA matrix once and evaluates a bounded expression of attribute queries. Each result contains the original query, its exact extent, and its exact closure in universe order. Matrix, gate, and row validation is identical to wm-fca-binary-rows-columns-atom.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Aligned WMFCABinaryRow records")
+    (@param "Context represented by the matrix")
+    (@param "Selected query context")
+    (@param "WM/FCA extraction gate")
+    (@param "Bounded expression of attribute-set queries")))
+  (@return "Aligned WMFCABatchQueryResult records"))
+
+(@doc wm-fca-binary-event-columns-atom
+  (@desc "Replays an immutable newest-first WM/FCA event log over a packed complete binary base and compiles the surviving evidence into aligned incidence columns. Events are applied oldest-first, so revision, remembering, and scoped forgetting retain their public transition order without materializing the base matrix as observations.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Aligned WMFCABinaryRow base records")
+    (@param "Base context")
+    (@param "Base source")
+    (@param "Base dependence group")
+    (@param "Newest-first WMFCAForgetEvent, WMFCARememberEvent, or WMFCAReviseEvent records")
+    (@param "Selected query context")
+    (@param "WM/FCA extraction gate")))
+  (@return "One WMFCAColumn per attribute after ordered event replay"))
+
+(@doc wm-fca-binary-event-cell-evidence-atom
+  (@desc "Returns the active, provenance-bearing evidence for one cell after ordered replay of a packed WM/FCA event state. Provenance-identical base and remembered observations are counted once.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Aligned WMFCABinaryRow base records")
+    (@param "Base context")
+    (@param "Base source")
+    (@param "Base dependence group")
+    (@param "Newest-first event records")
+    (@param "Queried context")
+    (@param "Queried object")
+    (@param "Queried attribute")))
+  (@return "The active WMFCAObservation expressions for the queried cell"))
+
+(@doc wm-fca-binary-event-query-batch-atom
+  (@desc "Replays a packed WM/FCA event state once and evaluates a bounded expression of exact extent and closure queries under the selected extraction gate.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Aligned WMFCABinaryRow base records")
+    (@param "Base context")
+    (@param "Base source")
+    (@param "Base dependence group")
+    (@param "Newest-first event records")
+    (@param "Selected query context")
+    (@param "WM/FCA extraction gate")
+    (@param "Bounded expression of attribute-set queries")))
+  (@return "Aligned WMFCABatchQueryResult records"))
+
+(@doc wm-fca-binary-event-observation-count-atom
+  (@desc "Counts active provenance-distinct observations after ordered replay of a packed WM/FCA event state, including remembered evidence outside the base context or universes.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Aligned WMFCABinaryRow base records")
+    (@param "Base context")
+    (@param "Base source")
+    (@param "Base dependence group")
+    (@param "Newest-first event records")))
+  (@return "The number of active provenance-distinct observations"))
+
+(@doc wm-fca-evidence-layer-columns-atom
+  (@desc "Compiles immutable packed four-valued evidence layers into aligned incidence columns. Each layer has a provenance identity, context, source, dependence group, and aligned WMFCAStatusRow records. The characters 1, 0, u, and . denote true, false, unknown, and missing. Exact duplicate layer identities are idempotent; conflicting reuse of an identity fails explicitly.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Aligned WMFCAEvidenceLayer records")
+    (@param "Selected query context")
+    (@param "WM/FCA extraction gate")))
+  (@return "One WMFCAColumn per attribute under the selected evidence projection"))
+
+(@doc wm-fca-evidence-layer-cell-evidence-atom
+  (@desc "Returns the provenance-bearing non-missing observations for one cell of a packed evidence-layer state. Each synthesized stamp includes the layer identity and cell coordinate.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Aligned WMFCAEvidenceLayer records")
+    (@param "Queried context")
+    (@param "Queried object")
+    (@param "Queried attribute")))
+  (@return "Provenance-distinct WMFCAObservation expressions in layer order"))
+
+(@doc wm-fca-evidence-layer-query-batch-atom
+  (@desc "Compiles packed four-valued evidence layers once and evaluates a bounded expression of extent and closure queries under the selected evidence gate.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Aligned WMFCAEvidenceLayer records")
+    (@param "Selected query context")
+    (@param "WM/FCA extraction gate")
+    (@param "Bounded expression of attribute-set queries")))
+  (@return "Aligned WMFCABatchQueryResult records"))
+
+(@doc wm-fca-evidence-layer-observation-count-atom
+  (@desc "Counts non-missing observations across provenance-distinct packed evidence layers. Exact duplicate layers count once; conflicting duplicate identities fail explicitly.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Aligned WMFCAEvidenceLayer records")))
+  (@return "The number of provenance-distinct non-missing observations"))
+
+(@doc galois-canonical-basis-atom
+  (@desc "Computes the Duquenne-Guigues canonical implication basis of a finite binary context by complete powerset traversal. This deliberately simple implementation is an exact small-context reference. Results are generic (antecedent consequent) pairs. The positive candidate limit bounds inspected subsets; the nonnegative implication limit bounds output. Either bound fails loudly instead of yielding a partial basis.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Object-membership columns aligned with the attributes")
+    (@param "Positive integer maximum number of candidate subsets to inspect")
+    (@param "Nonnegative integer maximum number of implications to emit")))
+  (@return "Canonical antecedent/consequent pairs in subset order, or an explicit limit error"))
+
+(@doc galois-canonical-basis-next-atom
+  (@desc "Computes the Duquenne-Guigues canonical implication basis with Ganter's NextClosure over the logical pseudo-closure. It enumerates intents and pseudo-intents instead of the complete attribute powerset. Results are generic (antecedent consequent) pairs. The positive logical-closure limit and nonnegative implication limit fail loudly instead of yielding a partial basis.")
+  (@params (
+    (@param "Ordered object universe")
+    (@param "Ordered attribute universe")
+    (@param "Object-membership columns aligned with the attributes")
+    (@param "Positive integer maximum number of logical closures to inspect")
+    (@param "Nonnegative integer maximum number of implications to emit")))
+  (@return "Canonical antecedent/consequent pairs in lectic pseudo-intent order, or an explicit limit error"))
+
+(@doc subset-cover-relations-atom
+  (@desc "Computes the Hasse cover relation of a finite family ordered by strict set inclusion. Duplicate family members and duplicate elements inside a member do not change the result. The positive family-size limit bounds the relation matrix and cubic cover check; the nonnegative result limit fails loudly instead of returning a partial relation.")
+  (@params (
+    (@param "Family of concrete set expressions")
+    (@param "Positive integer maximum input family size")
+    (@param "Nonnegative integer maximum number of covers to emit")))
+  (@return "Pairs (general specific) for every inclusion cover, in first-representative order, or an explicit limit error"))
 
 (= (id $x) $x)
 
@@ -428,6 +683,26 @@
   (function
     (chain (context-space) $space
       (eval (_minimal-foldl-atom $list $init $a $b $op $space)))))
+
+; Bounded early-exit fold.  Each step returns (FoldContinue next) or
+; (FoldStop result); malformed control states fail explicitly in the grounded
+; engine instead of falling into an unbounded recursive definition.
+(= (foldl-until-atom $list $init $a $b $op)
+  (function
+    (chain (context-space) $space
+      (eval
+        (_minimal-foldl-until-atom
+          $list (FoldContinue $init) $a $b $op $space)))))
+
+(@doc foldl-until-atom
+  (@desc "Folds a concrete expression from left to right and stops immediately when the step returns FoldStop. A continuing step must return FoldContinue; malformed control states produce an explicit Error.")
+  (@params (
+    (@param "Concrete expression to traverse")
+    (@param "Initial accumulator")
+    (@param "Accumulator variable")
+    (@param "Item variable")
+    (@param "Step expression returning FoldContinue or FoldStop")))
+  (@return "The FoldStop payload, or the final FoldContinue payload when input is exhausted"))
 
 ; quote itself is evaluator-backed so it preserves syntax without evaluating
 ; its body. Once that syntax is preserved, unquote can stay as an ordinary

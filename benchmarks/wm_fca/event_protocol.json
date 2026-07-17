@@ -1,0 +1,211 @@
+{
+  "schema": "wm-fca-event-protocol-v1",
+  "contexts": [
+    "random_30_30_0.5",
+    "bob_ross"
+  ],
+  "query_selection": [
+    "empty",
+    "true-anchor",
+    "false-anchor",
+    "anchor-pair",
+    "first-two",
+    "first-four",
+    "last-attribute"
+  ],
+  "extraction_gates": [
+    {
+      "id": "exact",
+      "kind": "exact"
+    },
+    {
+      "id": "positive-observations-2",
+      "kind": "positive-observations",
+      "threshold": 2
+    },
+    {
+      "id": "positive-sources-2",
+      "kind": "positive-sources",
+      "threshold": 2
+    },
+    {
+      "id": "positive-groups-2",
+      "kind": "positive-groups",
+      "threshold": 2
+    }
+  ],
+  "observation_templates": {
+    "anchor-base": {
+      "cell": "true-anchor",
+      "context": "base",
+      "group": "base",
+      "source": "base",
+      "stamp": {
+        "cell": "true-anchor",
+        "kind": "packed"
+      },
+      "status": "base"
+    },
+    "anchor-conflict-1": {
+      "cell": "true-anchor",
+      "context": "base",
+      "group": "wm-fca-event-group-1",
+      "source": "wm-fca-event-source-1",
+      "stamp": {
+        "kind": "symbol",
+        "value": "wm-fca-event-conflict-1"
+      },
+      "status": "false"
+    },
+    "anchor-corroboration-1": {
+      "cell": "true-anchor",
+      "context": "base",
+      "group": "wm-fca-event-group-1",
+      "source": "wm-fca-event-source-1",
+      "stamp": {
+        "kind": "symbol",
+        "value": "wm-fca-event-positive-1"
+      },
+      "status": "true"
+    },
+    "anchor-conflict-2": {
+      "cell": "true-anchor",
+      "context": "base",
+      "group": "wm-fca-event-group-2",
+      "source": "wm-fca-event-source-2",
+      "stamp": {
+        "kind": "symbol",
+        "value": "wm-fca-event-conflict-2"
+      },
+      "status": "false"
+    },
+    "false-cell-positive": {
+      "cell": "false-anchor",
+      "context": "base",
+      "group": "wm-fca-event-group-2",
+      "source": "wm-fca-event-source-2",
+      "stamp": {
+        "kind": "symbol",
+        "value": "wm-fca-event-promote-false-cell"
+      },
+      "status": "true"
+    },
+    "false-cell-unknown": {
+      "cell": "false-anchor",
+      "context": "base",
+      "group": "wm-fca-event-group-1",
+      "source": "wm-fca-event-source-1",
+      "stamp": {
+        "kind": "symbol",
+        "value": "wm-fca-event-explicit-unknown"
+      },
+      "status": "unknown"
+    },
+    "foreign-positive": {
+      "cell": "true-anchor",
+      "context": "foreign",
+      "group": "wm-fca-event-foreign-group",
+      "source": "wm-fca-event-foreign-source",
+      "stamp": {
+        "kind": "symbol",
+        "value": "wm-fca-event-foreign-positive"
+      },
+      "status": "true"
+    }
+  },
+  "events": [
+    {
+      "id": "forget-anchor-stamp",
+      "operation": "forget",
+      "scope": {
+        "cell": "true-anchor",
+        "kind": "packed-stamp"
+      }
+    },
+    {
+      "id": "restore-anchor-base",
+      "observation": "anchor-base",
+      "operation": "remember"
+    },
+    {
+      "id": "repeat-anchor-base",
+      "observation": "anchor-base",
+      "operation": "remember"
+    },
+    {
+      "id": "add-anchor-conflict",
+      "observation": "anchor-conflict-1",
+      "operation": "remember"
+    },
+    {
+      "id": "forget-anchor-conflict",
+      "operation": "forget",
+      "scope": {
+        "kind": "stamp",
+        "value": "wm-fca-event-conflict-1"
+      }
+    },
+    {
+      "id": "add-explicit-unknown",
+      "observation": "false-cell-unknown",
+      "operation": "remember"
+    },
+    {
+      "id": "forget-explicit-unknown",
+      "operation": "forget",
+      "scope": {
+        "kind": "stamp",
+        "value": "wm-fca-event-explicit-unknown"
+      }
+    },
+    {
+      "id": "add-anchor-corroboration",
+      "observation": "anchor-corroboration-1",
+      "operation": "remember"
+    },
+    {
+      "id": "repeat-anchor-corroboration",
+      "observation": "anchor-corroboration-1",
+      "operation": "remember"
+    },
+    {
+      "id": "revise-conflict-promotion-foreign",
+      "observations": [
+        "anchor-conflict-2",
+        "false-cell-positive",
+        "foreign-positive"
+      ],
+      "operation": "revise"
+    },
+    {
+      "id": "forget-second-dependence-group",
+      "operation": "forget",
+      "scope": {
+        "kind": "group",
+        "value": "wm-fca-event-group-2"
+      }
+    },
+    {
+      "id": "forget-base-source",
+      "operation": "forget",
+      "scope": {
+        "kind": "base-source"
+      }
+    },
+    {
+      "id": "forget-foreign-context",
+      "operation": "forget",
+      "scope": {
+        "kind": "foreign-context"
+      }
+    },
+    {
+      "id": "forget-anchor-cell",
+      "operation": "forget",
+      "scope": {
+        "cell": "true-anchor",
+        "kind": "cell"
+      }
+    }
+  ]
+}

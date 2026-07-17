@@ -253,6 +253,7 @@ bool is_grounded_op(SymbolId id) {
            id == g_builtin_syms.if_equal ||
            id == g_builtin_syms.sealed_text ||
            id == g_builtin_syms.minimal_foldl_atom ||
+           id == g_builtin_syms.minimal_foldl_until_atom ||
            id == g_builtin_syms.minimal_foldl_llist ||
            id == g_builtin_syms.minimal_space_contains_exact ||
            id == g_builtin_syms.collapse_add_next ||
@@ -273,6 +274,26 @@ bool is_grounded_op(SymbolId id) {
            id == g_builtin_syms.unique_atom ||
            id == g_builtin_syms.intersection_atom ||
            id == g_builtin_syms.subtraction_atom ||
+           id == g_builtin_syms.member_atom_q ||
+           id == g_builtin_syms.subset_atom_q ||
+           id == g_builtin_syms.same_set_atom_q ||
+           id == g_builtin_syms.galois_closure_atom ||
+           id == g_builtin_syms.galois_intents_atom ||
+           id == g_builtin_syms.galois_canonical_basis_atom ||
+           id == g_builtin_syms.galois_canonical_basis_next_atom ||
+           id == g_builtin_syms.wm_fca_index_columns_atom ||
+           id == g_builtin_syms.wm_fca_binary_rows_columns_atom ||
+           id == g_builtin_syms.wm_fca_binary_cell_status_atom ||
+           id == g_builtin_syms.wm_fca_binary_query_batch_atom ||
+           id == g_builtin_syms.wm_fca_binary_event_columns_atom ||
+           id == g_builtin_syms.wm_fca_binary_event_cell_evidence_atom ||
+           id == g_builtin_syms.wm_fca_binary_event_query_batch_atom ||
+           id == g_builtin_syms.wm_fca_binary_event_observation_count_atom ||
+           id == g_builtin_syms.wm_fca_evidence_layer_columns_atom ||
+           id == g_builtin_syms.wm_fca_evidence_layer_cell_evidence_atom ||
+           id == g_builtin_syms.wm_fca_evidence_layer_query_batch_atom ||
+           id == g_builtin_syms.wm_fca_evidence_layer_observation_count_atom ||
+           id == g_builtin_syms.subset_cover_relations_atom ||
            id == g_builtin_syms.max_atom ||
            id == g_builtin_syms.min_atom ||
            id == g_builtin_syms.pow_math ||
@@ -893,6 +914,23 @@ static Atom *grounded_foldl_in_space(Arena *a, Atom *head, Atom **args, uint32_t
     Atom *op_expr = args[4];
     Atom *space = args[5];
 
+    bool stop_aware = head->kind == ATOM_SYMBOL &&
+                      head->sym_id == g_builtin_syms.minimal_foldl_until_atom;
+    if (stop_aware) {
+        if (init->kind != ATOM_EXPR || init->expr.len != 2 ||
+            init->expr.elems[0]->kind != ATOM_SYMBOL ||
+            (init->expr.elems[0]->sym_id != g_builtin_syms.fold_continue &&
+             init->expr.elems[0]->sym_id != g_builtin_syms.fold_stop)) {
+            return grounded_string_error(
+                a, head, args, nargs,
+                "_minimal-foldl-until-atom expects FoldContinue/FoldStop accumulator state");
+        }
+        Atom *control = init->expr.elems[0];
+        init = init->expr.elems[1];
+        if (control->sym_id == g_builtin_syms.fold_stop)
+            return atom_expr2(a, atom_symbol(a, "return"), init);
+    }
+
     Atom *head_item;
     Atom *tail;
     if (list->expr.len == 0)
@@ -1006,6 +1044,1203 @@ static Atom *grounded_repeat_atom(Arena *a, Atom *head, Atom **args, uint32_t na
     return atom_expr(a, elems, len);
 }
 
+static void galois_boolean_closure(
+    CettaExprLen object_count,
+    CettaExprLen attribute_count,
+    const bool *incidence,
+    const bool *query,
+    bool *extent,
+    bool *closure) {
+    for (CettaExprIndex object = 0; object < object_count; object++)
+        extent[object] = true;
+    for (CettaExprIndex attribute = 0;
+         attribute < attribute_count; attribute++) {
+        if (!query[attribute])
+            continue;
+        for (CettaExprIndex object = 0; object < object_count; object++) {
+            if (!incidence[attribute * object_count + object])
+                extent[object] = false;
+        }
+    }
+    for (CettaExprIndex attribute = 0;
+         attribute < attribute_count; attribute++) {
+        closure[attribute] = true;
+        for (CettaExprIndex object = 0; object < object_count; object++) {
+            if (extent[object] &&
+                !incidence[attribute * object_count + object]) {
+                closure[attribute] = false;
+                break;
+            }
+        }
+    }
+}
+
+static bool *galois_boolean_incidence(
+    Arena *a,
+    Atom *objects,
+    Atom *columns) {
+    CettaExprLen object_count = objects->expr.len;
+    CettaExprLen attribute_count = columns->expr.len;
+    bool *incidence = arena_alloc(
+        a, sizeof(bool) * attribute_count * object_count);
+    memset(incidence, 0,
+           sizeof(bool) * attribute_count * object_count);
+    for (CettaExprIndex attribute = 0;
+         attribute < attribute_count; attribute++) {
+        Atom *column = columns->expr.elems[attribute];
+        for (CettaExprIndex object = 0; object < object_count; object++) {
+            for (CettaExprIndex member = 0;
+                 member < column->expr.len; member++) {
+                if (atom_alpha_eq(objects->expr.elems[object],
+                                  column->expr.elems[member])) {
+                    incidence[attribute * object_count + object] = true;
+                    break;
+                }
+            }
+        }
+    }
+    return incidence;
+}
+
+static bool galois_boolean_subset(
+    CettaExprLen attribute_count,
+    const bool *left,
+    const bool *right) {
+    for (CettaExprIndex attribute = 0;
+         attribute < attribute_count; attribute++) {
+        if (left[attribute] && !right[attribute])
+            return false;
+    }
+    return true;
+}
+
+static bool galois_boolean_equal(
+    CettaExprLen attribute_count,
+    const bool *left,
+    const bool *right) {
+    return memcmp(left, right, sizeof(bool) * attribute_count) == 0;
+}
+
+typedef struct {
+    bool *antecedent;
+    bool *closure;
+    Atom *pair;
+} GaloisBasisRecord;
+
+/* Logical pseudo-closure for the canonical-basis NextClosure algorithm.
+ * An implication P -> P'' fires only when P is a proper subset of the
+ * current set.  This strictness is what leaves each pseudo-intent itself
+ * closed while making every proper extension respect its implication. */
+static void galois_boolean_pseudo_closure(
+    CettaExprLen attribute_count,
+    const GaloisBasisRecord *basis,
+    CettaExprLen basis_count,
+    const bool *seed,
+    bool *result) {
+    memcpy(result, seed, sizeof(bool) * attribute_count);
+    bool changed;
+    do {
+        changed = false;
+        for (CettaExprIndex implication = 0;
+             implication < basis_count; implication++) {
+            if (!galois_boolean_subset(
+                    attribute_count,
+                    basis[implication].antecedent,
+                    result) ||
+                galois_boolean_equal(
+                    attribute_count,
+                    basis[implication].antecedent,
+                    result))
+                continue;
+            for (CettaExprIndex attribute = 0;
+                 attribute < attribute_count; attribute++) {
+                if (basis[implication].closure[attribute] &&
+                    !result[attribute]) {
+                    result[attribute] = true;
+                    changed = true;
+                }
+            }
+        }
+    } while (changed);
+}
+
+static Atom *galois_attribute_set_atom(
+    Arena *a,
+    Atom *attributes,
+    const bool *selected) {
+    Atom **items = arena_alloc(
+        a, sizeof(Atom *) * attributes->expr.len);
+    CettaExprLen len = 0;
+    for (CettaExprIndex attribute = 0;
+         attribute < attributes->expr.len; attribute++) {
+        if (selected[attribute])
+            items[len++] = attributes->expr.elems[attribute];
+    }
+    return atom_expr(a, items, len);
+}
+
+static bool expression_set_subset(const Atom *left, const Atom *right) {
+    for (CettaExprIndex i = 0; i < left->expr.len; i++) {
+        bool found = false;
+        for (CettaExprIndex j = 0; j < right->expr.len; j++) {
+            if (atom_alpha_eq(left->expr.elems[i], right->expr.elems[j])) {
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            return false;
+    }
+    return true;
+}
+
+static bool expression_set_equal(const Atom *left, const Atom *right) {
+    return expression_set_subset(left, right) &&
+           expression_set_subset(right, left);
+}
+
+typedef enum {
+    WM_FCA_GATE_EXACT_STATUS,
+    WM_FCA_GATE_POSITIVE_OBSERVATIONS,
+    WM_FCA_GATE_POSITIVE_SOURCES,
+    WM_FCA_GATE_POSITIVE_GROUPS
+} WmFcaNativeGateKind;
+
+typedef struct {
+    size_t positive_count;
+    size_t negative_count;
+    size_t unknown_count;
+    Atom **positive_sources;
+    size_t positive_source_count;
+    size_t positive_source_capacity;
+    Atom **positive_groups;
+    size_t positive_group_count;
+    size_t positive_group_capacity;
+} WmFcaNativeCellEvidence;
+
+static void wm_fca_native_evidence_free(
+    WmFcaNativeCellEvidence *cells,
+    size_t cell_count) {
+    if (!cells)
+        return;
+    for (size_t cell = 0; cell < cell_count; cell++) {
+        free(cells[cell].positive_sources);
+        free(cells[cell].positive_groups);
+    }
+    free(cells);
+}
+
+static bool wm_fca_native_add_unique(
+    Atom ***items,
+    size_t *len,
+    size_t *capacity,
+    Atom *candidate) {
+    for (size_t i = 0; i < *len; i++) {
+        if (atom_alpha_eq((*items)[i], candidate))
+            return true;
+    }
+    if (*len == *capacity) {
+        size_t next = *capacity == 0 ? 2 : *capacity * 2;
+        if (next < *capacity || next > SIZE_MAX / sizeof(Atom *))
+            return false;
+        *items = *capacity == 0
+            ? cetta_malloc(sizeof(Atom *) * next)
+            : cetta_realloc(*items, sizeof(Atom *) * next);
+        *capacity = next;
+    }
+    (*items)[(*len)++] = candidate;
+    return true;
+}
+
+static CettaExprIndex wm_fca_native_universe_index(
+    Atom *universe,
+    Atom *candidate) {
+    for (CettaExprIndex i = 0; i < universe->expr.len; i++) {
+        if (atom_alpha_eq(universe->expr.elems[i], candidate))
+            return i;
+    }
+    return universe->expr.len;
+}
+
+static bool wm_fca_native_count_at_least(
+    size_t count,
+    const NumArg *threshold) {
+    if (threshold->is_float)
+        return (double)count >= threshold->val;
+#if CETTA_BUILD_WITH_GMP
+    if (threshold->is_bigint || threshold->is_rational) {
+        mpq_t count_value, threshold_value;
+        mpq_inits(count_value, threshold_value, NULL);
+        mpq_set_ui(count_value, count, 1);
+        bool converted = num_arg_to_mpq(threshold, threshold_value);
+        bool result = converted && mpq_cmp(count_value, threshold_value) >= 0;
+        mpq_clears(count_value, threshold_value, NULL);
+        return result;
+    }
+#else
+    if (threshold->is_bigint || threshold->is_rational)
+        return (double)count >= threshold->val;
+#endif
+    if (threshold->ival < 0)
+        return true;
+    return count >= (uint64_t)threshold->ival;
+}
+
+static bool wm_fca_native_gate_accepts(
+    const WmFcaNativeCellEvidence *evidence,
+    WmFcaNativeGateKind gate_kind,
+    const NumArg *threshold) {
+    switch (gate_kind) {
+    case WM_FCA_GATE_EXACT_STATUS:
+        return evidence->positive_count > 0 &&
+               evidence->negative_count == 0 &&
+               evidence->unknown_count == 0;
+    case WM_FCA_GATE_POSITIVE_OBSERVATIONS:
+        return wm_fca_native_count_at_least(
+            evidence->positive_count, threshold);
+    case WM_FCA_GATE_POSITIVE_SOURCES:
+        return wm_fca_native_count_at_least(
+            evidence->positive_source_count, threshold);
+    case WM_FCA_GATE_POSITIVE_GROUPS:
+        return wm_fca_native_count_at_least(
+            evidence->positive_group_count, threshold);
+    }
+    return false;
+}
+
+static bool wm_fca_native_parse_gate(
+    Arena *a,
+    Atom *call,
+    Atom *gate,
+    WmFcaNativeGateKind *gate_kind,
+    NumArg *threshold,
+    Atom **error_out) {
+    *gate_kind = WM_FCA_GATE_EXACT_STATUS;
+    memset(threshold, 0, sizeof(*threshold));
+    *error_out = NULL;
+    if (atom_is_symbol(gate, "WMFCAExactStatusGate"))
+        return true;
+    if (gate->kind != ATOM_EXPR || gate->expr.len != 2 ||
+        gate->expr.elems[0]->kind != ATOM_SYMBOL) {
+        *error_out = atom_error(
+            a, call, atom_symbol(a, "UnsupportedWMFCAExtractionGate"));
+        return false;
+    }
+
+    Atom *gate_head = gate->expr.elems[0];
+    if (atom_is_symbol(gate_head, "WMFCAPositiveObservationThreshold")) {
+        *gate_kind = WM_FCA_GATE_POSITIVE_OBSERVATIONS;
+    } else if (atom_is_symbol(gate_head, "WMFCAPositiveSourceThreshold")) {
+        *gate_kind = WM_FCA_GATE_POSITIVE_SOURCES;
+    } else if (atom_is_symbol(
+                   gate_head,
+                   "WMFCAPositiveDependenceGroupThreshold")) {
+        *gate_kind = WM_FCA_GATE_POSITIVE_GROUPS;
+    } else {
+        *error_out = atom_error(
+            a, call, atom_symbol(a, "UnsupportedWMFCAExtractionGate"));
+        return false;
+    }
+    if (!get_numeric_arg(gate->expr.elems[1], threshold)) {
+        *error_out = atom_error(
+            a, call, atom_symbol(a, "NumericWMFCAThresholdExpected"));
+        return false;
+    }
+    return true;
+}
+
+static bool wm_fca_native_validate_binary_rows(
+    Arena *a,
+    Atom *call,
+    Atom *objects,
+    Atom *attributes,
+    Atom *rows,
+    Atom **error_out) {
+    *error_out = NULL;
+    if (rows->expr.len != objects->expr.len) {
+        *error_out = atom_error(
+            a, call, atom_symbol(a, "WMFCABinaryRowCountMismatch"));
+        return false;
+    }
+    for (CettaExprIndex i = 0; i < rows->expr.len; i++) {
+        Atom *row = rows->expr.elems[i];
+        if (row->kind != ATOM_EXPR || row->expr.len != 3 ||
+            !atom_is_symbol(row->expr.elems[0], "WMFCABinaryRow") ||
+            row->expr.elems[2]->kind != ATOM_GROUNDED ||
+            row->expr.elems[2]->ground.gkind != GV_STRING) {
+            *error_out = atom_error(
+                a, call, atom_symbol(a, "MalformedWMFCABinaryRow"));
+            return false;
+        }
+        if (!atom_alpha_eq(row->expr.elems[1], objects->expr.elems[i])) {
+            *error_out = atom_error(
+                a, call, atom_symbol(a, "WMFCABinaryRowObjectMismatch"));
+            return false;
+        }
+        const char *bits = row->expr.elems[2]->ground.sval;
+        if (strlen(bits) != (size_t)attributes->expr.len) {
+            *error_out = atom_error(
+                a, call, atom_symbol(a, "WMFCABinaryRowWidthMismatch"));
+            return false;
+        }
+        for (CettaExprIndex attribute = 0;
+             attribute < attributes->expr.len; attribute++) {
+            if (bits[attribute] != '0' && bits[attribute] != '1') {
+                *error_out = atom_error(
+                    a, call, atom_symbol(a, "InvalidWMFCABinaryCell"));
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static bool *wm_fca_native_binary_incidence(
+    Arena *a,
+    Atom *objects,
+    Atom *attributes,
+    Atom *rows,
+    bool same_context,
+    WmFcaNativeGateKind gate_kind,
+    const NumArg *threshold) {
+    size_t object_count = objects->expr.len;
+    size_t attribute_count = attributes->expr.len;
+    size_t cell_count = object_count * attribute_count;
+    bool *incidence = arena_alloc(
+        a, sizeof(bool) * (cell_count == 0 ? 1 : cell_count));
+    for (CettaExprIndex attribute = 0;
+         attribute < attributes->expr.len; attribute++) {
+        for (CettaExprIndex object = 0;
+             object < objects->expr.len; object++) {
+            WmFcaNativeCellEvidence evidence = {0};
+            if (same_context) {
+                const char *bits =
+                    rows->expr.elems[object]->expr.elems[2]->ground.sval;
+                if (bits[attribute] == '1') {
+                    evidence.positive_count = 1;
+                    evidence.positive_source_count = 1;
+                    evidence.positive_group_count = 1;
+                } else {
+                    evidence.negative_count = 1;
+                }
+            }
+            incidence[(size_t)attribute * object_count + object] =
+                wm_fca_native_gate_accepts(
+                    &evidence, gate_kind, threshold);
+        }
+    }
+    return incidence;
+}
+
+typedef struct {
+    bool *base_active;
+    size_t base_cell_count;
+    Atom **additions;
+    size_t addition_count;
+    size_t addition_capacity;
+} WmFcaNativeEventSnapshot;
+
+static void wm_fca_native_event_snapshot_free(
+    WmFcaNativeEventSnapshot *snapshot) {
+    if (!snapshot)
+        return;
+    free(snapshot->base_active);
+    free(snapshot->additions);
+    memset(snapshot, 0, sizeof(*snapshot));
+}
+
+static bool wm_fca_native_observation_valid(Atom *observation) {
+    if (observation->kind != ATOM_EXPR || observation->expr.len != 8 ||
+        !atom_is_symbol(
+            observation->expr.elems[0], "WMFCAObservation"))
+        return false;
+    Atom *status = observation->expr.elems[4];
+    return atom_is_symbol(status, "WMTrue") ||
+           atom_is_symbol(status, "WMFalse") ||
+           atom_is_symbol(status, "WMUnknown");
+}
+
+static bool wm_fca_native_packed_stamp_equal(
+    Atom *stamp,
+    Atom *context,
+    Atom *object,
+    Atom *attribute) {
+    return stamp->kind == ATOM_EXPR && stamp->expr.len == 4 &&
+           atom_is_symbol(stamp->expr.elems[0], "WMFCAPackedStamp") &&
+           atom_alpha_eq(stamp->expr.elems[1], context) &&
+           atom_alpha_eq(stamp->expr.elems[2], object) &&
+           atom_alpha_eq(stamp->expr.elems[3], attribute);
+}
+
+static bool wm_fca_native_base_observation_equal(
+    Atom *objects,
+    Atom *attributes,
+    Atom *rows,
+    Atom *base_context,
+    Atom *base_source,
+    Atom *base_group,
+    CettaExprIndex object,
+    CettaExprIndex attribute,
+    Atom *observation) {
+    if (!wm_fca_native_observation_valid(observation))
+        return false;
+    const char *bits =
+        rows->expr.elems[object]->expr.elems[2]->ground.sval;
+    const char *status = bits[attribute] == '1' ? "WMTrue" : "WMFalse";
+    return atom_alpha_eq(observation->expr.elems[1], base_context) &&
+           atom_alpha_eq(
+               observation->expr.elems[2], objects->expr.elems[object]) &&
+           atom_alpha_eq(
+               observation->expr.elems[3], attributes->expr.elems[attribute]) &&
+           atom_is_symbol(observation->expr.elems[4], status) &&
+           wm_fca_native_packed_stamp_equal(
+               observation->expr.elems[5], base_context,
+               objects->expr.elems[object],
+               attributes->expr.elems[attribute]) &&
+           atom_alpha_eq(observation->expr.elems[6], base_source) &&
+           atom_alpha_eq(observation->expr.elems[7], base_group);
+}
+
+static Atom *wm_fca_native_base_observation(
+    Arena *a,
+    Atom *objects,
+    Atom *attributes,
+    Atom *rows,
+    Atom *base_context,
+    Atom *base_source,
+    Atom *base_group,
+    CettaExprIndex object,
+    CettaExprIndex attribute) {
+    Atom *object_atom = objects->expr.elems[object];
+    Atom *attribute_atom = attributes->expr.elems[attribute];
+    Atom *stamp_items[4] = {
+        atom_symbol(a, "WMFCAPackedStamp"),
+        base_context,
+        object_atom,
+        attribute_atom,
+    };
+    Atom *stamp = atom_expr(a, stamp_items, 4);
+    const char *bits =
+        rows->expr.elems[object]->expr.elems[2]->ground.sval;
+    Atom *observation_items[8] = {
+        atom_symbol(a, "WMFCAObservation"),
+        base_context,
+        object_atom,
+        attribute_atom,
+        atom_symbol(a, bits[attribute] == '1' ? "WMTrue" : "WMFalse"),
+        stamp,
+        base_source,
+        base_group,
+    };
+    return atom_expr(a, observation_items, 8);
+}
+
+static bool wm_fca_native_scope_valid(Atom *scope) {
+    if (scope->kind != ATOM_EXPR || scope->expr.len < 2 ||
+        scope->expr.elems[0]->kind != ATOM_SYMBOL)
+        return false;
+    Atom *head = scope->expr.elems[0];
+    if (atom_is_symbol(head, "WMFCAScopeCell"))
+        return scope->expr.len == 4;
+    return scope->expr.len == 2 &&
+           (atom_is_symbol(head, "WMFCAScopeStamp") ||
+            atom_is_symbol(head, "WMFCAScopeSource") ||
+            atom_is_symbol(head, "WMFCAScopeDependenceGroup") ||
+            atom_is_symbol(head, "WMFCAScopeContext"));
+}
+
+static bool wm_fca_native_scope_matches_observation(
+    Atom *scope,
+    Atom *observation) {
+    Atom *head = scope->expr.elems[0];
+    if (atom_is_symbol(head, "WMFCAScopeStamp"))
+        return atom_alpha_eq(
+            scope->expr.elems[1], observation->expr.elems[5]);
+    if (atom_is_symbol(head, "WMFCAScopeSource"))
+        return atom_alpha_eq(
+            scope->expr.elems[1], observation->expr.elems[6]);
+    if (atom_is_symbol(head, "WMFCAScopeDependenceGroup"))
+        return atom_alpha_eq(
+            scope->expr.elems[1], observation->expr.elems[7]);
+    if (atom_is_symbol(head, "WMFCAScopeContext"))
+        return atom_alpha_eq(
+            scope->expr.elems[1], observation->expr.elems[1]);
+    return atom_alpha_eq(scope->expr.elems[1], observation->expr.elems[1]) &&
+           atom_alpha_eq(scope->expr.elems[2], observation->expr.elems[2]) &&
+           atom_alpha_eq(scope->expr.elems[3], observation->expr.elems[3]);
+}
+
+static bool wm_fca_native_scope_matches_base(
+    Atom *scope,
+    Atom *objects,
+    Atom *attributes,
+    Atom *base_context,
+    Atom *base_source,
+    Atom *base_group,
+    CettaExprIndex object,
+    CettaExprIndex attribute) {
+    Atom *head = scope->expr.elems[0];
+    if (atom_is_symbol(head, "WMFCAScopeStamp"))
+        return wm_fca_native_packed_stamp_equal(
+            scope->expr.elems[1], base_context,
+            objects->expr.elems[object],
+            attributes->expr.elems[attribute]);
+    if (atom_is_symbol(head, "WMFCAScopeSource"))
+        return atom_alpha_eq(scope->expr.elems[1], base_source);
+    if (atom_is_symbol(head, "WMFCAScopeDependenceGroup"))
+        return atom_alpha_eq(scope->expr.elems[1], base_group);
+    if (atom_is_symbol(head, "WMFCAScopeContext"))
+        return atom_alpha_eq(scope->expr.elems[1], base_context);
+    return atom_alpha_eq(scope->expr.elems[1], base_context) &&
+           atom_alpha_eq(
+               scope->expr.elems[2], objects->expr.elems[object]) &&
+           atom_alpha_eq(
+               scope->expr.elems[3], attributes->expr.elems[attribute]);
+}
+
+static bool wm_fca_native_event_remember(
+    Atom *objects,
+    Atom *attributes,
+    Atom *rows,
+    Atom *base_context,
+    Atom *base_source,
+    Atom *base_group,
+    WmFcaNativeEventSnapshot *snapshot,
+    Atom *observation) {
+    if (!wm_fca_native_observation_valid(observation))
+        return false;
+    CettaExprIndex object = wm_fca_native_universe_index(
+        objects, observation->expr.elems[2]);
+    CettaExprIndex attribute = wm_fca_native_universe_index(
+        attributes, observation->expr.elems[3]);
+    if (object < objects->expr.len && attribute < attributes->expr.len &&
+        snapshot->base_active[
+            (size_t)attribute * objects->expr.len + object] &&
+        wm_fca_native_base_observation_equal(
+            objects, attributes, rows, base_context, base_source, base_group,
+            object, attribute, observation))
+        return true;
+    return wm_fca_native_add_unique(
+        &snapshot->additions,
+        &snapshot->addition_count,
+        &snapshot->addition_capacity,
+        observation);
+}
+
+static bool wm_fca_native_event_forget(
+    Atom *objects,
+    Atom *attributes,
+    Atom *base_context,
+    Atom *base_source,
+    Atom *base_group,
+    WmFcaNativeEventSnapshot *snapshot,
+    Atom *scope) {
+    if (!wm_fca_native_scope_valid(scope))
+        return false;
+    for (CettaExprIndex attribute = 0;
+         attribute < attributes->expr.len; attribute++) {
+        for (CettaExprIndex object = 0;
+             object < objects->expr.len; object++) {
+            size_t cell =
+                (size_t)attribute * objects->expr.len + object;
+            if (snapshot->base_active[cell] &&
+                wm_fca_native_scope_matches_base(
+                    scope, objects, attributes, base_context,
+                    base_source, base_group, object, attribute))
+                snapshot->base_active[cell] = false;
+        }
+    }
+    size_t kept = 0;
+    for (size_t i = 0; i < snapshot->addition_count; i++) {
+        Atom *observation = snapshot->additions[i];
+        if (!wm_fca_native_scope_matches_observation(scope, observation))
+            snapshot->additions[kept++] = observation;
+    }
+    snapshot->addition_count = kept;
+    return true;
+}
+
+static bool wm_fca_native_replay_binary_events(
+    Arena *a,
+    Atom *call,
+    Atom *objects,
+    Atom *attributes,
+    Atom *rows,
+    Atom *base_context,
+    Atom *base_source,
+    Atom *base_group,
+    Atom *events,
+    WmFcaNativeEventSnapshot *snapshot,
+    Atom **error_out) {
+    memset(snapshot, 0, sizeof(*snapshot));
+    *error_out = NULL;
+    size_t object_count = objects->expr.len;
+    size_t attribute_count = attributes->expr.len;
+    if (attribute_count != 0 && object_count > SIZE_MAX / attribute_count) {
+        *error_out = atom_error(
+            a, call, atom_symbol(a, "WMFCAIndexDimensionsTooLarge"));
+        return false;
+    }
+    snapshot->base_cell_count = object_count * attribute_count;
+    size_t active_count = snapshot->base_cell_count == 0
+        ? 1 : snapshot->base_cell_count;
+    if (active_count > SIZE_MAX / sizeof(bool)) {
+        *error_out = atom_error(
+            a, call, atom_symbol(a, "WMFCAIndexDimensionsTooLarge"));
+        return false;
+    }
+    snapshot->base_active = cetta_malloc(sizeof(bool) * active_count);
+    memset(snapshot->base_active, 1, sizeof(bool) * snapshot->base_cell_count);
+
+    for (CettaExprIndex reverse = events->expr.len;
+         reverse > 0; reverse--) {
+        Atom *event = events->expr.elems[reverse - 1];
+        if (event->kind != ATOM_EXPR || event->expr.len != 2 ||
+            event->expr.elems[0]->kind != ATOM_SYMBOL) {
+            *error_out = atom_error(
+                a, call, atom_symbol(a, "MalformedWMFCAEvent"));
+            wm_fca_native_event_snapshot_free(snapshot);
+            return false;
+        }
+        Atom *event_head = event->expr.elems[0];
+        if (atom_is_symbol(event_head, "WMFCAForgetEvent")) {
+            if (!wm_fca_native_event_forget(
+                    objects, attributes, base_context, base_source, base_group,
+                    snapshot, event->expr.elems[1])) {
+                *error_out = atom_error(
+                    a, call, atom_symbol(a, "MalformedWMFCAScope"));
+                wm_fca_native_event_snapshot_free(snapshot);
+                return false;
+            }
+            continue;
+        }
+        if (atom_is_symbol(event_head, "WMFCARememberEvent")) {
+            if (!wm_fca_native_event_remember(
+                    objects, attributes, rows, base_context,
+                    base_source, base_group, snapshot,
+                    event->expr.elems[1])) {
+                *error_out = atom_error(
+                    a, call, atom_symbol(a, "MalformedWMFCAObservation"));
+                wm_fca_native_event_snapshot_free(snapshot);
+                return false;
+            }
+            continue;
+        }
+        if (atom_is_symbol(event_head, "WMFCAReviseEvent") &&
+            event->expr.elems[1]->kind == ATOM_EXPR) {
+            Atom *observations = event->expr.elems[1];
+            for (CettaExprIndex i = 0; i < observations->expr.len; i++) {
+                if (!wm_fca_native_event_remember(
+                        objects, attributes, rows, base_context,
+                        base_source, base_group, snapshot,
+                        observations->expr.elems[i])) {
+                    *error_out = atom_error(
+                        a, call,
+                        atom_symbol(a, "MalformedWMFCAObservation"));
+                    wm_fca_native_event_snapshot_free(snapshot);
+                    return false;
+                }
+            }
+            continue;
+        }
+        *error_out = atom_error(
+            a, call, atom_symbol(a, "MalformedWMFCAEvent"));
+        wm_fca_native_event_snapshot_free(snapshot);
+        return false;
+    }
+    return true;
+}
+
+static WmFcaNativeCellEvidence *wm_fca_native_event_evidence(
+    Arena *a,
+    Atom *call,
+    Atom *objects,
+    Atom *attributes,
+    Atom *rows,
+    Atom *base_context,
+    Atom *base_source,
+    Atom *base_group,
+    Atom *query_context,
+    const WmFcaNativeEventSnapshot *snapshot,
+    Atom **error_out) {
+    *error_out = NULL;
+    size_t object_count = objects->expr.len;
+    size_t cell_count = snapshot->base_cell_count;
+    if (cell_count > SIZE_MAX / sizeof(WmFcaNativeCellEvidence)) {
+        *error_out = atom_error(
+            a, call, atom_symbol(a, "WMFCAIndexDimensionsTooLarge"));
+        return NULL;
+    }
+    WmFcaNativeCellEvidence *cells = cell_count == 0
+        ? NULL
+        : cetta_malloc(sizeof(WmFcaNativeCellEvidence) * cell_count);
+    if (cells)
+        memset(cells, 0, sizeof(WmFcaNativeCellEvidence) * cell_count);
+
+    if (atom_alpha_eq(base_context, query_context)) {
+        for (CettaExprIndex attribute = 0;
+             attribute < attributes->expr.len; attribute++) {
+            for (CettaExprIndex object = 0;
+                 object < objects->expr.len; object++) {
+                size_t cell = (size_t)attribute * object_count + object;
+                if (!snapshot->base_active[cell])
+                    continue;
+                const char *bits =
+                    rows->expr.elems[object]->expr.elems[2]->ground.sval;
+                WmFcaNativeCellEvidence *evidence = &cells[cell];
+                if (bits[attribute] == '1') {
+                    evidence->positive_count = 1;
+                    if (!wm_fca_native_add_unique(
+                            &evidence->positive_sources,
+                            &evidence->positive_source_count,
+                            &evidence->positive_source_capacity,
+                            base_source) ||
+                        !wm_fca_native_add_unique(
+                            &evidence->positive_groups,
+                            &evidence->positive_group_count,
+                            &evidence->positive_group_capacity,
+                            base_group)) {
+                        wm_fca_native_evidence_free(cells, cell_count);
+                        *error_out = atom_error(
+                            a, call,
+                            atom_symbol(a, "WMFCAEvidenceIndexTooLarge"));
+                        return NULL;
+                    }
+                } else {
+                    evidence->negative_count = 1;
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < snapshot->addition_count; i++) {
+        Atom *observation = snapshot->additions[i];
+        if (!atom_alpha_eq(observation->expr.elems[1], query_context))
+            continue;
+        CettaExprIndex object = wm_fca_native_universe_index(
+            objects, observation->expr.elems[2]);
+        CettaExprIndex attribute = wm_fca_native_universe_index(
+            attributes, observation->expr.elems[3]);
+        if (object == objects->expr.len || attribute == attributes->expr.len)
+            continue;
+        WmFcaNativeCellEvidence *evidence =
+            &cells[(size_t)attribute * object_count + object];
+        Atom *status = observation->expr.elems[4];
+        if (atom_is_symbol(status, "WMTrue")) {
+            if (evidence->positive_count == SIZE_MAX) {
+                wm_fca_native_evidence_free(cells, cell_count);
+                *error_out = atom_error(
+                    a, call,
+                    atom_symbol(a, "WMFCAEvidenceIndexTooLarge"));
+                return NULL;
+            }
+            evidence->positive_count++;
+            if (!wm_fca_native_add_unique(
+                    &evidence->positive_sources,
+                    &evidence->positive_source_count,
+                    &evidence->positive_source_capacity,
+                    observation->expr.elems[6]) ||
+                !wm_fca_native_add_unique(
+                    &evidence->positive_groups,
+                    &evidence->positive_group_count,
+                    &evidence->positive_group_capacity,
+                    observation->expr.elems[7])) {
+                wm_fca_native_evidence_free(cells, cell_count);
+                *error_out = atom_error(
+                    a, call, atom_symbol(a, "WMFCAEvidenceIndexTooLarge"));
+                return NULL;
+            }
+        } else if (atom_is_symbol(status, "WMFalse")) {
+            if (evidence->negative_count == SIZE_MAX) {
+                wm_fca_native_evidence_free(cells, cell_count);
+                *error_out = atom_error(
+                    a, call,
+                    atom_symbol(a, "WMFCAEvidenceIndexTooLarge"));
+                return NULL;
+            }
+            evidence->negative_count++;
+        } else {
+            if (evidence->unknown_count == SIZE_MAX) {
+                wm_fca_native_evidence_free(cells, cell_count);
+                *error_out = atom_error(
+                    a, call,
+                    atom_symbol(a, "WMFCAEvidenceIndexTooLarge"));
+                return NULL;
+            }
+            evidence->unknown_count++;
+        }
+    }
+    return cells;
+}
+
+static bool *wm_fca_native_event_incidence(
+    Arena *a,
+    Atom *call,
+    Atom *objects,
+    Atom *attributes,
+    Atom *rows,
+    Atom *base_context,
+    Atom *base_source,
+    Atom *base_group,
+    Atom *query_context,
+    const WmFcaNativeEventSnapshot *snapshot,
+    WmFcaNativeGateKind gate_kind,
+    const NumArg *threshold,
+    Atom **error_out) {
+    WmFcaNativeCellEvidence *cells = wm_fca_native_event_evidence(
+        a, call, objects, attributes, rows, base_context,
+        base_source, base_group, query_context, snapshot, error_out);
+    if (*error_out)
+        return NULL;
+    size_t object_count = objects->expr.len;
+    size_t cell_count = snapshot->base_cell_count;
+    bool *incidence = arena_alloc(
+        a, sizeof(bool) * (cell_count == 0 ? 1 : cell_count));
+    for (CettaExprIndex attribute = 0;
+         attribute < attributes->expr.len; attribute++) {
+        for (CettaExprIndex object = 0;
+             object < objects->expr.len; object++) {
+            size_t cell = (size_t)attribute * object_count + object;
+            incidence[cell] = wm_fca_native_gate_accepts(
+                &cells[cell], gate_kind, threshold);
+        }
+    }
+    wm_fca_native_evidence_free(cells, cell_count);
+    return incidence;
+}
+
+/* Packed four-valued evidence layers.  A layer identity names one provenance
+ * chunk: repeating an alpha-identical layer is idempotent, while reusing the
+ * identity for different content is an explicit error. */
+static bool wm_fca_native_validate_evidence_layers(
+    Arena *a,
+    Atom *call,
+    Atom *objects,
+    Atom *attributes,
+    Atom *layers,
+    Atom **error_out) {
+    *error_out = NULL;
+    for (CettaExprIndex layer_index = 0;
+         layer_index < layers->expr.len; layer_index++) {
+        Atom *layer = layers->expr.elems[layer_index];
+        if (layer->kind != ATOM_EXPR || layer->expr.len != 6 ||
+            !atom_is_symbol(layer->expr.elems[0], "WMFCAEvidenceLayer") ||
+            layer->expr.elems[5]->kind != ATOM_EXPR) {
+            *error_out = atom_error(
+                a, call, atom_symbol(a, "MalformedWMFCAEvidenceLayer"));
+            return false;
+        }
+        bool duplicate = false;
+        for (CettaExprIndex prior = 0; prior < layer_index; prior++) {
+            Atom *prior_layer = layers->expr.elems[prior];
+            if (prior_layer->kind != ATOM_EXPR || prior_layer->expr.len != 6)
+                continue;
+            if (!atom_alpha_eq(
+                    prior_layer->expr.elems[1], layer->expr.elems[1]))
+                continue;
+            if (!atom_alpha_eq(prior_layer, layer)) {
+                *error_out = atom_error(
+                    a, call,
+                    atom_symbol(a,
+                                "WMFCAConflictingEvidenceLayerIdentity"));
+                return false;
+            }
+            duplicate = true;
+            break;
+        }
+        if (duplicate)
+            continue;
+        Atom *rows = layer->expr.elems[5];
+        if (rows->expr.len != objects->expr.len) {
+            *error_out = atom_error(
+                a, call,
+                atom_symbol(a, "WMFCAEvidenceLayerRowCountMismatch"));
+            return false;
+        }
+        for (CettaExprIndex object = 0;
+             object < rows->expr.len; object++) {
+            Atom *row = rows->expr.elems[object];
+            if (row->kind != ATOM_EXPR || row->expr.len != 3 ||
+                !atom_is_symbol(row->expr.elems[0], "WMFCAStatusRow") ||
+                row->expr.elems[2]->kind != ATOM_GROUNDED ||
+                row->expr.elems[2]->ground.gkind != GV_STRING) {
+                *error_out = atom_error(
+                    a, call, atom_symbol(a, "MalformedWMFCAStatusRow"));
+                return false;
+            }
+            if (!atom_alpha_eq(
+                    row->expr.elems[1], objects->expr.elems[object])) {
+                *error_out = atom_error(
+                    a, call,
+                    atom_symbol(a, "WMFCAStatusRowObjectMismatch"));
+                return false;
+            }
+            const char *statuses = row->expr.elems[2]->ground.sval;
+            if (strlen(statuses) != (size_t)attributes->expr.len) {
+                *error_out = atom_error(
+                    a, call,
+                    atom_symbol(a, "WMFCAStatusRowWidthMismatch"));
+                return false;
+            }
+            for (CettaExprIndex attribute = 0;
+                 attribute < attributes->expr.len; attribute++) {
+                char status = statuses[attribute];
+                if (status != '1' && status != '0' &&
+                    status != 'u' && status != '.') {
+                    *error_out = atom_error(
+                        a, call,
+                        atom_symbol(a, "InvalidWMFCAStatusCell"));
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+static bool wm_fca_native_evidence_layer_is_duplicate(
+    Atom *layers,
+    CettaExprIndex layer_index) {
+    Atom *layer = layers->expr.elems[layer_index];
+    for (CettaExprIndex prior = 0; prior < layer_index; prior++) {
+        Atom *prior_layer = layers->expr.elems[prior];
+        if (atom_alpha_eq(
+                prior_layer->expr.elems[1], layer->expr.elems[1]))
+            return true;
+    }
+    return false;
+}
+
+static const char *wm_fca_native_status_symbol(char status) {
+    switch (status) {
+    case '1': return "WMTrue";
+    case '0': return "WMFalse";
+    case 'u': return "WMUnknown";
+    case '.': return NULL;
+    }
+    return NULL;
+}
+
+static Atom *wm_fca_native_evidence_layer_observation(
+    Arena *a,
+    Atom *objects,
+    Atom *attributes,
+    Atom *layer,
+    CettaExprIndex object,
+    CettaExprIndex attribute) {
+    Atom *object_atom = objects->expr.elems[object];
+    Atom *attribute_atom = attributes->expr.elems[attribute];
+    Atom *stamp_items[4] = {
+        atom_symbol(a, "WMFCALayerStamp"),
+        layer->expr.elems[1],
+        object_atom,
+        attribute_atom,
+    };
+    Atom *stamp = atom_expr(a, stamp_items, 4);
+    const char *statuses =
+        layer->expr.elems[5]->expr.elems[object]->expr.elems[2]->ground.sval;
+    Atom *observation_items[8] = {
+        atom_symbol(a, "WMFCAObservation"),
+        layer->expr.elems[2],
+        object_atom,
+        attribute_atom,
+        atom_symbol(a, wm_fca_native_status_symbol(statuses[attribute])),
+        stamp,
+        layer->expr.elems[3],
+        layer->expr.elems[4],
+    };
+    return atom_expr(a, observation_items, 8);
+}
+
+static WmFcaNativeCellEvidence *wm_fca_native_evidence_layer_evidence(
+    Arena *a,
+    Atom *call,
+    Atom *objects,
+    Atom *attributes,
+    Atom *layers,
+    Atom *query_context,
+    Atom **error_out) {
+    *error_out = NULL;
+    size_t object_count = objects->expr.len;
+    size_t attribute_count = attributes->expr.len;
+    if (attribute_count != 0 && object_count > SIZE_MAX / attribute_count) {
+        *error_out = atom_error(
+            a, call, atom_symbol(a, "WMFCAIndexDimensionsTooLarge"));
+        return NULL;
+    }
+    size_t cell_count = object_count * attribute_count;
+    if (cell_count > SIZE_MAX / sizeof(WmFcaNativeCellEvidence)) {
+        *error_out = atom_error(
+            a, call, atom_symbol(a, "WMFCAIndexDimensionsTooLarge"));
+        return NULL;
+    }
+    WmFcaNativeCellEvidence *cells = cell_count == 0
+        ? NULL
+        : cetta_malloc(sizeof(WmFcaNativeCellEvidence) * cell_count);
+    if (cells)
+        memset(cells, 0, sizeof(WmFcaNativeCellEvidence) * cell_count);
+
+    for (CettaExprIndex layer_index = 0;
+         layer_index < layers->expr.len; layer_index++) {
+        if (wm_fca_native_evidence_layer_is_duplicate(layers, layer_index))
+            continue;
+        Atom *layer = layers->expr.elems[layer_index];
+        if (!atom_alpha_eq(layer->expr.elems[2], query_context))
+            continue;
+        Atom *rows = layer->expr.elems[5];
+        for (CettaExprIndex object = 0;
+             object < objects->expr.len; object++) {
+            const char *statuses =
+                rows->expr.elems[object]->expr.elems[2]->ground.sval;
+            for (CettaExprIndex attribute = 0;
+                 attribute < attributes->expr.len; attribute++) {
+                char status = statuses[attribute];
+                if (status == '.')
+                    continue;
+                WmFcaNativeCellEvidence *evidence =
+                    &cells[(size_t)attribute * object_count + object];
+                size_t *count = status == '1'
+                    ? &evidence->positive_count
+                    : status == '0'
+                        ? &evidence->negative_count
+                        : &evidence->unknown_count;
+                if (*count == SIZE_MAX) {
+                    wm_fca_native_evidence_free(cells, cell_count);
+                    *error_out = atom_error(
+                        a, call,
+                        atom_symbol(a, "WMFCAEvidenceIndexTooLarge"));
+                    return NULL;
+                }
+                (*count)++;
+                if (status == '1' &&
+                    (!wm_fca_native_add_unique(
+                         &evidence->positive_sources,
+                         &evidence->positive_source_count,
+                         &evidence->positive_source_capacity,
+                         layer->expr.elems[3]) ||
+                     !wm_fca_native_add_unique(
+                         &evidence->positive_groups,
+                         &evidence->positive_group_count,
+                         &evidence->positive_group_capacity,
+                         layer->expr.elems[4]))) {
+                    wm_fca_native_evidence_free(cells, cell_count);
+                    *error_out = atom_error(
+                        a, call,
+                        atom_symbol(a, "WMFCAEvidenceIndexTooLarge"));
+                    return NULL;
+                }
+            }
+        }
+    }
+    return cells;
+}
+
+static bool *wm_fca_native_evidence_layer_incidence(
+    Arena *a,
+    Atom *call,
+    Atom *objects,
+    Atom *attributes,
+    Atom *layers,
+    Atom *query_context,
+    WmFcaNativeGateKind gate_kind,
+    const NumArg *threshold,
+    Atom **error_out) {
+    WmFcaNativeCellEvidence *cells =
+        wm_fca_native_evidence_layer_evidence(
+            a, call, objects, attributes, layers, query_context, error_out);
+    if (*error_out)
+        return NULL;
+    size_t object_count = objects->expr.len;
+    size_t cell_count = object_count * attributes->expr.len;
+    bool *incidence = arena_alloc(
+        a, sizeof(bool) * (cell_count == 0 ? 1 : cell_count));
+    for (CettaExprIndex attribute = 0;
+         attribute < attributes->expr.len; attribute++) {
+        for (CettaExprIndex object = 0;
+             object < objects->expr.len; object++) {
+            size_t cell = (size_t)attribute * object_count + object;
+            incidence[cell] = wm_fca_native_gate_accepts(
+                &cells[cell], gate_kind, threshold);
+        }
+    }
+    wm_fca_native_evidence_free(cells, cell_count);
+    return incidence;
+}
+
+static Atom *wm_fca_native_columns_from_incidence(
+    Arena *a,
+    Atom *objects,
+    Atom *attributes,
+    const bool *incidence) {
+    size_t object_count = objects->expr.len;
+    Atom **columns = arena_alloc(a, sizeof(Atom *) * attributes->expr.len);
+    for (CettaExprIndex attribute = 0;
+         attribute < attributes->expr.len; attribute++) {
+        Atom **members = arena_alloc(a, sizeof(Atom *) * object_count);
+        CettaExprLen member_count = 0;
+        for (CettaExprIndex object = 0;
+             object < objects->expr.len; object++) {
+            if (incidence[(size_t)attribute * object_count + object])
+                members[member_count++] = objects->expr.elems[object];
+        }
+        columns[attribute] = atom_expr3(
+            a, atom_symbol(a, "WMFCAColumn"),
+            attributes->expr.elems[attribute],
+            atom_expr(a, members, member_count));
+    }
+    return atom_expr(a, columns, attributes->expr.len);
+}
+
+static Atom *wm_fca_native_batch_from_incidence(
+    Arena *a,
+    Atom *call,
+    Atom *objects,
+    Atom *attributes,
+    const bool *incidence,
+    Atom *queries) {
+    size_t object_count = objects->expr.len;
+    size_t attribute_count = attributes->expr.len;
+    Atom **results = arena_alloc(a, sizeof(Atom *) * queries->expr.len);
+    for (CettaExprIndex query_index = 0;
+         query_index < queries->expr.len; query_index++) {
+        Atom *query = queries->expr.elems[query_index];
+        if (query->kind != ATOM_EXPR)
+            return atom_error(
+                a, call, atom_symbol(a, "MalformedWMFCABatchQuery"));
+        bool *selected = arena_alloc(
+            a, sizeof(bool) * (attribute_count == 0 ? 1 : attribute_count));
+        memset(selected, 0, sizeof(bool) * attribute_count);
+        for (CettaExprIndex item = 0; item < query->expr.len; item++) {
+            CettaExprIndex attribute = wm_fca_native_universe_index(
+                attributes, query->expr.elems[item]);
+            if (attribute < attributes->expr.len)
+                selected[attribute] = true;
+        }
+        bool *extent = arena_alloc(
+            a, sizeof(bool) * (object_count == 0 ? 1 : object_count));
+        bool *closure = arena_alloc(
+            a, sizeof(bool) * (attribute_count == 0 ? 1 : attribute_count));
+        galois_boolean_closure(
+            objects->expr.len, attributes->expr.len,
+            incidence, selected, extent, closure);
+        Atom **extent_items = arena_alloc(a, sizeof(Atom *) * object_count);
+        CettaExprLen extent_len = 0;
+        for (CettaExprIndex object = 0;
+             object < objects->expr.len; object++) {
+            if (extent[object])
+                extent_items[extent_len++] = objects->expr.elems[object];
+        }
+        Atom *result_items[4] = {
+            atom_symbol(a, "WMFCABatchQueryResult"),
+            query,
+            atom_expr(a, extent_items, extent_len),
+            galois_attribute_set_atom(a, attributes, closure),
+        };
+        results[query_index] = atom_expr(a, result_items, 4);
+    }
+    return atom_expr(a, results, queries->expr.len);
+}
+
 /* ── Dispatch ──────────────────────────────────────────────────────────── */
 
 Atom *grounded_dispatch(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
@@ -1056,6 +2291,7 @@ Atom *grounded_dispatch(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
         return grounded_space_contains_exact(a, head, args, nargs);
 
     if (head_id == g_builtin_syms.minimal_foldl_atom ||
+        head_id == g_builtin_syms.minimal_foldl_until_atom ||
         head_id == g_builtin_syms.foldl_atom_in_space)
         return grounded_foldl_in_space(a, head, args, nargs);
 
@@ -1538,6 +2774,1564 @@ Atom *grounded_dispatch(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
             out[out_len++] = candidate;
         }
         return atom_expr(a, out, out_len);
+    }
+
+    if (head_id == g_builtin_syms.member_atom_q) {
+        if (nargs != 2)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        if (args[1]->kind != ATOM_EXPR) {
+            if (args[1]->kind == ATOM_GROUNDED)
+                return grounded_bad_arg_type(a, head, args, nargs, 2,
+                                             atom_expression_type(a), args[1]);
+            return NULL;
+        }
+        for (CettaExprIndex i = 0; i < args[1]->expr.len; i++) {
+            if (atom_alpha_eq(args[0], args[1]->expr.elems[i]))
+                return atom_bool(a, true);
+        }
+        return atom_bool(a, false);
+    }
+
+    if (head_id == g_builtin_syms.subset_atom_q ||
+        head_id == g_builtin_syms.same_set_atom_q) {
+        if (nargs != 2)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        if (args[0]->kind != ATOM_EXPR || args[1]->kind != ATOM_EXPR) {
+            if (args[0]->kind == ATOM_GROUNDED)
+                return grounded_bad_arg_type(a, head, args, nargs, 1,
+                                             atom_expression_type(a), args[0]);
+            if (args[1]->kind == ATOM_GROUNDED)
+                return grounded_bad_arg_type(a, head, args, nargs, 2,
+                                             atom_expression_type(a), args[1]);
+            return NULL;
+        }
+        bool left_subset = true;
+        for (CettaExprIndex i = 0; i < args[0]->expr.len && left_subset; i++) {
+            bool found = false;
+            for (CettaExprIndex j = 0; j < args[1]->expr.len; j++) {
+                if (atom_alpha_eq(args[0]->expr.elems[i],
+                                  args[1]->expr.elems[j])) {
+                    found = true;
+                    break;
+                }
+            }
+            left_subset = found;
+        }
+        if (head_id == g_builtin_syms.subset_atom_q || !left_subset)
+            return atom_bool(a, left_subset);
+
+        for (CettaExprIndex i = 0; i < args[1]->expr.len; i++) {
+            bool found = false;
+            for (CettaExprIndex j = 0; j < args[0]->expr.len; j++) {
+                if (atom_alpha_eq(args[1]->expr.elems[i],
+                                  args[0]->expr.elems[j])) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+                return atom_bool(a, false);
+        }
+        return atom_bool(a, true);
+    }
+
+    if (head_id == g_builtin_syms.wm_fca_index_columns_atom) {
+        if (nargs != 5)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        for (uint32_t i = 0; i < 3; i++) {
+            if (args[i]->kind != ATOM_EXPR) {
+                if (args[i]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(
+                        a, head, args, nargs, i + 1,
+                        atom_expression_type(a), args[i]);
+                return NULL;
+            }
+        }
+
+        WmFcaNativeGateKind gate_kind;
+        NumArg threshold;
+        Atom *gate_error = NULL;
+        Atom *call = grounded_call_expr(a, head, args, nargs);
+        if (!wm_fca_native_parse_gate(
+                a, call, args[4], &gate_kind, &threshold, &gate_error))
+            return gate_error;
+
+        Atom *objects = args[0];
+        Atom *attributes = args[1];
+        Atom *observations = args[2];
+        Atom *context = args[3];
+        size_t object_count = objects->expr.len;
+        size_t attribute_count = attributes->expr.len;
+        if (!cetta_expr_len_mul_fits_size(
+                objects->expr.len, sizeof(Atom *)) ||
+            !cetta_expr_len_mul_fits_size(
+                attributes->expr.len, sizeof(Atom *)) ||
+            (attribute_count != 0 &&
+             object_count > SIZE_MAX / attribute_count)) {
+            return atom_error(
+                a, grounded_call_expr(a, head, args, nargs),
+                atom_symbol(a, "WMFCAIndexDimensionsTooLarge"));
+        }
+        size_t cell_count = object_count * attribute_count;
+        if (cell_count > SIZE_MAX / sizeof(WmFcaNativeCellEvidence)) {
+            return atom_error(
+                a, grounded_call_expr(a, head, args, nargs),
+                atom_symbol(a, "WMFCAIndexDimensionsTooLarge"));
+        }
+        WmFcaNativeCellEvidence *cells = cell_count == 0
+            ? NULL
+            : cetta_malloc(sizeof(WmFcaNativeCellEvidence) * cell_count);
+        if (cells)
+            memset(cells, 0,
+                   sizeof(WmFcaNativeCellEvidence) * cell_count);
+
+        for (CettaExprIndex i = 0; i < observations->expr.len; i++) {
+            Atom *observation = observations->expr.elems[i];
+            if (observation->kind != ATOM_EXPR ||
+                observation->expr.len != 8 ||
+                !atom_is_symbol(
+                    observation->expr.elems[0], "WMFCAObservation")) {
+                wm_fca_native_evidence_free(cells, cell_count);
+                return atom_error(
+                    a, grounded_call_expr(a, head, args, nargs),
+                    atom_symbol(a, "MalformedWMFCAObservation"));
+            }
+            Atom *status = observation->expr.elems[4];
+            bool positive = atom_is_symbol(status, "WMTrue");
+            bool negative = atom_is_symbol(status, "WMFalse");
+            bool unknown = atom_is_symbol(status, "WMUnknown");
+            if (!positive && !negative && !unknown) {
+                wm_fca_native_evidence_free(cells, cell_count);
+                return atom_error(
+                    a, grounded_call_expr(a, head, args, nargs),
+                    atom_symbol(a, "InvalidWMFCAObservationStatus"));
+            }
+            if (!atom_alpha_eq(observation->expr.elems[1], context))
+                continue;
+            CettaExprIndex object = wm_fca_native_universe_index(
+                objects, observation->expr.elems[2]);
+            CettaExprIndex attribute = wm_fca_native_universe_index(
+                attributes, observation->expr.elems[3]);
+            if (object == objects->expr.len ||
+                attribute == attributes->expr.len)
+                continue;
+            WmFcaNativeCellEvidence *evidence =
+                &cells[(size_t)attribute * object_count + object];
+            if (positive) {
+                evidence->positive_count++;
+                if (!wm_fca_native_add_unique(
+                        &evidence->positive_sources,
+                        &evidence->positive_source_count,
+                        &evidence->positive_source_capacity,
+                        observation->expr.elems[6]) ||
+                    !wm_fca_native_add_unique(
+                        &evidence->positive_groups,
+                        &evidence->positive_group_count,
+                        &evidence->positive_group_capacity,
+                        observation->expr.elems[7])) {
+                    wm_fca_native_evidence_free(cells, cell_count);
+                    return atom_error(
+                        a, grounded_call_expr(a, head, args, nargs),
+                        atom_symbol(a, "WMFCAEvidenceIndexTooLarge"));
+                }
+            } else if (negative) {
+                evidence->negative_count++;
+            } else {
+                evidence->unknown_count++;
+            }
+        }
+
+        Atom **columns = arena_alloc(
+            a, sizeof(Atom *) * attribute_count);
+        for (CettaExprIndex attribute = 0;
+             attribute < attributes->expr.len; attribute++) {
+            Atom **members = arena_alloc(
+                a, sizeof(Atom *) * object_count);
+            CettaExprLen member_count = 0;
+            for (CettaExprIndex object = 0;
+                 object < objects->expr.len; object++) {
+                const WmFcaNativeCellEvidence *evidence =
+                    &cells[(size_t)attribute * object_count + object];
+                if (wm_fca_native_gate_accepts(
+                        evidence, gate_kind, &threshold)) {
+                    members[member_count++] = objects->expr.elems[object];
+                }
+            }
+            columns[attribute] = atom_expr3(
+                a, atom_symbol(a, "WMFCAColumn"),
+                attributes->expr.elems[attribute],
+                atom_expr(a, members, member_count));
+        }
+        Atom *result = atom_expr(a, columns, attributes->expr.len);
+        wm_fca_native_evidence_free(cells, cell_count);
+        return result;
+    }
+
+    if (head_id == g_builtin_syms.wm_fca_binary_rows_columns_atom) {
+        if (nargs != 6)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        for (uint32_t i = 0; i < 3; i++) {
+            if (args[i]->kind != ATOM_EXPR) {
+                if (args[i]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(
+                        a, head, args, nargs, i + 1,
+                        atom_expression_type(a), args[i]);
+                return NULL;
+            }
+        }
+
+        Atom *call = grounded_call_expr(a, head, args, nargs);
+        Atom *objects = args[0];
+        Atom *attributes = args[1];
+        Atom *rows = args[2];
+        Atom *row_error = NULL;
+        if (!wm_fca_native_validate_binary_rows(
+                a, call, objects, attributes, rows, &row_error))
+            return row_error;
+
+        WmFcaNativeGateKind gate_kind;
+        NumArg threshold;
+        Atom *gate_error = NULL;
+        if (!wm_fca_native_parse_gate(
+                a, call, args[5], &gate_kind, &threshold, &gate_error))
+            return gate_error;
+
+        size_t object_count = objects->expr.len;
+        size_t attribute_count = attributes->expr.len;
+        if (!cetta_expr_len_mul_fits_size(
+                objects->expr.len, sizeof(Atom *)) ||
+            !cetta_expr_len_mul_fits_size(
+                attributes->expr.len, sizeof(Atom *)) ||
+            (attribute_count != 0 &&
+             object_count > SIZE_MAX / attribute_count)) {
+            return atom_error(
+                a, call, atom_symbol(a, "WMFCAIndexDimensionsTooLarge"));
+        }
+
+        bool same_context = atom_alpha_eq(args[3], args[4]);
+        bool *incidence = wm_fca_native_binary_incidence(
+            a, objects, attributes, rows, same_context,
+            gate_kind, &threshold);
+        Atom **columns = arena_alloc(a, sizeof(Atom *) * attribute_count);
+        for (CettaExprIndex attribute = 0;
+             attribute < attributes->expr.len; attribute++) {
+            Atom **members = arena_alloc(a, sizeof(Atom *) * object_count);
+            CettaExprLen member_count = 0;
+            for (CettaExprIndex object = 0;
+                 object < objects->expr.len; object++) {
+                if (incidence[(size_t)attribute * object_count + object]) {
+                    members[member_count++] = objects->expr.elems[object];
+                }
+            }
+            columns[attribute] = atom_expr3(
+                a, atom_symbol(a, "WMFCAColumn"),
+                attributes->expr.elems[attribute],
+                atom_expr(a, members, member_count));
+        }
+        return atom_expr(a, columns, attributes->expr.len);
+    }
+
+    if (head_id == g_builtin_syms.wm_fca_binary_cell_status_atom) {
+        if (nargs != 7)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        for (uint32_t i = 0; i < 3; i++) {
+            if (args[i]->kind != ATOM_EXPR) {
+                if (args[i]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(
+                        a, head, args, nargs, i + 1,
+                        atom_expression_type(a), args[i]);
+                return NULL;
+            }
+        }
+
+        Atom *call = grounded_call_expr(a, head, args, nargs);
+        Atom *objects = args[0];
+        Atom *attributes = args[1];
+        Atom *rows = args[2];
+        Atom *row_error = NULL;
+        if (!wm_fca_native_validate_binary_rows(
+                a, call, objects, attributes, rows, &row_error))
+            return row_error;
+        if (!atom_alpha_eq(args[3], args[4]))
+            return atom_symbol(a, "WMMissing");
+
+        CettaExprIndex object = wm_fca_native_universe_index(objects, args[5]);
+        CettaExprIndex attribute =
+            wm_fca_native_universe_index(attributes, args[6]);
+        if (object == objects->expr.len || attribute == attributes->expr.len)
+            return atom_symbol(a, "WMMissing");
+        const char *bits = rows->expr.elems[object]->expr.elems[2]->ground.sval;
+        return atom_symbol(a, bits[attribute] == '1' ? "WMTrue" : "WMFalse");
+    }
+
+    if (head_id == g_builtin_syms.wm_fca_binary_query_batch_atom) {
+        if (nargs != 7)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        for (uint32_t i = 0; i < 3; i++) {
+            if (args[i]->kind != ATOM_EXPR) {
+                if (args[i]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(
+                        a, head, args, nargs, i + 1,
+                        atom_expression_type(a), args[i]);
+                return NULL;
+            }
+        }
+        if (args[6]->kind != ATOM_EXPR) {
+            if (args[6]->kind == ATOM_GROUNDED)
+                return grounded_bad_arg_type(
+                    a, head, args, nargs, 7,
+                    atom_expression_type(a), args[6]);
+            return NULL;
+        }
+
+        Atom *call = grounded_call_expr(a, head, args, nargs);
+        Atom *objects = args[0];
+        Atom *attributes = args[1];
+        Atom *rows = args[2];
+        Atom *row_error = NULL;
+        if (!wm_fca_native_validate_binary_rows(
+                a, call, objects, attributes, rows, &row_error))
+            return row_error;
+
+        WmFcaNativeGateKind gate_kind;
+        NumArg threshold;
+        Atom *gate_error = NULL;
+        if (!wm_fca_native_parse_gate(
+                a, call, args[5], &gate_kind, &threshold, &gate_error))
+            return gate_error;
+
+        size_t object_count = objects->expr.len;
+        size_t attribute_count = attributes->expr.len;
+        if (!cetta_expr_len_mul_fits_size(
+                objects->expr.len, sizeof(bool)) ||
+            !cetta_expr_len_mul_fits_size(
+                attributes->expr.len, sizeof(bool)) ||
+            (attribute_count != 0 &&
+             object_count > SIZE_MAX / attribute_count)) {
+            return atom_error(
+                a, call, atom_symbol(a, "WMFCAIndexDimensionsTooLarge"));
+        }
+
+        bool *incidence = wm_fca_native_binary_incidence(
+            a, objects, attributes, rows,
+            atom_alpha_eq(args[3], args[4]), gate_kind, &threshold);
+        Atom *queries = args[6];
+        Atom **results = arena_alloc(
+            a, sizeof(Atom *) * queries->expr.len);
+        for (CettaExprIndex query_index = 0;
+             query_index < queries->expr.len; query_index++) {
+            Atom *query = queries->expr.elems[query_index];
+            if (query->kind != ATOM_EXPR) {
+                return atom_error(
+                    a, call, atom_symbol(a, "MalformedWMFCABatchQuery"));
+            }
+            bool *selected = arena_alloc(
+                a, sizeof(bool) * (attribute_count == 0 ? 1 : attribute_count));
+            memset(selected, 0, sizeof(bool) * attribute_count);
+            for (CettaExprIndex item = 0; item < query->expr.len; item++) {
+                CettaExprIndex attribute = wm_fca_native_universe_index(
+                    attributes, query->expr.elems[item]);
+                if (attribute < attributes->expr.len)
+                    selected[attribute] = true;
+            }
+
+            bool *extent = arena_alloc(
+                a, sizeof(bool) * (object_count == 0 ? 1 : object_count));
+            bool *closure = arena_alloc(
+                a, sizeof(bool) * (attribute_count == 0 ? 1 : attribute_count));
+            galois_boolean_closure(
+                objects->expr.len, attributes->expr.len,
+                incidence, selected, extent, closure);
+
+            Atom **extent_items = arena_alloc(
+                a, sizeof(Atom *) * object_count);
+            CettaExprLen extent_len = 0;
+            for (CettaExprIndex object = 0;
+                 object < objects->expr.len; object++) {
+                if (extent[object])
+                    extent_items[extent_len++] = objects->expr.elems[object];
+            }
+            Atom *extent_atom = atom_expr(a, extent_items, extent_len);
+            Atom *closure_atom =
+                galois_attribute_set_atom(a, attributes, closure);
+            Atom *result_items[4] = {
+                atom_symbol(a, "WMFCABatchQueryResult"),
+                query,
+                extent_atom,
+                closure_atom,
+            };
+            results[query_index] = atom_expr(a, result_items, 4);
+        }
+        return atom_expr(a, results, queries->expr.len);
+    }
+
+    if (head_id == g_builtin_syms.wm_fca_binary_event_columns_atom) {
+        if (nargs != 9)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        const uint32_t expression_args[] = {0, 1, 2, 6};
+        for (size_t i = 0;
+             i < sizeof(expression_args) / sizeof(expression_args[0]); i++) {
+            uint32_t arg = expression_args[i];
+            if (args[arg]->kind != ATOM_EXPR) {
+                if (args[arg]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(
+                        a, head, args, nargs, arg + 1,
+                        atom_expression_type(a), args[arg]);
+                return NULL;
+            }
+        }
+
+        Atom *call = grounded_call_expr(a, head, args, nargs);
+        Atom *row_error = NULL;
+        if (!wm_fca_native_validate_binary_rows(
+                a, call, args[0], args[1], args[2], &row_error))
+            return row_error;
+        WmFcaNativeGateKind gate_kind;
+        NumArg threshold;
+        Atom *gate_error = NULL;
+        if (!wm_fca_native_parse_gate(
+                a, call, args[8], &gate_kind, &threshold, &gate_error))
+            return gate_error;
+
+        WmFcaNativeEventSnapshot snapshot;
+        Atom *event_error = NULL;
+        if (!wm_fca_native_replay_binary_events(
+                a, call, args[0], args[1], args[2], args[3],
+                args[4], args[5], args[6], &snapshot, &event_error))
+            return event_error;
+        Atom *evidence_error = NULL;
+        bool *incidence = wm_fca_native_event_incidence(
+            a, call, args[0], args[1], args[2], args[3],
+            args[4], args[5], args[7], &snapshot,
+            gate_kind, &threshold, &evidence_error);
+        if (evidence_error) {
+            wm_fca_native_event_snapshot_free(&snapshot);
+            return evidence_error;
+        }
+
+        size_t object_count = args[0]->expr.len;
+        size_t attribute_count = args[1]->expr.len;
+        Atom **columns = arena_alloc(a, sizeof(Atom *) * attribute_count);
+        for (CettaExprIndex attribute = 0;
+             attribute < args[1]->expr.len; attribute++) {
+            Atom **members = arena_alloc(a, sizeof(Atom *) * object_count);
+            CettaExprLen member_count = 0;
+            for (CettaExprIndex object = 0;
+                 object < args[0]->expr.len; object++) {
+                if (incidence[(size_t)attribute * object_count + object])
+                    members[member_count++] = args[0]->expr.elems[object];
+            }
+            columns[attribute] = atom_expr3(
+                a, atom_symbol(a, "WMFCAColumn"),
+                args[1]->expr.elems[attribute],
+                atom_expr(a, members, member_count));
+        }
+        Atom *result = atom_expr(a, columns, args[1]->expr.len);
+        wm_fca_native_event_snapshot_free(&snapshot);
+        return result;
+    }
+
+    if (head_id ==
+        g_builtin_syms.wm_fca_binary_event_cell_evidence_atom) {
+        if (nargs != 10)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        const uint32_t expression_args[] = {0, 1, 2, 6};
+        for (size_t i = 0;
+             i < sizeof(expression_args) / sizeof(expression_args[0]); i++) {
+            uint32_t arg = expression_args[i];
+            if (args[arg]->kind != ATOM_EXPR) {
+                if (args[arg]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(
+                        a, head, args, nargs, arg + 1,
+                        atom_expression_type(a), args[arg]);
+                return NULL;
+            }
+        }
+        Atom *call = grounded_call_expr(a, head, args, nargs);
+        Atom *row_error = NULL;
+        if (!wm_fca_native_validate_binary_rows(
+                a, call, args[0], args[1], args[2], &row_error))
+            return row_error;
+        WmFcaNativeEventSnapshot snapshot;
+        Atom *event_error = NULL;
+        if (!wm_fca_native_replay_binary_events(
+                a, call, args[0], args[1], args[2], args[3],
+                args[4], args[5], args[6], &snapshot, &event_error))
+            return event_error;
+
+        if (snapshot.addition_count == SIZE_MAX) {
+            wm_fca_native_event_snapshot_free(&snapshot);
+            return atom_error(
+                a, call, atom_symbol(a, "WMFCAEvidenceIndexTooLarge"));
+        }
+        Atom **items = arena_alloc(
+            a, sizeof(Atom *) * (snapshot.addition_count + 1));
+        CettaExprLen len = 0;
+        CettaExprIndex object = wm_fca_native_universe_index(args[0], args[8]);
+        CettaExprIndex attribute =
+            wm_fca_native_universe_index(args[1], args[9]);
+        if (atom_alpha_eq(args[3], args[7]) &&
+            object < args[0]->expr.len && attribute < args[1]->expr.len &&
+            snapshot.base_active[
+                (size_t)attribute * args[0]->expr.len + object]) {
+            items[len++] = wm_fca_native_base_observation(
+                a, args[0], args[1], args[2], args[3], args[4], args[5],
+                object, attribute);
+        }
+        for (size_t i = 0; i < snapshot.addition_count; i++) {
+            Atom *observation = snapshot.additions[i];
+            if (atom_alpha_eq(observation->expr.elems[1], args[7]) &&
+                atom_alpha_eq(observation->expr.elems[2], args[8]) &&
+                atom_alpha_eq(observation->expr.elems[3], args[9]))
+                items[len++] = observation;
+        }
+        Atom *result = atom_expr(a, items, len);
+        wm_fca_native_event_snapshot_free(&snapshot);
+        return result;
+    }
+
+    if (head_id ==
+        g_builtin_syms.wm_fca_binary_event_observation_count_atom) {
+        if (nargs != 7)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        const uint32_t expression_args[] = {0, 1, 2, 6};
+        for (size_t i = 0;
+             i < sizeof(expression_args) / sizeof(expression_args[0]); i++) {
+            uint32_t arg = expression_args[i];
+            if (args[arg]->kind != ATOM_EXPR) {
+                if (args[arg]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(
+                        a, head, args, nargs, arg + 1,
+                        atom_expression_type(a), args[arg]);
+                return NULL;
+            }
+        }
+        Atom *call = grounded_call_expr(a, head, args, nargs);
+        Atom *row_error = NULL;
+        if (!wm_fca_native_validate_binary_rows(
+                a, call, args[0], args[1], args[2], &row_error))
+            return row_error;
+        WmFcaNativeEventSnapshot snapshot;
+        Atom *event_error = NULL;
+        if (!wm_fca_native_replay_binary_events(
+                a, call, args[0], args[1], args[2], args[3],
+                args[4], args[5], args[6], &snapshot, &event_error))
+            return event_error;
+        if ((uint64_t)snapshot.addition_count > (uint64_t)INT64_MAX) {
+            wm_fca_native_event_snapshot_free(&snapshot);
+            return atom_error(
+                a, call,
+                atom_symbol(a, "WMFCAObservationCountTooLarge"));
+        }
+        uint64_t active = (uint64_t)snapshot.addition_count;
+        for (size_t cell = 0; cell < snapshot.base_cell_count; cell++) {
+            if (snapshot.base_active[cell]) {
+                if (active == (uint64_t)INT64_MAX) {
+                    wm_fca_native_event_snapshot_free(&snapshot);
+                    return atom_error(
+                        a, call,
+                        atom_symbol(a, "WMFCAObservationCountTooLarge"));
+                }
+                active++;
+            }
+        }
+        wm_fca_native_event_snapshot_free(&snapshot);
+        return atom_int(a, (int64_t)active);
+    }
+
+    if (head_id ==
+        g_builtin_syms.wm_fca_binary_event_query_batch_atom) {
+        if (nargs != 10)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        const uint32_t expression_args[] = {0, 1, 2, 6, 9};
+        for (size_t i = 0;
+             i < sizeof(expression_args) / sizeof(expression_args[0]); i++) {
+            uint32_t arg = expression_args[i];
+            if (args[arg]->kind != ATOM_EXPR) {
+                if (args[arg]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(
+                        a, head, args, nargs, arg + 1,
+                        atom_expression_type(a), args[arg]);
+                return NULL;
+            }
+        }
+        Atom *call = grounded_call_expr(a, head, args, nargs);
+        Atom *row_error = NULL;
+        if (!wm_fca_native_validate_binary_rows(
+                a, call, args[0], args[1], args[2], &row_error))
+            return row_error;
+        WmFcaNativeGateKind gate_kind;
+        NumArg threshold;
+        Atom *gate_error = NULL;
+        if (!wm_fca_native_parse_gate(
+                a, call, args[8], &gate_kind, &threshold, &gate_error))
+            return gate_error;
+        WmFcaNativeEventSnapshot snapshot;
+        Atom *event_error = NULL;
+        if (!wm_fca_native_replay_binary_events(
+                a, call, args[0], args[1], args[2], args[3],
+                args[4], args[5], args[6], &snapshot, &event_error))
+            return event_error;
+        Atom *evidence_error = NULL;
+        bool *incidence = wm_fca_native_event_incidence(
+            a, call, args[0], args[1], args[2], args[3],
+            args[4], args[5], args[7], &snapshot,
+            gate_kind, &threshold, &evidence_error);
+        if (evidence_error) {
+            wm_fca_native_event_snapshot_free(&snapshot);
+            return evidence_error;
+        }
+
+        size_t object_count = args[0]->expr.len;
+        size_t attribute_count = args[1]->expr.len;
+        Atom *queries = args[9];
+        Atom **results = arena_alloc(a, sizeof(Atom *) * queries->expr.len);
+        for (CettaExprIndex query_index = 0;
+             query_index < queries->expr.len; query_index++) {
+            Atom *query = queries->expr.elems[query_index];
+            if (query->kind != ATOM_EXPR) {
+                wm_fca_native_event_snapshot_free(&snapshot);
+                return atom_error(
+                    a, call, atom_symbol(a, "MalformedWMFCABatchQuery"));
+            }
+            bool *selected = arena_alloc(
+                a, sizeof(bool) * (attribute_count == 0 ? 1 : attribute_count));
+            memset(selected, 0, sizeof(bool) * attribute_count);
+            for (CettaExprIndex item = 0; item < query->expr.len; item++) {
+                CettaExprIndex attribute = wm_fca_native_universe_index(
+                    args[1], query->expr.elems[item]);
+                if (attribute < args[1]->expr.len)
+                    selected[attribute] = true;
+            }
+            bool *extent = arena_alloc(
+                a, sizeof(bool) * (object_count == 0 ? 1 : object_count));
+            bool *closure = arena_alloc(
+                a, sizeof(bool) * (attribute_count == 0 ? 1 : attribute_count));
+            galois_boolean_closure(
+                args[0]->expr.len, args[1]->expr.len,
+                incidence, selected, extent, closure);
+
+            Atom **extent_items = arena_alloc(a, sizeof(Atom *) * object_count);
+            CettaExprLen extent_len = 0;
+            for (CettaExprIndex item = 0;
+                 item < args[0]->expr.len; item++) {
+                if (extent[item])
+                    extent_items[extent_len++] = args[0]->expr.elems[item];
+            }
+            Atom *result_items[4] = {
+                atom_symbol(a, "WMFCABatchQueryResult"),
+                query,
+                atom_expr(a, extent_items, extent_len),
+                galois_attribute_set_atom(a, args[1], closure),
+            };
+            results[query_index] = atom_expr(a, result_items, 4);
+        }
+        Atom *result = atom_expr(a, results, queries->expr.len);
+        wm_fca_native_event_snapshot_free(&snapshot);
+        return result;
+    }
+
+    if (head_id == g_builtin_syms.wm_fca_evidence_layer_columns_atom) {
+        if (nargs != 5)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        const uint32_t expression_args[] = {0, 1, 2};
+        for (size_t i = 0;
+             i < sizeof(expression_args) / sizeof(expression_args[0]); i++) {
+            uint32_t arg = expression_args[i];
+            if (args[arg]->kind != ATOM_EXPR) {
+                if (args[arg]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(
+                        a, head, args, nargs, arg + 1,
+                        atom_expression_type(a), args[arg]);
+                return NULL;
+            }
+        }
+        Atom *call = grounded_call_expr(a, head, args, nargs);
+        Atom *layer_error = NULL;
+        if (!wm_fca_native_validate_evidence_layers(
+                a, call, args[0], args[1], args[2], &layer_error))
+            return layer_error;
+        WmFcaNativeGateKind gate_kind;
+        NumArg threshold;
+        Atom *gate_error = NULL;
+        if (!wm_fca_native_parse_gate(
+                a, call, args[4], &gate_kind, &threshold, &gate_error))
+            return gate_error;
+        Atom *evidence_error = NULL;
+        bool *incidence = wm_fca_native_evidence_layer_incidence(
+            a, call, args[0], args[1], args[2], args[3],
+            gate_kind, &threshold, &evidence_error);
+        if (evidence_error)
+            return evidence_error;
+        return wm_fca_native_columns_from_incidence(
+            a, args[0], args[1], incidence);
+    }
+
+    if (head_id ==
+        g_builtin_syms.wm_fca_evidence_layer_cell_evidence_atom) {
+        if (nargs != 6)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        const uint32_t expression_args[] = {0, 1, 2};
+        for (size_t i = 0;
+             i < sizeof(expression_args) / sizeof(expression_args[0]); i++) {
+            uint32_t arg = expression_args[i];
+            if (args[arg]->kind != ATOM_EXPR) {
+                if (args[arg]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(
+                        a, head, args, nargs, arg + 1,
+                        atom_expression_type(a), args[arg]);
+                return NULL;
+            }
+        }
+        Atom *call = grounded_call_expr(a, head, args, nargs);
+        Atom *layer_error = NULL;
+        if (!wm_fca_native_validate_evidence_layers(
+                a, call, args[0], args[1], args[2], &layer_error))
+            return layer_error;
+        Atom **items = arena_alloc(a, sizeof(Atom *) * args[2]->expr.len);
+        CettaExprLen len = 0;
+        CettaExprIndex object = wm_fca_native_universe_index(args[0], args[4]);
+        CettaExprIndex attribute =
+            wm_fca_native_universe_index(args[1], args[5]);
+        if (object < args[0]->expr.len && attribute < args[1]->expr.len) {
+            for (CettaExprIndex layer_index = 0;
+                 layer_index < args[2]->expr.len; layer_index++) {
+                if (wm_fca_native_evidence_layer_is_duplicate(
+                        args[2], layer_index))
+                    continue;
+                Atom *layer = args[2]->expr.elems[layer_index];
+                if (!atom_alpha_eq(layer->expr.elems[2], args[3]))
+                    continue;
+                const char *statuses = layer->expr.elems[5]
+                    ->expr.elems[object]->expr.elems[2]->ground.sval;
+                if (statuses[attribute] == '.')
+                    continue;
+                items[len++] = wm_fca_native_evidence_layer_observation(
+                    a, args[0], args[1], layer, object, attribute);
+            }
+        }
+        return atom_expr(a, items, len);
+    }
+
+    if (head_id ==
+        g_builtin_syms.wm_fca_evidence_layer_observation_count_atom) {
+        if (nargs != 3)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        for (uint32_t arg = 0; arg < nargs; arg++) {
+            if (args[arg]->kind != ATOM_EXPR) {
+                if (args[arg]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(
+                        a, head, args, nargs, arg + 1,
+                        atom_expression_type(a), args[arg]);
+                return NULL;
+            }
+        }
+        Atom *call = grounded_call_expr(a, head, args, nargs);
+        Atom *layer_error = NULL;
+        if (!wm_fca_native_validate_evidence_layers(
+                a, call, args[0], args[1], args[2], &layer_error))
+            return layer_error;
+        uint64_t count = 0;
+        for (CettaExprIndex layer_index = 0;
+             layer_index < args[2]->expr.len; layer_index++) {
+            if (wm_fca_native_evidence_layer_is_duplicate(
+                    args[2], layer_index))
+                continue;
+            Atom *rows = args[2]->expr.elems[layer_index]->expr.elems[5];
+            for (CettaExprIndex object = 0;
+                 object < rows->expr.len; object++) {
+                const char *statuses =
+                    rows->expr.elems[object]->expr.elems[2]->ground.sval;
+                for (CettaExprIndex attribute = 0;
+                     attribute < args[1]->expr.len; attribute++) {
+                    if (statuses[attribute] == '.')
+                        continue;
+                    if (count == (uint64_t)INT64_MAX)
+                        return atom_error(
+                            a, call,
+                            atom_symbol(a,
+                                        "WMFCAObservationCountTooLarge"));
+                    count++;
+                }
+            }
+        }
+        return atom_int(a, (int64_t)count);
+    }
+
+    if (head_id ==
+        g_builtin_syms.wm_fca_evidence_layer_query_batch_atom) {
+        if (nargs != 6)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        const uint32_t expression_args[] = {0, 1, 2, 5};
+        for (size_t i = 0;
+             i < sizeof(expression_args) / sizeof(expression_args[0]); i++) {
+            uint32_t arg = expression_args[i];
+            if (args[arg]->kind != ATOM_EXPR) {
+                if (args[arg]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(
+                        a, head, args, nargs, arg + 1,
+                        atom_expression_type(a), args[arg]);
+                return NULL;
+            }
+        }
+        Atom *call = grounded_call_expr(a, head, args, nargs);
+        Atom *layer_error = NULL;
+        if (!wm_fca_native_validate_evidence_layers(
+                a, call, args[0], args[1], args[2], &layer_error))
+            return layer_error;
+        WmFcaNativeGateKind gate_kind;
+        NumArg threshold;
+        Atom *gate_error = NULL;
+        if (!wm_fca_native_parse_gate(
+                a, call, args[4], &gate_kind, &threshold, &gate_error))
+            return gate_error;
+        Atom *evidence_error = NULL;
+        bool *incidence = wm_fca_native_evidence_layer_incidence(
+            a, call, args[0], args[1], args[2], args[3],
+            gate_kind, &threshold, &evidence_error);
+        if (evidence_error)
+            return evidence_error;
+        return wm_fca_native_batch_from_incidence(
+            a, call, args[0], args[1], incidence, args[5]);
+    }
+
+    if (head_id == g_builtin_syms.galois_closure_atom) {
+        if (nargs != 4)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        for (uint32_t i = 0; i < nargs; i++) {
+            if (args[i]->kind != ATOM_EXPR) {
+                if (args[i]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(a, head, args, nargs, i + 1,
+                                                 atom_expression_type(a),
+                                                 args[i]);
+                return NULL;
+            }
+        }
+        Atom *objects = args[0];
+        Atom *attributes = args[1];
+        Atom *columns = args[2];
+        Atom *query = args[3];
+        if (attributes->expr.len != columns->expr.len) {
+            return atom_error(
+                a, grounded_call_expr(a, head, args, nargs),
+                atom_string(
+                    a,
+                    "galois-closure-atom expects one object column per attribute"));
+        }
+        for (CettaExprIndex i = 0; i < columns->expr.len; i++) {
+            if (columns->expr.elems[i]->kind != ATOM_EXPR) {
+                return atom_error(
+                    a, grounded_call_expr(a, head, args, nargs),
+                    atom_string(
+                        a,
+                        "galois-closure-atom expects every column to be an expression"));
+            }
+        }
+
+        bool *extent = arena_alloc(a, sizeof(bool) * objects->expr.len);
+        for (CettaExprIndex i = 0; i < objects->expr.len; i++)
+            extent[i] = true;
+
+        for (CettaExprIndex q = 0; q < query->expr.len; q++) {
+            CettaExprIndex column_index = attributes->expr.len;
+            for (CettaExprIndex i = 0; i < attributes->expr.len; i++) {
+                if (atom_alpha_eq(query->expr.elems[q],
+                                  attributes->expr.elems[i])) {
+                    column_index = i;
+                    break;
+                }
+            }
+            /* Match the MeTTa indexed semantics: out-of-domain attributes do
+             * not select a column and therefore do not change the extent. */
+            if (column_index == attributes->expr.len)
+                continue;
+            Atom *column = columns->expr.elems[column_index];
+            for (CettaExprIndex i = 0; i < objects->expr.len; i++) {
+                if (!extent[i])
+                    continue;
+                bool present = false;
+                for (CettaExprIndex j = 0; j < column->expr.len; j++) {
+                    if (atom_alpha_eq(objects->expr.elems[i],
+                                      column->expr.elems[j])) {
+                        present = true;
+                        break;
+                    }
+                }
+                extent[i] = present;
+            }
+        }
+
+        Atom **closure = arena_alloc(
+            a, sizeof(Atom *) * attributes->expr.len);
+        CettaExprLen closure_len = 0;
+        for (CettaExprIndex c = 0; c < columns->expr.len; c++) {
+            Atom *column = columns->expr.elems[c];
+            bool contains_extent = true;
+            for (CettaExprIndex i = 0;
+                 i < objects->expr.len && contains_extent; i++) {
+                if (!extent[i])
+                    continue;
+                bool present = false;
+                for (CettaExprIndex j = 0; j < column->expr.len; j++) {
+                    if (atom_alpha_eq(objects->expr.elems[i],
+                                      column->expr.elems[j])) {
+                        present = true;
+                        break;
+                    }
+                }
+                contains_extent = present;
+            }
+            if (contains_extent)
+                closure[closure_len++] = attributes->expr.elems[c];
+        }
+        return atom_expr(a, closure, closure_len);
+    }
+
+    if (head_id == g_builtin_syms.galois_intents_atom) {
+        if (nargs != 4)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        for (uint32_t i = 0; i < 3; i++) {
+            if (args[i]->kind != ATOM_EXPR) {
+                if (args[i]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(a, head, args, nargs, i + 1,
+                                                 atom_expression_type(a),
+                                                 args[i]);
+                return NULL;
+            }
+        }
+        if (args[3]->kind != ATOM_GROUNDED ||
+            args[3]->ground.gkind != GV_INT) {
+            if (args[3]->kind == ATOM_GROUNDED)
+                return atom_error(
+                    a, grounded_call_expr(a, head, args, nargs),
+                    atom_symbol(a, "IntegerEnumerationLimitExpected"));
+            return NULL;
+        }
+        Atom *objects = args[0];
+        Atom *attributes = args[1];
+        Atom *columns = args[2];
+        int64_t limit_value = args[3]->ground.ival;
+        if (limit_value <= 0) {
+            return atom_error(a, grounded_call_expr(a, head, args, nargs),
+                              atom_symbol(a, "PositiveIntegerIsExpected"));
+        }
+        if (attributes->expr.len != columns->expr.len) {
+            return atom_error(
+                a, grounded_call_expr(a, head, args, nargs),
+                atom_string(
+                    a,
+                    "galois-intents-atom expects one object column per attribute"));
+        }
+        for (CettaExprIndex i = 0; i < columns->expr.len; i++) {
+            if (columns->expr.elems[i]->kind != ATOM_EXPR) {
+                return atom_error(
+                    a, grounded_call_expr(a, head, args, nargs),
+                    atom_string(
+                        a,
+                        "galois-intents-atom expects every column to be an expression"));
+            }
+        }
+
+        CettaExprLen object_count = objects->expr.len;
+        CettaExprLen attribute_count = attributes->expr.len;
+        CettaExprLen limit = (CettaExprLen)limit_value;
+        if ((int64_t)limit != limit_value ||
+            !cetta_expr_len_mul_fits_size(limit, sizeof(Atom *)) ||
+            (object_count != 0 &&
+             attribute_count > (CettaExprLen)(SIZE_MAX / object_count))) {
+            return atom_error(a, grounded_call_expr(a, head, args, nargs),
+                              atom_symbol(a, "EnumerationLimitTooLarge"));
+        }
+
+        bool *incidence = galois_boolean_incidence(a, objects, columns);
+
+        bool *current = arena_alloc(a, sizeof(bool) * attribute_count);
+        bool *seed = arena_alloc(a, sizeof(bool) * attribute_count);
+        bool *candidate = arena_alloc(a, sizeof(bool) * attribute_count);
+        bool *extent = arena_alloc(a, sizeof(bool) * object_count);
+        CettaExprLen intent_capacity = limit < 16 ? limit : 16;
+        Atom **intents = cetta_malloc(
+            sizeof(Atom *) * (size_t)intent_capacity);
+        memset(seed, 0, sizeof(bool) * attribute_count);
+        galois_boolean_closure(object_count, attribute_count, incidence,
+                               seed, extent, current);
+
+        CettaExprLen intent_count = 0;
+        for (;;) {
+            if (intent_count == intent_capacity) {
+                CettaExprLen remaining = limit - intent_capacity;
+                CettaExprLen growth =
+                    intent_capacity < remaining ? intent_capacity : remaining;
+                intent_capacity += growth;
+                intents = cetta_realloc(
+                    intents, sizeof(Atom *) * (size_t)intent_capacity);
+            }
+            intents[intent_count++] =
+                galois_attribute_set_atom(a, attributes, current);
+
+            bool found = false;
+            for (CettaExprIndex reverse = attribute_count;
+                 reverse > 0 && !found; reverse--) {
+                CettaExprIndex pivot = reverse - 1;
+                if (current[pivot])
+                    continue;
+                for (CettaExprIndex attribute = 0;
+                     attribute < attribute_count; attribute++) {
+                    seed[attribute] =
+                        attribute < pivot ? current[attribute] : false;
+                }
+                seed[pivot] = true;
+                galois_boolean_closure(
+                    object_count, attribute_count, incidence,
+                    seed, extent, candidate);
+                bool lectic = true;
+                for (CettaExprIndex attribute = 0;
+                     attribute < pivot; attribute++) {
+                    if (candidate[attribute] && !current[attribute]) {
+                        lectic = false;
+                        break;
+                    }
+                }
+                if (lectic)
+                    found = true;
+            }
+            if (!found)
+                break;
+            if (intent_count >= limit) {
+                free(intents);
+                return atom_error(
+                    a, grounded_call_expr(a, head, args, nargs),
+                    atom_symbol(a, "GaloisEnumerationLimitExceeded"));
+            }
+            memcpy(current, candidate, sizeof(bool) * attribute_count);
+        }
+        Atom *result = atom_expr(a, intents, intent_count);
+        free(intents);
+        return result;
+    }
+
+    if (head_id == g_builtin_syms.galois_canonical_basis_atom) {
+        if (nargs != 5)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        for (uint32_t i = 0; i < 3; i++) {
+            if (args[i]->kind != ATOM_EXPR) {
+                if (args[i]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(a, head, args, nargs, i + 1,
+                                                 atom_expression_type(a),
+                                                 args[i]);
+                return NULL;
+            }
+        }
+        for (uint32_t i = 3; i < 5; i++) {
+            if (args[i]->kind != ATOM_GROUNDED ||
+                args[i]->ground.gkind != GV_INT) {
+                if (args[i]->kind == ATOM_GROUNDED)
+                    return atom_error(
+                        a, grounded_call_expr(a, head, args, nargs),
+                        atom_symbol(a, "IntegerEnumerationLimitExpected"));
+                return NULL;
+            }
+        }
+
+        Atom *objects = args[0];
+        Atom *attributes = args[1];
+        Atom *columns = args[2];
+        int64_t candidate_limit_value = args[3]->ground.ival;
+        int64_t basis_limit_value = args[4]->ground.ival;
+        if (candidate_limit_value <= 0) {
+            return atom_error(a, grounded_call_expr(a, head, args, nargs),
+                              atom_symbol(a, "PositiveCandidateLimitExpected"));
+        }
+        if (basis_limit_value < 0) {
+            return atom_error(a, grounded_call_expr(a, head, args, nargs),
+                              atom_symbol(a, "NonnegativeBasisLimitExpected"));
+        }
+        if (attributes->expr.len != columns->expr.len) {
+            return atom_error(
+                a, grounded_call_expr(a, head, args, nargs),
+                atom_string(
+                    a,
+                    "galois-canonical-basis-atom expects one object column per attribute"));
+        }
+        for (CettaExprIndex i = 0; i < columns->expr.len; i++) {
+            if (columns->expr.elems[i]->kind != ATOM_EXPR) {
+                return atom_error(
+                    a, grounded_call_expr(a, head, args, nargs),
+                    atom_string(
+                        a,
+                        "galois-canonical-basis-atom expects every column to be an expression"));
+            }
+        }
+
+        CettaExprLen object_count = objects->expr.len;
+        CettaExprLen attribute_count = attributes->expr.len;
+        CettaExprLen candidate_limit =
+            (CettaExprLen)candidate_limit_value;
+        CettaExprLen basis_limit = (CettaExprLen)basis_limit_value;
+        if ((int64_t)candidate_limit != candidate_limit_value ||
+            (int64_t)basis_limit != basis_limit_value ||
+            !cetta_expr_len_mul_fits_size(attribute_count, sizeof(bool)) ||
+            (object_count != 0 &&
+             attribute_count > (CettaExprLen)(SIZE_MAX / object_count))) {
+            return atom_error(a, grounded_call_expr(a, head, args, nargs),
+                              atom_symbol(a, "GaloisEnumerationLimitTooLarge"));
+        }
+
+        bool *incidence = galois_boolean_incidence(a, objects, columns);
+        bool *candidate = arena_alloc(a, sizeof(bool) * attribute_count);
+        bool *closure = arena_alloc(a, sizeof(bool) * attribute_count);
+        bool *difference = arena_alloc(a, sizeof(bool) * attribute_count);
+        bool *extent = arena_alloc(a, sizeof(bool) * object_count);
+        memset(candidate, 0, sizeof(bool) * attribute_count);
+
+        GaloisBasisRecord *basis = NULL;
+        CettaExprLen basis_count = 0;
+        CettaExprLen basis_capacity = 0;
+        CettaExprLen candidate_count = 0;
+
+        for (;;) {
+            if (candidate_count >= candidate_limit) {
+                free(basis);
+                return atom_error(
+                    a, grounded_call_expr(a, head, args, nargs),
+                    atom_symbol(a, "GaloisCandidateLimitExceeded"));
+            }
+            candidate_count++;
+
+            galois_boolean_closure(
+                object_count, attribute_count, incidence,
+                candidate, extent, closure);
+            if (!galois_boolean_equal(
+                    attribute_count, candidate, closure)) {
+                bool respects_prior_basis = true;
+                for (CettaExprIndex prior = 0;
+                     prior < basis_count && respects_prior_basis; prior++) {
+                    bool proper_subset =
+                        galois_boolean_subset(
+                            attribute_count,
+                            basis[prior].antecedent, candidate) &&
+                        !galois_boolean_equal(
+                            attribute_count,
+                            basis[prior].antecedent, candidate);
+                    if (proper_subset &&
+                        !galois_boolean_subset(
+                            attribute_count,
+                            basis[prior].closure, candidate))
+                        respects_prior_basis = false;
+                }
+
+                if (respects_prior_basis) {
+                    if (basis_count >= basis_limit) {
+                        free(basis);
+                        return atom_error(
+                            a, grounded_call_expr(a, head, args, nargs),
+                            atom_symbol(a, "GaloisBasisLimitExceeded"));
+                    }
+                    if (basis_count == basis_capacity) {
+                        CettaExprLen remaining =
+                            basis_limit - basis_capacity;
+                        CettaExprLen growth = basis_capacity == 0
+                            ? (remaining < 8 ? remaining : 8)
+                            : (basis_capacity < remaining
+                                ? basis_capacity : remaining);
+                        CettaExprLen next_capacity =
+                            basis_capacity + growth;
+                        if (!cetta_expr_len_mul_fits_size(
+                                next_capacity,
+                                sizeof(GaloisBasisRecord))) {
+                            free(basis);
+                            return atom_error(
+                                a, grounded_call_expr(a, head, args, nargs),
+                                atom_symbol(
+                                    a, "GaloisEnumerationLimitTooLarge"));
+                        }
+                        basis = basis_capacity == 0
+                            ? cetta_malloc(
+                                sizeof(GaloisBasisRecord) *
+                                (size_t)next_capacity)
+                            : cetta_realloc(
+                                basis,
+                                sizeof(GaloisBasisRecord) *
+                                (size_t)next_capacity);
+                        basis_capacity = next_capacity;
+                    }
+
+                    bool *stored_antecedent = arena_alloc(
+                        a, sizeof(bool) * attribute_count);
+                    bool *stored_closure = arena_alloc(
+                        a, sizeof(bool) * attribute_count);
+                    memcpy(stored_antecedent, candidate,
+                           sizeof(bool) * attribute_count);
+                    memcpy(stored_closure, closure,
+                           sizeof(bool) * attribute_count);
+                    for (CettaExprIndex attribute = 0;
+                         attribute < attribute_count; attribute++) {
+                        difference[attribute] =
+                            closure[attribute] && !candidate[attribute];
+                    }
+                    Atom *antecedent_atom = galois_attribute_set_atom(
+                        a, attributes, candidate);
+                    Atom *consequent_atom = galois_attribute_set_atom(
+                        a, attributes, difference);
+                    basis[basis_count++] = (GaloisBasisRecord){
+                        .antecedent = stored_antecedent,
+                        .closure = stored_closure,
+                        .pair = atom_expr2(
+                            a, antecedent_atom, consequent_atom),
+                    };
+                }
+            }
+
+            bool has_next = false;
+            for (CettaExprIndex attribute = 0;
+                 attribute < attribute_count; attribute++) {
+                if (!candidate[attribute]) {
+                    candidate[attribute] = true;
+                    has_next = true;
+                    break;
+                }
+                candidate[attribute] = false;
+            }
+            if (!has_next)
+                break;
+        }
+
+        Atom **pairs = arena_alloc(a, sizeof(Atom *) * basis_count);
+        for (CettaExprIndex i = 0; i < basis_count; i++)
+            pairs[i] = basis[i].pair;
+        Atom *result = atom_expr(a, pairs, basis_count);
+        free(basis);
+        return result;
+    }
+
+    if (head_id == g_builtin_syms.galois_canonical_basis_next_atom) {
+        if (nargs != 5)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        for (uint32_t i = 0; i < 3; i++) {
+            if (args[i]->kind != ATOM_EXPR) {
+                if (args[i]->kind == ATOM_GROUNDED)
+                    return grounded_bad_arg_type(a, head, args, nargs, i + 1,
+                                                 atom_expression_type(a),
+                                                 args[i]);
+                return NULL;
+            }
+        }
+        for (uint32_t i = 3; i < 5; i++) {
+            if (args[i]->kind != ATOM_GROUNDED ||
+                args[i]->ground.gkind != GV_INT) {
+                if (args[i]->kind == ATOM_GROUNDED)
+                    return atom_error(
+                        a, grounded_call_expr(a, head, args, nargs),
+                        atom_symbol(a, "IntegerEnumerationLimitExpected"));
+                return NULL;
+            }
+        }
+
+        Atom *objects = args[0];
+        Atom *attributes = args[1];
+        Atom *columns = args[2];
+        int64_t logical_limit_value = args[3]->ground.ival;
+        int64_t basis_limit_value = args[4]->ground.ival;
+        if (logical_limit_value <= 0) {
+            return atom_error(
+                a, grounded_call_expr(a, head, args, nargs),
+                atom_symbol(a, "PositiveLogicalClosureLimitExpected"));
+        }
+        if (basis_limit_value < 0) {
+            return atom_error(a, grounded_call_expr(a, head, args, nargs),
+                              atom_symbol(a, "NonnegativeBasisLimitExpected"));
+        }
+        if (attributes->expr.len != columns->expr.len) {
+            return atom_error(
+                a, grounded_call_expr(a, head, args, nargs),
+                atom_string(
+                    a,
+                    "galois-canonical-basis-next-atom expects one object column per attribute"));
+        }
+        for (CettaExprIndex i = 0; i < columns->expr.len; i++) {
+            if (columns->expr.elems[i]->kind != ATOM_EXPR) {
+                return atom_error(
+                    a, grounded_call_expr(a, head, args, nargs),
+                    atom_string(
+                        a,
+                        "galois-canonical-basis-next-atom expects every column to be an expression"));
+            }
+        }
+
+        CettaExprLen object_count = objects->expr.len;
+        CettaExprLen attribute_count = attributes->expr.len;
+        CettaExprLen logical_limit = (CettaExprLen)logical_limit_value;
+        CettaExprLen basis_limit = (CettaExprLen)basis_limit_value;
+        if ((int64_t)logical_limit != logical_limit_value ||
+            (int64_t)basis_limit != basis_limit_value ||
+            !cetta_expr_len_mul_fits_size(attribute_count, sizeof(bool)) ||
+            (object_count != 0 &&
+             attribute_count > (CettaExprLen)(SIZE_MAX / object_count))) {
+            return atom_error(a, grounded_call_expr(a, head, args, nargs),
+                              atom_symbol(a, "GaloisEnumerationLimitTooLarge"));
+        }
+
+        bool *incidence = galois_boolean_incidence(a, objects, columns);
+        bool *current = arena_alloc(a, sizeof(bool) * attribute_count);
+        bool *seed = arena_alloc(a, sizeof(bool) * attribute_count);
+        bool *candidate = arena_alloc(a, sizeof(bool) * attribute_count);
+        bool *closure = arena_alloc(a, sizeof(bool) * attribute_count);
+        bool *difference = arena_alloc(a, sizeof(bool) * attribute_count);
+        bool *extent = arena_alloc(a, sizeof(bool) * object_count);
+        memset(current, 0, sizeof(bool) * attribute_count);
+
+        GaloisBasisRecord *basis = NULL;
+        CettaExprLen basis_count = 0;
+        CettaExprLen basis_capacity = 0;
+        CettaExprLen logical_count = 0;
+
+        for (;;) {
+            if (logical_count >= logical_limit) {
+                free(basis);
+                return atom_error(
+                    a, grounded_call_expr(a, head, args, nargs),
+                    atom_symbol(a, "GaloisLogicalClosureLimitExceeded"));
+            }
+            logical_count++;
+
+            galois_boolean_closure(
+                object_count, attribute_count, incidence,
+                current, extent, closure);
+            if (!galois_boolean_equal(
+                    attribute_count, current, closure)) {
+                if (basis_count >= basis_limit) {
+                    free(basis);
+                    return atom_error(
+                        a, grounded_call_expr(a, head, args, nargs),
+                        atom_symbol(a, "GaloisBasisLimitExceeded"));
+                }
+                if (basis_count == basis_capacity) {
+                    CettaExprLen remaining = basis_limit - basis_capacity;
+                    CettaExprLen growth = basis_capacity == 0
+                        ? (remaining < 8 ? remaining : 8)
+                        : (basis_capacity < remaining
+                            ? basis_capacity : remaining);
+                    CettaExprLen next_capacity = basis_capacity + growth;
+                    if (!cetta_expr_len_mul_fits_size(
+                            next_capacity, sizeof(GaloisBasisRecord))) {
+                        free(basis);
+                        return atom_error(
+                            a, grounded_call_expr(a, head, args, nargs),
+                            atom_symbol(a, "GaloisEnumerationLimitTooLarge"));
+                    }
+                    basis = basis_capacity == 0
+                        ? cetta_malloc(
+                            sizeof(GaloisBasisRecord) *
+                            (size_t)next_capacity)
+                        : cetta_realloc(
+                            basis,
+                            sizeof(GaloisBasisRecord) *
+                            (size_t)next_capacity);
+                    basis_capacity = next_capacity;
+                }
+
+                bool *stored_antecedent = arena_alloc(
+                    a, sizeof(bool) * attribute_count);
+                bool *stored_closure = arena_alloc(
+                    a, sizeof(bool) * attribute_count);
+                memcpy(stored_antecedent, current,
+                       sizeof(bool) * attribute_count);
+                memcpy(stored_closure, closure,
+                       sizeof(bool) * attribute_count);
+                for (CettaExprIndex attribute = 0;
+                     attribute < attribute_count; attribute++) {
+                    difference[attribute] =
+                        closure[attribute] && !current[attribute];
+                }
+                Atom *antecedent_atom = galois_attribute_set_atom(
+                    a, attributes, current);
+                Atom *consequent_atom = galois_attribute_set_atom(
+                    a, attributes, difference);
+                basis[basis_count++] = (GaloisBasisRecord){
+                    .antecedent = stored_antecedent,
+                    .closure = stored_closure,
+                    .pair = atom_expr2(
+                        a, antecedent_atom, consequent_atom),
+                };
+            }
+
+            bool found = false;
+            for (CettaExprIndex reverse = attribute_count;
+                 reverse > 0 && !found; reverse--) {
+                CettaExprIndex pivot = reverse - 1;
+                if (current[pivot])
+                    continue;
+                for (CettaExprIndex attribute = 0;
+                     attribute < attribute_count; attribute++) {
+                    seed[attribute] =
+                        attribute < pivot ? current[attribute] : false;
+                }
+                seed[pivot] = true;
+                galois_boolean_pseudo_closure(
+                    attribute_count, basis, basis_count, seed, candidate);
+                bool lectic = true;
+                for (CettaExprIndex attribute = 0;
+                     attribute < pivot; attribute++) {
+                    if (candidate[attribute] && !current[attribute]) {
+                        lectic = false;
+                        break;
+                    }
+                }
+                if (lectic)
+                    found = true;
+            }
+            if (!found)
+                break;
+            memcpy(current, candidate, sizeof(bool) * attribute_count);
+        }
+
+        Atom **pairs = arena_alloc(a, sizeof(Atom *) * basis_count);
+        for (CettaExprIndex i = 0; i < basis_count; i++)
+            pairs[i] = basis[i].pair;
+        Atom *result = atom_expr(a, pairs, basis_count);
+        free(basis);
+        return result;
+    }
+
+    if (head_id == g_builtin_syms.subset_cover_relations_atom) {
+        if (nargs != 3)
+            return grounded_incorrect_arity(a, head, args, nargs);
+        if (args[0]->kind != ATOM_EXPR) {
+            if (args[0]->kind == ATOM_GROUNDED)
+                return grounded_bad_arg_type(a, head, args, nargs, 1,
+                                             atom_expression_type(a), args[0]);
+            return NULL;
+        }
+        for (uint32_t i = 1; i < 3; i++) {
+            if (args[i]->kind != ATOM_GROUNDED ||
+                args[i]->ground.gkind != GV_INT) {
+                if (args[i]->kind == ATOM_GROUNDED)
+                    return atom_error(
+                        a, grounded_call_expr(a, head, args, nargs),
+                        atom_symbol(a, "IntegerEnumerationLimitExpected"));
+                return NULL;
+            }
+        }
+
+        int64_t family_limit_value = args[1]->ground.ival;
+        int64_t cover_limit_value = args[2]->ground.ival;
+        if (family_limit_value <= 0) {
+            return atom_error(a, grounded_call_expr(a, head, args, nargs),
+                              atom_symbol(a, "PositiveFamilyLimitExpected"));
+        }
+        if (cover_limit_value < 0) {
+            return atom_error(a, grounded_call_expr(a, head, args, nargs),
+                              atom_symbol(a, "NonnegativeCoverLimitExpected"));
+        }
+
+        CettaExprLen family_limit = (CettaExprLen)family_limit_value;
+        CettaExprLen cover_limit = (CettaExprLen)cover_limit_value;
+        if ((int64_t)family_limit != family_limit_value ||
+            (int64_t)cover_limit != cover_limit_value ||
+            !cetta_expr_len_mul_fits_size(cover_limit, sizeof(Atom *))) {
+            return atom_error(a, grounded_call_expr(a, head, args, nargs),
+                              atom_symbol(a, "SubsetCoverLimitTooLarge"));
+        }
+
+        Atom *family = args[0];
+        if (family->expr.len > family_limit) {
+            return atom_error(a, grounded_call_expr(a, head, args, nargs),
+                              atom_symbol(a, "SubsetCoverFamilyLimitExceeded"));
+        }
+        for (CettaExprIndex i = 0; i < family->expr.len; i++) {
+            if (family->expr.elems[i]->kind != ATOM_EXPR) {
+                return atom_error(
+                    a, grounded_call_expr(a, head, args, nargs),
+                    atom_string(
+                        a,
+                        "subset-cover-relations-atom expects a family of expressions"));
+            }
+        }
+
+        Atom **sets = arena_alloc(
+            a, sizeof(Atom *) * (size_t)family->expr.len);
+        CettaExprLen set_count = 0;
+        for (CettaExprIndex i = 0; i < family->expr.len; i++) {
+            Atom *candidate = family->expr.elems[i];
+            bool duplicate = false;
+            for (CettaExprIndex j = 0; j < set_count; j++) {
+                if (expression_set_equal(candidate, sets[j])) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate)
+                sets[set_count++] = candidate;
+        }
+
+        if (set_count != 0 &&
+            (size_t)set_count > SIZE_MAX / (size_t)set_count) {
+            return atom_error(a, grounded_call_expr(a, head, args, nargs),
+                              atom_symbol(a, "SubsetCoverLimitTooLarge"));
+        }
+        size_t relation_cells = (size_t)set_count * (size_t)set_count;
+        bool *strict_subset = cetta_malloc(
+            relation_cells == 0 ? 1 : relation_cells * sizeof(bool));
+        memset(strict_subset, 0, relation_cells * sizeof(bool));
+        for (CettaExprIndex left = 0; left < set_count; left++) {
+            for (CettaExprIndex right = 0; right < set_count; right++) {
+                if (left == right)
+                    continue;
+                bool left_subset = expression_set_subset(sets[left], sets[right]);
+                strict_subset[(size_t)left * set_count + right] =
+                    left_subset && !expression_set_subset(sets[right], sets[left]);
+            }
+        }
+
+        Atom **covers = NULL;
+        CettaExprLen cover_count = 0;
+        CettaExprLen cover_capacity = 0;
+        for (CettaExprIndex general = 0; general < set_count; general++) {
+            for (CettaExprIndex specific = 0; specific < set_count; specific++) {
+                if (!strict_subset[(size_t)general * set_count + specific])
+                    continue;
+                bool has_middle = false;
+                for (CettaExprIndex middle = 0;
+                     middle < set_count && !has_middle; middle++) {
+                    has_middle =
+                        strict_subset[(size_t)general * set_count + middle] &&
+                        strict_subset[(size_t)middle * set_count + specific];
+                }
+                if (has_middle)
+                    continue;
+                if (cover_count >= cover_limit) {
+                    free(strict_subset);
+                    free(covers);
+                    return atom_error(
+                        a, grounded_call_expr(a, head, args, nargs),
+                        atom_symbol(a, "SubsetCoverLimitExceeded"));
+                }
+                if (cover_count == cover_capacity) {
+                    CettaExprLen remaining = cover_limit - cover_capacity;
+                    CettaExprLen growth = cover_capacity == 0
+                        ? (remaining < 8 ? remaining : 8)
+                        : (cover_capacity < remaining
+                            ? cover_capacity : remaining);
+                    CettaExprLen next_capacity = cover_capacity + growth;
+                    covers = cover_capacity == 0
+                        ? cetta_malloc(sizeof(Atom *) * (size_t)next_capacity)
+                        : cetta_realloc(
+                            covers, sizeof(Atom *) * (size_t)next_capacity);
+                    cover_capacity = next_capacity;
+                }
+                covers[cover_count++] =
+                    atom_expr2(a, sets[general], sets[specific]);
+            }
+        }
+
+        Atom **result_items = arena_alloc(
+            a, sizeof(Atom *) * (size_t)cover_count);
+        for (CettaExprIndex i = 0; i < cover_count; i++)
+            result_items[i] = covers[i];
+        Atom *result = atom_expr(a, result_items, cover_count);
+        free(strict_subset);
+        free(covers);
+        return result;
     }
 
     /* ── Structural equality (any atom type) ───────────────────────────── */

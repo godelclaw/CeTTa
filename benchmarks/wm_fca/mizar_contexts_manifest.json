@@ -1,0 +1,116 @@
+{
+  "schema": "wm-fca-context-manifest-v1",
+  "upstream": {
+    "repository": "https://github.com/zariuq/MeTTapedia",
+    "commit": "f93a93f7d4d62d90e22812295b7e46c036458603",
+    "source_id": "mettapedia-mizar-family",
+    "license": "MIT",
+    "validation_role": "project semantic case study, not independent external validation"
+  },
+  "contexts": {
+    "mizar_conlat_1": {
+      "path": "mizar_contexts/conlat_1.cxt",
+      "sha256": "095f36e87b8111fc9b51896a31d28981ba8e38060f0c7c71412a1cb6135450e3",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/conlat_1.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article conlat_1.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-conlat-1-extraction"
+    },
+    "mizar_conlat_2": {
+      "path": "mizar_contexts/conlat_2.cxt",
+      "sha256": "52ec90abd002554ecef4d98a835911ded9d8195e495864490da29dd945ffbb19",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/conlat_2.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article conlat_2.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-conlat-2-extraction"
+    },
+    "mizar_yellow_0": {
+      "path": "mizar_contexts/yellow_0.cxt",
+      "sha256": "d0ca8ecbd78006652e99ebb8728e28cda3b8abebbd19640a3583dc47a64258a2",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/yellow_0.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article yellow_0.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-yellow-0-extraction"
+    },
+    "mizar_yellow_1": {
+      "path": "mizar_contexts/yellow_1.cxt",
+      "sha256": "8f3f87fcb2eafb82fc21b9f3803e5a4d4108b092a3127b2ca9ff6287563108a1",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/yellow_1.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article yellow_1.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-yellow-1-extraction"
+    },
+    "mizar_yellow_2": {
+      "path": "mizar_contexts/yellow_2.cxt",
+      "sha256": "30621625b97e12042d10292d60d114fc95a67c78d395cc987b94660d69f50188",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/yellow_2.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article yellow_2.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-yellow-2-extraction"
+    },
+    "mizar_yellow_3": {
+      "path": "mizar_contexts/yellow_3.cxt",
+      "sha256": "4a845cdc6f285be3b561817cbfd25bf38b68fdf7d7df6f663147f0aa24bb8687",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/yellow_3.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article yellow_3.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-yellow-3-extraction"
+    },
+    "mizar_waybel_0": {
+      "path": "mizar_contexts/waybel_0.cxt",
+      "sha256": "8ee1793cf8cd53f8bef3b8c857c4771879ecc34b0516f42489ec1f170dedca5e",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/waybel_0.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article waybel_0.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-waybel-0-extraction"
+    },
+    "mizar_waybel_1": {
+      "path": "mizar_contexts/waybel_1.cxt",
+      "sha256": "282ad2a6ed4d95982b7a4a8c8ea8a13b5b6fb3a4333e3007601c4df0c52d7047",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/waybel_1.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article waybel_1.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-waybel-1-extraction"
+    },
+    "mizar_lattices": {
+      "path": "mizar_contexts/lattices.cxt",
+      "sha256": "d2251384ef2436061733ab59c44ca0f35913a5b01dcfa9c41d8004e8df10b968",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/lattices.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article lattices.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-lattices-extraction"
+    },
+    "mizar_lattice2": {
+      "path": "mizar_contexts/lattice2.cxt",
+      "sha256": "46fe11c557ac85009434ad17aca60a49a15ba9fa56a25f67d79d0ff418645a9b",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/lattice2.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article lattice2.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-lattice2-extraction"
+    },
+    "mizar_lattice3": {
+      "path": "mizar_contexts/lattice3.cxt",
+      "sha256": "13941812be5ea09a777407e1dccc61537f9d863eb221e7c41e2b1defb38f60ca",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/lattice3.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article lattice3.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-lattice3-extraction"
+    },
+    "mizar_lattice4": {
+      "path": "mizar_contexts/lattice4.cxt",
+      "sha256": "b1f59280ad434183988d0487525223e9eaf942d21e6ebe4e57b4190d36c3c405",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/lattice4.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article lattice4.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-lattice4-extraction"
+    },
+    "mizar_lattice6": {
+      "path": "mizar_contexts/lattice6.cxt",
+      "sha256": "9e7a34527b0293875e3f1537f4148105e03318a5c07b2b2fd7d74459c4222e11",
+      "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/lattice6.cxt",
+      "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article lattice6.miz.",
+      "matrix_label": "complete positive-occurrence article context",
+      "dependence_group": "mizar-lattice6-extraction"
+    }
+  }
+}

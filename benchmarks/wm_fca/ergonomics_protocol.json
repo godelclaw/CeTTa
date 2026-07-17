@@ -1,0 +1,49 @@
+{
+  "schema": "wm-fca-ergonomics-protocol-v1",
+  "measurement_scope": "end-to-end process startup, parsing, native execution, and golden-output validation",
+  "language": "he",
+  "profile": "he-extended",
+  "warmup_runs_per_case": 1,
+  "cases": [
+    {
+      "id": "bob_ross_query_batch",
+      "program": "benchmarks/wm_fca/test_bob_ross_scale_queries.metta",
+      "expected": "benchmarks/wm_fca/test_bob_ross_scale_queries.expected",
+      "work_unit": "closure_query",
+      "work_unit_count": 82,
+      "interpretation": "403-object by 67-attribute query-only context"
+    },
+    {
+      "id": "bob_ross_event_replay",
+      "program": "benchmarks/wm_fca/test_bob_ross_event_replay_only.metta",
+      "expected": "benchmarks/wm_fca/test_bob_ross_event_replay_only.expected",
+      "work_unit": "event_operation",
+      "work_unit_count": 14,
+      "interpretation": "end-to-end immutable event replay without FCA queries"
+    },
+    {
+      "id": "query_certificates",
+      "program": "tests/test_wm_fca_query_certificates.metta",
+      "expected": "tests/test_wm_fca_query_certificates.expected",
+      "work_unit": "verified_assertion",
+      "work_unit_count": 24,
+      "interpretation": "closure, implication, and concept certificate behavior"
+    }
+  ],
+  "certificate_coverage": [
+    "closure-positive",
+    "closure-tamper-negative",
+    "required-cell-positive",
+    "unrelated-cell-negative",
+    "positive-and-negative-cell-evidence",
+    "implication-positive",
+    "implication-negative",
+    "implication-tamper-negative",
+    "concept-positive",
+    "concept-negative",
+    "concept-tamper-negative",
+    "snapshot-history-unavailable",
+    "event-history-retained",
+    "typed-query-wrapper"
+  ]
+}

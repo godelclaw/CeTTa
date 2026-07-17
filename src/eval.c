@@ -1696,6 +1696,38 @@ static bool grounded_dispatch_accepts_data_arg(Atom *head, uint32_t arg_index) {
     if (head->sym_id == g_builtin_syms.minimal_foldl_llist &&
         (arg_index == 0 || arg_index == 4))
         return true;
+    if (head->sym_id == g_builtin_syms.minimal_foldl_until_atom &&
+        (arg_index == 0 || arg_index == 1 || arg_index == 4))
+        return true;
+    if (head->sym_id == g_builtin_syms.member_atom_q && arg_index == 1)
+        return true;
+    if ((head->sym_id == g_builtin_syms.subset_atom_q ||
+         head->sym_id == g_builtin_syms.same_set_atom_q) &&
+        arg_index < 2)
+        return true;
+    if (head->sym_id == g_builtin_syms.galois_closure_atom && arg_index < 4)
+        return true;
+    if (head->sym_id == g_builtin_syms.galois_intents_atom && arg_index < 3)
+        return true;
+    if ((head->sym_id == g_builtin_syms.galois_canonical_basis_atom ||
+         head->sym_id == g_builtin_syms.galois_canonical_basis_next_atom) &&
+        arg_index < 3)
+        return true;
+    if (head->sym_id == g_builtin_syms.wm_fca_index_columns_atom &&
+        arg_index < 5)
+        return true;
+    if (head->sym_id == g_builtin_syms.wm_fca_binary_rows_columns_atom &&
+        arg_index < 6)
+        return true;
+    if (head->sym_id == g_builtin_syms.wm_fca_binary_cell_status_atom &&
+        arg_index < 7)
+        return true;
+    if (head->sym_id == g_builtin_syms.wm_fca_binary_query_batch_atom &&
+        arg_index < 7)
+        return true;
+    if (head->sym_id == g_builtin_syms.subset_cover_relations_atom &&
+        arg_index == 0)
+        return true;
     if (head->sym_id == g_builtin_syms.minimal_space_contains_exact &&
         arg_index == 1)
         return true;

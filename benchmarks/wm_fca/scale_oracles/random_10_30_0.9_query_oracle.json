@@ -1,0 +1,1669 @@
+{
+  "attribute_count": 30,
+  "attribute_symbols": {
+    "m_0": "attribute_000_m_0",
+    "m_1": "attribute_001_m_1",
+    "m_10": "attribute_010_m_10",
+    "m_11": "attribute_011_m_11",
+    "m_12": "attribute_012_m_12",
+    "m_13": "attribute_013_m_13",
+    "m_14": "attribute_014_m_14",
+    "m_15": "attribute_015_m_15",
+    "m_16": "attribute_016_m_16",
+    "m_17": "attribute_017_m_17",
+    "m_18": "attribute_018_m_18",
+    "m_19": "attribute_019_m_19",
+    "m_2": "attribute_002_m_2",
+    "m_20": "attribute_020_m_20",
+    "m_21": "attribute_021_m_21",
+    "m_22": "attribute_022_m_22",
+    "m_23": "attribute_023_m_23",
+    "m_24": "attribute_024_m_24",
+    "m_25": "attribute_025_m_25",
+    "m_26": "attribute_026_m_26",
+    "m_27": "attribute_027_m_27",
+    "m_28": "attribute_028_m_28",
+    "m_29": "attribute_029_m_29",
+    "m_3": "attribute_003_m_3",
+    "m_4": "attribute_004_m_4",
+    "m_5": "attribute_005_m_5",
+    "m_6": "attribute_006_m_6",
+    "m_7": "attribute_007_m_7",
+    "m_8": "attribute_008_m_8",
+    "m_9": "attribute_009_m_9"
+  },
+  "attributes": [
+    "m_0",
+    "m_1",
+    "m_2",
+    "m_3",
+    "m_4",
+    "m_5",
+    "m_6",
+    "m_7",
+    "m_8",
+    "m_9",
+    "m_10",
+    "m_11",
+    "m_12",
+    "m_13",
+    "m_14",
+    "m_15",
+    "m_16",
+    "m_17",
+    "m_18",
+    "m_19",
+    "m_20",
+    "m_21",
+    "m_22",
+    "m_23",
+    "m_24",
+    "m_25",
+    "m_26",
+    "m_27",
+    "m_28",
+    "m_29"
+  ],
+  "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+  "context_id": "random_10_30_0.9",
+  "context_name": "random_10_30_0.9",
+  "context_sha256": "cd45bcd02b1422b8943147e40bf732deebfbeb41661e7cf4681b5f677b3238b4",
+  "dependence_group": "random_10_30_0.9-generated-matrix",
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "false_cell": [
+      "object_000_g_0",
+      "attribute_017_m_17"
+    ],
+    "true_cell": [
+      "object_000_g_0",
+      "attribute_000_m_0"
+    ]
+  },
+  "execution_policy": "query-only",
+  "false_cell_count": 33,
+  "manifest_sha256": "269ddc445a20ff0fc30215dc2685c5565a61d5bdcc349343cb1a3577db2085de",
+  "matrix_label": "FCApy controlled random matrix",
+  "object_count": 10,
+  "object_symbols": {
+    "g_0": "object_000_g_0",
+    "g_1": "object_001_g_1",
+    "g_2": "object_002_g_2",
+    "g_3": "object_003_g_3",
+    "g_4": "object_004_g_4",
+    "g_5": "object_005_g_5",
+    "g_6": "object_006_g_6",
+    "g_7": "object_007_g_7",
+    "g_8": "object_008_g_8",
+    "g_9": "object_009_g_9"
+  },
+  "objects": [
+    "g_0",
+    "g_1",
+    "g_2",
+    "g_3",
+    "g_4",
+    "g_5",
+    "g_6",
+    "g_7",
+    "g_8",
+    "g_9"
+  ],
+  "oracle_agreement": {
+    "direct_closures_equal_concepts_0_9_2": true,
+    "direct_extents_equal_concepts_0_9_2": true
+  },
+  "protocol_sha256": "fb46ad6fea1c40be6b1ce1d261e1c7a54e79620206b849eeffdf0f808cafc46b",
+  "queries": [
+    {
+      "candidate": [],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_000_m_0"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_001_m_1"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_026_m_26",
+        "attribute_027_m_27"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_002_m_2"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_007_m_7",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_029_m_29"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_003_m_3"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_004_m_4"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_024_m_24",
+        "attribute_029_m_29"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_005_m_5"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_006_m_6"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_022_m_22",
+        "attribute_025_m_25",
+        "attribute_028_m_28"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_007_m_7"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_007_m_7",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_008_m_8"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_021_m_21",
+        "attribute_022_m_22",
+        "attribute_025_m_25",
+        "attribute_028_m_28"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_009_m_9"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_010_m_10"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_010_m_10",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_026_m_26",
+        "attribute_027_m_27"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_007_g_7",
+        "object_008_g_8"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_011_m_11"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_011_m_11",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_029_m_29"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_006_g_6",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_012_m_12"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_013_m_13"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_026_m_26",
+        "attribute_027_m_27"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_014_m_14"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_015_m_15"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_026_m_26",
+        "attribute_027_m_27"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_016_m_16"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_017_m_17"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_007_m_7",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_017_m_17",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_018_m_18"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_019_m_19"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_020_m_20"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_021_m_21"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_021_m_21",
+        "attribute_022_m_22",
+        "attribute_025_m_25",
+        "attribute_028_m_28"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_022_m_22"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_022_m_22",
+        "attribute_025_m_25",
+        "attribute_028_m_28"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_023_m_23"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_007_m_7",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_023_m_23"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_024_m_24"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_024_m_24",
+        "attribute_029_m_29"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_025_m_25"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_022_m_22",
+        "attribute_025_m_25",
+        "attribute_028_m_28"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_026_m_26"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_026_m_26",
+        "attribute_027_m_27"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_027_m_27"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_026_m_26",
+        "attribute_027_m_27"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_028_m_28"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_022_m_22",
+        "attribute_025_m_25",
+        "attribute_028_m_28"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_029_m_29"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_029_m_29"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_000_m_0",
+        "attribute_001_m_1"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_005_m_5",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_026_m_26",
+        "attribute_027_m_27"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_021_m_21",
+        "attribute_022_m_22",
+        "attribute_025_m_25",
+        "attribute_028_m_28"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_016_m_16",
+        "attribute_017_m_17"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_007_m_7",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_017_m_17",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20"
+      ],
+      "extent": [
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_024_m_24",
+        "attribute_025_m_25"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_014_m_14",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_021_m_21",
+        "attribute_022_m_22",
+        "attribute_024_m_24",
+        "attribute_025_m_25",
+        "attribute_028_m_28",
+        "attribute_029_m_29"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_004_g_4",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_007_m_7",
+        "attribute_009_m_9",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_026_m_26",
+        "attribute_027_m_27",
+        "attribute_029_m_29"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9",
+        "attribute_010_m_10",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_021_m_21",
+        "attribute_022_m_22",
+        "attribute_023_m_23",
+        "attribute_024_m_24",
+        "attribute_025_m_25",
+        "attribute_026_m_26",
+        "attribute_027_m_27",
+        "attribute_028_m_28",
+        "attribute_029_m_29"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_002_g_2",
+        "object_007_g_7",
+        "object_008_g_8"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9",
+        "attribute_010_m_10",
+        "attribute_011_m_11",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9",
+        "attribute_010_m_10",
+        "attribute_011_m_11",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15",
+        "attribute_016_m_16",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_021_m_21",
+        "attribute_022_m_22",
+        "attribute_023_m_23",
+        "attribute_024_m_24",
+        "attribute_025_m_25",
+        "attribute_026_m_26",
+        "attribute_027_m_27",
+        "attribute_028_m_28",
+        "attribute_029_m_29"
+      ],
+      "extent": [
+        "object_000_g_0",
+        "object_008_g_8"
+      ]
+    },
+    {
+      "candidate": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9",
+        "attribute_010_m_10",
+        "attribute_011_m_11",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15",
+        "attribute_016_m_16",
+        "attribute_017_m_17",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_021_m_21",
+        "attribute_022_m_22",
+        "attribute_023_m_23",
+        "attribute_024_m_24",
+        "attribute_025_m_25",
+        "attribute_026_m_26",
+        "attribute_027_m_27",
+        "attribute_028_m_28",
+        "attribute_029_m_29"
+      ],
+      "closure": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9",
+        "attribute_010_m_10",
+        "attribute_011_m_11",
+        "attribute_012_m_12",
+        "attribute_013_m_13",
+        "attribute_014_m_14",
+        "attribute_015_m_15",
+        "attribute_016_m_16",
+        "attribute_017_m_17",
+        "attribute_018_m_18",
+        "attribute_019_m_19",
+        "attribute_020_m_20",
+        "attribute_021_m_21",
+        "attribute_022_m_22",
+        "attribute_023_m_23",
+        "attribute_024_m_24",
+        "attribute_025_m_25",
+        "attribute_026_m_26",
+        "attribute_027_m_27",
+        "attribute_028_m_28",
+        "attribute_029_m_29"
+      ],
+      "extent": [
+        "object_008_g_8"
+      ]
+    }
+  ],
+  "query_count": 39,
+  "schema": "wm-fca-scale-query-oracle-v1",
+  "source_path": "FCA_python_packages/performance_benchmark.py",
+  "true_cell_count": 267,
+  "true_incidence": {
+    "object_000_g_0": [
+      "attribute_000_m_0",
+      "attribute_001_m_1",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_004_m_4",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8",
+      "attribute_009_m_9",
+      "attribute_010_m_10",
+      "attribute_011_m_11",
+      "attribute_012_m_12",
+      "attribute_013_m_13",
+      "attribute_014_m_14",
+      "attribute_015_m_15",
+      "attribute_016_m_16",
+      "attribute_018_m_18",
+      "attribute_019_m_19",
+      "attribute_020_m_20",
+      "attribute_021_m_21",
+      "attribute_022_m_22",
+      "attribute_023_m_23",
+      "attribute_024_m_24",
+      "attribute_025_m_25",
+      "attribute_026_m_26",
+      "attribute_027_m_27",
+      "attribute_028_m_28",
+      "attribute_029_m_29"
+    ],
+    "object_001_g_1": [
+      "attribute_000_m_0",
+      "attribute_001_m_1",
+      "attribute_003_m_3",
+      "attribute_004_m_4",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_008_m_8",
+      "attribute_009_m_9",
+      "attribute_010_m_10",
+      "attribute_011_m_11",
+      "attribute_012_m_12",
+      "attribute_013_m_13",
+      "attribute_014_m_14",
+      "attribute_015_m_15",
+      "attribute_016_m_16",
+      "attribute_018_m_18",
+      "attribute_019_m_19",
+      "attribute_020_m_20",
+      "attribute_021_m_21",
+      "attribute_022_m_22",
+      "attribute_024_m_24",
+      "attribute_025_m_25",
+      "attribute_026_m_26",
+      "attribute_027_m_27",
+      "attribute_028_m_28",
+      "attribute_029_m_29"
+    ],
+    "object_002_g_2": [
+      "attribute_000_m_0",
+      "attribute_001_m_1",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_004_m_4",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8",
+      "attribute_009_m_9",
+      "attribute_010_m_10",
+      "attribute_012_m_12",
+      "attribute_013_m_13",
+      "attribute_014_m_14",
+      "attribute_015_m_15",
+      "attribute_016_m_16",
+      "attribute_017_m_17",
+      "attribute_018_m_18",
+      "attribute_019_m_19",
+      "attribute_020_m_20",
+      "attribute_021_m_21",
+      "attribute_022_m_22",
+      "attribute_023_m_23",
+      "attribute_024_m_24",
+      "attribute_025_m_25",
+      "attribute_026_m_26",
+      "attribute_027_m_27",
+      "attribute_028_m_28",
+      "attribute_029_m_29"
+    ],
+    "object_003_g_3": [
+      "attribute_000_m_0",
+      "attribute_001_m_1",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_004_m_4",
+      "attribute_005_m_5",
+      "attribute_007_m_7",
+      "attribute_009_m_9",
+      "attribute_010_m_10",
+      "attribute_011_m_11",
+      "attribute_012_m_12",
+      "attribute_013_m_13",
+      "attribute_014_m_14",
+      "attribute_015_m_15",
+      "attribute_016_m_16",
+      "attribute_017_m_17",
+      "attribute_018_m_18",
+      "attribute_019_m_19",
+      "attribute_020_m_20",
+      "attribute_023_m_23",
+      "attribute_024_m_24",
+      "attribute_026_m_26",
+      "attribute_027_m_27",
+      "attribute_029_m_29"
+    ],
+    "object_004_g_4": [
+      "attribute_000_m_0",
+      "attribute_001_m_1",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8",
+      "attribute_009_m_9",
+      "attribute_010_m_10",
+      "attribute_011_m_11",
+      "attribute_012_m_12",
+      "attribute_013_m_13",
+      "attribute_014_m_14",
+      "attribute_015_m_15",
+      "attribute_016_m_16",
+      "attribute_017_m_17",
+      "attribute_018_m_18",
+      "attribute_019_m_19",
+      "attribute_020_m_20",
+      "attribute_021_m_21",
+      "attribute_022_m_22",
+      "attribute_023_m_23",
+      "attribute_024_m_24",
+      "attribute_025_m_25",
+      "attribute_026_m_26",
+      "attribute_027_m_27",
+      "attribute_028_m_28",
+      "attribute_029_m_29"
+    ],
+    "object_005_g_5": [
+      "attribute_000_m_0",
+      "attribute_001_m_1",
+      "attribute_003_m_3",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8",
+      "attribute_009_m_9",
+      "attribute_010_m_10",
+      "attribute_012_m_12",
+      "attribute_013_m_13",
+      "attribute_014_m_14",
+      "attribute_015_m_15",
+      "attribute_016_m_16",
+      "attribute_017_m_17",
+      "attribute_018_m_18",
+      "attribute_019_m_19",
+      "attribute_020_m_20",
+      "attribute_021_m_21",
+      "attribute_022_m_22",
+      "attribute_023_m_23",
+      "attribute_025_m_25",
+      "attribute_026_m_26",
+      "attribute_027_m_27",
+      "attribute_028_m_28"
+    ],
+    "object_006_g_6": [
+      "attribute_000_m_0",
+      "attribute_001_m_1",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_009_m_9",
+      "attribute_011_m_11",
+      "attribute_012_m_12",
+      "attribute_013_m_13",
+      "attribute_014_m_14",
+      "attribute_015_m_15",
+      "attribute_016_m_16",
+      "attribute_017_m_17",
+      "attribute_018_m_18",
+      "attribute_019_m_19",
+      "attribute_020_m_20",
+      "attribute_022_m_22",
+      "attribute_025_m_25",
+      "attribute_026_m_26",
+      "attribute_027_m_27",
+      "attribute_028_m_28",
+      "attribute_029_m_29"
+    ],
+    "object_007_g_7": [
+      "attribute_000_m_0",
+      "attribute_001_m_1",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_004_m_4",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8",
+      "attribute_009_m_9",
+      "attribute_010_m_10",
+      "attribute_012_m_12",
+      "attribute_013_m_13",
+      "attribute_014_m_14",
+      "attribute_015_m_15",
+      "attribute_016_m_16",
+      "attribute_017_m_17",
+      "attribute_018_m_18",
+      "attribute_019_m_19",
+      "attribute_020_m_20",
+      "attribute_021_m_21",
+      "attribute_022_m_22",
+      "attribute_023_m_23",
+      "attribute_024_m_24",
+      "attribute_025_m_25",
+      "attribute_026_m_26",
+      "attribute_027_m_27",
+      "attribute_028_m_28",
+      "attribute_029_m_29"
+    ],
+    "object_008_g_8": [
+      "attribute_000_m_0",
+      "attribute_001_m_1",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_004_m_4",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8",
+      "attribute_009_m_9",
+      "attribute_010_m_10",
+      "attribute_011_m_11",
+      "attribute_012_m_12",
+      "attribute_013_m_13",
+      "attribute_014_m_14",
+      "attribute_015_m_15",
+      "attribute_016_m_16",
+      "attribute_017_m_17",
+      "attribute_018_m_18",
+      "attribute_019_m_19",
+      "attribute_020_m_20",
+      "attribute_021_m_21",
+      "attribute_022_m_22",
+      "attribute_023_m_23",
+      "attribute_024_m_24",
+      "attribute_025_m_25",
+      "attribute_026_m_26",
+      "attribute_027_m_27",
+      "attribute_028_m_28",
+      "attribute_029_m_29"
+    ],
+    "object_009_g_9": [
+      "attribute_000_m_0",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_004_m_4",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8",
+      "attribute_009_m_9",
+      "attribute_011_m_11",
+      "attribute_012_m_12",
+      "attribute_014_m_14",
+      "attribute_016_m_16",
+      "attribute_017_m_17",
+      "attribute_018_m_18",
+      "attribute_019_m_19",
+      "attribute_020_m_20",
+      "attribute_021_m_21",
+      "attribute_022_m_22",
+      "attribute_023_m_23",
+      "attribute_024_m_24",
+      "attribute_025_m_25",
+      "attribute_028_m_28",
+      "attribute_029_m_29"
+    ]
+  },
+  "upstream": {
+    "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+    "license": "GPL-3.0-only",
+    "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+    "source_id": "fcapy-controlled-random"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "source": {
+    "name": "fcaR 2.0.0 concept-lattice vignette",
+    "url": "https://malaga-fca-group.github.io/fcaR/articles/concept_lattice.html"
+  },
+  "objects": [
+    "Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn",
+    "Uranus", "Neptune", "Pluto"
+  ],
+  "attributes": ["small", "medium", "large", "near", "far", "moon", "no_moon"],
+  "true_incidence": {
+    "Mercury": ["small", "near", "no_moon"],
+    "Venus": ["small", "near", "no_moon"],
+    "Earth": ["small", "near", "moon"],
+    "Mars": ["small", "near", "moon"],
+    "Jupiter": ["large", "far", "moon"],
+    "Saturn": ["large", "far", "moon"],
+    "Uranus": ["medium", "far", "moon"],
+    "Neptune": ["medium", "far", "moon"],
+    "Pluto": ["small", "far", "moon"]
+  },
+  "published_intents": [
+    [],
+    ["moon"],
+    ["far", "moon"],
+    ["large", "far", "moon"],
+    ["medium", "far", "moon"],
+    ["small"],
+    ["small", "moon"],
+    ["small", "far", "moon"],
+    ["small", "near"],
+    ["small", "near", "no_moon"],
+    ["small", "near", "moon"],
+    ["small", "medium", "large", "near", "far", "moon", "no_moon"]
+  ],
+  "published_basis": [
+    [["no_moon"], ["small", "near"]],
+    [["far"], ["moon"]],
+    [["near"], ["small"]],
+    [["large"], ["far", "moon"]],
+    [["medium"], ["far", "moon"]],
+    [["medium", "large", "far", "moon"], ["small", "near", "no_moon"]],
+    [["small", "near", "moon", "no_moon"], ["medium", "large", "far"]],
+    [["small", "near", "far", "moon"], ["medium", "large", "no_moon"]],
+    [["small", "large", "far", "moon"], ["medium", "near", "no_moon"]],
+    [["small", "medium", "far", "moon"], ["large", "near", "no_moon"]]
+  ]
+}

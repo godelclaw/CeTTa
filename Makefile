@@ -2443,6 +2443,217 @@ probe-core-lane: $(BIN)
 		$(CETTA_BIN_INVOKE) --profile he-extended --lang he "$$f"; \
 	done
 
+WM_FCA_ORACLE_PYTHON ?= python3
+
+test-wm-fca: $(BIN)
+	@mkdir -p runtime/wm_fca
+	@$(WM_FCA_ORACLE_PYTHON) benchmarks/wm_fca/planets_oracle.py \
+		--receipt runtime/wm_fca/planets_oracle_receipt.json
+	@for f in \
+		tests/test_set_relation_atom_surface.metta \
+		tests/test_galois_closure_atom_surface.metta \
+		tests/test_galois_intents_atom_surface.metta \
+		tests/test_galois_canonical_basis_atom_surface.metta \
+		tests/test_galois_canonical_basis_next_atom_surface.metta \
+		tests/test_wm_fca_index_columns_atom_surface.metta \
+		tests/test_subset_cover_relations_atom_surface.metta \
+		tests/test_foldl_until_atom_surface.metta \
+		tests/test_wm_fca_cell_minimal.metta \
+		tests/test_wm_fca_credal.metta \
+		tests/test_wm_fca_evidence_layers.metta \
+		tests/test_wm_fca_query_certificates.metta \
+		tests/test_wm_fca_state.metta \
+		benchmarks/wm_fca/test_planets_exact.metta \
+		benchmarks/wm_fca/test_livingbeings_exact.metta \
+		benchmarks/wm_fca/test_livingbeings_state_updates.metta; do \
+		exp="$${f%.metta}.expected"; \
+		result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "$$f" 2>&1); \
+		if [ "$$result" = "$$(cat "$$exp")" ]; then \
+			echo "PASS: $$f"; \
+		else \
+			echo "FAIL: $$f"; \
+			diff <(cat "$$exp") <(echo "$$result") | head -20; \
+			exit 1; \
+		fi; \
+	done
+	@$(WM_FCA_ORACLE_PYTHON) benchmarks/wm_fca/analyze_corruption_receipt.py \
+		--protocol benchmarks/wm_fca/corruption_protocol.json \
+		--receipt benchmarks/wm_fca/results/wm_fca_corruption_full_v1_receipt.json.gz \
+		--output runtime/wm_fca/wm_fca_corruption_full_v1_analysis.json
+	@cmp runtime/wm_fca/wm_fca_corruption_full_v1_analysis.json \
+		benchmarks/wm_fca/results/wm_fca_corruption_full_v1_analysis.json
+	@$(WM_FCA_ORACLE_PYTHON) -m unittest \
+		benchmarks/wm_fca/test_incomplete_context_baseline.py
+	@$(WM_FCA_ORACLE_PYTHON) \
+		benchmarks/wm_fca/analyze_incomplete_context_baseline.py \
+		--protocol benchmarks/wm_fca/incomplete_context_baseline_protocol.json \
+		--receipt benchmarks/wm_fca/results/wm_fca_incomplete_context_baseline_v1_receipt.json.gz \
+		--output runtime/wm_fca/wm_fca_incomplete_context_baseline_v1_analysis.json
+	@cmp runtime/wm_fca/wm_fca_incomplete_context_baseline_v1_analysis.json \
+		benchmarks/wm_fca/results/wm_fca_incomplete_context_baseline_v1_analysis.json
+	@echo "PASS: independent Planets, corruption, and incomplete-context FCA receipts"
+
+WM_FCA_ERGONOMICS_REPETITIONS ?= 5
+
+refresh-wm-fca-ergonomics: $(BIN)
+	@python3 benchmarks/wm_fca/run_ergonomics_benchmark.py \
+		--repo-root . \
+		--cetta ./$(BIN) \
+		--protocol benchmarks/wm_fca/ergonomics_protocol.json \
+		--repetitions $(WM_FCA_ERGONOMICS_REPETITIONS) \
+		--output benchmarks/wm_fca/results/wm_fca_ergonomics_v1_receipt.json
+
+test-wm-fca-scale: $(BIN)
+	@for f in \
+		benchmarks/wm_fca/test_animals_native_intents.metta \
+		benchmarks/wm_fca/test_animals_native_basis.metta \
+		benchmarks/wm_fca/test_animals_native_lattice.metta \
+		benchmarks/wm_fca/test_animals_revision.metta \
+		benchmarks/wm_fca/test_animals_forget_remember.metta \
+		benchmarks/wm_fca/test_animals_recompute.metta \
+		benchmarks/wm_fca/test_animals_state_updates.metta; do \
+		exp="$${f%.metta}.expected"; \
+		result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "$$f" 2>&1); \
+		if [ "$$result" = "$$(cat "$$exp")" ]; then \
+			echo "PASS: $$f"; \
+		else \
+			echo "FAIL: $$f"; \
+			diff <(cat "$$exp") <(echo "$$result") | head -20; \
+			exit 1; \
+		fi; \
+	done
+
+test-wm-fca-published: $(BIN)
+	@for f in \
+		benchmarks/wm_fca/test_binary_relations_exact.metta \
+		benchmarks/wm_fca/test_tealady_exact.metta \
+		benchmarks/wm_fca/test_music_exact.metta; do \
+		exp="$${f%.metta}.expected"; \
+		result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "$$f" 2>&1); \
+		if [ "$$result" = "$$(cat "$$exp")" ]; then \
+			echo "PASS: $$f"; \
+		else \
+			echo "FAIL: $$f"; \
+			diff <(cat "$$exp") <(echo "$$result") | head -20; \
+			exit 1; \
+		fi; \
+	done
+
+test-wm-fca-mizar: $(BIN)
+	@for context in \
+		mizar_conlat_1 mizar_conlat_2 \
+		mizar_yellow_0 mizar_yellow_1 mizar_yellow_2 mizar_yellow_3 \
+		mizar_waybel_0 mizar_waybel_1 \
+		mizar_lattices mizar_lattice2 mizar_lattice3 mizar_lattice4 \
+		mizar_lattice6; do \
+		for suffix in \
+			semantic_queries native_intents native_basis native_lattice \
+			revision forget_remember recompute state_updates; do \
+			f="benchmarks/wm_fca/test_$${context}_$${suffix}.metta"; \
+			exp="$${f%.metta}.expected"; \
+			result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "$$f" 2>&1); \
+			if [ "$$result" = "$$(cat "$$exp")" ]; then \
+				echo "PASS: $$f"; \
+			else \
+				echo "FAIL: $$f"; \
+				diff <(cat "$$exp") <(echo "$$result") | head -20; \
+				exit 1; \
+			fi; \
+		done; \
+	done
+	@for f in \
+		benchmarks/wm_fca/test_mizar_conlat_1_context_load.metta \
+		benchmarks/wm_fca/test_mizar_conlat_1_native_columns.metta \
+		benchmarks/wm_fca/test_mizar_conlat_1_index_build.metta; do \
+		exp="$${f%.metta}.expected"; \
+		result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "$$f" 2>&1); \
+		if [ "$$result" = "$$(cat "$$exp")" ]; then \
+			echo "PASS: $$f"; \
+		else \
+			echo "FAIL: $$f"; \
+			diff <(cat "$$exp") <(echo "$$result") | head -20; \
+			exit 1; \
+		fi; \
+	done
+
+# External FCApy controlled-random and Bob Ross scale gates.  Exact lattice
+# enumeration is confined to the preregistered 10-attribute contexts; wider
+# contexts exercise only packed-state loading, index construction, and fixed
+# closure queries.
+test-wm-fca-external-scale: $(BIN)
+	@for f in \
+		tests/test_wm_fca_binary_rows_atom_surface.metta \
+		tests/test_wm_fca_binary_event_state.metta; do \
+		exp="$${f%.metta}.expected"; \
+		result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "$$f" 2>&1); \
+		if [ "$$result" = "$$(cat "$$exp")" ]; then \
+			echo "PASS: $$f"; \
+		else \
+			echo "FAIL: $$f"; \
+			diff <(cat "$$exp") <(echo "$$result") | head -20; \
+			exit 1; \
+		fi; \
+	done
+	@for context in \
+		random_10_10_0.1 random_10_10_0.5 random_10_10_0.9 \
+		random_30_10_0.1 random_30_10_0.5 random_30_10_0.9 \
+		random_100_10_0.1 random_100_10_0.5 random_100_10_0.9; do \
+		for suffix in \
+			semantic_queries native_intents native_basis native_lattice \
+			revision forget_remember recompute state_updates; do \
+			f="benchmarks/wm_fca/test_$${context}_$${suffix}.metta"; \
+			exp="$${f%.metta}.expected"; \
+			result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "$$f" 2>&1); \
+			if [ "$$result" = "$$(cat "$$exp")" ]; then \
+				echo "PASS: $$f"; \
+			else \
+				echo "FAIL: $$f"; \
+				diff <(cat "$$exp") <(echo "$$result") | head -20; \
+				exit 1; \
+			fi; \
+		done; \
+	done
+	@for context in \
+		random_10_30_0.1 random_10_30_0.5 random_10_30_0.9 \
+		random_10_50_0.1 random_10_50_0.5 random_10_50_0.9 \
+		random_30_30_0.1 random_30_30_0.5 random_30_30_0.9 \
+		random_30_50_0.1 random_30_50_0.5 random_30_50_0.9 \
+		random_100_30_0.1 random_100_30_0.5 random_100_30_0.9 \
+		random_100_50_0.1 random_100_50_0.5 random_100_50_0.9 \
+		bob_ross; do \
+		for suffix in context_load index_build scale_queries; do \
+			f="benchmarks/wm_fca/test_$${context}_$${suffix}.metta"; \
+			exp="$${f%.metta}.expected"; \
+			result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "$$f" 2>&1); \
+			if [ "$$result" = "$$(cat "$$exp")" ]; then \
+				echo "PASS: $$f"; \
+			else \
+				echo "FAIL: $$f"; \
+				diff <(cat "$$exp") <(echo "$$result") | head -20; \
+				exit 1; \
+			fi; \
+		done; \
+	done
+
+# Immutable WM revision/forgetting gates.  Each prefix is a separate process so
+# a wide context never accumulates all lifecycle snapshots in one evaluator
+# arena.  Expected values come from the independent scale-event receipts.
+test-wm-fca-event-lifecycle: $(BIN)
+	@for context in random_30_30_0.5 bob_ross; do \
+		for prefix in 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14; do \
+			f="benchmarks/wm_fca/test_$${context}_event_prefix_$${prefix}.metta"; \
+			exp="$${f%.metta}.expected"; \
+			result=$$($(CETTA_BIN_INVOKE) --profile he-extended --lang he "$$f" 2>&1); \
+			if [ "$$result" = "$$(cat "$$exp")" ]; then \
+				echo "PASS: $$f"; \
+			else \
+				echo "FAIL: $$f"; \
+				diff <(cat "$$exp") <(echo "$$result") | head -20; \
+				exit 1; \
+			fi; \
+		done; \
+	done
+
 test-heavy: $(BIN)
 	@pass=0; fail=0; no_exp=0; \
 	for f in $(BACKEND_HEAVY_TESTS); do \
@@ -4690,3 +4901,4 @@ refresh-he-matrices:
 .PHONY: test-atom-deep-copy-iterative bench-lib-parse-inference-native
 .PHONY: test-rhometta-macro-audit test-eval-gc-adversarial test-eval-gc-survivor-reset test-eval-gc-asan-selected test-eval-gc-asan-selected-body test-eval-gc-asan-full-differential test-eval-gc-asan-full-differential-body test-tsan test-tsan-main test-tsan-mork bench-rho-rhometta-deduction-farm bench-rho-hot-frontier bench-rho-hot-successors bench-rho-threaded bench-rho-threaded-heavy bench-rho-threaded-corpus bench-rho-threaded-generated bench-rho-threaded-generated-runtime-stats
 .PHONY: test-backends-lanes test-manifest-strict test-mork-lane-core-body test-mork-add-atoms-runtime-stats-body test-mork-bridge-contextual-exact-rows test-mork-cursor-byte-buffer-count-abi test-mork-cursor-expr-row-stream-abi test-mork-query-row-stream-abi probe-core-lane probe-pathmap-lane probe-pathmap-lane-body
+.PHONY: test-wm-fca refresh-wm-fca-ergonomics test-wm-fca-scale test-wm-fca-published test-wm-fca-mizar test-wm-fca-external-scale test-wm-fca-event-lifecycle

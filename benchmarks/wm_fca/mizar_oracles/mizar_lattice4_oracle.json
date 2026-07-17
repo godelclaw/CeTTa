@@ -1,0 +1,5181 @@
+{
+  "algorithm_counts": {
+    "lectic_logical_closures": 167,
+    "levelwise_candidates": 902
+  },
+  "attribute_count": 20,
+  "attribute_symbols": {
+    "BL": "attribute_000_bl",
+    "ClosedSubset": "attribute_001_closedsubset",
+    "D1": "attribute_002_d1",
+    "D2": "attribute_003_d2",
+    "Field": "attribute_004_field",
+    "FinJoin": "attribute_005_finjoin",
+    "FinMeet": "attribute_006_finmeet",
+    "Function": "attribute_007_function",
+    "Homomorphism": "attribute_008_homomorphism",
+    "L1": "attribute_009_l1",
+    "L2": "attribute_010_l2",
+    "SetImp": "attribute_011_setimp",
+    "Subset": "attribute_012_subset",
+    "field_by": "attribute_013_field_by",
+    "join-closed": "attribute_014_join_closed",
+    "meet-closed": "attribute_015_meet_closed",
+    "preserves_bottom": "attribute_016_preserves_bottom",
+    "preserves_complement": "attribute_017_preserves_complement",
+    "preserves_implication": "attribute_018_preserves_implication",
+    "preserves_top": "attribute_019_preserves_top"
+  },
+  "attributes": [
+    "BL",
+    "ClosedSubset",
+    "D1",
+    "D2",
+    "Field",
+    "FinJoin",
+    "FinMeet",
+    "Function",
+    "Homomorphism",
+    "L1",
+    "L2",
+    "SetImp",
+    "Subset",
+    "field_by",
+    "join-closed",
+    "meet-closed",
+    "preserves_bottom",
+    "preserves_complement",
+    "preserves_implication",
+    "preserves_top"
+  ],
+  "canonical_basis": [
+    {
+      "antecedent": [
+        "attribute_009_l1"
+      ],
+      "consequent": [
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_013_field_by"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_004_field",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_014_join_closed"
+      ],
+      "consequent": [
+        "attribute_001_closedsubset",
+        "attribute_012_subset",
+        "attribute_015_meet_closed"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_015_meet_closed"
+      ],
+      "consequent": [
+        "attribute_001_closedsubset",
+        "attribute_012_subset",
+        "attribute_014_join_closed"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_017_preserves_complement"
+      ],
+      "consequent": [
+        "attribute_016_preserves_bottom",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_002_d1"
+      ],
+      "consequent": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_003_d2"
+      ],
+      "consequent": [
+        "attribute_002_d1",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_004_field"
+      ],
+      "consequent": [
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_010_l2"
+      ],
+      "consequent": [
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_016_preserves_bottom"
+      ],
+      "consequent": [
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_008_homomorphism",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_closedsubset",
+        "attribute_002_d1"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_closedsubset",
+        "attribute_003_d2"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_closedsubset",
+        "attribute_004_field"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_closedsubset",
+        "attribute_007_function"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_closedsubset",
+        "attribute_008_homomorphism"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_closedsubset",
+        "attribute_010_l2"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_closedsubset",
+        "attribute_011_setimp"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_closedsubset",
+        "attribute_016_preserves_bottom"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_closedsubset",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_closedsubset",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_004_field"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_003_d2",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_005_finjoin"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_006_finmeet"
+      ],
+      "consequent": [
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_007_function"
+      ],
+      "consequent": [
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_008_homomorphism"
+      ],
+      "consequent": [
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_011_setimp"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_012_subset"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_016_preserves_bottom"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_008_homomorphism"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_d2",
+        "attribute_004_field"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_d2",
+        "attribute_005_finjoin"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_004_field",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_d2",
+        "attribute_006_finmeet"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_d2",
+        "attribute_007_function"
+      ],
+      "consequent": [
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism"
+      ],
+      "consequent": [
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_d2",
+        "attribute_011_setimp"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_d2",
+        "attribute_012_subset"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_d2",
+        "attribute_016_preserves_bottom"
+      ],
+      "consequent": [
+        "attribute_008_homomorphism"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_d2",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_d2",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_field",
+        "attribute_005_finjoin"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_006_finmeet",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_field",
+        "attribute_006_finmeet"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_field",
+        "attribute_007_function"
+      ],
+      "consequent": [
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_field",
+        "attribute_008_homomorphism"
+      ],
+      "consequent": [
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_field",
+        "attribute_010_l2"
+      ],
+      "consequent": [
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_field",
+        "attribute_011_setimp"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_field",
+        "attribute_012_subset"
+      ],
+      "consequent": [
+        "attribute_000_bl"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_field",
+        "attribute_016_preserves_bottom"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_field",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_field",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_finjoin",
+        "attribute_008_homomorphism"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_finjoin",
+        "attribute_010_l2"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_finjoin",
+        "attribute_011_setimp"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_finjoin",
+        "attribute_012_subset"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_004_field",
+        "attribute_006_finmeet",
+        "attribute_011_setimp",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_finjoin",
+        "attribute_016_preserves_bottom"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_finjoin",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_finjoin",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_finmeet",
+        "attribute_007_function"
+      ],
+      "consequent": [
+        "attribute_002_d1",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_finmeet",
+        "attribute_010_l2"
+      ],
+      "consequent": [
+        "attribute_008_homomorphism"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_finmeet",
+        "attribute_011_setimp"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_finmeet",
+        "attribute_012_subset"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_011_setimp",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_finmeet",
+        "attribute_016_preserves_bottom"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_finmeet",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_finmeet",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_002_d1",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_function",
+        "attribute_008_homomorphism"
+      ],
+      "consequent": [
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_function",
+        "attribute_011_setimp"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_function",
+        "attribute_012_subset"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_function",
+        "attribute_016_preserves_bottom"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_function",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_function",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_002_d1",
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_homomorphism",
+        "attribute_011_setimp"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_homomorphism",
+        "attribute_012_subset"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom"
+      ],
+      "consequent": [
+        "attribute_003_d2"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_homomorphism",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_homomorphism",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_002_d1"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_010_l2",
+        "attribute_011_setimp"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_010_l2",
+        "attribute_012_subset"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_011_setimp",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_010_l2",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_009_l1",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_011_setimp",
+        "attribute_012_subset"
+      ],
+      "consequent": [
+        "attribute_000_bl"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_011_setimp",
+        "attribute_016_preserves_bottom"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_011_setimp",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_011_setimp",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_012_subset",
+        "attribute_016_preserves_bottom"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_012_subset",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_008_homomorphism"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_012_subset",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_016_preserves_bottom",
+        "attribute_018_preserves_implication"
+      ],
+      "consequent": [
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_016_preserves_bottom",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_017_preserves_complement"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin"
+      ],
+      "consequent": [
+        "attribute_006_finmeet",
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_006_finmeet"
+      ],
+      "consequent": [
+        "attribute_005_finjoin",
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_012_subset"
+      ],
+      "consequent": [
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_005_finjoin",
+        "attribute_007_function"
+      ],
+      "consequent": [
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism"
+      ],
+      "consequent": [
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "consequent": [
+        "attribute_007_function"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_d2",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "consequent": [
+        "attribute_007_function"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "consequent": [
+        "attribute_007_function"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom"
+      ],
+      "consequent": [
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_006_finmeet",
+        "attribute_007_function"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ],
+      "consequent": [
+        "attribute_009_l1",
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "consequent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed"
+      ],
+      "consequent": [
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    }
+  ],
+  "canonical_basis_count": 105,
+  "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article lattice4.miz.",
+  "concept_count": 62,
+  "concepts": [
+    {
+      "extent": [
+        "object_000_theorem_3",
+        "object_001_definition_1",
+        "object_002_definition_2",
+        "object_003_registration_2",
+        "object_004_definition_3",
+        "object_005_theorem_4",
+        "object_006_theorem_5",
+        "object_007_theorem_6",
+        "object_008_definition_4",
+        "object_009_definition_5",
+        "object_010_definition_6",
+        "object_011_theorem_7",
+        "object_012_registration_3",
+        "object_013_theorem_8",
+        "object_014_definition_7",
+        "object_015_theorem_9",
+        "object_016_theorem_10",
+        "object_017_theorem_11",
+        "object_018_theorem_12",
+        "object_019_theorem_13",
+        "object_020_theorem_14",
+        "object_021_theorem_15",
+        "object_022_theorem_16",
+        "object_023_theorem_17",
+        "object_024_theorem_18",
+        "object_025_theorem_19",
+        "object_026_theorem_20",
+        "object_027_theorem_21",
+        "object_028_theorem_22",
+        "object_029_theorem_23",
+        "object_030_theorem_24",
+        "object_031_theorem_25",
+        "object_032_theorem_26",
+        "object_033_theorem_27",
+        "object_034_theorem_28",
+        "object_035_theorem_29",
+        "object_036_theorem_30",
+        "object_037_theorem_31",
+        "object_038_definition_8",
+        "object_039_theorem_34",
+        "object_040_theorem_35",
+        "object_041_definition_9",
+        "object_042_definition_10",
+        "object_043_registration_4",
+        "object_044_theorem_36",
+        "object_045_theorem_37",
+        "object_046_definition_11",
+        "object_047_theorem_38",
+        "object_048_theorem_39",
+        "object_049_theorem_40",
+        "object_050_theorem_41",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": []
+    },
+    {
+      "extent": [
+        "object_034_theorem_28",
+        "object_035_theorem_29",
+        "object_036_theorem_30",
+        "object_037_theorem_31",
+        "object_038_definition_8",
+        "object_039_theorem_34",
+        "object_040_theorem_35",
+        "object_041_definition_9",
+        "object_042_definition_10",
+        "object_043_registration_4",
+        "object_046_definition_11",
+        "object_047_theorem_38",
+        "object_048_theorem_39",
+        "object_049_theorem_40",
+        "object_050_theorem_41",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_000_bl"
+      ]
+    },
+    {
+      "extent": [
+        "object_010_definition_6",
+        "object_011_theorem_7",
+        "object_012_registration_3",
+        "object_013_theorem_8",
+        "object_023_theorem_17",
+        "object_030_theorem_24",
+        "object_040_theorem_35",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_001_closedsubset"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_definition_1",
+        "object_005_theorem_4",
+        "object_006_theorem_5",
+        "object_017_theorem_11",
+        "object_024_theorem_18",
+        "object_037_theorem_31"
+      ],
+      "intent": [
+        "attribute_002_d1"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_definition_2",
+        "object_017_theorem_11",
+        "object_018_theorem_12",
+        "object_032_theorem_26",
+        "object_033_theorem_27",
+        "object_037_theorem_31"
+      ],
+      "intent": [
+        "attribute_003_d2"
+      ]
+    },
+    {
+      "extent": [
+        "object_008_definition_4",
+        "object_038_definition_8",
+        "object_039_theorem_34",
+        "object_041_definition_9",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_004_field"
+      ]
+    },
+    {
+      "extent": [
+        "object_014_definition_7",
+        "object_015_theorem_9",
+        "object_019_theorem_13",
+        "object_020_theorem_14",
+        "object_021_theorem_15",
+        "object_022_theorem_16",
+        "object_023_theorem_17",
+        "object_047_theorem_38",
+        "object_048_theorem_39",
+        "object_050_theorem_41",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_005_finjoin"
+      ]
+    },
+    {
+      "extent": [
+        "object_014_definition_7",
+        "object_016_theorem_10",
+        "object_024_theorem_18",
+        "object_025_theorem_19",
+        "object_026_theorem_20",
+        "object_027_theorem_21",
+        "object_028_theorem_22",
+        "object_029_theorem_23",
+        "object_030_theorem_24",
+        "object_031_theorem_25",
+        "object_048_theorem_39",
+        "object_049_theorem_40",
+        "object_050_theorem_41",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_definition_1",
+        "object_002_definition_2",
+        "object_003_registration_2",
+        "object_004_definition_3",
+        "object_006_theorem_5",
+        "object_007_theorem_6",
+        "object_008_definition_4",
+        "object_021_theorem_15",
+        "object_024_theorem_18",
+        "object_046_definition_11"
+      ],
+      "intent": [
+        "attribute_007_function"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_3",
+        "object_008_definition_4",
+        "object_016_theorem_10",
+        "object_018_theorem_12",
+        "object_024_theorem_18",
+        "object_031_theorem_25",
+        "object_034_theorem_28",
+        "object_037_theorem_31"
+      ],
+      "intent": [
+        "attribute_008_homomorphism"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_theorem_3",
+        "object_001_definition_1",
+        "object_002_definition_2",
+        "object_003_registration_2",
+        "object_004_definition_3",
+        "object_006_theorem_5",
+        "object_007_theorem_6",
+        "object_008_definition_4",
+        "object_009_definition_5",
+        "object_016_theorem_10",
+        "object_017_theorem_11",
+        "object_018_theorem_12",
+        "object_024_theorem_18"
+      ],
+      "intent": [
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_042_definition_10",
+        "object_043_registration_4",
+        "object_044_theorem_36",
+        "object_045_theorem_37",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "extent": [
+        "object_010_definition_6",
+        "object_011_theorem_7",
+        "object_034_theorem_28",
+        "object_038_definition_8",
+        "object_039_theorem_34",
+        "object_041_definition_9",
+        "object_042_definition_10",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_5",
+        "object_018_theorem_12",
+        "object_037_theorem_31"
+      ],
+      "intent": [
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_5",
+        "object_034_theorem_28"
+      ],
+      "intent": [
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_5",
+        "object_024_theorem_18",
+        "object_037_theorem_31"
+      ],
+      "intent": [
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "extent": [
+        "object_040_theorem_35",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset"
+      ]
+    },
+    {
+      "extent": [
+        "object_047_theorem_38",
+        "object_048_theorem_39",
+        "object_050_theorem_41",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_005_finjoin"
+      ]
+    },
+    {
+      "extent": [
+        "object_048_theorem_39",
+        "object_049_theorem_40",
+        "object_050_theorem_41",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "extent": [
+        "object_046_definition_11"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_007_function"
+      ]
+    },
+    {
+      "extent": [
+        "object_034_theorem_28",
+        "object_037_theorem_31"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_008_homomorphism"
+      ]
+    },
+    {
+      "extent": [
+        "object_042_definition_10",
+        "object_043_registration_4",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "extent": [
+        "object_034_theorem_28",
+        "object_038_definition_8",
+        "object_039_theorem_34",
+        "object_041_definition_9",
+        "object_042_definition_10",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "extent": [
+        "object_023_theorem_17",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin"
+      ]
+    },
+    {
+      "extent": [
+        "object_030_theorem_24",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_001_closedsubset",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "extent": [
+        "object_010_definition_6",
+        "object_011_theorem_7",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_001_closedsubset",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "extent": [
+        "object_017_theorem_11",
+        "object_037_theorem_31"
+      ],
+      "intent": [
+        "attribute_002_d1",
+        "attribute_003_d2"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_definition_1",
+        "object_006_theorem_5",
+        "object_017_theorem_11",
+        "object_024_theorem_18"
+      ],
+      "intent": [
+        "attribute_002_d1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_definition_2",
+        "object_017_theorem_11",
+        "object_018_theorem_12"
+      ],
+      "intent": [
+        "attribute_003_d2",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_014_definition_7",
+        "object_048_theorem_39",
+        "object_050_theorem_41",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_005_finjoin",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "extent": [
+        "object_021_theorem_15"
+      ],
+      "intent": [
+        "attribute_005_finjoin",
+        "attribute_007_function"
+      ]
+    },
+    {
+      "extent": [
+        "object_016_theorem_10",
+        "object_024_theorem_18",
+        "object_031_theorem_25"
+      ],
+      "intent": [
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_definition_1",
+        "object_002_definition_2",
+        "object_003_registration_2",
+        "object_004_definition_3",
+        "object_006_theorem_5",
+        "object_007_theorem_6",
+        "object_008_definition_4",
+        "object_024_theorem_18"
+      ],
+      "intent": [
+        "attribute_007_function",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_3",
+        "object_008_definition_4",
+        "object_016_theorem_10",
+        "object_018_theorem_12",
+        "object_024_theorem_18"
+      ],
+      "intent": [
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_theorem_3",
+        "object_001_definition_1",
+        "object_002_definition_2",
+        "object_003_registration_2",
+        "object_004_definition_3",
+        "object_006_theorem_5",
+        "object_007_theorem_6",
+        "object_008_definition_4",
+        "object_009_definition_5"
+      ],
+      "intent": [
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_5",
+        "object_018_theorem_12"
+      ],
+      "intent": [
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_5",
+        "object_024_theorem_18"
+      ],
+      "intent": [
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "extent": [
+        "object_038_definition_8",
+        "object_039_theorem_34",
+        "object_041_definition_9",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_004_field",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "extent": [
+        "object_048_theorem_39",
+        "object_050_theorem_41",
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "extent": [
+        "object_042_definition_10",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_011_setimp",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "extent": [
+        "object_017_theorem_11"
+      ],
+      "intent": [
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_definition_1",
+        "object_006_theorem_5",
+        "object_024_theorem_18"
+      ],
+      "intent": [
+        "attribute_002_d1",
+        "attribute_007_function",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_024_theorem_18",
+        "object_037_theorem_31"
+      ],
+      "intent": [
+        "attribute_002_d1",
+        "attribute_008_homomorphism",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "extent": [
+        "object_018_theorem_12",
+        "object_037_theorem_31"
+      ],
+      "intent": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "extent": [
+        "object_016_theorem_10",
+        "object_024_theorem_18"
+      ],
+      "intent": [
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_3",
+        "object_008_definition_4",
+        "object_024_theorem_18"
+      ],
+      "intent": [
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_definition_1",
+        "object_002_definition_2",
+        "object_003_registration_2",
+        "object_004_definition_3",
+        "object_006_theorem_5",
+        "object_007_theorem_6",
+        "object_008_definition_4"
+      ],
+      "intent": [
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_5",
+        "object_037_theorem_31"
+      ],
+      "intent": [
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "extent": [
+        "object_041_definition_9",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_004_field",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "extent": [
+        "object_034_theorem_28"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_008_homomorphism",
+        "attribute_012_subset",
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "extent": [
+        "object_010_definition_6"
+      ],
+      "intent": [
+        "attribute_001_closedsubset",
+        "attribute_012_subset",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_definition_1",
+        "object_006_theorem_5"
+      ],
+      "intent": [
+        "attribute_002_d1",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_definition_2"
+      ],
+      "intent": [
+        "attribute_003_d2",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_018_theorem_12"
+      ],
+      "intent": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_3",
+        "object_008_definition_4"
+      ],
+      "intent": [
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_051_theorem_42",
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "extent": [
+        "object_008_definition_4"
+      ],
+      "intent": [
+        "attribute_004_field",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_024_theorem_18"
+      ],
+      "intent": [
+        "attribute_002_d1",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_definition_5"
+      ],
+      "intent": [
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "extent": [
+        "object_037_theorem_31"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "extent": [
+        "object_052_theorem_43"
+      ],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "extent": [],
+      "intent": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    }
+  ],
+  "context_id": "mizar_lattice4",
+  "context_name": "",
+  "context_sha256": "b1f59280ad434183988d0487525223e9eaf942d21e6ebe4e57b4190d36c3c405",
+  "cover_count": 136,
+  "covers": [
+    {
+      "general": [],
+      "specific": [
+        "attribute_000_bl"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_001_closedsubset"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_002_d1"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_003_d2"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_004_field"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_005_finjoin"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_007_function"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_008_homomorphism"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_005_finjoin"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_007_function"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_008_homomorphism"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_closedsubset"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_closedsubset"
+      ],
+      "specific": [
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_closedsubset"
+      ],
+      "specific": [
+        "attribute_001_closedsubset",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_closedsubset"
+      ],
+      "specific": [
+        "attribute_001_closedsubset",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_003_d2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_008_homomorphism",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_d2"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_003_d2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_d2"
+      ],
+      "specific": [
+        "attribute_003_d2",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_d2"
+      ],
+      "specific": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_field"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_004_field",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_field"
+      ],
+      "specific": [
+        "attribute_004_field",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_finjoin"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_005_finjoin"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_finjoin"
+      ],
+      "specific": [
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_finjoin"
+      ],
+      "specific": [
+        "attribute_005_finjoin",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_finjoin"
+      ],
+      "specific": [
+        "attribute_005_finjoin",
+        "attribute_007_function"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_finmeet"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_finmeet"
+      ],
+      "specific": [
+        "attribute_001_closedsubset",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_finmeet"
+      ],
+      "specific": [
+        "attribute_005_finjoin",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_finmeet"
+      ],
+      "specific": [
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_function"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_007_function"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_function"
+      ],
+      "specific": [
+        "attribute_005_finjoin",
+        "attribute_007_function"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_function"
+      ],
+      "specific": [
+        "attribute_007_function",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_homomorphism"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_008_homomorphism"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_homomorphism"
+      ],
+      "specific": [
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_homomorphism"
+      ],
+      "specific": [
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_homomorphism"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_008_homomorphism",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_homomorphism"
+      ],
+      "specific": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_003_d2",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_007_function",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_011_setimp"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "general": [
+        "attribute_012_subset"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_012_subset"
+      ],
+      "specific": [
+        "attribute_001_closedsubset",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_016_preserves_bottom"
+      ],
+      "specific": [
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "general": [
+        "attribute_016_preserves_bottom"
+      ],
+      "specific": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "general": [
+        "attribute_016_preserves_bottom"
+      ],
+      "specific": [
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_018_preserves_implication"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_008_homomorphism",
+        "attribute_012_subset",
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "general": [
+        "attribute_018_preserves_implication"
+      ],
+      "specific": [
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_019_preserves_top"
+      ],
+      "specific": [
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_019_preserves_top"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_008_homomorphism",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_019_preserves_top"
+      ],
+      "specific": [
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_005_finjoin"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_006_finmeet"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_007_function"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_008_homomorphism"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_008_homomorphism",
+        "attribute_012_subset",
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_008_homomorphism"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_011_setimp"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_011_setimp",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_011_setimp"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_012_subset"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_004_field",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_012_subset"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_011_setimp",
+        "attribute_012_subset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_012_subset"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_008_homomorphism",
+        "attribute_012_subset",
+        "attribute_018_preserves_implication"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_closedsubset",
+        "attribute_006_finmeet"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_closedsubset",
+        "attribute_012_subset"
+      ],
+      "specific": [
+        "attribute_001_closedsubset",
+        "attribute_012_subset",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_closedsubset",
+        "attribute_012_subset"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1",
+        "attribute_003_d2"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1",
+        "attribute_003_d2"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_007_function",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_d2",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_d2",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_003_d2",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_d2",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_finjoin",
+        "attribute_006_finmeet"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_finjoin",
+        "attribute_007_function"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism"
+      ],
+      "specific": [
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_function",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_007_function",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_function",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_function",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom"
+      ],
+      "specific": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom"
+      ],
+      "specific": [
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ],
+      "specific": [
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_004_field",
+        "attribute_012_subset"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_004_field",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_011_setimp",
+        "attribute_012_subset"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1",
+        "attribute_007_function",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1",
+        "attribute_007_function",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1",
+        "attribute_008_homomorphism",
+        "attribute_019_preserves_top"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1",
+        "attribute_008_homomorphism",
+        "attribute_019_preserves_top"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom"
+      ],
+      "specific": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_finmeet",
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_002_d1",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_003_d2",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ],
+      "specific": [
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_004_field",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_008_homomorphism",
+        "attribute_012_subset",
+        "attribute_018_preserves_implication"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_closedsubset",
+        "attribute_012_subset",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_d2",
+        "attribute_007_function",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_004_field",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_field",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_d1",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_010_l2",
+        "attribute_019_preserves_top"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_008_homomorphism",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_019_preserves_top"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by"
+      ],
+      "specific": [
+        "attribute_000_bl",
+        "attribute_001_closedsubset",
+        "attribute_002_d1",
+        "attribute_003_d2",
+        "attribute_004_field",
+        "attribute_005_finjoin",
+        "attribute_006_finmeet",
+        "attribute_007_function",
+        "attribute_008_homomorphism",
+        "attribute_009_l1",
+        "attribute_010_l2",
+        "attribute_011_setimp",
+        "attribute_012_subset",
+        "attribute_013_field_by",
+        "attribute_014_join_closed",
+        "attribute_015_meet_closed",
+        "attribute_016_preserves_bottom",
+        "attribute_017_preserves_complement",
+        "attribute_018_preserves_implication",
+        "attribute_019_preserves_top"
+      ]
+    }
+  ],
+  "dependence_group": "mizar-lattice4-extraction",
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "closed_candidate": [
+      "attribute_000_bl"
+    ],
+    "false_cell": [
+      "object_000_theorem_3",
+      "attribute_000_bl"
+    ],
+    "negative_implication": {
+      "antecedent": [
+        "attribute_000_bl"
+      ],
+      "consequent": [
+        "attribute_001_closedsubset"
+      ]
+    },
+    "nonclosed_candidate": [
+      "attribute_009_l1"
+    ],
+    "nonclosed_closure": [
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    "positive_implication": {
+      "antecedent": [
+        "attribute_009_l1"
+      ],
+      "consequent": [
+        "attribute_010_l2"
+      ]
+    },
+    "true_cell": [
+      "object_000_theorem_3",
+      "attribute_009_l1"
+    ]
+  },
+  "false_cell_count": 922,
+  "intents": [
+    [],
+    [
+      "attribute_000_bl"
+    ],
+    [
+      "attribute_001_closedsubset"
+    ],
+    [
+      "attribute_002_d1"
+    ],
+    [
+      "attribute_003_d2"
+    ],
+    [
+      "attribute_004_field"
+    ],
+    [
+      "attribute_005_finjoin"
+    ],
+    [
+      "attribute_006_finmeet"
+    ],
+    [
+      "attribute_007_function"
+    ],
+    [
+      "attribute_008_homomorphism"
+    ],
+    [
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_011_setimp"
+    ],
+    [
+      "attribute_012_subset"
+    ],
+    [
+      "attribute_016_preserves_bottom"
+    ],
+    [
+      "attribute_018_preserves_implication"
+    ],
+    [
+      "attribute_019_preserves_top"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_001_closedsubset"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_005_finjoin"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_006_finmeet"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_007_function"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_008_homomorphism"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_011_setimp"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_012_subset"
+    ],
+    [
+      "attribute_001_closedsubset",
+      "attribute_005_finjoin"
+    ],
+    [
+      "attribute_001_closedsubset",
+      "attribute_006_finmeet"
+    ],
+    [
+      "attribute_001_closedsubset",
+      "attribute_012_subset"
+    ],
+    [
+      "attribute_002_d1",
+      "attribute_003_d2"
+    ],
+    [
+      "attribute_002_d1",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_003_d2",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_005_finjoin",
+      "attribute_006_finmeet"
+    ],
+    [
+      "attribute_005_finjoin",
+      "attribute_007_function"
+    ],
+    [
+      "attribute_006_finmeet",
+      "attribute_008_homomorphism"
+    ],
+    [
+      "attribute_007_function",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_008_homomorphism",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_010_l2",
+      "attribute_016_preserves_bottom"
+    ],
+    [
+      "attribute_010_l2",
+      "attribute_019_preserves_top"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_004_field",
+      "attribute_012_subset"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_005_finjoin",
+      "attribute_006_finmeet"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_011_setimp",
+      "attribute_012_subset"
+    ],
+    [
+      "attribute_002_d1",
+      "attribute_003_d2",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_002_d1",
+      "attribute_007_function",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_002_d1",
+      "attribute_008_homomorphism",
+      "attribute_019_preserves_top"
+    ],
+    [
+      "attribute_003_d2",
+      "attribute_008_homomorphism",
+      "attribute_016_preserves_bottom"
+    ],
+    [
+      "attribute_006_finmeet",
+      "attribute_008_homomorphism",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_007_function",
+      "attribute_008_homomorphism",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_007_function",
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_016_preserves_bottom",
+      "attribute_017_preserves_complement",
+      "attribute_019_preserves_top"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_004_field",
+      "attribute_012_subset",
+      "attribute_013_field_by"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_008_homomorphism",
+      "attribute_012_subset",
+      "attribute_018_preserves_implication"
+    ],
+    [
+      "attribute_001_closedsubset",
+      "attribute_012_subset",
+      "attribute_014_join_closed",
+      "attribute_015_meet_closed"
+    ],
+    [
+      "attribute_002_d1",
+      "attribute_007_function",
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_003_d2",
+      "attribute_007_function",
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_003_d2",
+      "attribute_008_homomorphism",
+      "attribute_010_l2",
+      "attribute_016_preserves_bottom"
+    ],
+    [
+      "attribute_007_function",
+      "attribute_008_homomorphism",
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_001_closedsubset",
+      "attribute_005_finjoin",
+      "attribute_006_finmeet",
+      "attribute_011_setimp"
+    ],
+    [
+      "attribute_004_field",
+      "attribute_007_function",
+      "attribute_008_homomorphism",
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    [
+      "attribute_002_d1",
+      "attribute_006_finmeet",
+      "attribute_007_function",
+      "attribute_008_homomorphism",
+      "attribute_010_l2",
+      "attribute_019_preserves_top"
+    ],
+    [
+      "attribute_009_l1",
+      "attribute_010_l2",
+      "attribute_016_preserves_bottom",
+      "attribute_017_preserves_complement",
+      "attribute_018_preserves_implication",
+      "attribute_019_preserves_top"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_002_d1",
+      "attribute_003_d2",
+      "attribute_008_homomorphism",
+      "attribute_016_preserves_bottom",
+      "attribute_017_preserves_complement",
+      "attribute_019_preserves_top"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_001_closedsubset",
+      "attribute_004_field",
+      "attribute_005_finjoin",
+      "attribute_006_finmeet",
+      "attribute_011_setimp",
+      "attribute_012_subset",
+      "attribute_013_field_by"
+    ],
+    [
+      "attribute_000_bl",
+      "attribute_001_closedsubset",
+      "attribute_002_d1",
+      "attribute_003_d2",
+      "attribute_004_field",
+      "attribute_005_finjoin",
+      "attribute_006_finmeet",
+      "attribute_007_function",
+      "attribute_008_homomorphism",
+      "attribute_009_l1",
+      "attribute_010_l2",
+      "attribute_011_setimp",
+      "attribute_012_subset",
+      "attribute_013_field_by",
+      "attribute_014_join_closed",
+      "attribute_015_meet_closed",
+      "attribute_016_preserves_bottom",
+      "attribute_017_preserves_complement",
+      "attribute_018_preserves_implication",
+      "attribute_019_preserves_top"
+    ]
+  ],
+  "manifest_sha256": "26b7e2de0a429a5db4949a6da64800e5aa0753c37d6139a00e999848384e0272",
+  "matrix_label": "complete positive-occurrence article context",
+  "object_count": 53,
+  "object_symbols": {
+    "definition_1": "object_001_definition_1",
+    "definition_10": "object_042_definition_10",
+    "definition_11": "object_046_definition_11",
+    "definition_2": "object_002_definition_2",
+    "definition_3": "object_004_definition_3",
+    "definition_4": "object_008_definition_4",
+    "definition_5": "object_009_definition_5",
+    "definition_6": "object_010_definition_6",
+    "definition_7": "object_014_definition_7",
+    "definition_8": "object_038_definition_8",
+    "definition_9": "object_041_definition_9",
+    "registration_2": "object_003_registration_2",
+    "registration_3": "object_012_registration_3",
+    "registration_4": "object_043_registration_4",
+    "theorem_10": "object_016_theorem_10",
+    "theorem_11": "object_017_theorem_11",
+    "theorem_12": "object_018_theorem_12",
+    "theorem_13": "object_019_theorem_13",
+    "theorem_14": "object_020_theorem_14",
+    "theorem_15": "object_021_theorem_15",
+    "theorem_16": "object_022_theorem_16",
+    "theorem_17": "object_023_theorem_17",
+    "theorem_18": "object_024_theorem_18",
+    "theorem_19": "object_025_theorem_19",
+    "theorem_20": "object_026_theorem_20",
+    "theorem_21": "object_027_theorem_21",
+    "theorem_22": "object_028_theorem_22",
+    "theorem_23": "object_029_theorem_23",
+    "theorem_24": "object_030_theorem_24",
+    "theorem_25": "object_031_theorem_25",
+    "theorem_26": "object_032_theorem_26",
+    "theorem_27": "object_033_theorem_27",
+    "theorem_28": "object_034_theorem_28",
+    "theorem_29": "object_035_theorem_29",
+    "theorem_3": "object_000_theorem_3",
+    "theorem_30": "object_036_theorem_30",
+    "theorem_31": "object_037_theorem_31",
+    "theorem_34": "object_039_theorem_34",
+    "theorem_35": "object_040_theorem_35",
+    "theorem_36": "object_044_theorem_36",
+    "theorem_37": "object_045_theorem_37",
+    "theorem_38": "object_047_theorem_38",
+    "theorem_39": "object_048_theorem_39",
+    "theorem_4": "object_005_theorem_4",
+    "theorem_40": "object_049_theorem_40",
+    "theorem_41": "object_050_theorem_41",
+    "theorem_42": "object_051_theorem_42",
+    "theorem_43": "object_052_theorem_43",
+    "theorem_5": "object_006_theorem_5",
+    "theorem_6": "object_007_theorem_6",
+    "theorem_7": "object_011_theorem_7",
+    "theorem_8": "object_013_theorem_8",
+    "theorem_9": "object_015_theorem_9"
+  },
+  "objects": [
+    "theorem_3",
+    "definition_1",
+    "definition_2",
+    "registration_2",
+    "definition_3",
+    "theorem_4",
+    "theorem_5",
+    "theorem_6",
+    "definition_4",
+    "definition_5",
+    "definition_6",
+    "theorem_7",
+    "registration_3",
+    "theorem_8",
+    "definition_7",
+    "theorem_9",
+    "theorem_10",
+    "theorem_11",
+    "theorem_12",
+    "theorem_13",
+    "theorem_14",
+    "theorem_15",
+    "theorem_16",
+    "theorem_17",
+    "theorem_18",
+    "theorem_19",
+    "theorem_20",
+    "theorem_21",
+    "theorem_22",
+    "theorem_23",
+    "theorem_24",
+    "theorem_25",
+    "theorem_26",
+    "theorem_27",
+    "theorem_28",
+    "theorem_29",
+    "theorem_30",
+    "theorem_31",
+    "definition_8",
+    "theorem_34",
+    "theorem_35",
+    "definition_9",
+    "definition_10",
+    "registration_4",
+    "theorem_36",
+    "theorem_37",
+    "definition_11",
+    "theorem_38",
+    "theorem_39",
+    "theorem_40",
+    "theorem_41",
+    "theorem_42",
+    "theorem_43"
+  ],
+  "oracle_agreement": {
+    "covers_equal_concepts_0_9_2_neighbors": true,
+    "lectic_basis_equals_levelwise_nextclosures": true,
+    "lectic_intents_equal_concepts_0_9_2": true,
+    "lectic_intents_equals_levelwise_nextclosures": true
+  },
+  "schema": "wm-fca-cxt-oracle-v1",
+  "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/lattice4.cxt",
+  "true_cell_count": 138,
+  "true_incidence": {
+    "object_000_theorem_3": [
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    "object_001_definition_1": [
+      "attribute_002_d1",
+      "attribute_007_function",
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    "object_002_definition_2": [
+      "attribute_003_d2",
+      "attribute_007_function",
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    "object_003_registration_2": [
+      "attribute_007_function",
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    "object_004_definition_3": [
+      "attribute_007_function",
+      "attribute_008_homomorphism",
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    "object_005_theorem_4": [
+      "attribute_002_d1"
+    ],
+    "object_006_theorem_5": [
+      "attribute_002_d1",
+      "attribute_007_function",
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    "object_007_theorem_6": [
+      "attribute_007_function",
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    "object_008_definition_4": [
+      "attribute_004_field",
+      "attribute_007_function",
+      "attribute_008_homomorphism",
+      "attribute_009_l1",
+      "attribute_010_l2"
+    ],
+    "object_009_definition_5": [
+      "attribute_009_l1",
+      "attribute_010_l2",
+      "attribute_016_preserves_bottom",
+      "attribute_017_preserves_complement",
+      "attribute_018_preserves_implication",
+      "attribute_019_preserves_top"
+    ],
+    "object_010_definition_6": [
+      "attribute_001_closedsubset",
+      "attribute_012_subset",
+      "attribute_014_join_closed",
+      "attribute_015_meet_closed"
+    ],
+    "object_011_theorem_7": [
+      "attribute_001_closedsubset",
+      "attribute_012_subset"
+    ],
+    "object_012_registration_3": [
+      "attribute_001_closedsubset"
+    ],
+    "object_013_theorem_8": [
+      "attribute_001_closedsubset"
+    ],
+    "object_014_definition_7": [
+      "attribute_005_finjoin",
+      "attribute_006_finmeet"
+    ],
+    "object_015_theorem_9": [
+      "attribute_005_finjoin"
+    ],
+    "object_016_theorem_10": [
+      "attribute_006_finmeet",
+      "attribute_008_homomorphism",
+      "attribute_010_l2"
+    ],
+    "object_017_theorem_11": [
+      "attribute_002_d1",
+      "attribute_003_d2",
+      "attribute_010_l2"
+    ],
+    "object_018_theorem_12": [
+      "attribute_003_d2",
+      "attribute_008_homomorphism",
+      "attribute_010_l2",
+      "attribute_016_preserves_bottom"
+    ],
+    "object_019_theorem_13": [
+      "attribute_005_finjoin"
+    ],
+    "object_020_theorem_14": [
+      "attribute_005_finjoin"
+    ],
+    "object_021_theorem_15": [
+      "attribute_005_finjoin",
+      "attribute_007_function"
+    ],
+    "object_022_theorem_16": [
+      "attribute_005_finjoin"
+    ],
+    "object_023_theorem_17": [
+      "attribute_001_closedsubset",
+      "attribute_005_finjoin"
+    ],
+    "object_024_theorem_18": [
+      "attribute_002_d1",
+      "attribute_006_finmeet",
+      "attribute_007_function",
+      "attribute_008_homomorphism",
+      "attribute_010_l2",
+      "attribute_019_preserves_top"
+    ],
+    "object_025_theorem_19": [
+      "attribute_006_finmeet"
+    ],
+    "object_026_theorem_20": [
+      "attribute_006_finmeet"
+    ],
+    "object_027_theorem_21": [
+      "attribute_006_finmeet"
+    ],
+    "object_028_theorem_22": [
+      "attribute_006_finmeet"
+    ],
+    "object_029_theorem_23": [
+      "attribute_006_finmeet"
+    ],
+    "object_030_theorem_24": [
+      "attribute_001_closedsubset",
+      "attribute_006_finmeet"
+    ],
+    "object_031_theorem_25": [
+      "attribute_006_finmeet",
+      "attribute_008_homomorphism"
+    ],
+    "object_032_theorem_26": [
+      "attribute_003_d2"
+    ],
+    "object_033_theorem_27": [
+      "attribute_003_d2"
+    ],
+    "object_034_theorem_28": [
+      "attribute_000_bl",
+      "attribute_008_homomorphism",
+      "attribute_012_subset",
+      "attribute_018_preserves_implication"
+    ],
+    "object_035_theorem_29": [
+      "attribute_000_bl"
+    ],
+    "object_036_theorem_30": [
+      "attribute_000_bl"
+    ],
+    "object_037_theorem_31": [
+      "attribute_000_bl",
+      "attribute_002_d1",
+      "attribute_003_d2",
+      "attribute_008_homomorphism",
+      "attribute_016_preserves_bottom",
+      "attribute_017_preserves_complement",
+      "attribute_019_preserves_top"
+    ],
+    "object_038_definition_8": [
+      "attribute_000_bl",
+      "attribute_004_field",
+      "attribute_012_subset"
+    ],
+    "object_039_theorem_34": [
+      "attribute_000_bl",
+      "attribute_004_field",
+      "attribute_012_subset"
+    ],
+    "object_040_theorem_35": [
+      "attribute_000_bl",
+      "attribute_001_closedsubset"
+    ],
+    "object_041_definition_9": [
+      "attribute_000_bl",
+      "attribute_004_field",
+      "attribute_012_subset",
+      "attribute_013_field_by"
+    ],
+    "object_042_definition_10": [
+      "attribute_000_bl",
+      "attribute_011_setimp",
+      "attribute_012_subset"
+    ],
+    "object_043_registration_4": [
+      "attribute_000_bl",
+      "attribute_011_setimp"
+    ],
+    "object_044_theorem_36": [
+      "attribute_011_setimp"
+    ],
+    "object_045_theorem_37": [
+      "attribute_011_setimp"
+    ],
+    "object_046_definition_11": [
+      "attribute_000_bl",
+      "attribute_007_function"
+    ],
+    "object_047_theorem_38": [
+      "attribute_000_bl",
+      "attribute_005_finjoin"
+    ],
+    "object_048_theorem_39": [
+      "attribute_000_bl",
+      "attribute_005_finjoin",
+      "attribute_006_finmeet"
+    ],
+    "object_049_theorem_40": [
+      "attribute_000_bl",
+      "attribute_006_finmeet"
+    ],
+    "object_050_theorem_41": [
+      "attribute_000_bl",
+      "attribute_005_finjoin",
+      "attribute_006_finmeet"
+    ],
+    "object_051_theorem_42": [
+      "attribute_000_bl",
+      "attribute_001_closedsubset",
+      "attribute_005_finjoin",
+      "attribute_006_finmeet",
+      "attribute_011_setimp"
+    ],
+    "object_052_theorem_43": [
+      "attribute_000_bl",
+      "attribute_001_closedsubset",
+      "attribute_004_field",
+      "attribute_005_finjoin",
+      "attribute_006_finmeet",
+      "attribute_011_setimp",
+      "attribute_012_subset",
+      "attribute_013_field_by"
+    ]
+  },
+  "upstream": {
+    "commit": "f93a93f7d4d62d90e22812295b7e46c036458603",
+    "license": "MIT",
+    "repository": "https://github.com/zariuq/MeTTapedia",
+    "source_id": "mettapedia-mizar-family",
+    "validation_role": "project semantic case study, not independent external validation"
+  }
+}

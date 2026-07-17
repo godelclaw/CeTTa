@@ -195,9 +195,30 @@ typedef struct {
     X(map_atom, "map-atom") \
     X(filter_atom, "filter-atom") \
     X(foldl_atom, "foldl-atom") \
+    X(foldl_until_atom, "foldl-until-atom") \
     X(unique_atom, "unique-atom") \
     X(intersection_atom, "intersection-atom") \
     X(subtraction_atom, "subtraction-atom") \
+    X(member_atom_q, "member-atom?") \
+    X(subset_atom_q, "subset-atom?") \
+    X(same_set_atom_q, "same-set-atom?") \
+    X(galois_closure_atom, "galois-closure-atom") \
+    X(galois_intents_atom, "galois-intents-atom") \
+    X(galois_canonical_basis_atom, "galois-canonical-basis-atom") \
+    X(galois_canonical_basis_next_atom, "galois-canonical-basis-next-atom") \
+    X(wm_fca_index_columns_atom, "wm-fca-index-columns-atom") \
+    X(wm_fca_binary_rows_columns_atom, "wm-fca-binary-rows-columns-atom") \
+    X(wm_fca_binary_cell_status_atom, "wm-fca-binary-cell-status-atom") \
+    X(wm_fca_binary_query_batch_atom, "wm-fca-binary-query-batch-atom") \
+    X(wm_fca_binary_event_columns_atom, "wm-fca-binary-event-columns-atom") \
+    X(wm_fca_binary_event_cell_evidence_atom, "wm-fca-binary-event-cell-evidence-atom") \
+    X(wm_fca_binary_event_query_batch_atom, "wm-fca-binary-event-query-batch-atom") \
+    X(wm_fca_binary_event_observation_count_atom, "wm-fca-binary-event-observation-count-atom") \
+    X(wm_fca_evidence_layer_columns_atom, "wm-fca-evidence-layer-columns-atom") \
+    X(wm_fca_evidence_layer_cell_evidence_atom, "wm-fca-evidence-layer-cell-evidence-atom") \
+    X(wm_fca_evidence_layer_query_batch_atom, "wm-fca-evidence-layer-query-batch-atom") \
+    X(wm_fca_evidence_layer_observation_count_atom, "wm-fca-evidence-layer-observation-count-atom") \
+    X(subset_cover_relations_atom, "subset-cover-relations-atom") \
     X(max_atom, "max-atom") \
     X(min_atom, "min-atom") \
     X(sort_strings, "sort-strings") \
@@ -223,7 +244,10 @@ typedef struct {
     X(llist_nil, "LNil") \
     X(llist_cons, "LCons") \
     X(minimal_foldl_atom, "_minimal-foldl-atom") \
+    X(minimal_foldl_until_atom, "_minimal-foldl-until-atom") \
     X(minimal_foldl_llist, "_minimal-foldl-llist") \
+    X(fold_continue, "FoldContinue") \
+    X(fold_stop, "FoldStop") \
     X(minimal_space_contains_exact, "_minimal-space-contains-exact") \
     X(collapse_add_next, "_collapse-add-next-atom-from-collapse-bind-result") \
     X(cetta_surface_available, "__cetta_surface-available") \

@@ -159,6 +159,7 @@ tests/test_fold_docs.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_foldl_atom.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_foldl_atom_chain_collapse.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_foldl_atom_in_space_extension.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_foldl_until_atom_surface.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_format_args.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_format_args_arity.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_format_args_bad_args.metta	he	metta	he-extended	main	native	test	golden	-
@@ -167,6 +168,10 @@ tests/test_fs2_eq.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_fs_surface.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_function_return.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_function_type_check.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_galois_canonical_basis_atom_surface.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_galois_canonical_basis_next_atom_surface.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_galois_closure_atom_surface.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_galois_intents_atom_surface.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_get_atoms.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_get_metatype.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_get_metatype_arity.metta	he	metta	he-extended	main	native	test	golden	-
@@ -459,6 +464,7 @@ tests/test_select_arity.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_select_bad_type.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_select_collect_docs.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_select_once_alias.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_set_relation_atom_surface.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_simple_match_builder_regression.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_singleton_visible_witness_overlap_regression.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_singleton_visible_witness_regression.metta	he	metta	he-extended	main	native	test	golden	-
@@ -485,6 +491,7 @@ tests/test_str_surface.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_stree_deep.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_string_escapes.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_string_ops.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_subset_cover_relations_atom_surface.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_subtraction_atom.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_success_priority.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_superpose_arity.metta	he	metta	he-extended	main	native	test	golden	-
@@ -542,5 +549,14 @@ tests/test_with_space_snapshot_equation_regression.metta	he	metta	he-extended	ma
 tests/test_with_space_snapshot_non_exact_query_regression.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_with_space_snapshot_passthrough.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_with_space_snapshot_queue_regression.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_wm_fca_binary_event_state.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_wm_fca_binary_rows_atom_surface.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_wm_fca_cell_minimal.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_wm_fca_conlat1_oracle.metta	he	metta	he-extended	main	native	test	property	assertion-only property without golden oracle
+tests/test_wm_fca_credal.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_wm_fca_evidence_layers.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_wm_fca_index_columns_atom_surface.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_wm_fca_query_certificates.metta	he	metta	he-extended	main	native	test	golden	-
+tests/test_wm_fca_state.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_xor.metta	he	metta	he-extended	main	native	test	golden	-
 tests/test_zero_arity_function_overload.metta	he	metta	he-extended	main	native	test	golden	-

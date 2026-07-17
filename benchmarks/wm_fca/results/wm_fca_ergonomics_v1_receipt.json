@@ -1,0 +1,125 @@
+{
+  "binary": {
+    "bytes": 1517032,
+    "language": "he",
+    "profile": "he-extended",
+    "sha256": "0a6daeaf0917cc0b55b61555c0041f965476d70fb211d707ffa4a436beabe0ca"
+  },
+  "campaign_peak_child_rss_kib": 20004,
+  "certificate_coverage": [
+    "closure-positive",
+    "closure-tamper-negative",
+    "required-cell-positive",
+    "unrelated-cell-negative",
+    "positive-and-negative-cell-evidence",
+    "implication-positive",
+    "implication-negative",
+    "implication-tamper-negative",
+    "concept-positive",
+    "concept-negative",
+    "concept-tamper-negative",
+    "snapshot-history-unavailable",
+    "event-history-retained",
+    "typed-query-wrapper"
+  ],
+  "environment": {
+    "logical_cpu_count": 16,
+    "machine": "x86_64",
+    "python": "3.13.13",
+    "release": "7.0.0-27-generic",
+    "system": "Linux"
+  },
+  "interpretation_guard": "Timings include startup and parsing, are machine-specific, and do not support a performance claim against specialized FCA engines.",
+  "measurement_kind": "descriptive_microbenchmark",
+  "measurement_scope": "end-to-end process startup, parsing, native execution, and golden-output validation",
+  "measurements": [
+    {
+      "all_runs_golden_equal": true,
+      "campaign_peak_child_rss_kib_after_case": 20004,
+      "elapsed_seconds": {
+        "maximum": 0.01020288490690291,
+        "median": 0.009988662088289857,
+        "minimum": 0.009166484931483865
+      },
+      "end_to_end_work_units_per_second_at_median": 8209.307640522966,
+      "expected": "benchmarks/wm_fca/test_bob_ross_scale_queries.expected",
+      "expected_sha256": "9144fac3c85e0212d983d5868b26c108e4c03b1c950faa86cd098ee93a987e27",
+      "golden_output_bytes": 30,
+      "golden_output_rows": 6,
+      "id": "bob_ross_query_batch",
+      "interpretation": "403-object by 67-attribute query-only context",
+      "measured_runs": 5,
+      "program": "benchmarks/wm_fca/test_bob_ross_scale_queries.metta",
+      "program_sha256": "3e3afdf990b6fe2b1ed8534e26f639695bf72c811a5953b3ad530b1288cd0f40",
+      "warmup_runs": 1,
+      "work_unit": "closure_query",
+      "work_unit_count": 82
+    },
+    {
+      "all_runs_golden_equal": true,
+      "campaign_peak_child_rss_kib_after_case": 20004,
+      "elapsed_seconds": {
+        "maximum": 0.013535094913095236,
+        "median": 0.01286784908734262,
+        "minimum": 0.012024580966681242
+      },
+      "end_to_end_work_units_per_second_at_median": 1087.9829181219582,
+      "expected": "benchmarks/wm_fca/test_bob_ross_event_replay_only.expected",
+      "expected_sha256": "26b4898cd1952a7e0351ff9843b6b8543459747119a648fcef685c969b2f102d",
+      "golden_output_bytes": 15,
+      "golden_output_rows": 3,
+      "id": "bob_ross_event_replay",
+      "interpretation": "end-to-end immutable event replay without FCA queries",
+      "measured_runs": 5,
+      "program": "benchmarks/wm_fca/test_bob_ross_event_replay_only.metta",
+      "program_sha256": "42a57fac2fb5d5f8befe578f3127a32daac83891de839f6d5060e13110e1e7b7",
+      "warmup_runs": 1,
+      "work_unit": "event_operation",
+      "work_unit_count": 14
+    },
+    {
+      "all_runs_golden_equal": true,
+      "campaign_peak_child_rss_kib_after_case": 20004,
+      "elapsed_seconds": {
+        "maximum": 0.014726316090673208,
+        "median": 0.013266053050756454,
+        "minimum": 0.012385825160890818
+      },
+      "end_to_end_work_units_per_second_at_median": 1809.128902784802,
+      "expected": "tests/test_wm_fca_query_certificates.expected",
+      "expected_sha256": "005a891adda805772bd8567fc9f317bc5fa4c025575acef0c3dd8bceac8601f3",
+      "golden_output_bytes": 125,
+      "golden_output_rows": 25,
+      "id": "query_certificates",
+      "interpretation": "closure, implication, and concept certificate behavior",
+      "measured_runs": 5,
+      "program": "tests/test_wm_fca_query_certificates.metta",
+      "program_sha256": "4118ccb56b770e1eb56c0af55fbec44cde5ca98a8efa9509f0a3925249ecca68",
+      "warmup_runs": 1,
+      "work_unit": "verified_assertion",
+      "work_unit_count": 24
+    }
+  ],
+  "protocol": "benchmarks/wm_fca/ergonomics_protocol.json",
+  "protocol_sha256": "020dbf0aa00455b3452beda157bc1f0335820704f7c4c97f536db93cb9e412a5",
+  "runner": {
+    "path": "benchmarks/wm_fca/run_ergonomics_benchmark.py",
+    "sha256": "c1175f325633503bf819f37722f3fb76b49033ff2551c94757d5457d052c0334"
+  },
+  "scale_context": {
+    "attributes": 67,
+    "objects": 403,
+    "observed_cells": 27001,
+    "oracle_sha256": "08e815d40b3e50291ce53e73ba46b177b93aec6e2a6a0c6ecbd3357cd3853861",
+    "query_count": 82
+  },
+  "schema": "wm-fca-ergonomics-receipt-v1",
+  "wm_fca_library": {
+    "bytes": 79938,
+    "equation_definitions": 249,
+    "lines": 2309,
+    "path": "lib_wm_fca.metta",
+    "sha256": "28d2f024aa705aa3668eaccf7dabe658e4ae3fd0993a48a1a90ed3dc66cc4741",
+    "type_declarations": 110
+  }
+}

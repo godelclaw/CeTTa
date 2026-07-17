@@ -1,0 +1,84 @@
+{
+  "schema": "wm-fca-incomplete-context-baseline-protocol-v1",
+  "status": "frozen-extension-before-comparator-execution",
+  "source_study": {
+    "protocol": "corruption_protocol.json",
+    "protocol_sha256": "7dcd2936b0148b5242fbe3f9bfb5410244b083c7946d80d12be0bfce50d7baa1",
+    "receipt": "results/wm_fca_corruption_full_v1_receipt.json.gz",
+    "receipt_artifact_sha256": "835ac74af9be80abcf33d21d7cbb64dd7b86be31b1e23c5c6e28057b0a5f2754",
+    "receipt_content_sha256": "40c755197680c9ccfc137251c105768bb05b906e768de651becb83a4bc82e85c",
+    "reconstruction_driver": "run_corruption_experiment.py",
+    "reconstruction_driver_sha256": "accd0cee14091fa4efa44b0c7f897ba2e96804022b357fc01bbc4de1efd19dc4"
+  },
+  "case_selection": {
+    "evidence_layer": "primary",
+    "expected_case_count": 405,
+    "policy": "all cases from the complete frozen source receipt"
+  },
+  "context_inputs": {
+    "oracle_directory": "scale_oracles",
+    "scale_context_directory": "scale_contexts"
+  },
+  "baseline_family": [
+    {
+      "id": "incomplete-lower-completion",
+      "status_to_incidence": {
+        ".": "0",
+        "0": "0",
+        "1": "1",
+        "u": "0"
+      }
+    },
+    {
+      "id": "incomplete-upper-completion",
+      "status_to_incidence": {
+        ".": "1",
+        "0": "0",
+        "1": "1",
+        "u": "1"
+      }
+    }
+  ],
+  "cell_point_forecast": {
+    "definition": "arithmetic midpoint of lower and upper completed incidence",
+    "values": [
+      0.0,
+      0.5,
+      1.0
+    ]
+  },
+  "comparison_policy": {
+    "source_models": [
+      "crisp-single-source",
+      "raw-majority-2",
+      "source-majority-2",
+      "wm-permissive-group-1",
+      "wm-robust-group-2",
+      "wm-exact-consensus"
+    ],
+    "report_both_completions": true,
+    "selection": "none"
+  },
+  "metrics": [
+    "cell_precision_recall_f1",
+    "held_out_closure_exact_and_jaccard",
+    "concept_set_recovery",
+    "canonical_basis_recovery",
+    "lattice_cover_recovery",
+    "cell_midpoint_brier_ece",
+    "cell_completion_interval_coverage_width"
+  ],
+  "interpretation_guards": [
+    "Lower and upper completions are scored separately for closures, concepts, canonical bases, and lattice covers.",
+    "No set-theoretic concept-family or closure interval is inferred from relation inclusion.",
+    "Midpoint Brier score and ECE evaluate a point forecast, not calibration of the set-valued interval.",
+    "Observed flips remain observed values in both completions; completion addresses only unknown and missing cells.",
+    "The comparator has no fitted parameters, model selection, or post-result tuning."
+  ],
+  "method_reference": {
+    "authors": "Fernando Chacon-Gomez, M. Eugenia Cornejo, Didier Dubois, Jesus Medina, and Henri Prade",
+    "doi": "10.1007/s40314-025-03440-3",
+    "title": "Handling incomplete information in formal concept analysis - a possibilistic approach",
+    "year": 2026
+  }
+}

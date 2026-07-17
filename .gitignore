@@ -43,6 +43,8 @@
 /bench_pathmap.metta
 
 # Local Python caches
+__pycache__/
+*.py[cod]
 /scripts/__pycache__/
 /tests/support/__pycache__/
 /tests/support/import_foreign_pkg/plugin/__pycache__/

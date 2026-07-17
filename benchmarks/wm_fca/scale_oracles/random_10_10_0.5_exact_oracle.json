@@ -1,0 +1,2532 @@
+{
+  "algorithm_counts": {
+    "lectic_logical_closures": 68,
+    "levelwise_candidates": 261
+  },
+  "attribute_count": 10,
+  "attribute_symbols": {
+    "m_0": "attribute_000_m_0",
+    "m_1": "attribute_001_m_1",
+    "m_2": "attribute_002_m_2",
+    "m_3": "attribute_003_m_3",
+    "m_4": "attribute_004_m_4",
+    "m_5": "attribute_005_m_5",
+    "m_6": "attribute_006_m_6",
+    "m_7": "attribute_007_m_7",
+    "m_8": "attribute_008_m_8",
+    "m_9": "attribute_009_m_9"
+  },
+  "attributes": [
+    "m_0",
+    "m_1",
+    "m_2",
+    "m_3",
+    "m_4",
+    "m_5",
+    "m_6",
+    "m_7",
+    "m_8",
+    "m_9"
+  ],
+  "canonical_basis": [
+    {
+      "antecedent": [
+        "attribute_000_m_0"
+      ],
+      "consequent": [
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_m_5"
+      ],
+      "consequent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_m_8"
+      ],
+      "consequent": [
+        "attribute_002_m_2",
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_m_1",
+        "attribute_002_m_2"
+      ],
+      "consequent": [
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_m_1",
+        "attribute_004_m_4"
+      ],
+      "consequent": [
+        "attribute_003_m_3",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_m_1",
+        "attribute_006_m_6"
+      ],
+      "consequent": [
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_m_2",
+        "attribute_004_m_4"
+      ],
+      "consequent": [
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_m_2",
+        "attribute_006_m_6"
+      ],
+      "consequent": [
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_m_2",
+        "attribute_007_m_7"
+      ],
+      "consequent": [
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_m_2",
+        "attribute_009_m_9"
+      ],
+      "consequent": [
+        "attribute_003_m_3"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_m_3",
+        "attribute_006_m_6"
+      ],
+      "consequent": [
+        "attribute_002_m_2",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ],
+      "consequent": [
+        "attribute_002_m_2"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_m_4",
+        "attribute_009_m_9"
+      ],
+      "consequent": [
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ],
+      "consequent": [
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_m_0",
+        "attribute_006_m_6",
+        "attribute_009_m_9"
+      ],
+      "consequent": [
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_007_m_7"
+      ],
+      "consequent": [
+        "attribute_001_m_1"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_007_m_7"
+      ],
+      "consequent": [
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_m_0",
+        "attribute_002_m_2",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ],
+      "consequent": [
+        "attribute_004_m_4"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ],
+      "consequent": [
+        "attribute_005_m_5",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ],
+      "consequent": [
+        "attribute_004_m_4"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ],
+      "consequent": [
+        "attribute_001_m_1"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ],
+      "consequent": [
+        "attribute_000_m_0"
+      ]
+    }
+  ],
+  "canonical_basis_count": 22,
+  "citation": "FCApy Benchmarks, Performance_Benchmark.ipynb and performance_benchmark.py",
+  "concept_count": 46,
+  "concepts": [
+    {
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ],
+      "intent": []
+    },
+    {
+      "extent": [
+        "object_000_g_0",
+        "object_002_g_2",
+        "object_006_g_6",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_001_m_1"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_006_g_6",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_002_m_2"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_006_g_6",
+        "object_008_g_8",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_003_m_3"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1",
+        "object_003_g_3",
+        "object_005_g_5",
+        "object_007_g_7"
+      ],
+      "intent": [
+        "attribute_004_m_4"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_g_0",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_008_g_8",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_005_g_5",
+        "object_006_g_6",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_g_2",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_007_g_7"
+      ],
+      "intent": [
+        "attribute_000_m_0",
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_g_0",
+        "object_006_g_6",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_001_m_1",
+        "attribute_003_m_3"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_g_0",
+        "object_002_g_2",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_001_m_1",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_g_2",
+        "object_006_g_6",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_001_m_1",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_006_g_6",
+        "object_008_g_8",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_g_0",
+        "object_001_g_1"
+      ],
+      "intent": [
+        "attribute_003_m_3",
+        "attribute_004_m_4"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_g_0",
+        "object_008_g_8",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_003_m_3",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_003_g_3",
+        "object_005_g_5",
+        "object_007_g_7"
+      ],
+      "intent": [
+        "attribute_004_m_4",
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_g_0",
+        "object_003_g_3",
+        "object_005_g_5"
+      ],
+      "intent": [
+        "attribute_004_m_4",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_004_g_4",
+        "object_005_g_5",
+        "object_008_g_8",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_006_m_6",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_005_g_5",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_006_m_6",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_005_g_5",
+        "object_007_g_7"
+      ],
+      "intent": [
+        "attribute_000_m_0",
+        "attribute_004_m_4",
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_g_2",
+        "object_004_g_4",
+        "object_005_g_5"
+      ],
+      "intent": [
+        "attribute_000_m_0",
+        "attribute_006_m_6",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_g_0",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_001_m_1",
+        "attribute_003_m_3",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_006_g_6",
+        "object_008_g_8"
+      ],
+      "intent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_006_g_6",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_007_g_7",
+        "object_008_g_8",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_002_m_2",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_003_g_3",
+        "object_005_g_5"
+      ],
+      "intent": [
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_g_2",
+        "object_003_g_3",
+        "object_005_g_5",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_g_2",
+        "object_005_g_5"
+      ],
+      "intent": [
+        "attribute_000_m_0",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_006_g_6",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_g_0"
+      ],
+      "intent": [
+        "attribute_001_m_1",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_g_2",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_001_m_1",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_006_g_6"
+      ],
+      "intent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_008_g_8",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_007_g_7"
+      ],
+      "intent": [
+        "attribute_002_m_2",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_003_g_3",
+        "object_005_g_5"
+      ],
+      "intent": [
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_g_2"
+      ],
+      "intent": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_007_g_7"
+      ],
+      "intent": [
+        "attribute_000_m_0",
+        "attribute_002_m_2",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_005_g_5"
+      ],
+      "intent": [
+        "attribute_000_m_0",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_006_g_6"
+      ],
+      "intent": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_008_g_8"
+      ],
+      "intent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_008_g_8",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1",
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_008_g_8"
+      ],
+      "intent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_g_9"
+      ],
+      "intent": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_g_1"
+      ],
+      "intent": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "extent": [],
+      "intent": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    }
+  ],
+  "context_id": "random_10_10_0.5",
+  "context_name": "random_10_10_0.5",
+  "context_sha256": "cc114ca400ce44569a3a742da1361807e471182ea994ec06d3fe24d071ee8a02",
+  "cover_count": 102,
+  "covers": [
+    {
+      "general": [],
+      "specific": [
+        "attribute_001_m_1"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_002_m_2"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_003_m_3"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_004_m_4"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_003_m_3"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_m_3"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_003_m_3"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_m_3"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_m_3"
+      ],
+      "specific": [
+        "attribute_003_m_3",
+        "attribute_004_m_4"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_m_3"
+      ],
+      "specific": [
+        "attribute_003_m_3",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_m_4"
+      ],
+      "specific": [
+        "attribute_003_m_3",
+        "attribute_004_m_4"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_m_4"
+      ],
+      "specific": [
+        "attribute_004_m_4",
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_m_4"
+      ],
+      "specific": [
+        "attribute_004_m_4",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6"
+      ],
+      "specific": [
+        "attribute_004_m_4",
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6"
+      ],
+      "specific": [
+        "attribute_006_m_6",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6"
+      ],
+      "specific": [
+        "attribute_006_m_6",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_003_m_3",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_004_m_4",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_006_m_6",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_006_m_6",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_m_0",
+        "attribute_006_m_6"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_004_m_4",
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_m_0",
+        "attribute_006_m_6"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_006_m_6",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_003_m_3"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_003_m_3",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_003_m_3"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_003_m_3",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_m_3",
+        "attribute_004_m_4"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_m_3",
+        "attribute_004_m_4"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_m_3",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_003_m_3",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_m_3",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_m_4",
+        "attribute_006_m_6"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_004_m_4",
+        "attribute_006_m_6"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_m_4",
+        "attribute_006_m_6"
+      ],
+      "specific": [
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_m_4",
+        "attribute_006_m_6"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_m_4",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_m_4",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_006_m_6",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_m_0",
+        "attribute_004_m_4",
+        "attribute_006_m_6"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_002_m_2",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_m_0",
+        "attribute_004_m_4",
+        "attribute_006_m_6"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_m_0",
+        "attribute_006_m_6",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_003_m_3",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_007_m_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_003_m_3",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_m_0",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_m_0",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_007_m_7"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_002_m_2",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_m_0",
+        "attribute_002_m_2",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_m_0",
+        "attribute_004_m_4",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ],
+      "specific": [
+        "attribute_000_m_0",
+        "attribute_001_m_1",
+        "attribute_002_m_2",
+        "attribute_003_m_3",
+        "attribute_004_m_4",
+        "attribute_005_m_5",
+        "attribute_006_m_6",
+        "attribute_007_m_7",
+        "attribute_008_m_8",
+        "attribute_009_m_9"
+      ]
+    }
+  ],
+  "dependence_group": "random_10_10_0.5-generated-matrix",
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "closed_candidate": [
+      "attribute_001_m_1"
+    ],
+    "false_cell": [
+      "object_000_g_0",
+      "attribute_000_m_0"
+    ],
+    "negative_implication": {
+      "antecedent": [
+        "attribute_000_m_0"
+      ],
+      "consequent": [
+        "attribute_001_m_1"
+      ]
+    },
+    "nonclosed_candidate": [
+      "attribute_000_m_0"
+    ],
+    "nonclosed_closure": [
+      "attribute_000_m_0",
+      "attribute_006_m_6"
+    ],
+    "positive_implication": {
+      "antecedent": [
+        "attribute_000_m_0"
+      ],
+      "consequent": [
+        "attribute_006_m_6"
+      ]
+    },
+    "true_cell": [
+      "object_000_g_0",
+      "attribute_001_m_1"
+    ]
+  },
+  "false_cell_count": 49,
+  "intents": [
+    [],
+    [
+      "attribute_001_m_1"
+    ],
+    [
+      "attribute_002_m_2"
+    ],
+    [
+      "attribute_003_m_3"
+    ],
+    [
+      "attribute_004_m_4"
+    ],
+    [
+      "attribute_006_m_6"
+    ],
+    [
+      "attribute_007_m_7"
+    ],
+    [
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_000_m_0",
+      "attribute_006_m_6"
+    ],
+    [
+      "attribute_001_m_1",
+      "attribute_003_m_3"
+    ],
+    [
+      "attribute_001_m_1",
+      "attribute_007_m_7"
+    ],
+    [
+      "attribute_001_m_1",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_002_m_2",
+      "attribute_003_m_3"
+    ],
+    [
+      "attribute_003_m_3",
+      "attribute_004_m_4"
+    ],
+    [
+      "attribute_003_m_3",
+      "attribute_007_m_7"
+    ],
+    [
+      "attribute_004_m_4",
+      "attribute_006_m_6"
+    ],
+    [
+      "attribute_004_m_4",
+      "attribute_007_m_7"
+    ],
+    [
+      "attribute_006_m_6",
+      "attribute_007_m_7"
+    ],
+    [
+      "attribute_006_m_6",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_000_m_0",
+      "attribute_004_m_4",
+      "attribute_006_m_6"
+    ],
+    [
+      "attribute_000_m_0",
+      "attribute_006_m_6",
+      "attribute_007_m_7"
+    ],
+    [
+      "attribute_001_m_1",
+      "attribute_003_m_3",
+      "attribute_007_m_7"
+    ],
+    [
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_005_m_5"
+    ],
+    [
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_002_m_2",
+      "attribute_006_m_6",
+      "attribute_008_m_8"
+    ],
+    [
+      "attribute_004_m_4",
+      "attribute_006_m_6",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_000_m_0",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_001_m_1",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_001_m_1",
+      "attribute_003_m_3",
+      "attribute_004_m_4",
+      "attribute_007_m_7"
+    ],
+    [
+      "attribute_001_m_1",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_005_m_5",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_006_m_6",
+      "attribute_008_m_8"
+    ],
+    [
+      "attribute_002_m_2",
+      "attribute_004_m_4",
+      "attribute_006_m_6",
+      "attribute_008_m_8"
+    ],
+    [
+      "attribute_004_m_4",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_000_m_0",
+      "attribute_001_m_1",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_000_m_0",
+      "attribute_002_m_2",
+      "attribute_004_m_4",
+      "attribute_006_m_6",
+      "attribute_008_m_8"
+    ],
+    [
+      "attribute_000_m_0",
+      "attribute_004_m_4",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_001_m_1",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_005_m_5",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_008_m_8"
+    ],
+    [
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8"
+    ],
+    [
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_006_m_6",
+      "attribute_008_m_8",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8"
+    ],
+    [
+      "attribute_001_m_1",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_004_m_4",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_008_m_8",
+      "attribute_009_m_9"
+    ],
+    [
+      "attribute_000_m_0",
+      "attribute_001_m_1",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_004_m_4",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8",
+      "attribute_009_m_9"
+    ]
+  ],
+  "manifest_sha256": "269ddc445a20ff0fc30215dc2685c5565a61d5bdcc349343cb1a3577db2085de",
+  "matrix_label": "FCApy controlled random matrix",
+  "object_count": 10,
+  "object_symbols": {
+    "g_0": "object_000_g_0",
+    "g_1": "object_001_g_1",
+    "g_2": "object_002_g_2",
+    "g_3": "object_003_g_3",
+    "g_4": "object_004_g_4",
+    "g_5": "object_005_g_5",
+    "g_6": "object_006_g_6",
+    "g_7": "object_007_g_7",
+    "g_8": "object_008_g_8",
+    "g_9": "object_009_g_9"
+  },
+  "objects": [
+    "g_0",
+    "g_1",
+    "g_2",
+    "g_3",
+    "g_4",
+    "g_5",
+    "g_6",
+    "g_7",
+    "g_8",
+    "g_9"
+  ],
+  "oracle_agreement": {
+    "covers_equal_concepts_0_9_2_neighbors": true,
+    "lectic_basis_equals_levelwise_nextclosures": true,
+    "lectic_intents_equal_concepts_0_9_2": true,
+    "lectic_intents_equals_levelwise_nextclosures": true
+  },
+  "schema": "wm-fca-cxt-oracle-v1",
+  "source_path": "FCA_python_packages/performance_benchmark.py",
+  "true_cell_count": 51,
+  "true_incidence": {
+    "object_000_g_0": [
+      "attribute_001_m_1",
+      "attribute_003_m_3",
+      "attribute_004_m_4",
+      "attribute_007_m_7"
+    ],
+    "object_001_g_1": [
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_004_m_4",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_008_m_8",
+      "attribute_009_m_9"
+    ],
+    "object_002_g_2": [
+      "attribute_000_m_0",
+      "attribute_001_m_1",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_009_m_9"
+    ],
+    "object_003_g_3": [
+      "attribute_004_m_4",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_009_m_9"
+    ],
+    "object_004_g_4": [
+      "attribute_000_m_0",
+      "attribute_006_m_6",
+      "attribute_007_m_7"
+    ],
+    "object_005_g_5": [
+      "attribute_000_m_0",
+      "attribute_004_m_4",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_009_m_9"
+    ],
+    "object_006_g_6": [
+      "attribute_001_m_1",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_005_m_5",
+      "attribute_009_m_9"
+    ],
+    "object_007_g_7": [
+      "attribute_000_m_0",
+      "attribute_002_m_2",
+      "attribute_004_m_4",
+      "attribute_006_m_6",
+      "attribute_008_m_8"
+    ],
+    "object_008_g_8": [
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_005_m_5",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8"
+    ],
+    "object_009_g_9": [
+      "attribute_001_m_1",
+      "attribute_002_m_2",
+      "attribute_003_m_3",
+      "attribute_006_m_6",
+      "attribute_007_m_7",
+      "attribute_008_m_8",
+      "attribute_009_m_9"
+    ]
+  },
+  "upstream": {
+    "commit": "509f45a3b887e74258fb392fb7e2378e38cc9cf1",
+    "license": "GPL-3.0-only",
+    "repository": "https://github.com/EgorDudyrev/FCApy_benchmarks",
+    "source_id": "fcapy-controlled-random"
+  }
+}

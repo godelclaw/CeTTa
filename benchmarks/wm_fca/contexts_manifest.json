@@ -1,0 +1,40 @@
+{
+  "schema": "wm-fca-context-manifest-v1",
+  "upstream": {
+    "repository": "https://github.com/fcatools/contexts",
+    "commit": "9306d256c8a212ffa0c60a52f883a516d8b87b58",
+    "license": "CC0-1.0"
+  },
+  "contexts": {
+    "animals": {
+      "path": "contexts/animals_en.cxt",
+      "sha256": "8a91853b8189c2e3cf6f9257d05967384c65db8deb55aacb8cff1ee4516828cd",
+      "source_path": "contexts/animals_en.cxt",
+      "citation": "Ganter, B., Wille, R., and Stumme, G. (2005). Formal Concept Analysis: Foundations and Applications, LNCS 3626, p. 27."
+    },
+    "binary_relations": {
+      "path": "contexts/binary_relations_en.cxt",
+      "sha256": "165a56063f0f3487382a5835e5cd6414fe99e88e6602f22350817caff963108d",
+      "source_path": "contexts/binary_relations_en.cxt",
+      "citation": "Ganter, B. and Wille, R. (2024). Formal Concept Analysis: Mathematical Foundations, Figure 2.15."
+    },
+    "livingbeings": {
+      "path": "contexts/livingbeings_en.cxt",
+      "sha256": "da4de61a55315b175f166a63b54e26f6c33af5b9ef28e22b554811fae9de790f",
+      "source_path": "contexts/livingbeings_en.cxt",
+      "citation": "Ganter, B. and Wille, R. (2024). Formal Concept Analysis: Mathematical Foundations, Figure 1.1."
+    },
+    "music": {
+      "path": "contexts/music_en.cxt",
+      "sha256": "3b0f9a5f49f336f853e5ac111cc73571edd962dd0bdecbf88d0f1c8c6b7bb5b3",
+      "source_path": "contexts/music_en.cxt",
+      "citation": "Ganter, B., Wille, R., and Stumme, G. (2005). Formal Concept Analysis: Foundations and Applications, LNCS 3626, p. 22."
+    },
+    "tealady": {
+      "path": "contexts/tealady.cxt",
+      "sha256": "4000210e27acacb0dbe4e4efe93842f5502d771cb0c491e303c49ff5528c1227",
+      "source_path": "contexts/tealady.cxt",
+      "citation": "Wille, R. (1992). Concept Lattices and Conceptual Knowledge Systems. Computers & Mathematics with Applications 23(6–9), 493–515."
+    }
+  }
+}

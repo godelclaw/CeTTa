@@ -1,0 +1,3857 @@
+{
+  "attribute_count": 14,
+  "attribute_symbols": {
+    "1": "attribute_000_attribute_1",
+    "10": "attribute_009_attribute_10",
+    "11": "attribute_010_attribute_11",
+    "12": "attribute_011_attribute_12",
+    "13": "attribute_012_attribute_13",
+    "14": "attribute_013_attribute_14",
+    "2": "attribute_001_attribute_2",
+    "3": "attribute_002_attribute_3",
+    "4": "attribute_003_attribute_4",
+    "5": "attribute_004_attribute_5",
+    "6": "attribute_005_attribute_6",
+    "7": "attribute_006_attribute_7",
+    "8": "attribute_007_attribute_8",
+    "9": "attribute_008_attribute_9"
+  },
+  "attributes": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14"
+  ],
+  "canonical_basis": [
+    {
+      "antecedent": [
+        "attribute_000_attribute_1"
+      ],
+      "consequent": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_attribute_2"
+      ],
+      "consequent": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_attribute_3"
+      ],
+      "consequent": [
+        "attribute_004_attribute_5"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_attribute_4"
+      ],
+      "consequent": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_009_attribute_10"
+      ],
+      "consequent": [
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_012_attribute_13"
+      ],
+      "consequent": [
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_013_attribute_14"
+      ],
+      "consequent": [
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6"
+      ],
+      "consequent": [
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_attribute_5",
+        "attribute_008_attribute_9"
+      ],
+      "consequent": [
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_attribute_5",
+        "attribute_010_attribute_11"
+      ],
+      "consequent": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_attribute_5",
+        "attribute_011_attribute_12"
+      ],
+      "consequent": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_attribute_6",
+        "attribute_010_attribute_11"
+      ],
+      "consequent": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_attribute_6",
+        "attribute_011_attribute_12"
+      ],
+      "consequent": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_attribute_7",
+        "attribute_010_attribute_11"
+      ],
+      "consequent": [
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_attribute_8",
+        "attribute_010_attribute_11"
+      ],
+      "consequent": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12"
+      ],
+      "consequent": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_007_attribute_8"
+      ],
+      "consequent": [
+        "attribute_005_attribute_6"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "consequent": [
+        "attribute_004_attribute_5"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "consequent": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "consequent": [
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "consequent": [
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ],
+      "consequent": [
+        "attribute_005_attribute_6"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "consequent": [
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    }
+  ],
+  "canonical_basis_count": 23,
+  "citation": "Wille, R. (1992). Concept Lattices and Conceptual Knowledge Systems. Computers & Mathematics with Applications 23(6\u20139), 493\u2013515.",
+  "concept_count": 65,
+  "concepts": [
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_004_charlotte",
+        "object_005_frances",
+        "object_006_eleanor",
+        "object_007_pearl",
+        "object_008_ruth",
+        "object_009_verne",
+        "object_010_myra",
+        "object_011_katherine",
+        "object_012_syliva",
+        "object_013_nora",
+        "object_014_helen",
+        "object_015_dorothy",
+        "object_016_olivia",
+        "object_017_flora"
+      ],
+      "intent": []
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_004_charlotte",
+        "object_005_frances",
+        "object_006_eleanor",
+        "object_008_ruth"
+      ],
+      "intent": [
+        "attribute_004_attribute_5"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_005_frances",
+        "object_006_eleanor",
+        "object_007_pearl",
+        "object_013_nora"
+      ],
+      "intent": [
+        "attribute_005_attribute_6"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_004_charlotte",
+        "object_006_eleanor",
+        "object_008_ruth",
+        "object_009_verne",
+        "object_012_syliva",
+        "object_013_nora",
+        "object_014_helen"
+      ],
+      "intent": [
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_005_frances",
+        "object_006_eleanor",
+        "object_007_pearl",
+        "object_008_ruth",
+        "object_009_verne",
+        "object_010_myra",
+        "object_011_katherine",
+        "object_012_syliva",
+        "object_014_helen",
+        "object_015_dorothy"
+      ],
+      "intent": [
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_002_theresa",
+        "object_007_pearl",
+        "object_008_ruth",
+        "object_009_verne",
+        "object_010_myra",
+        "object_011_katherine",
+        "object_012_syliva",
+        "object_013_nora",
+        "object_015_dorothy",
+        "object_016_olivia",
+        "object_017_flora"
+      ],
+      "intent": [
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_013_nora",
+        "object_014_helen",
+        "object_016_olivia",
+        "object_017_flora"
+      ],
+      "intent": [
+        "attribute_010_attribute_11"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_verne",
+        "object_010_myra",
+        "object_011_katherine",
+        "object_012_syliva",
+        "object_013_nora",
+        "object_014_helen"
+      ],
+      "intent": [
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_004_charlotte",
+        "object_005_frances"
+      ],
+      "intent": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_004_charlotte",
+        "object_006_eleanor",
+        "object_008_ruth"
+      ],
+      "intent": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_005_frances",
+        "object_006_eleanor",
+        "object_008_ruth"
+      ],
+      "intent": [
+        "attribute_004_attribute_5",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_006_eleanor",
+        "object_013_nora"
+      ],
+      "intent": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_005_frances",
+        "object_006_eleanor",
+        "object_007_pearl"
+      ],
+      "intent": [
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_002_theresa",
+        "object_007_pearl",
+        "object_013_nora"
+      ],
+      "intent": [
+        "attribute_005_attribute_6",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_006_eleanor",
+        "object_008_ruth",
+        "object_009_verne",
+        "object_012_syliva",
+        "object_014_helen"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_theresa",
+        "object_008_ruth",
+        "object_009_verne",
+        "object_012_syliva",
+        "object_013_nora"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_verne",
+        "object_012_syliva",
+        "object_013_nora",
+        "object_014_helen"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_002_theresa",
+        "object_007_pearl",
+        "object_008_ruth",
+        "object_009_verne",
+        "object_010_myra",
+        "object_011_katherine",
+        "object_012_syliva",
+        "object_015_dorothy"
+      ],
+      "intent": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_verne",
+        "object_010_myra",
+        "object_011_katherine",
+        "object_012_syliva",
+        "object_014_helen"
+      ],
+      "intent": [
+        "attribute_007_attribute_8",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_013_nora",
+        "object_016_olivia",
+        "object_017_flora"
+      ],
+      "intent": [
+        "attribute_008_attribute_9",
+        "attribute_010_attribute_11"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_verne",
+        "object_010_myra",
+        "object_011_katherine",
+        "object_012_syliva",
+        "object_013_nora"
+      ],
+      "intent": [
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_010_myra",
+        "object_011_katherine",
+        "object_012_syliva",
+        "object_013_nora",
+        "object_014_helen"
+      ],
+      "intent": [
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_004_charlotte"
+      ],
+      "intent": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_004_charlotte"
+      ],
+      "intent": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_005_frances",
+        "object_006_eleanor"
+      ],
+      "intent": [
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_006_eleanor",
+        "object_008_ruth"
+      ],
+      "intent": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_002_theresa",
+        "object_008_ruth"
+      ],
+      "intent": [
+        "attribute_004_attribute_5",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_theresa",
+        "object_013_nora"
+      ],
+      "intent": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_002_theresa",
+        "object_007_pearl"
+      ],
+      "intent": [
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_theresa",
+        "object_008_ruth",
+        "object_009_verne",
+        "object_012_syliva"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_verne",
+        "object_012_syliva",
+        "object_014_helen"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_verne",
+        "object_012_syliva",
+        "object_013_nora"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_012_syliva",
+        "object_013_nora",
+        "object_014_helen"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_verne",
+        "object_010_myra",
+        "object_011_katherine",
+        "object_012_syliva"
+      ],
+      "intent": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_010_myra",
+        "object_011_katherine",
+        "object_012_syliva",
+        "object_014_helen"
+      ],
+      "intent": [
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_010_myra",
+        "object_011_katherine",
+        "object_012_syliva",
+        "object_013_nora"
+      ],
+      "intent": [
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_004_charlotte"
+      ],
+      "intent": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_005_frances"
+      ],
+      "intent": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda",
+        "object_006_eleanor"
+      ],
+      "intent": [
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_theresa",
+        "object_008_ruth"
+      ],
+      "intent": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_009_verne",
+        "object_012_syliva"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_012_syliva",
+        "object_014_helen"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_013_nora",
+        "object_014_helen"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_010_myra",
+        "object_011_katherine",
+        "object_012_syliva"
+      ],
+      "intent": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_001_laura",
+        "object_003_brenda"
+      ],
+      "intent": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_001_laura",
+        "object_002_theresa"
+      ],
+      "intent": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_002_theresa",
+        "object_003_brenda"
+      ],
+      "intent": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_laura",
+        "object_002_theresa",
+        "object_003_brenda"
+      ],
+      "intent": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_014_helen"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "extent": [
+        "object_011_katherine",
+        "object_012_syliva",
+        "object_013_nora"
+      ],
+      "intent": [
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_001_laura"
+      ],
+      "intent": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_003_brenda"
+      ],
+      "intent": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_laura",
+        "object_003_brenda"
+      ],
+      "intent": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_laura",
+        "object_002_theresa"
+      ],
+      "intent": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_theresa",
+        "object_003_brenda"
+      ],
+      "intent": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_012_syliva",
+        "object_013_nora"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "extent": [
+        "object_011_katherine",
+        "object_012_syliva"
+      ],
+      "intent": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_laura"
+      ],
+      "intent": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_003_brenda"
+      ],
+      "intent": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn",
+        "object_002_theresa"
+      ],
+      "intent": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_012_syliva"
+      ],
+      "intent": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_evelyn"
+      ],
+      "intent": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_theresa"
+      ],
+      "intent": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "extent": [
+        "object_013_nora"
+      ],
+      "intent": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "extent": [],
+      "intent": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    }
+  ],
+  "context_id": "tealady",
+  "context_name": "",
+  "context_sha256": "4000210e27acacb0dbe4e4efe93842f5502d771cb0c491e303c49ff5528c1227",
+  "cover_count": 148,
+  "covers": [
+    {
+      "general": [],
+      "specific": [
+        "attribute_004_attribute_5"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_005_attribute_6"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_010_attribute_11"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_008_attribute_9",
+        "attribute_010_attribute_11"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_attribute_11"
+      ],
+      "specific": [
+        "attribute_008_attribute_9",
+        "attribute_010_attribute_11"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_attribute_11"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9",
+        "attribute_010_attribute_11"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_attribute_5",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ],
+      "specific": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ],
+      "specific": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ],
+      "specific": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_attribute_1",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ],
+      "specific": [
+        "attribute_000_attribute_1",
+        "attribute_001_attribute_2",
+        "attribute_002_attribute_3",
+        "attribute_003_attribute_4",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_006_attribute_7",
+        "attribute_007_attribute_8",
+        "attribute_008_attribute_9",
+        "attribute_009_attribute_10",
+        "attribute_010_attribute_11",
+        "attribute_011_attribute_12",
+        "attribute_012_attribute_13",
+        "attribute_013_attribute_14"
+      ]
+    }
+  ],
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "closed_candidate": [
+      "attribute_004_attribute_5"
+    ],
+    "false_cell": [
+      "object_000_evelyn",
+      "attribute_006_attribute_7"
+    ],
+    "negative_implication": {
+      "antecedent": [
+        "attribute_000_attribute_1"
+      ],
+      "consequent": [
+        "attribute_001_attribute_2"
+      ]
+    },
+    "nonclosed_candidate": [
+      "attribute_000_attribute_1"
+    ],
+    "nonclosed_closure": [
+      "attribute_000_attribute_1",
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8"
+    ],
+    "positive_implication": {
+      "antecedent": [
+        "attribute_000_attribute_1"
+      ],
+      "consequent": [
+        "attribute_002_attribute_3",
+        "attribute_004_attribute_5",
+        "attribute_005_attribute_6",
+        "attribute_007_attribute_8"
+      ]
+    },
+    "true_cell": [
+      "object_000_evelyn",
+      "attribute_000_attribute_1"
+    ]
+  },
+  "false_cell_count": 163,
+  "intents": [
+    [],
+    [
+      "attribute_004_attribute_5"
+    ],
+    [
+      "attribute_005_attribute_6"
+    ],
+    [
+      "attribute_006_attribute_7"
+    ],
+    [
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_008_attribute_9"
+    ],
+    [
+      "attribute_010_attribute_11"
+    ],
+    [
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5"
+    ],
+    [
+      "attribute_004_attribute_5",
+      "attribute_006_attribute_7"
+    ],
+    [
+      "attribute_004_attribute_5",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7"
+    ],
+    [
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_005_attribute_6",
+      "attribute_008_attribute_9"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_008_attribute_9"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    [
+      "attribute_007_attribute_8",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_008_attribute_9",
+      "attribute_010_attribute_11"
+    ],
+    [
+      "attribute_008_attribute_9",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5"
+    ],
+    [
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5",
+      "attribute_006_attribute_7"
+    ],
+    [
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_004_attribute_5",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_004_attribute_5",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    [
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_008_attribute_9"
+    ],
+    [
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_008_attribute_9",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_007_attribute_8",
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_008_attribute_9",
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_006_attribute_7"
+    ],
+    [
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_004_attribute_5",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_009_attribute_10",
+      "attribute_010_attribute_11",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9",
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_000_attribute_1",
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_001_attribute_2",
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_009_attribute_10",
+      "attribute_010_attribute_11",
+      "attribute_011_attribute_12"
+    ],
+    [
+      "attribute_008_attribute_9",
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12",
+      "attribute_012_attribute_13",
+      "attribute_013_attribute_14"
+    ],
+    [
+      "attribute_000_attribute_1",
+      "attribute_001_attribute_2",
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_000_attribute_1",
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_000_attribute_1",
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_001_attribute_2",
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_008_attribute_9",
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12",
+      "attribute_012_attribute_13",
+      "attribute_013_attribute_14"
+    ],
+    [
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9",
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12",
+      "attribute_012_attribute_13",
+      "attribute_013_attribute_14"
+    ],
+    [
+      "attribute_000_attribute_1",
+      "attribute_001_attribute_2",
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_000_attribute_1",
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8"
+    ],
+    [
+      "attribute_001_attribute_2",
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    [
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9",
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12",
+      "attribute_012_attribute_13",
+      "attribute_013_attribute_14"
+    ],
+    [
+      "attribute_000_attribute_1",
+      "attribute_001_attribute_2",
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    [
+      "attribute_001_attribute_2",
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    [
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_008_attribute_9",
+      "attribute_009_attribute_10",
+      "attribute_010_attribute_11",
+      "attribute_011_attribute_12",
+      "attribute_012_attribute_13",
+      "attribute_013_attribute_14"
+    ],
+    [
+      "attribute_000_attribute_1",
+      "attribute_001_attribute_2",
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9",
+      "attribute_009_attribute_10",
+      "attribute_010_attribute_11",
+      "attribute_011_attribute_12",
+      "attribute_012_attribute_13",
+      "attribute_013_attribute_14"
+    ]
+  ],
+  "manifest_sha256": "ef81ae7691755afb8ce223db7ee7e69b6a338be8ef724eb98f716f22884567d8",
+  "object_count": 18,
+  "object_symbols": {
+    "Brenda": "object_003_brenda",
+    "Charlotte": "object_004_charlotte",
+    "Dorothy": "object_015_dorothy",
+    "Eleanor": "object_006_eleanor",
+    "Evelyn": "object_000_evelyn",
+    "Flora": "object_017_flora",
+    "Frances": "object_005_frances",
+    "Helen": "object_014_helen",
+    "Katherine": "object_011_katherine",
+    "Laura": "object_001_laura",
+    "Myra": "object_010_myra",
+    "Nora": "object_013_nora",
+    "Olivia": "object_016_olivia",
+    "Pearl": "object_007_pearl",
+    "Ruth": "object_008_ruth",
+    "Syliva": "object_012_syliva",
+    "Theresa": "object_002_theresa",
+    "Verne": "object_009_verne"
+  },
+  "objects": [
+    "Evelyn",
+    "Laura",
+    "Theresa",
+    "Brenda",
+    "Charlotte",
+    "Frances",
+    "Eleanor",
+    "Pearl",
+    "Ruth",
+    "Verne",
+    "Myra",
+    "Katherine",
+    "Syliva",
+    "Nora",
+    "Helen",
+    "Dorothy",
+    "Olivia",
+    "Flora"
+  ],
+  "oracle_agreement": {
+    "bruteforce_equals_concepts_0_9_2": true,
+    "covers_equal_concepts_0_9_2_neighbors": true,
+    "set_basis_equals_bitset_basis": true
+  },
+  "schema": "wm-fca-cxt-oracle-v1",
+  "source_path": "contexts/tealady.cxt",
+  "true_cell_count": 89,
+  "true_incidence": {
+    "object_000_evelyn": [
+      "attribute_000_attribute_1",
+      "attribute_001_attribute_2",
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    "object_001_laura": [
+      "attribute_000_attribute_1",
+      "attribute_001_attribute_2",
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8"
+    ],
+    "object_002_theresa": [
+      "attribute_001_attribute_2",
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    "object_003_brenda": [
+      "attribute_000_attribute_1",
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8"
+    ],
+    "object_004_charlotte": [
+      "attribute_002_attribute_3",
+      "attribute_003_attribute_4",
+      "attribute_004_attribute_5",
+      "attribute_006_attribute_7"
+    ],
+    "object_005_frances": [
+      "attribute_002_attribute_3",
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8"
+    ],
+    "object_006_eleanor": [
+      "attribute_004_attribute_5",
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8"
+    ],
+    "object_007_pearl": [
+      "attribute_005_attribute_6",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    "object_008_ruth": [
+      "attribute_004_attribute_5",
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    "object_009_verne": [
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9",
+      "attribute_011_attribute_12"
+    ],
+    "object_010_myra": [
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9",
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12"
+    ],
+    "object_011_katherine": [
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9",
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12",
+      "attribute_012_attribute_13",
+      "attribute_013_attribute_14"
+    ],
+    "object_012_syliva": [
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9",
+      "attribute_009_attribute_10",
+      "attribute_011_attribute_12",
+      "attribute_012_attribute_13",
+      "attribute_013_attribute_14"
+    ],
+    "object_013_nora": [
+      "attribute_005_attribute_6",
+      "attribute_006_attribute_7",
+      "attribute_008_attribute_9",
+      "attribute_009_attribute_10",
+      "attribute_010_attribute_11",
+      "attribute_011_attribute_12",
+      "attribute_012_attribute_13",
+      "attribute_013_attribute_14"
+    ],
+    "object_014_helen": [
+      "attribute_006_attribute_7",
+      "attribute_007_attribute_8",
+      "attribute_009_attribute_10",
+      "attribute_010_attribute_11",
+      "attribute_011_attribute_12"
+    ],
+    "object_015_dorothy": [
+      "attribute_007_attribute_8",
+      "attribute_008_attribute_9"
+    ],
+    "object_016_olivia": [
+      "attribute_008_attribute_9",
+      "attribute_010_attribute_11"
+    ],
+    "object_017_flora": [
+      "attribute_008_attribute_9",
+      "attribute_010_attribute_11"
+    ]
+  },
+  "upstream": {
+    "commit": "9306d256c8a212ffa0c60a52f883a516d8b87b58",
+    "license": "CC0-1.0",
+    "repository": "https://github.com/fcatools/contexts"
+  }
+}

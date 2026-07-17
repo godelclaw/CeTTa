@@ -1,0 +1,1033 @@
+{
+  "attribute_count": 9,
+  "attribute_symbols": {
+    "can move around": "attribute_006_can_move_around",
+    "has limbs": "attribute_007_has_limbs",
+    "lives in water": "attribute_001_lives_in_water",
+    "lives on land": "attribute_002_lives_on_land",
+    "needs chlorophyll to produce food": "attribute_003_needs_chlorophyll_to_produce_food",
+    "needs water to live": "attribute_000_needs_water_to_live",
+    "one seed leave": "attribute_005_one_seed_leave",
+    "suckles its offspring": "attribute_008_suckles_its_offspring",
+    "two seed leaves": "attribute_004_two_seed_leaves"
+  },
+  "attributes": [
+    "needs water to live",
+    "lives in water",
+    "lives on land",
+    "needs chlorophyll to produce food",
+    "two seed leaves",
+    "one seed leave",
+    "can move around",
+    "has limbs",
+    "suckles its offspring"
+  ],
+  "canonical_basis": [
+    {
+      "antecedent": [],
+      "consequent": [
+        "attribute_000_needs_water_to_live"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_004_two_seed_leaves"
+      ],
+      "consequent": [
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_005_one_seed_leave"
+      ],
+      "consequent": [
+        "attribute_003_needs_chlorophyll_to_produce_food"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_007_has_limbs"
+      ],
+      "consequent": [
+        "attribute_006_can_move_around"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_008_suckles_its_offspring"
+      ],
+      "consequent": [
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_003_needs_chlorophyll_to_produce_food"
+      ],
+      "consequent": [
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around"
+      ],
+      "consequent": [
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_006_can_move_around"
+      ],
+      "consequent": [
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_004_two_seed_leaves",
+        "attribute_005_one_seed_leave",
+        "attribute_007_has_limbs",
+        "attribute_008_suckles_its_offspring"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_004_two_seed_leaves",
+        "attribute_005_one_seed_leave"
+      ],
+      "consequent": [
+        "attribute_001_lives_in_water",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs",
+        "attribute_008_suckles_its_offspring"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs",
+        "attribute_008_suckles_its_offspring"
+      ],
+      "consequent": [
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_004_two_seed_leaves",
+        "attribute_005_one_seed_leave"
+      ]
+    }
+  ],
+  "canonical_basis_count": 10,
+  "citation": "Ganter, B. and Wille, R. (2024). Formal Concept Analysis: Mathematical Foundations, Figure 1.1.",
+  "concept_count": 19,
+  "concepts": [
+    {
+      "extent": [
+        "object_000_leech",
+        "object_001_bream",
+        "object_002_frog",
+        "object_003_dog",
+        "object_004_waterweed",
+        "object_005_reed",
+        "object_006_bean",
+        "object_007_maize"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_leech",
+        "object_001_bream",
+        "object_002_frog",
+        "object_004_waterweed",
+        "object_005_reed"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_frog",
+        "object_003_dog",
+        "object_005_reed",
+        "object_006_bean",
+        "object_007_maize"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_waterweed",
+        "object_005_reed",
+        "object_006_bean",
+        "object_007_maize"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_003_needs_chlorophyll_to_produce_food"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_leech",
+        "object_001_bream",
+        "object_002_frog",
+        "object_003_dog"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_006_can_move_around"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_frog",
+        "object_005_reed"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_leech",
+        "object_001_bream",
+        "object_002_frog"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_006_can_move_around"
+      ]
+    },
+    {
+      "extent": [
+        "object_005_reed",
+        "object_006_bean",
+        "object_007_maize"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_waterweed",
+        "object_005_reed",
+        "object_007_maize"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_bream",
+        "object_002_frog",
+        "object_003_dog"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_waterweed",
+        "object_005_reed"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_bream",
+        "object_002_frog"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "extent": [
+        "object_006_bean"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_004_two_seed_leaves"
+      ]
+    },
+    {
+      "extent": [
+        "object_005_reed",
+        "object_007_maize"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_frog",
+        "object_003_dog"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "extent": [
+        "object_005_reed"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_frog"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "extent": [
+        "object_003_dog"
+      ],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs",
+        "attribute_008_suckles_its_offspring"
+      ]
+    },
+    {
+      "extent": [],
+      "intent": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_004_two_seed_leaves",
+        "attribute_005_one_seed_leave",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs",
+        "attribute_008_suckles_its_offspring"
+      ]
+    }
+  ],
+  "context_id": "livingbeings",
+  "context_name": "Living beings and water",
+  "context_sha256": "da4de61a55315b175f166a63b54e26f6c33af5b9ef28e22b554811fae9de790f",
+  "cover_count": 32,
+  "covers": [
+    {
+      "general": [
+        "attribute_000_needs_water_to_live"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_003_needs_chlorophyll_to_produce_food"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_006_can_move_around"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_006_can_move_around"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_003_needs_chlorophyll_to_produce_food"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_003_needs_chlorophyll_to_produce_food"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_006_can_move_around"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_006_can_move_around"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_006_can_move_around"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_006_can_move_around"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_004_two_seed_leaves"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_004_two_seed_leaves"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_004_two_seed_leaves",
+        "attribute_005_one_seed_leave",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs",
+        "attribute_008_suckles_its_offspring"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs",
+        "attribute_008_suckles_its_offspring"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_005_one_seed_leave"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_004_two_seed_leaves",
+        "attribute_005_one_seed_leave",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs",
+        "attribute_008_suckles_its_offspring"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_004_two_seed_leaves",
+        "attribute_005_one_seed_leave",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs",
+        "attribute_008_suckles_its_offspring"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_needs_water_to_live",
+        "attribute_002_lives_on_land",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs",
+        "attribute_008_suckles_its_offspring"
+      ],
+      "specific": [
+        "attribute_000_needs_water_to_live",
+        "attribute_001_lives_in_water",
+        "attribute_002_lives_on_land",
+        "attribute_003_needs_chlorophyll_to_produce_food",
+        "attribute_004_two_seed_leaves",
+        "attribute_005_one_seed_leave",
+        "attribute_006_can_move_around",
+        "attribute_007_has_limbs",
+        "attribute_008_suckles_its_offspring"
+      ]
+    }
+  ],
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "closed_candidate": [
+      "attribute_000_needs_water_to_live"
+    ],
+    "false_cell": [
+      "object_000_leech",
+      "attribute_002_lives_on_land"
+    ],
+    "negative_implication": {
+      "antecedent": [
+        "attribute_000_needs_water_to_live"
+      ],
+      "consequent": [
+        "attribute_001_lives_in_water"
+      ]
+    },
+    "nonclosed_candidate": [],
+    "nonclosed_closure": [
+      "attribute_000_needs_water_to_live"
+    ],
+    "positive_implication": {
+      "antecedent": [],
+      "consequent": [
+        "attribute_000_needs_water_to_live"
+      ]
+    },
+    "true_cell": [
+      "object_000_leech",
+      "attribute_000_needs_water_to_live"
+    ]
+  },
+  "false_cell_count": 38,
+  "intents": [
+    [
+      "attribute_000_needs_water_to_live"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_002_lives_on_land"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_003_needs_chlorophyll_to_produce_food"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_006_can_move_around"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water",
+      "attribute_002_lives_on_land"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water",
+      "attribute_006_can_move_around"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_002_lives_on_land",
+      "attribute_003_needs_chlorophyll_to_produce_food"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_003_needs_chlorophyll_to_produce_food",
+      "attribute_005_one_seed_leave"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_006_can_move_around",
+      "attribute_007_has_limbs"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water",
+      "attribute_003_needs_chlorophyll_to_produce_food",
+      "attribute_005_one_seed_leave"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water",
+      "attribute_006_can_move_around",
+      "attribute_007_has_limbs"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_002_lives_on_land",
+      "attribute_003_needs_chlorophyll_to_produce_food",
+      "attribute_004_two_seed_leaves"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_002_lives_on_land",
+      "attribute_003_needs_chlorophyll_to_produce_food",
+      "attribute_005_one_seed_leave"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_002_lives_on_land",
+      "attribute_006_can_move_around",
+      "attribute_007_has_limbs"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water",
+      "attribute_002_lives_on_land",
+      "attribute_003_needs_chlorophyll_to_produce_food",
+      "attribute_005_one_seed_leave"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water",
+      "attribute_002_lives_on_land",
+      "attribute_006_can_move_around",
+      "attribute_007_has_limbs"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_002_lives_on_land",
+      "attribute_006_can_move_around",
+      "attribute_007_has_limbs",
+      "attribute_008_suckles_its_offspring"
+    ],
+    [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water",
+      "attribute_002_lives_on_land",
+      "attribute_003_needs_chlorophyll_to_produce_food",
+      "attribute_004_two_seed_leaves",
+      "attribute_005_one_seed_leave",
+      "attribute_006_can_move_around",
+      "attribute_007_has_limbs",
+      "attribute_008_suckles_its_offspring"
+    ]
+  ],
+  "manifest_sha256": "ef81ae7691755afb8ce223db7ee7e69b6a338be8ef724eb98f716f22884567d8",
+  "object_count": 8,
+  "object_symbols": {
+    "bean": "object_006_bean",
+    "bream": "object_001_bream",
+    "dog": "object_003_dog",
+    "frog": "object_002_frog",
+    "leech": "object_000_leech",
+    "maize": "object_007_maize",
+    "reed": "object_005_reed",
+    "waterweed": "object_004_waterweed"
+  },
+  "objects": [
+    "leech",
+    "bream",
+    "frog",
+    "dog",
+    "waterweed",
+    "reed",
+    "bean",
+    "maize"
+  ],
+  "oracle_agreement": {
+    "bruteforce_equals_concepts_0_9_2": true,
+    "covers_equal_concepts_0_9_2_neighbors": true,
+    "set_basis_equals_bitset_basis": true
+  },
+  "schema": "wm-fca-cxt-oracle-v1",
+  "source_path": "contexts/livingbeings_en.cxt",
+  "true_cell_count": 34,
+  "true_incidence": {
+    "object_000_leech": [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water",
+      "attribute_006_can_move_around"
+    ],
+    "object_001_bream": [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water",
+      "attribute_006_can_move_around",
+      "attribute_007_has_limbs"
+    ],
+    "object_002_frog": [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water",
+      "attribute_002_lives_on_land",
+      "attribute_006_can_move_around",
+      "attribute_007_has_limbs"
+    ],
+    "object_003_dog": [
+      "attribute_000_needs_water_to_live",
+      "attribute_002_lives_on_land",
+      "attribute_006_can_move_around",
+      "attribute_007_has_limbs",
+      "attribute_008_suckles_its_offspring"
+    ],
+    "object_004_waterweed": [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water",
+      "attribute_003_needs_chlorophyll_to_produce_food",
+      "attribute_005_one_seed_leave"
+    ],
+    "object_005_reed": [
+      "attribute_000_needs_water_to_live",
+      "attribute_001_lives_in_water",
+      "attribute_002_lives_on_land",
+      "attribute_003_needs_chlorophyll_to_produce_food",
+      "attribute_005_one_seed_leave"
+    ],
+    "object_006_bean": [
+      "attribute_000_needs_water_to_live",
+      "attribute_002_lives_on_land",
+      "attribute_003_needs_chlorophyll_to_produce_food",
+      "attribute_004_two_seed_leaves"
+    ],
+    "object_007_maize": [
+      "attribute_000_needs_water_to_live",
+      "attribute_002_lives_on_land",
+      "attribute_003_needs_chlorophyll_to_produce_food",
+      "attribute_005_one_seed_leave"
+    ]
+  },
+  "upstream": {
+    "commit": "9306d256c8a212ffa0c60a52f883a516d8b87b58",
+    "license": "CC0-1.0",
+    "repository": "https://github.com/fcatools/contexts"
+  }
+}

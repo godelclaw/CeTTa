@@ -1,0 +1,4521 @@
+{
+  "algorithm_counts": {
+    "lectic_logical_closures": 118,
+    "levelwise_candidates": 572
+  },
+  "attribute_count": 16,
+  "attribute_symbols": {
+    "Boolean": "attribute_000_boolean",
+    "Connection": "attribute_001_connection",
+    "Function": "attribute_002_function",
+    "Galois": "attribute_003_galois",
+    "Heyting": "attribute_004_heyting",
+    "Image": "attribute_005_image",
+    "L1": "attribute_006_l1",
+    "L2": "attribute_007_l2",
+    "are_isomorphic": "attribute_008_are_isomorphic",
+    "ex_max_of": "attribute_009_ex_max_of",
+    "ex_min_of": "attribute_010_ex_min_of",
+    "is_a_complement_of": "attribute_011_is_a_complement_of",
+    "is_maximum_of": "attribute_012_is_maximum_of",
+    "is_minimum_of": "attribute_013_is_minimum_of",
+    "lower_adjoint": "attribute_014_lower_adjoint",
+    "upper_adjoint": "attribute_015_upper_adjoint"
+  },
+  "attributes": [
+    "Boolean",
+    "Connection",
+    "Function",
+    "Galois",
+    "Heyting",
+    "Image",
+    "L1",
+    "L2",
+    "are_isomorphic",
+    "ex_max_of",
+    "ex_min_of",
+    "is_a_complement_of",
+    "is_maximum_of",
+    "is_minimum_of",
+    "lower_adjoint",
+    "upper_adjoint"
+  ],
+  "canonical_basis": [
+    {
+      "antecedent": [
+        "attribute_001_connection"
+      ],
+      "consequent": [
+        "attribute_002_function"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_l1"
+      ],
+      "consequent": [
+        "attribute_002_function",
+        "attribute_007_l2"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_l2"
+      ],
+      "consequent": [
+        "attribute_002_function",
+        "attribute_006_l1"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_010_ex_min_of"
+      ],
+      "consequent": [
+        "attribute_009_ex_max_of"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_015_upper_adjoint"
+      ],
+      "consequent": [
+        "attribute_002_function"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolean",
+        "attribute_002_function"
+      ],
+      "consequent": [
+        "attribute_001_connection",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolean",
+        "attribute_003_galois"
+      ],
+      "consequent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolean",
+        "attribute_005_image"
+      ],
+      "consequent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolean",
+        "attribute_008_are_isomorphic"
+      ],
+      "consequent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolean",
+        "attribute_009_ex_max_of"
+      ],
+      "consequent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolean",
+        "attribute_011_is_a_complement_of"
+      ],
+      "consequent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolean",
+        "attribute_012_is_maximum_of"
+      ],
+      "consequent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolean",
+        "attribute_013_is_minimum_of"
+      ],
+      "consequent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_boolean",
+        "attribute_014_lower_adjoint"
+      ],
+      "consequent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_004_heyting"
+      ],
+      "consequent": [
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_008_are_isomorphic"
+      ],
+      "consequent": [
+        "attribute_006_l1",
+        "attribute_007_l2"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_009_ex_max_of"
+      ],
+      "consequent": [
+        "attribute_003_galois",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_011_is_a_complement_of"
+      ],
+      "consequent": [
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_galois",
+        "attribute_009_ex_max_of"
+      ],
+      "consequent": [
+        "attribute_002_function",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_galois",
+        "attribute_011_is_a_complement_of"
+      ],
+      "consequent": [
+        "attribute_002_function",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_galois",
+        "attribute_012_is_maximum_of"
+      ],
+      "consequent": [
+        "attribute_002_function"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_galois",
+        "attribute_013_is_minimum_of"
+      ],
+      "consequent": [
+        "attribute_002_function"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_heyting",
+        "attribute_005_image"
+      ],
+      "consequent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_heyting",
+        "attribute_008_are_isomorphic"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_heyting",
+        "attribute_009_ex_max_of"
+      ],
+      "consequent": [
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_heyting",
+        "attribute_013_is_minimum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_image",
+        "attribute_008_are_isomorphic"
+      ],
+      "consequent": [
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_image",
+        "attribute_009_ex_max_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_image",
+        "attribute_011_is_a_complement_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_image",
+        "attribute_012_is_maximum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_image",
+        "attribute_013_is_minimum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_image",
+        "attribute_014_lower_adjoint"
+      ],
+      "consequent": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_are_isomorphic",
+        "attribute_011_is_a_complement_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_are_isomorphic",
+        "attribute_012_is_maximum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_are_isomorphic",
+        "attribute_013_is_minimum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_are_isomorphic",
+        "attribute_014_lower_adjoint"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_009_ex_max_of",
+        "attribute_011_is_a_complement_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_010_ex_min_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_009_ex_max_of",
+        "attribute_013_is_minimum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_009_ex_max_of",
+        "attribute_014_lower_adjoint"
+      ],
+      "consequent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_011_is_a_complement_of",
+        "attribute_013_is_minimum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_011_is_a_complement_of",
+        "attribute_014_lower_adjoint"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint"
+      ],
+      "consequent": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_005_image"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_012_is_maximum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_013_is_minimum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_014_lower_adjoint"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_015_upper_adjoint"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_005_image",
+        "attribute_015_upper_adjoint"
+      ],
+      "consequent": [
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_012_is_maximum_of",
+        "attribute_015_upper_adjoint"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_013_is_minimum_of",
+        "attribute_015_upper_adjoint"
+      ],
+      "consequent": [
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ],
+      "consequent": [
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_014_lower_adjoint"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_012_is_maximum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_011_is_a_complement_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_015_upper_adjoint"
+      ],
+      "consequent": [
+        "attribute_005_image"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_006_l1",
+        "attribute_007_l2"
+      ],
+      "consequent": [
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_012_is_maximum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_013_is_minimum_of"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_014_lower_adjoint"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_015_upper_adjoint"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic"
+      ],
+      "consequent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_004_heyting",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    }
+  ],
+  "canonical_basis_count": 66,
+  "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article waybel_1.miz.",
+  "concept_count": 52,
+  "concepts": [
+    {
+      "extent": [
+        "object_000_definition_1",
+        "object_001_definition_2",
+        "object_002_definition_4",
+        "object_003_notation_1",
+        "object_004_definition_5",
+        "object_005_definition_6",
+        "object_006_theorem_6",
+        "object_007_theorem_7",
+        "object_008_definition_7",
+        "object_009_definition_8",
+        "object_010_definition_9",
+        "object_011_theorem_8",
+        "object_012_definition_10",
+        "object_013_definition_11",
+        "object_014_theorem_9",
+        "object_015_theorem_10",
+        "object_016_theorem_11",
+        "object_017_theorem_12",
+        "object_018_registration_3",
+        "object_019_theorem_13",
+        "object_020_registration_4",
+        "object_021_theorem_14",
+        "object_022_theorem_15",
+        "object_023_theorem_16",
+        "object_024_theorem_17",
+        "object_025_theorem_18",
+        "object_026_theorem_19",
+        "object_027_theorem_20",
+        "object_028_theorem_21",
+        "object_029_theorem_22",
+        "object_030_theorem_23",
+        "object_031_theorem_24",
+        "object_032_theorem_25",
+        "object_033_theorem_26",
+        "object_034_theorem_27",
+        "object_035_definition_12",
+        "object_036_registration_6",
+        "object_037_definition_13",
+        "object_038_registration_7",
+        "object_039_registration_8",
+        "object_040_definition_14",
+        "object_041_registration_10",
+        "object_042_registration_11",
+        "object_043_registration_12",
+        "object_044_theorem_28",
+        "object_045_theorem_29",
+        "object_046_definition_15",
+        "object_047_theorem_30",
+        "object_048_registration_13",
+        "object_049_theorem_31",
+        "object_050_definition_16",
+        "object_051_registration_14",
+        "object_052_theorem_32",
+        "object_053_theorem_33",
+        "object_054_theorem_34",
+        "object_055_theorem_35",
+        "object_056_theorem_36",
+        "object_057_theorem_37",
+        "object_058_theorem_38",
+        "object_059_theorem_39",
+        "object_060_theorem_40",
+        "object_061_theorem_41",
+        "object_062_theorem_42",
+        "object_063_theorem_43",
+        "object_064_theorem_44",
+        "object_065_theorem_45",
+        "object_066_theorem_46",
+        "object_067_theorem_47",
+        "object_068_theorem_48",
+        "object_069_theorem_49",
+        "object_070_theorem_50",
+        "object_071_theorem_51",
+        "object_072_theorem_52",
+        "object_073_theorem_53",
+        "object_074_theorem_54",
+        "object_075_theorem_55",
+        "object_076_theorem_56",
+        "object_077_theorem_57",
+        "object_078_theorem_58",
+        "object_079_definition_17",
+        "object_080_theorem_62",
+        "object_081_theorem_63",
+        "object_082_theorem_64",
+        "object_083_definition_18",
+        "object_084_registration_16",
+        "object_085_definition_19",
+        "object_086_theorem_66",
+        "object_087_registration_17",
+        "object_088_theorem_67",
+        "object_089_theorem_68",
+        "object_090_registration_18",
+        "object_091_theorem_69",
+        "object_092_theorem_70",
+        "object_093_theorem_71",
+        "object_094_theorem_72",
+        "object_095_theorem_73",
+        "object_096_theorem_74",
+        "object_097_theorem_75",
+        "object_098_theorem_76",
+        "object_099_theorem_77",
+        "object_100_theorem_78",
+        "object_101_theorem_79",
+        "object_102_theorem_80",
+        "object_103_theorem_81",
+        "object_104_theorem_82",
+        "object_105_theorem_83",
+        "object_106_theorem_84",
+        "object_107_theorem_85",
+        "object_108_definition_22",
+        "object_109_definition_23",
+        "object_110_registration_19",
+        "object_111_theorem_86",
+        "object_112_theorem_87",
+        "object_113_definition_24",
+        "object_114_registration_20",
+        "object_115_registration_21",
+        "object_116_registration_22",
+        "object_117_registration_23",
+        "object_118_registration_24"
+      ],
+      "intent": []
+    },
+    {
+      "extent": [
+        "object_113_definition_24",
+        "object_114_registration_20",
+        "object_115_registration_21",
+        "object_116_registration_22",
+        "object_117_registration_23",
+        "object_118_registration_24"
+      ],
+      "intent": [
+        "attribute_000_boolean"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_definition_1",
+        "object_001_definition_2",
+        "object_005_definition_6",
+        "object_006_theorem_6",
+        "object_007_theorem_7",
+        "object_008_definition_7",
+        "object_009_definition_8",
+        "object_010_definition_9",
+        "object_011_theorem_8",
+        "object_012_definition_10",
+        "object_013_definition_11",
+        "object_014_theorem_9",
+        "object_015_theorem_10",
+        "object_016_theorem_11",
+        "object_017_theorem_12",
+        "object_018_registration_3",
+        "object_019_theorem_13",
+        "object_020_registration_4",
+        "object_021_theorem_14",
+        "object_022_theorem_15",
+        "object_023_theorem_16",
+        "object_024_theorem_17",
+        "object_025_theorem_18",
+        "object_026_theorem_19",
+        "object_027_theorem_20",
+        "object_028_theorem_21",
+        "object_029_theorem_22",
+        "object_030_theorem_23",
+        "object_031_theorem_24",
+        "object_032_theorem_25",
+        "object_033_theorem_26",
+        "object_034_theorem_27",
+        "object_035_definition_12",
+        "object_036_registration_6",
+        "object_037_definition_13",
+        "object_038_registration_7",
+        "object_039_registration_8",
+        "object_040_definition_14",
+        "object_041_registration_10",
+        "object_042_registration_11",
+        "object_043_registration_12",
+        "object_044_theorem_28",
+        "object_045_theorem_29",
+        "object_046_definition_15",
+        "object_047_theorem_30",
+        "object_048_registration_13",
+        "object_049_theorem_31",
+        "object_050_definition_16",
+        "object_051_registration_14",
+        "object_052_theorem_32",
+        "object_053_theorem_33",
+        "object_054_theorem_34",
+        "object_055_theorem_35",
+        "object_056_theorem_36",
+        "object_057_theorem_37",
+        "object_058_theorem_38",
+        "object_059_theorem_39",
+        "object_060_theorem_40",
+        "object_061_theorem_41",
+        "object_062_theorem_42",
+        "object_063_theorem_43",
+        "object_064_theorem_44",
+        "object_065_theorem_45",
+        "object_066_theorem_46",
+        "object_067_theorem_47",
+        "object_068_theorem_48",
+        "object_069_theorem_49",
+        "object_070_theorem_50",
+        "object_071_theorem_51",
+        "object_072_theorem_52",
+        "object_073_theorem_53",
+        "object_074_theorem_54",
+        "object_075_theorem_55",
+        "object_076_theorem_56",
+        "object_079_definition_17",
+        "object_080_theorem_62",
+        "object_085_definition_19",
+        "object_110_registration_19"
+      ],
+      "intent": [
+        "attribute_002_function"
+      ]
+    },
+    {
+      "extent": [
+        "object_007_theorem_7",
+        "object_010_definition_9",
+        "object_011_theorem_8",
+        "object_012_definition_10",
+        "object_013_definition_11",
+        "object_014_theorem_9",
+        "object_015_theorem_10",
+        "object_016_theorem_11",
+        "object_017_theorem_12",
+        "object_019_theorem_13",
+        "object_021_theorem_14",
+        "object_022_theorem_15",
+        "object_023_theorem_16",
+        "object_024_theorem_17",
+        "object_025_theorem_18",
+        "object_026_theorem_19",
+        "object_029_theorem_22",
+        "object_031_theorem_24",
+        "object_032_theorem_25",
+        "object_034_theorem_27",
+        "object_056_theorem_36",
+        "object_057_theorem_37",
+        "object_058_theorem_38",
+        "object_059_theorem_39",
+        "object_060_theorem_40",
+        "object_061_theorem_41",
+        "object_075_theorem_55",
+        "object_076_theorem_56",
+        "object_077_theorem_57",
+        "object_078_theorem_58",
+        "object_080_theorem_62",
+        "object_085_definition_19",
+        "object_088_theorem_67",
+        "object_110_registration_19"
+      ],
+      "intent": [
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "extent": [
+        "object_076_theorem_56",
+        "object_083_definition_18",
+        "object_084_registration_16",
+        "object_085_definition_19",
+        "object_086_theorem_66",
+        "object_087_registration_17",
+        "object_088_theorem_67",
+        "object_089_theorem_68",
+        "object_090_registration_18",
+        "object_091_theorem_69",
+        "object_092_theorem_70",
+        "object_093_theorem_71",
+        "object_094_theorem_72",
+        "object_095_theorem_73",
+        "object_096_theorem_74",
+        "object_097_theorem_75",
+        "object_098_theorem_76",
+        "object_099_theorem_77",
+        "object_100_theorem_78",
+        "object_101_theorem_79",
+        "object_102_theorem_80",
+        "object_103_theorem_81",
+        "object_104_theorem_82",
+        "object_105_theorem_83",
+        "object_106_theorem_84",
+        "object_107_theorem_85",
+        "object_110_registration_19",
+        "object_111_theorem_86",
+        "object_112_theorem_87",
+        "object_116_registration_22",
+        "object_118_registration_24"
+      ],
+      "intent": [
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "extent": [
+        "object_046_definition_15",
+        "object_047_theorem_30",
+        "object_050_definition_16",
+        "object_052_theorem_32",
+        "object_053_theorem_33",
+        "object_054_theorem_34",
+        "object_056_theorem_36",
+        "object_057_theorem_37",
+        "object_059_theorem_39",
+        "object_060_theorem_40",
+        "object_071_theorem_51",
+        "object_072_theorem_52",
+        "object_073_theorem_53",
+        "object_074_theorem_54",
+        "object_075_theorem_55",
+        "object_076_theorem_56",
+        "object_078_theorem_58"
+      ],
+      "intent": [
+        "attribute_005_image"
+      ]
+    },
+    {
+      "extent": [
+        "object_005_definition_6",
+        "object_006_theorem_6",
+        "object_007_theorem_7",
+        "object_078_theorem_58"
+      ],
+      "intent": [
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_definition_4",
+        "object_003_notation_1",
+        "object_080_theorem_62",
+        "object_101_theorem_79"
+      ],
+      "intent": [
+        "attribute_009_ex_max_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_108_definition_22",
+        "object_109_definition_23",
+        "object_110_registration_19",
+        "object_111_theorem_86"
+      ],
+      "intent": [
+        "attribute_011_is_a_complement_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_5",
+        "object_016_theorem_11",
+        "object_022_theorem_15",
+        "object_024_theorem_17",
+        "object_032_theorem_25",
+        "object_033_theorem_26",
+        "object_034_theorem_27",
+        "object_080_theorem_62",
+        "object_085_definition_19",
+        "object_101_theorem_79"
+      ],
+      "intent": [
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_5",
+        "object_015_theorem_10",
+        "object_021_theorem_14",
+        "object_023_theorem_16",
+        "object_029_theorem_22",
+        "object_030_theorem_23",
+        "object_031_theorem_24"
+      ],
+      "intent": [
+        "attribute_013_is_minimum_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_013_definition_11",
+        "object_014_theorem_9",
+        "object_019_theorem_13",
+        "object_020_registration_4",
+        "object_024_theorem_17",
+        "object_075_theorem_55",
+        "object_077_theorem_57",
+        "object_080_theorem_62",
+        "object_081_theorem_63",
+        "object_082_theorem_64",
+        "object_083_definition_18",
+        "object_086_theorem_66"
+      ],
+      "intent": [
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "extent": [
+        "object_116_registration_22",
+        "object_118_registration_24"
+      ],
+      "intent": [
+        "attribute_000_boolean",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "extent": [
+        "object_008_definition_7",
+        "object_009_definition_8",
+        "object_010_definition_9"
+      ],
+      "intent": [
+        "attribute_001_connection",
+        "attribute_002_function"
+      ]
+    },
+    {
+      "extent": [
+        "object_007_theorem_7",
+        "object_010_definition_9",
+        "object_011_theorem_8",
+        "object_012_definition_10",
+        "object_013_definition_11",
+        "object_014_theorem_9",
+        "object_015_theorem_10",
+        "object_016_theorem_11",
+        "object_017_theorem_12",
+        "object_019_theorem_13",
+        "object_021_theorem_14",
+        "object_022_theorem_15",
+        "object_023_theorem_16",
+        "object_024_theorem_17",
+        "object_025_theorem_18",
+        "object_026_theorem_19",
+        "object_029_theorem_22",
+        "object_031_theorem_24",
+        "object_032_theorem_25",
+        "object_034_theorem_27",
+        "object_056_theorem_36",
+        "object_057_theorem_37",
+        "object_058_theorem_38",
+        "object_059_theorem_39",
+        "object_060_theorem_40",
+        "object_061_theorem_41",
+        "object_075_theorem_55",
+        "object_076_theorem_56",
+        "object_080_theorem_62",
+        "object_085_definition_19",
+        "object_110_registration_19"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "extent": [
+        "object_046_definition_15",
+        "object_047_theorem_30",
+        "object_050_definition_16",
+        "object_052_theorem_32",
+        "object_053_theorem_33",
+        "object_054_theorem_34",
+        "object_056_theorem_36",
+        "object_057_theorem_37",
+        "object_059_theorem_39",
+        "object_060_theorem_40",
+        "object_071_theorem_51",
+        "object_072_theorem_52",
+        "object_073_theorem_53",
+        "object_074_theorem_54",
+        "object_075_theorem_55",
+        "object_076_theorem_56"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_005_image"
+      ]
+    },
+    {
+      "extent": [
+        "object_016_theorem_11",
+        "object_022_theorem_15",
+        "object_024_theorem_17",
+        "object_032_theorem_25",
+        "object_033_theorem_26",
+        "object_034_theorem_27",
+        "object_080_theorem_62",
+        "object_085_definition_19"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_015_theorem_10",
+        "object_021_theorem_14",
+        "object_023_theorem_16",
+        "object_029_theorem_22",
+        "object_030_theorem_23",
+        "object_031_theorem_24"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_013_is_minimum_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_013_definition_11",
+        "object_014_theorem_9",
+        "object_019_theorem_13",
+        "object_020_registration_4",
+        "object_024_theorem_17",
+        "object_075_theorem_55",
+        "object_080_theorem_62"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "extent": [
+        "object_012_definition_10",
+        "object_014_theorem_9",
+        "object_017_theorem_12",
+        "object_018_registration_3",
+        "object_023_theorem_16",
+        "object_076_theorem_56"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "extent": [
+        "object_076_theorem_56",
+        "object_085_definition_19",
+        "object_088_theorem_67",
+        "object_110_registration_19"
+      ],
+      "intent": [
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "extent": [
+        "object_056_theorem_36",
+        "object_057_theorem_37",
+        "object_059_theorem_39",
+        "object_060_theorem_40",
+        "object_075_theorem_55",
+        "object_076_theorem_56",
+        "object_078_theorem_58"
+      ],
+      "intent": [
+        "attribute_003_galois",
+        "attribute_005_image"
+      ]
+    },
+    {
+      "extent": [
+        "object_007_theorem_7",
+        "object_078_theorem_58"
+      ],
+      "intent": [
+        "attribute_003_galois",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "extent": [
+        "object_013_definition_11",
+        "object_014_theorem_9",
+        "object_019_theorem_13",
+        "object_024_theorem_17",
+        "object_075_theorem_55",
+        "object_077_theorem_57",
+        "object_080_theorem_62"
+      ],
+      "intent": [
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "extent": [
+        "object_110_registration_19",
+        "object_111_theorem_86"
+      ],
+      "intent": [
+        "attribute_004_heyting",
+        "attribute_011_is_a_complement_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_085_definition_19",
+        "object_101_theorem_79"
+      ],
+      "intent": [
+        "attribute_004_heyting",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_083_definition_18",
+        "object_086_theorem_66"
+      ],
+      "intent": [
+        "attribute_004_heyting",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_definition_4",
+        "object_003_notation_1"
+      ],
+      "intent": [
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_080_theorem_62",
+        "object_101_theorem_79"
+      ],
+      "intent": [
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_5"
+      ],
+      "intent": [
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_010_definition_9"
+      ],
+      "intent": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "extent": [
+        "object_076_theorem_56",
+        "object_085_definition_19",
+        "object_110_registration_19"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "extent": [
+        "object_056_theorem_36",
+        "object_057_theorem_37",
+        "object_059_theorem_39",
+        "object_060_theorem_40",
+        "object_075_theorem_55",
+        "object_076_theorem_56"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image"
+      ]
+    },
+    {
+      "extent": [
+        "object_016_theorem_11",
+        "object_022_theorem_15",
+        "object_024_theorem_17",
+        "object_032_theorem_25",
+        "object_034_theorem_27",
+        "object_080_theorem_62",
+        "object_085_definition_19"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_015_theorem_10",
+        "object_021_theorem_14",
+        "object_023_theorem_16",
+        "object_029_theorem_22",
+        "object_031_theorem_24"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_013_is_minimum_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_013_definition_11",
+        "object_014_theorem_9",
+        "object_019_theorem_13",
+        "object_024_theorem_17",
+        "object_075_theorem_55",
+        "object_080_theorem_62"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "extent": [
+        "object_012_definition_10",
+        "object_014_theorem_9",
+        "object_017_theorem_12",
+        "object_023_theorem_16",
+        "object_076_theorem_56"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_definition_1",
+        "object_001_definition_2",
+        "object_005_definition_6",
+        "object_006_theorem_6",
+        "object_007_theorem_7",
+        "object_038_registration_7",
+        "object_046_definition_15",
+        "object_047_theorem_30",
+        "object_048_registration_13",
+        "object_049_theorem_31",
+        "object_050_definition_16",
+        "object_051_registration_14"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_078_theorem_58"
+      ],
+      "intent": [
+        "attribute_003_galois",
+        "attribute_005_image",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "extent": [
+        "object_101_theorem_79"
+      ],
+      "intent": [
+        "attribute_004_heyting",
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_110_registration_19"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_011_is_a_complement_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_085_definition_19"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_075_theorem_55"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "extent": [
+        "object_024_theorem_17",
+        "object_080_theorem_62"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "extent": [
+        "object_023_theorem_16"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_013_is_minimum_of",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "extent": [
+        "object_014_theorem_9"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "extent": [
+        "object_046_definition_15",
+        "object_047_theorem_30",
+        "object_050_definition_16"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2"
+      ]
+    },
+    {
+      "extent": [
+        "object_005_definition_6",
+        "object_006_theorem_6",
+        "object_007_theorem_7"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "extent": [
+        "object_076_theorem_56"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "extent": [
+        "object_007_theorem_7"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "extent": [
+        "object_080_theorem_62"
+      ],
+      "intent": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "extent": [],
+      "intent": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    }
+  ],
+  "context_id": "mizar_waybel_1",
+  "context_name": "",
+  "context_sha256": "282ad2a6ed4d95982b7a4a8c8ea8a13b5b6fb3a4333e3007601c4df0c52d7047",
+  "cover_count": 106,
+  "covers": [
+    {
+      "general": [],
+      "specific": [
+        "attribute_000_boolean"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_002_function"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_005_image"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_009_ex_max_of"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_011_is_a_complement_of"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_013_is_minimum_of"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_boolean"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function"
+      ],
+      "specific": [
+        "attribute_001_connection",
+        "attribute_002_function"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_005_image"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_013_is_minimum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_003_galois",
+        "attribute_005_image"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_003_galois",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_011_is_a_complement_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_image"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_005_image"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_image"
+      ],
+      "specific": [
+        "attribute_003_galois",
+        "attribute_005_image"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_are_isomorphic"
+      ],
+      "specific": [
+        "attribute_003_galois",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "general": [
+        "attribute_008_are_isomorphic"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_ex_max_of"
+      ],
+      "specific": [
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_ex_max_of"
+      ],
+      "specific": [
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_011_is_a_complement_of"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_011_is_a_complement_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_013_is_minimum_of"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_013_is_minimum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_013_is_minimum_of"
+      ],
+      "specific": [
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_014_lower_adjoint"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_014_lower_adjoint"
+      ],
+      "specific": [
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_014_lower_adjoint"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_boolean",
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_connection",
+        "attribute_002_function"
+      ],
+      "specific": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_013_is_minimum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_005_image"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_005_image"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_013_is_minimum_of"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_013_is_minimum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_014_lower_adjoint"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_015_upper_adjoint"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_galois",
+        "attribute_005_image"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_galois",
+        "attribute_005_image"
+      ],
+      "specific": [
+        "attribute_003_galois",
+        "attribute_005_image",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_galois",
+        "attribute_008_are_isomorphic"
+      ],
+      "specific": [
+        "attribute_003_galois",
+        "attribute_005_image",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_galois",
+        "attribute_008_are_isomorphic"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting",
+        "attribute_011_is_a_complement_of"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_011_is_a_complement_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting",
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting",
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting",
+        "attribute_014_lower_adjoint"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_011_is_a_complement_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_012_is_maximum_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_013_is_minimum_of"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_013_is_minimum_of",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_015_upper_adjoint"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_013_is_minimum_of",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_015_upper_adjoint"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_015_upper_adjoint"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_galois",
+        "attribute_005_image",
+        "attribute_008_are_isomorphic"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting",
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_011_is_a_complement_of"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_012_is_maximum_of"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_005_image",
+        "attribute_014_lower_adjoint"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_013_is_minimum_of",
+        "attribute_015_upper_adjoint"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic"
+      ],
+      "specific": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_015_upper_adjoint"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_009_ex_max_of",
+        "attribute_012_is_maximum_of",
+        "attribute_014_lower_adjoint"
+      ],
+      "specific": [
+        "attribute_000_boolean",
+        "attribute_001_connection",
+        "attribute_002_function",
+        "attribute_003_galois",
+        "attribute_004_heyting",
+        "attribute_005_image",
+        "attribute_006_l1",
+        "attribute_007_l2",
+        "attribute_008_are_isomorphic",
+        "attribute_009_ex_max_of",
+        "attribute_010_ex_min_of",
+        "attribute_011_is_a_complement_of",
+        "attribute_012_is_maximum_of",
+        "attribute_013_is_minimum_of",
+        "attribute_014_lower_adjoint",
+        "attribute_015_upper_adjoint"
+      ]
+    }
+  ],
+  "dependence_group": "mizar-waybel-1-extraction",
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "closed_candidate": [
+      "attribute_000_boolean"
+    ],
+    "false_cell": [
+      "object_000_definition_1",
+      "attribute_000_boolean"
+    ],
+    "negative_implication": {
+      "antecedent": [
+        "attribute_000_boolean"
+      ],
+      "consequent": [
+        "attribute_001_connection"
+      ]
+    },
+    "nonclosed_candidate": [
+      "attribute_001_connection"
+    ],
+    "nonclosed_closure": [
+      "attribute_001_connection",
+      "attribute_002_function"
+    ],
+    "positive_implication": {
+      "antecedent": [
+        "attribute_001_connection"
+      ],
+      "consequent": [
+        "attribute_002_function"
+      ]
+    },
+    "true_cell": [
+      "object_000_definition_1",
+      "attribute_002_function"
+    ]
+  },
+  "false_cell_count": 1662,
+  "intents": [
+    [],
+    [
+      "attribute_000_boolean"
+    ],
+    [
+      "attribute_002_function"
+    ],
+    [
+      "attribute_003_galois"
+    ],
+    [
+      "attribute_004_heyting"
+    ],
+    [
+      "attribute_005_image"
+    ],
+    [
+      "attribute_008_are_isomorphic"
+    ],
+    [
+      "attribute_009_ex_max_of"
+    ],
+    [
+      "attribute_011_is_a_complement_of"
+    ],
+    [
+      "attribute_012_is_maximum_of"
+    ],
+    [
+      "attribute_013_is_minimum_of"
+    ],
+    [
+      "attribute_014_lower_adjoint"
+    ],
+    [
+      "attribute_000_boolean",
+      "attribute_004_heyting"
+    ],
+    [
+      "attribute_001_connection",
+      "attribute_002_function"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_005_image"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_012_is_maximum_of"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_013_is_minimum_of"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_014_lower_adjoint"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_015_upper_adjoint"
+    ],
+    [
+      "attribute_003_galois",
+      "attribute_004_heyting"
+    ],
+    [
+      "attribute_003_galois",
+      "attribute_005_image"
+    ],
+    [
+      "attribute_003_galois",
+      "attribute_008_are_isomorphic"
+    ],
+    [
+      "attribute_003_galois",
+      "attribute_014_lower_adjoint"
+    ],
+    [
+      "attribute_004_heyting",
+      "attribute_011_is_a_complement_of"
+    ],
+    [
+      "attribute_004_heyting",
+      "attribute_012_is_maximum_of"
+    ],
+    [
+      "attribute_004_heyting",
+      "attribute_014_lower_adjoint"
+    ],
+    [
+      "attribute_009_ex_max_of",
+      "attribute_010_ex_min_of"
+    ],
+    [
+      "attribute_009_ex_max_of",
+      "attribute_012_is_maximum_of"
+    ],
+    [
+      "attribute_012_is_maximum_of",
+      "attribute_013_is_minimum_of"
+    ],
+    [
+      "attribute_001_connection",
+      "attribute_002_function",
+      "attribute_003_galois"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_004_heyting"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_005_image"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_012_is_maximum_of"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_013_is_minimum_of"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_014_lower_adjoint"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_015_upper_adjoint"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_006_l1",
+      "attribute_007_l2"
+    ],
+    [
+      "attribute_003_galois",
+      "attribute_005_image",
+      "attribute_008_are_isomorphic"
+    ],
+    [
+      "attribute_004_heyting",
+      "attribute_009_ex_max_of",
+      "attribute_012_is_maximum_of"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_004_heyting",
+      "attribute_011_is_a_complement_of"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_004_heyting",
+      "attribute_012_is_maximum_of"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_005_image",
+      "attribute_014_lower_adjoint"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_012_is_maximum_of",
+      "attribute_014_lower_adjoint"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_013_is_minimum_of",
+      "attribute_015_upper_adjoint"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_014_lower_adjoint",
+      "attribute_015_upper_adjoint"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_005_image",
+      "attribute_006_l1",
+      "attribute_007_l2"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_006_l1",
+      "attribute_007_l2",
+      "attribute_008_are_isomorphic"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_004_heyting",
+      "attribute_005_image",
+      "attribute_015_upper_adjoint"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_006_l1",
+      "attribute_007_l2",
+      "attribute_008_are_isomorphic"
+    ],
+    [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_009_ex_max_of",
+      "attribute_012_is_maximum_of",
+      "attribute_014_lower_adjoint"
+    ],
+    [
+      "attribute_000_boolean",
+      "attribute_001_connection",
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_004_heyting",
+      "attribute_005_image",
+      "attribute_006_l1",
+      "attribute_007_l2",
+      "attribute_008_are_isomorphic",
+      "attribute_009_ex_max_of",
+      "attribute_010_ex_min_of",
+      "attribute_011_is_a_complement_of",
+      "attribute_012_is_maximum_of",
+      "attribute_013_is_minimum_of",
+      "attribute_014_lower_adjoint",
+      "attribute_015_upper_adjoint"
+    ]
+  ],
+  "manifest_sha256": "26b7e2de0a429a5db4949a6da64800e5aa0753c37d6139a00e999848384e0272",
+  "matrix_label": "complete positive-occurrence article context",
+  "object_count": 119,
+  "object_symbols": {
+    "definition_1": "object_000_definition_1",
+    "definition_10": "object_012_definition_10",
+    "definition_11": "object_013_definition_11",
+    "definition_12": "object_035_definition_12",
+    "definition_13": "object_037_definition_13",
+    "definition_14": "object_040_definition_14",
+    "definition_15": "object_046_definition_15",
+    "definition_16": "object_050_definition_16",
+    "definition_17": "object_079_definition_17",
+    "definition_18": "object_083_definition_18",
+    "definition_19": "object_085_definition_19",
+    "definition_2": "object_001_definition_2",
+    "definition_22": "object_108_definition_22",
+    "definition_23": "object_109_definition_23",
+    "definition_24": "object_113_definition_24",
+    "definition_4": "object_002_definition_4",
+    "definition_5": "object_004_definition_5",
+    "definition_6": "object_005_definition_6",
+    "definition_7": "object_008_definition_7",
+    "definition_8": "object_009_definition_8",
+    "definition_9": "object_010_definition_9",
+    "notation_1": "object_003_notation_1",
+    "registration_10": "object_041_registration_10",
+    "registration_11": "object_042_registration_11",
+    "registration_12": "object_043_registration_12",
+    "registration_13": "object_048_registration_13",
+    "registration_14": "object_051_registration_14",
+    "registration_16": "object_084_registration_16",
+    "registration_17": "object_087_registration_17",
+    "registration_18": "object_090_registration_18",
+    "registration_19": "object_110_registration_19",
+    "registration_20": "object_114_registration_20",
+    "registration_21": "object_115_registration_21",
+    "registration_22": "object_116_registration_22",
+    "registration_23": "object_117_registration_23",
+    "registration_24": "object_118_registration_24",
+    "registration_3": "object_018_registration_3",
+    "registration_4": "object_020_registration_4",
+    "registration_6": "object_036_registration_6",
+    "registration_7": "object_038_registration_7",
+    "registration_8": "object_039_registration_8",
+    "theorem_10": "object_015_theorem_10",
+    "theorem_11": "object_016_theorem_11",
+    "theorem_12": "object_017_theorem_12",
+    "theorem_13": "object_019_theorem_13",
+    "theorem_14": "object_021_theorem_14",
+    "theorem_15": "object_022_theorem_15",
+    "theorem_16": "object_023_theorem_16",
+    "theorem_17": "object_024_theorem_17",
+    "theorem_18": "object_025_theorem_18",
+    "theorem_19": "object_026_theorem_19",
+    "theorem_20": "object_027_theorem_20",
+    "theorem_21": "object_028_theorem_21",
+    "theorem_22": "object_029_theorem_22",
+    "theorem_23": "object_030_theorem_23",
+    "theorem_24": "object_031_theorem_24",
+    "theorem_25": "object_032_theorem_25",
+    "theorem_26": "object_033_theorem_26",
+    "theorem_27": "object_034_theorem_27",
+    "theorem_28": "object_044_theorem_28",
+    "theorem_29": "object_045_theorem_29",
+    "theorem_30": "object_047_theorem_30",
+    "theorem_31": "object_049_theorem_31",
+    "theorem_32": "object_052_theorem_32",
+    "theorem_33": "object_053_theorem_33",
+    "theorem_34": "object_054_theorem_34",
+    "theorem_35": "object_055_theorem_35",
+    "theorem_36": "object_056_theorem_36",
+    "theorem_37": "object_057_theorem_37",
+    "theorem_38": "object_058_theorem_38",
+    "theorem_39": "object_059_theorem_39",
+    "theorem_40": "object_060_theorem_40",
+    "theorem_41": "object_061_theorem_41",
+    "theorem_42": "object_062_theorem_42",
+    "theorem_43": "object_063_theorem_43",
+    "theorem_44": "object_064_theorem_44",
+    "theorem_45": "object_065_theorem_45",
+    "theorem_46": "object_066_theorem_46",
+    "theorem_47": "object_067_theorem_47",
+    "theorem_48": "object_068_theorem_48",
+    "theorem_49": "object_069_theorem_49",
+    "theorem_50": "object_070_theorem_50",
+    "theorem_51": "object_071_theorem_51",
+    "theorem_52": "object_072_theorem_52",
+    "theorem_53": "object_073_theorem_53",
+    "theorem_54": "object_074_theorem_54",
+    "theorem_55": "object_075_theorem_55",
+    "theorem_56": "object_076_theorem_56",
+    "theorem_57": "object_077_theorem_57",
+    "theorem_58": "object_078_theorem_58",
+    "theorem_6": "object_006_theorem_6",
+    "theorem_62": "object_080_theorem_62",
+    "theorem_63": "object_081_theorem_63",
+    "theorem_64": "object_082_theorem_64",
+    "theorem_66": "object_086_theorem_66",
+    "theorem_67": "object_088_theorem_67",
+    "theorem_68": "object_089_theorem_68",
+    "theorem_69": "object_091_theorem_69",
+    "theorem_7": "object_007_theorem_7",
+    "theorem_70": "object_092_theorem_70",
+    "theorem_71": "object_093_theorem_71",
+    "theorem_72": "object_094_theorem_72",
+    "theorem_73": "object_095_theorem_73",
+    "theorem_74": "object_096_theorem_74",
+    "theorem_75": "object_097_theorem_75",
+    "theorem_76": "object_098_theorem_76",
+    "theorem_77": "object_099_theorem_77",
+    "theorem_78": "object_100_theorem_78",
+    "theorem_79": "object_101_theorem_79",
+    "theorem_8": "object_011_theorem_8",
+    "theorem_80": "object_102_theorem_80",
+    "theorem_81": "object_103_theorem_81",
+    "theorem_82": "object_104_theorem_82",
+    "theorem_83": "object_105_theorem_83",
+    "theorem_84": "object_106_theorem_84",
+    "theorem_85": "object_107_theorem_85",
+    "theorem_86": "object_111_theorem_86",
+    "theorem_87": "object_112_theorem_87",
+    "theorem_9": "object_014_theorem_9"
+  },
+  "objects": [
+    "definition_1",
+    "definition_2",
+    "definition_4",
+    "notation_1",
+    "definition_5",
+    "definition_6",
+    "theorem_6",
+    "theorem_7",
+    "definition_7",
+    "definition_8",
+    "definition_9",
+    "theorem_8",
+    "definition_10",
+    "definition_11",
+    "theorem_9",
+    "theorem_10",
+    "theorem_11",
+    "theorem_12",
+    "registration_3",
+    "theorem_13",
+    "registration_4",
+    "theorem_14",
+    "theorem_15",
+    "theorem_16",
+    "theorem_17",
+    "theorem_18",
+    "theorem_19",
+    "theorem_20",
+    "theorem_21",
+    "theorem_22",
+    "theorem_23",
+    "theorem_24",
+    "theorem_25",
+    "theorem_26",
+    "theorem_27",
+    "definition_12",
+    "registration_6",
+    "definition_13",
+    "registration_7",
+    "registration_8",
+    "definition_14",
+    "registration_10",
+    "registration_11",
+    "registration_12",
+    "theorem_28",
+    "theorem_29",
+    "definition_15",
+    "theorem_30",
+    "registration_13",
+    "theorem_31",
+    "definition_16",
+    "registration_14",
+    "theorem_32",
+    "theorem_33",
+    "theorem_34",
+    "theorem_35",
+    "theorem_36",
+    "theorem_37",
+    "theorem_38",
+    "theorem_39",
+    "theorem_40",
+    "theorem_41",
+    "theorem_42",
+    "theorem_43",
+    "theorem_44",
+    "theorem_45",
+    "theorem_46",
+    "theorem_47",
+    "theorem_48",
+    "theorem_49",
+    "theorem_50",
+    "theorem_51",
+    "theorem_52",
+    "theorem_53",
+    "theorem_54",
+    "theorem_55",
+    "theorem_56",
+    "theorem_57",
+    "theorem_58",
+    "definition_17",
+    "theorem_62",
+    "theorem_63",
+    "theorem_64",
+    "definition_18",
+    "registration_16",
+    "definition_19",
+    "theorem_66",
+    "registration_17",
+    "theorem_67",
+    "theorem_68",
+    "registration_18",
+    "theorem_69",
+    "theorem_70",
+    "theorem_71",
+    "theorem_72",
+    "theorem_73",
+    "theorem_74",
+    "theorem_75",
+    "theorem_76",
+    "theorem_77",
+    "theorem_78",
+    "theorem_79",
+    "theorem_80",
+    "theorem_81",
+    "theorem_82",
+    "theorem_83",
+    "theorem_84",
+    "theorem_85",
+    "definition_22",
+    "definition_23",
+    "registration_19",
+    "theorem_86",
+    "theorem_87",
+    "definition_24",
+    "registration_20",
+    "registration_21",
+    "registration_22",
+    "registration_23",
+    "registration_24"
+  ],
+  "oracle_agreement": {
+    "covers_equal_concepts_0_9_2_neighbors": true,
+    "lectic_basis_equals_levelwise_nextclosures": true,
+    "lectic_intents_equal_concepts_0_9_2": true,
+    "lectic_intents_equals_levelwise_nextclosures": true
+  },
+  "schema": "wm-fca-cxt-oracle-v1",
+  "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/waybel_1.cxt",
+  "true_cell_count": 242,
+  "true_incidence": {
+    "object_000_definition_1": [
+      "attribute_002_function",
+      "attribute_006_l1",
+      "attribute_007_l2"
+    ],
+    "object_001_definition_2": [
+      "attribute_002_function",
+      "attribute_006_l1",
+      "attribute_007_l2"
+    ],
+    "object_002_definition_4": [
+      "attribute_009_ex_max_of",
+      "attribute_010_ex_min_of"
+    ],
+    "object_003_notation_1": [
+      "attribute_009_ex_max_of",
+      "attribute_010_ex_min_of"
+    ],
+    "object_004_definition_5": [
+      "attribute_012_is_maximum_of",
+      "attribute_013_is_minimum_of"
+    ],
+    "object_005_definition_6": [
+      "attribute_002_function",
+      "attribute_006_l1",
+      "attribute_007_l2",
+      "attribute_008_are_isomorphic"
+    ],
+    "object_006_theorem_6": [
+      "attribute_002_function",
+      "attribute_006_l1",
+      "attribute_007_l2",
+      "attribute_008_are_isomorphic"
+    ],
+    "object_007_theorem_7": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_006_l1",
+      "attribute_007_l2",
+      "attribute_008_are_isomorphic"
+    ],
+    "object_008_definition_7": [
+      "attribute_001_connection",
+      "attribute_002_function"
+    ],
+    "object_009_definition_8": [
+      "attribute_001_connection",
+      "attribute_002_function"
+    ],
+    "object_010_definition_9": [
+      "attribute_001_connection",
+      "attribute_002_function",
+      "attribute_003_galois"
+    ],
+    "object_011_theorem_8": [
+      "attribute_002_function",
+      "attribute_003_galois"
+    ],
+    "object_012_definition_10": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_015_upper_adjoint"
+    ],
+    "object_013_definition_11": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_014_lower_adjoint"
+    ],
+    "object_014_theorem_9": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_014_lower_adjoint",
+      "attribute_015_upper_adjoint"
+    ],
+    "object_015_theorem_10": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_013_is_minimum_of"
+    ],
+    "object_016_theorem_11": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_012_is_maximum_of"
+    ],
+    "object_017_theorem_12": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_015_upper_adjoint"
+    ],
+    "object_018_registration_3": [
+      "attribute_002_function",
+      "attribute_015_upper_adjoint"
+    ],
+    "object_019_theorem_13": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_014_lower_adjoint"
+    ],
+    "object_020_registration_4": [
+      "attribute_002_function",
+      "attribute_014_lower_adjoint"
+    ],
+    "object_021_theorem_14": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_013_is_minimum_of"
+    ],
+    "object_022_theorem_15": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_012_is_maximum_of"
+    ],
+    "object_023_theorem_16": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_013_is_minimum_of",
+      "attribute_015_upper_adjoint"
+    ],
+    "object_024_theorem_17": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_012_is_maximum_of",
+      "attribute_014_lower_adjoint"
+    ],
+    "object_025_theorem_18": [
+      "attribute_002_function",
+      "attribute_003_galois"
+    ],
+    "object_026_theorem_19": [
+      "attribute_002_function",
+      "attribute_003_galois"
+    ],
+    "object_027_theorem_20": [
+      "attribute_002_function"
+    ],
+    "object_028_theorem_21": [
+      "attribute_002_function"
+    ],
+    "object_029_theorem_22": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_013_is_minimum_of"
+    ],
+    "object_030_theorem_23": [
+      "attribute_002_function",
+      "attribute_013_is_minimum_of"
+    ],
+    "object_031_theorem_24": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_013_is_minimum_of"
+    ],
+    "object_032_theorem_25": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_012_is_maximum_of"
+    ],
+    "object_033_theorem_26": [
+      "attribute_002_function",
+      "attribute_012_is_maximum_of"
+    ],
+    "object_034_theorem_27": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_012_is_maximum_of"
+    ],
+    "object_035_definition_12": [
+      "attribute_002_function"
+    ],
+    "object_036_registration_6": [
+      "attribute_002_function"
+    ],
+    "object_037_definition_13": [
+      "attribute_002_function"
+    ],
+    "object_038_registration_7": [
+      "attribute_002_function",
+      "attribute_006_l1",
+      "attribute_007_l2"
+    ],
+    "object_039_registration_8": [
+      "attribute_002_function"
+    ],
+    "object_040_definition_14": [
+      "attribute_002_function"
+    ],
+    "object_041_registration_10": [
+      "attribute_002_function"
+    ],
+    "object_042_registration_11": [
+      "attribute_002_function"
+    ],
+    "object_043_registration_12": [
+      "attribute_002_function"
+    ],
+    "object_044_theorem_28": [
+      "attribute_002_function"
+    ],
+    "object_045_theorem_29": [
+      "attribute_002_function"
+    ],
+    "object_046_definition_15": [
+      "attribute_002_function",
+      "attribute_005_image",
+      "attribute_006_l1",
+      "attribute_007_l2"
+    ],
+    "object_047_theorem_30": [
+      "attribute_002_function",
+      "attribute_005_image",
+      "attribute_006_l1",
+      "attribute_007_l2"
+    ],
+    "object_048_registration_13": [
+      "attribute_002_function",
+      "attribute_006_l1",
+      "attribute_007_l2"
+    ],
+    "object_049_theorem_31": [
+      "attribute_002_function",
+      "attribute_006_l1",
+      "attribute_007_l2"
+    ],
+    "object_050_definition_16": [
+      "attribute_002_function",
+      "attribute_005_image",
+      "attribute_006_l1",
+      "attribute_007_l2"
+    ],
+    "object_051_registration_14": [
+      "attribute_002_function",
+      "attribute_006_l1",
+      "attribute_007_l2"
+    ],
+    "object_052_theorem_32": [
+      "attribute_002_function",
+      "attribute_005_image"
+    ],
+    "object_053_theorem_33": [
+      "attribute_002_function",
+      "attribute_005_image"
+    ],
+    "object_054_theorem_34": [
+      "attribute_002_function",
+      "attribute_005_image"
+    ],
+    "object_055_theorem_35": [
+      "attribute_002_function"
+    ],
+    "object_056_theorem_36": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_005_image"
+    ],
+    "object_057_theorem_37": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_005_image"
+    ],
+    "object_058_theorem_38": [
+      "attribute_002_function",
+      "attribute_003_galois"
+    ],
+    "object_059_theorem_39": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_005_image"
+    ],
+    "object_060_theorem_40": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_005_image"
+    ],
+    "object_061_theorem_41": [
+      "attribute_002_function",
+      "attribute_003_galois"
+    ],
+    "object_062_theorem_42": [
+      "attribute_002_function"
+    ],
+    "object_063_theorem_43": [
+      "attribute_002_function"
+    ],
+    "object_064_theorem_44": [
+      "attribute_002_function"
+    ],
+    "object_065_theorem_45": [
+      "attribute_002_function"
+    ],
+    "object_066_theorem_46": [
+      "attribute_002_function"
+    ],
+    "object_067_theorem_47": [
+      "attribute_002_function"
+    ],
+    "object_068_theorem_48": [
+      "attribute_002_function"
+    ],
+    "object_069_theorem_49": [
+      "attribute_002_function"
+    ],
+    "object_070_theorem_50": [
+      "attribute_002_function"
+    ],
+    "object_071_theorem_51": [
+      "attribute_002_function",
+      "attribute_005_image"
+    ],
+    "object_072_theorem_52": [
+      "attribute_002_function",
+      "attribute_005_image"
+    ],
+    "object_073_theorem_53": [
+      "attribute_002_function",
+      "attribute_005_image"
+    ],
+    "object_074_theorem_54": [
+      "attribute_002_function",
+      "attribute_005_image"
+    ],
+    "object_075_theorem_55": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_005_image",
+      "attribute_014_lower_adjoint"
+    ],
+    "object_076_theorem_56": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_004_heyting",
+      "attribute_005_image",
+      "attribute_015_upper_adjoint"
+    ],
+    "object_077_theorem_57": [
+      "attribute_003_galois",
+      "attribute_014_lower_adjoint"
+    ],
+    "object_078_theorem_58": [
+      "attribute_003_galois",
+      "attribute_005_image",
+      "attribute_008_are_isomorphic"
+    ],
+    "object_079_definition_17": [
+      "attribute_002_function"
+    ],
+    "object_080_theorem_62": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_009_ex_max_of",
+      "attribute_012_is_maximum_of",
+      "attribute_014_lower_adjoint"
+    ],
+    "object_081_theorem_63": [
+      "attribute_014_lower_adjoint"
+    ],
+    "object_082_theorem_64": [
+      "attribute_014_lower_adjoint"
+    ],
+    "object_083_definition_18": [
+      "attribute_004_heyting",
+      "attribute_014_lower_adjoint"
+    ],
+    "object_084_registration_16": [
+      "attribute_004_heyting"
+    ],
+    "object_085_definition_19": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_004_heyting",
+      "attribute_012_is_maximum_of"
+    ],
+    "object_086_theorem_66": [
+      "attribute_004_heyting",
+      "attribute_014_lower_adjoint"
+    ],
+    "object_087_registration_17": [
+      "attribute_004_heyting"
+    ],
+    "object_088_theorem_67": [
+      "attribute_003_galois",
+      "attribute_004_heyting"
+    ],
+    "object_089_theorem_68": [
+      "attribute_004_heyting"
+    ],
+    "object_090_registration_18": [
+      "attribute_004_heyting"
+    ],
+    "object_091_theorem_69": [
+      "attribute_004_heyting"
+    ],
+    "object_092_theorem_70": [
+      "attribute_004_heyting"
+    ],
+    "object_093_theorem_71": [
+      "attribute_004_heyting"
+    ],
+    "object_094_theorem_72": [
+      "attribute_004_heyting"
+    ],
+    "object_095_theorem_73": [
+      "attribute_004_heyting"
+    ],
+    "object_096_theorem_74": [
+      "attribute_004_heyting"
+    ],
+    "object_097_theorem_75": [
+      "attribute_004_heyting"
+    ],
+    "object_098_theorem_76": [
+      "attribute_004_heyting"
+    ],
+    "object_099_theorem_77": [
+      "attribute_004_heyting"
+    ],
+    "object_100_theorem_78": [
+      "attribute_004_heyting"
+    ],
+    "object_101_theorem_79": [
+      "attribute_004_heyting",
+      "attribute_009_ex_max_of",
+      "attribute_012_is_maximum_of"
+    ],
+    "object_102_theorem_80": [
+      "attribute_004_heyting"
+    ],
+    "object_103_theorem_81": [
+      "attribute_004_heyting"
+    ],
+    "object_104_theorem_82": [
+      "attribute_004_heyting"
+    ],
+    "object_105_theorem_83": [
+      "attribute_004_heyting"
+    ],
+    "object_106_theorem_84": [
+      "attribute_004_heyting"
+    ],
+    "object_107_theorem_85": [
+      "attribute_004_heyting"
+    ],
+    "object_108_definition_22": [
+      "attribute_011_is_a_complement_of"
+    ],
+    "object_109_definition_23": [
+      "attribute_011_is_a_complement_of"
+    ],
+    "object_110_registration_19": [
+      "attribute_002_function",
+      "attribute_003_galois",
+      "attribute_004_heyting",
+      "attribute_011_is_a_complement_of"
+    ],
+    "object_111_theorem_86": [
+      "attribute_004_heyting",
+      "attribute_011_is_a_complement_of"
+    ],
+    "object_112_theorem_87": [
+      "attribute_004_heyting"
+    ],
+    "object_113_definition_24": [
+      "attribute_000_boolean"
+    ],
+    "object_114_registration_20": [
+      "attribute_000_boolean"
+    ],
+    "object_115_registration_21": [
+      "attribute_000_boolean"
+    ],
+    "object_116_registration_22": [
+      "attribute_000_boolean",
+      "attribute_004_heyting"
+    ],
+    "object_117_registration_23": [
+      "attribute_000_boolean"
+    ],
+    "object_118_registration_24": [
+      "attribute_000_boolean",
+      "attribute_004_heyting"
+    ]
+  },
+  "upstream": {
+    "commit": "f93a93f7d4d62d90e22812295b7e46c036458603",
+    "license": "MIT",
+    "repository": "https://github.com/zariuq/MeTTapedia",
+    "source_id": "mettapedia-mizar-family",
+    "validation_role": "project semantic case study, not independent external validation"
+  }
+}

@@ -1,0 +1,2380 @@
+{
+  "algorithm_counts": {
+    "lectic_logical_closures": 71,
+    "levelwise_candidates": 237
+  },
+  "attribute_count": 11,
+  "attribute_symbols": {
+    "JIRRS": "attribute_000_jirrs",
+    "LattPOSet": "attribute_001_lattposet",
+    "MIRRS": "attribute_002_mirrs",
+    "Subset": "attribute_003_subset",
+    "co-atomic": "attribute_004_co_atomic",
+    "co-noetherian": "attribute_005_co_noetherian",
+    "completely-join-irreducible": "attribute_006_completely_join_irreducible",
+    "completely-meet-irreducible": "attribute_007_completely_meet_irreducible",
+    "infimum-dense": "attribute_008_infimum_dense",
+    "is-upper-neighbour-of": "attribute_009_is_upper_neighbour_of",
+    "supremum-dense": "attribute_010_supremum_dense"
+  },
+  "attributes": [
+    "JIRRS",
+    "LattPOSet",
+    "MIRRS",
+    "Subset",
+    "co-atomic",
+    "co-noetherian",
+    "completely-join-irreducible",
+    "completely-meet-irreducible",
+    "infimum-dense",
+    "is-upper-neighbour-of",
+    "supremum-dense"
+  ],
+  "canonical_basis": [
+    {
+      "antecedent": [
+        "attribute_002_mirrs"
+      ],
+      "consequent": [
+        "attribute_003_subset"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_infimum_dense"
+      ],
+      "consequent": [
+        "attribute_003_subset"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet"
+      ],
+      "consequent": [
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_jirrs",
+        "attribute_003_subset"
+      ],
+      "consequent": [
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_jirrs",
+        "attribute_004_co_atomic"
+      ],
+      "consequent": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_jirrs",
+        "attribute_005_co_noetherian"
+      ],
+      "consequent": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_jirrs",
+        "attribute_006_completely_join_irreducible"
+      ],
+      "consequent": [
+        "attribute_003_subset"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_jirrs",
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "consequent": [
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_jirrs",
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "consequent": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_lattposet",
+        "attribute_004_co_atomic"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_lattposet",
+        "attribute_010_supremum_dense"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_subset",
+        "attribute_004_co_atomic"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_subset",
+        "attribute_005_co_noetherian"
+      ],
+      "consequent": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ],
+      "consequent": [
+        "attribute_000_jirrs"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_subset",
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "consequent": [
+        "attribute_002_mirrs"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_subset",
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_co_atomic",
+        "attribute_006_completely_join_irreducible"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_co_atomic",
+        "attribute_010_supremum_dense"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_co_noetherian",
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "consequent": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_co_noetherian",
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_co_noetherian",
+        "attribute_010_supremum_dense"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_completely_join_irreducible",
+        "attribute_010_supremum_dense"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_003_subset"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_completely_meet_irreducible",
+        "attribute_010_supremum_dense"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset"
+      ],
+      "consequent": [
+        "attribute_005_co_noetherian",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_lattposet",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_lattposet",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_lattposet",
+        "attribute_006_completely_join_irreducible",
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_lattposet",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_008_infimum_dense"
+      ],
+      "consequent": [
+        "attribute_001_lattposet",
+        "attribute_005_co_noetherian"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_010_supremum_dense"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_co_atomic",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "consequent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_jirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense"
+      ],
+      "consequent": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_005_co_noetherian",
+        "attribute_010_supremum_dense"
+      ]
+    }
+  ],
+  "canonical_basis_count": 35,
+  "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article lattice6.miz.",
+  "concept_count": 36,
+  "concepts": [
+    {
+      "extent": [
+        "object_000_registration_1",
+        "object_001_definition_1",
+        "object_002_definition_2",
+        "object_003_registration_3",
+        "object_004_definition_3",
+        "object_005_registration_5",
+        "object_006_theorem_1",
+        "object_007_registration_6",
+        "object_008_definition_4",
+        "object_009_notation_1",
+        "object_010_theorem_2",
+        "object_011_theorem_3",
+        "object_012_theorem_4",
+        "object_013_theorem_5",
+        "object_014_theorem_6",
+        "object_015_theorem_8",
+        "object_016_definition_6",
+        "object_017_theorem_10",
+        "object_018_theorem_11",
+        "object_019_theorem_12",
+        "object_020_theorem_13",
+        "object_021_theorem_14",
+        "object_022_theorem_15",
+        "object_023_theorem_16",
+        "object_024_theorem_17",
+        "object_025_theorem_18",
+        "object_026_theorem_19",
+        "object_027_theorem_20",
+        "object_028_definition_7",
+        "object_029_theorem_21",
+        "object_030_theorem_22",
+        "object_031_definition_8",
+        "object_032_registration_8",
+        "object_033_definition_9",
+        "object_034_theorem_23",
+        "object_035_theorem_24",
+        "object_036_theorem_25",
+        "object_037_definition_10",
+        "object_038_theorem_26",
+        "object_039_theorem_27",
+        "object_040_registration_9",
+        "object_041_registration_10"
+      ],
+      "intent": []
+    },
+    {
+      "extent": [
+        "object_037_definition_10",
+        "object_038_theorem_26",
+        "object_040_registration_9",
+        "object_041_registration_10"
+      ],
+      "intent": [
+        "attribute_000_jirrs"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_registration_1",
+        "object_001_definition_1",
+        "object_002_definition_2",
+        "object_003_registration_3",
+        "object_004_definition_3",
+        "object_005_registration_5",
+        "object_006_theorem_1",
+        "object_011_theorem_3",
+        "object_012_theorem_4",
+        "object_017_theorem_10",
+        "object_018_theorem_11",
+        "object_023_theorem_16",
+        "object_025_theorem_18",
+        "object_036_theorem_25",
+        "object_039_theorem_27",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_001_lattposet"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_registration_1",
+        "object_001_definition_1",
+        "object_002_definition_2",
+        "object_003_registration_3",
+        "object_031_definition_8",
+        "object_032_registration_8",
+        "object_033_definition_9",
+        "object_034_theorem_23",
+        "object_035_theorem_24",
+        "object_036_theorem_25",
+        "object_037_definition_10",
+        "object_038_theorem_26",
+        "object_039_theorem_27",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_003_subset"
+      ]
+    },
+    {
+      "extent": [
+        "object_028_definition_7",
+        "object_030_theorem_22"
+      ],
+      "intent": [
+        "attribute_004_co_atomic"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_3",
+        "object_005_registration_5",
+        "object_006_theorem_1",
+        "object_007_registration_6",
+        "object_012_theorem_4",
+        "object_015_theorem_8",
+        "object_022_theorem_15",
+        "object_026_theorem_19",
+        "object_039_theorem_27",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_005_co_noetherian"
+      ]
+    },
+    {
+      "extent": [
+        "object_016_definition_6",
+        "object_020_theorem_13",
+        "object_022_theorem_15",
+        "object_025_theorem_18",
+        "object_026_theorem_19",
+        "object_027_theorem_20",
+        "object_029_theorem_21",
+        "object_037_definition_10",
+        "object_038_theorem_26",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "extent": [
+        "object_016_definition_6",
+        "object_019_theorem_12",
+        "object_021_theorem_14",
+        "object_023_theorem_16",
+        "object_024_theorem_17",
+        "object_027_theorem_20",
+        "object_030_theorem_22",
+        "object_037_definition_10",
+        "object_039_theorem_27"
+      ],
+      "intent": [
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "extent": [
+        "object_008_definition_4",
+        "object_009_notation_1",
+        "object_010_theorem_2",
+        "object_011_theorem_3",
+        "object_013_theorem_5",
+        "object_014_theorem_6",
+        "object_019_theorem_12",
+        "object_021_theorem_14",
+        "object_024_theorem_17",
+        "object_028_definition_7",
+        "object_029_theorem_21"
+      ],
+      "intent": [
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_033_definition_9",
+        "object_034_theorem_23",
+        "object_038_theorem_26",
+        "object_040_registration_9",
+        "object_041_registration_10"
+      ],
+      "intent": [
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "extent": [
+        "object_038_theorem_26",
+        "object_040_registration_9",
+        "object_041_registration_10"
+      ],
+      "intent": [
+        "attribute_000_jirrs",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_registration_1",
+        "object_001_definition_1",
+        "object_002_definition_2",
+        "object_003_registration_3",
+        "object_036_theorem_25",
+        "object_039_theorem_27",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_001_lattposet",
+        "attribute_003_subset"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_3",
+        "object_005_registration_5",
+        "object_006_theorem_1",
+        "object_012_theorem_4",
+        "object_039_theorem_27",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_001_lattposet",
+        "attribute_005_co_noetherian"
+      ]
+    },
+    {
+      "extent": [
+        "object_025_theorem_18",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_001_lattposet",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "extent": [
+        "object_023_theorem_16",
+        "object_039_theorem_27"
+      ],
+      "intent": [
+        "attribute_001_lattposet",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "extent": [
+        "object_011_theorem_3"
+      ],
+      "intent": [
+        "attribute_001_lattposet",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_037_definition_10",
+        "object_039_theorem_27",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_002_mirrs",
+        "attribute_003_subset"
+      ]
+    },
+    {
+      "extent": [
+        "object_033_definition_9",
+        "object_035_theorem_24",
+        "object_036_theorem_25",
+        "object_039_theorem_27",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_003_subset",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "extent": [
+        "object_033_definition_9",
+        "object_034_theorem_23",
+        "object_038_theorem_26",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_003_subset",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "extent": [
+        "object_030_theorem_22"
+      ],
+      "intent": [
+        "attribute_004_co_atomic",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "extent": [
+        "object_028_definition_7"
+      ],
+      "intent": [
+        "attribute_004_co_atomic",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_022_theorem_15",
+        "object_026_theorem_19",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "extent": [
+        "object_016_definition_6",
+        "object_027_theorem_20",
+        "object_037_definition_10"
+      ],
+      "intent": [
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "extent": [
+        "object_029_theorem_21"
+      ],
+      "intent": [
+        "attribute_006_completely_join_irreducible",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_019_theorem_12",
+        "object_021_theorem_14",
+        "object_024_theorem_17"
+      ],
+      "intent": [
+        "attribute_007_completely_meet_irreducible",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "extent": [
+        "object_037_definition_10",
+        "object_038_theorem_26",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_000_jirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "extent": [
+        "object_036_theorem_25",
+        "object_039_theorem_27",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_001_lattposet",
+        "attribute_003_subset",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "extent": [
+        "object_037_definition_10",
+        "object_039_theorem_27"
+      ],
+      "intent": [
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "extent": [
+        "object_033_definition_9",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_003_subset",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "extent": [
+        "object_037_definition_10",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "extent": [
+        "object_038_theorem_26",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_000_jirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "extent": [
+        "object_037_definition_10"
+      ],
+      "intent": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "extent": [
+        "object_039_theorem_27",
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "extent": [
+        "object_039_theorem_27"
+      ],
+      "intent": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "extent": [
+        "object_040_registration_9"
+      ],
+      "intent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "extent": [],
+      "intent": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    }
+  ],
+  "context_id": "mizar_lattice6",
+  "context_name": "",
+  "context_sha256": "9e7a34527b0293875e3f1537f4148105e03318a5c07b2b2fd7d74459c4222e11",
+  "cover_count": 74,
+  "covers": [
+    {
+      "general": [],
+      "specific": [
+        "attribute_000_jirrs"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_001_lattposet"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_003_subset"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_004_co_atomic"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_005_co_noetherian"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_jirrs"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_jirrs"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_003_subset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_005_co_noetherian"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_subset"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_003_subset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_subset"
+      ],
+      "specific": [
+        "attribute_002_mirrs",
+        "attribute_003_subset"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_subset"
+      ],
+      "specific": [
+        "attribute_003_subset",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_subset"
+      ],
+      "specific": [
+        "attribute_003_subset",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_subset"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_co_atomic"
+      ],
+      "specific": [
+        "attribute_004_co_atomic",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_co_atomic"
+      ],
+      "specific": [
+        "attribute_004_co_atomic",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_co_noetherian"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_005_co_noetherian"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_co_noetherian"
+      ],
+      "specific": [
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_completely_join_irreducible"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_completely_join_irreducible"
+      ],
+      "specific": [
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_completely_join_irreducible"
+      ],
+      "specific": [
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_completely_join_irreducible"
+      ],
+      "specific": [
+        "attribute_006_completely_join_irreducible",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_completely_join_irreducible"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "specific": [
+        "attribute_004_co_atomic",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "specific": [
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "specific": [
+        "attribute_007_completely_meet_irreducible",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "specific": [
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "specific": [
+        "attribute_004_co_atomic",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "specific": [
+        "attribute_006_completely_join_irreducible",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "specific": [
+        "attribute_007_completely_meet_irreducible",
+        "attribute_009_is_upper_neighbour_of"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_supremum_dense"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_supremum_dense"
+      ],
+      "specific": [
+        "attribute_003_subset",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_jirrs",
+        "attribute_010_supremum_dense"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet",
+        "attribute_003_subset"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_003_subset",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet",
+        "attribute_005_co_noetherian"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet",
+        "attribute_006_completely_join_irreducible"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet",
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet",
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_mirrs",
+        "attribute_003_subset"
+      ],
+      "specific": [
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_mirrs",
+        "attribute_003_subset"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_mirrs",
+        "attribute_003_subset"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_subset",
+        "attribute_008_infimum_dense"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_003_subset",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_subset",
+        "attribute_008_infimum_dense"
+      ],
+      "specific": [
+        "attribute_003_subset",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_subset",
+        "attribute_010_supremum_dense"
+      ],
+      "specific": [
+        "attribute_003_subset",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_subset",
+        "attribute_010_supremum_dense"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_co_atomic",
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_co_atomic",
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_completely_join_irreducible",
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_completely_meet_irreducible",
+        "attribute_009_is_upper_neighbour_of"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_jirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_jirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet",
+        "attribute_003_subset",
+        "attribute_008_infimum_dense"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_subset",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_jirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_010_supremum_dense"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_jirrs",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_008_infimum_dense"
+      ],
+      "specific": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_008_infimum_dense"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_010_supremum_dense"
+      ],
+      "specific": [
+        "attribute_000_jirrs",
+        "attribute_001_lattposet",
+        "attribute_002_mirrs",
+        "attribute_003_subset",
+        "attribute_004_co_atomic",
+        "attribute_005_co_noetherian",
+        "attribute_006_completely_join_irreducible",
+        "attribute_007_completely_meet_irreducible",
+        "attribute_008_infimum_dense",
+        "attribute_009_is_upper_neighbour_of",
+        "attribute_010_supremum_dense"
+      ]
+    }
+  ],
+  "dependence_group": "mizar-lattice6-extraction",
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "closed_candidate": [
+      "attribute_000_jirrs"
+    ],
+    "false_cell": [
+      "object_000_registration_1",
+      "attribute_000_jirrs"
+    ],
+    "negative_implication": {
+      "antecedent": [
+        "attribute_000_jirrs"
+      ],
+      "consequent": [
+        "attribute_001_lattposet"
+      ]
+    },
+    "nonclosed_candidate": [
+      "attribute_002_mirrs"
+    ],
+    "nonclosed_closure": [
+      "attribute_002_mirrs",
+      "attribute_003_subset"
+    ],
+    "positive_implication": {
+      "antecedent": [
+        "attribute_002_mirrs"
+      ],
+      "consequent": [
+        "attribute_003_subset"
+      ]
+    },
+    "true_cell": [
+      "object_000_registration_1",
+      "attribute_001_lattposet"
+    ]
+  },
+  "false_cell_count": 373,
+  "intents": [
+    [],
+    [
+      "attribute_000_jirrs"
+    ],
+    [
+      "attribute_001_lattposet"
+    ],
+    [
+      "attribute_003_subset"
+    ],
+    [
+      "attribute_004_co_atomic"
+    ],
+    [
+      "attribute_005_co_noetherian"
+    ],
+    [
+      "attribute_006_completely_join_irreducible"
+    ],
+    [
+      "attribute_007_completely_meet_irreducible"
+    ],
+    [
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    [
+      "attribute_010_supremum_dense"
+    ],
+    [
+      "attribute_000_jirrs",
+      "attribute_010_supremum_dense"
+    ],
+    [
+      "attribute_001_lattposet",
+      "attribute_003_subset"
+    ],
+    [
+      "attribute_001_lattposet",
+      "attribute_005_co_noetherian"
+    ],
+    [
+      "attribute_001_lattposet",
+      "attribute_006_completely_join_irreducible"
+    ],
+    [
+      "attribute_001_lattposet",
+      "attribute_007_completely_meet_irreducible"
+    ],
+    [
+      "attribute_001_lattposet",
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    [
+      "attribute_002_mirrs",
+      "attribute_003_subset"
+    ],
+    [
+      "attribute_003_subset",
+      "attribute_008_infimum_dense"
+    ],
+    [
+      "attribute_003_subset",
+      "attribute_010_supremum_dense"
+    ],
+    [
+      "attribute_004_co_atomic",
+      "attribute_007_completely_meet_irreducible"
+    ],
+    [
+      "attribute_004_co_atomic",
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    [
+      "attribute_005_co_noetherian",
+      "attribute_006_completely_join_irreducible"
+    ],
+    [
+      "attribute_006_completely_join_irreducible",
+      "attribute_007_completely_meet_irreducible"
+    ],
+    [
+      "attribute_006_completely_join_irreducible",
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    [
+      "attribute_007_completely_meet_irreducible",
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    [
+      "attribute_000_jirrs",
+      "attribute_003_subset",
+      "attribute_006_completely_join_irreducible"
+    ],
+    [
+      "attribute_001_lattposet",
+      "attribute_003_subset",
+      "attribute_008_infimum_dense"
+    ],
+    [
+      "attribute_002_mirrs",
+      "attribute_003_subset",
+      "attribute_007_completely_meet_irreducible"
+    ],
+    [
+      "attribute_003_subset",
+      "attribute_008_infimum_dense",
+      "attribute_010_supremum_dense"
+    ],
+    [
+      "attribute_000_jirrs",
+      "attribute_002_mirrs",
+      "attribute_003_subset",
+      "attribute_006_completely_join_irreducible"
+    ],
+    [
+      "attribute_000_jirrs",
+      "attribute_003_subset",
+      "attribute_006_completely_join_irreducible",
+      "attribute_010_supremum_dense"
+    ],
+    [
+      "attribute_000_jirrs",
+      "attribute_002_mirrs",
+      "attribute_003_subset",
+      "attribute_006_completely_join_irreducible",
+      "attribute_007_completely_meet_irreducible"
+    ],
+    [
+      "attribute_001_lattposet",
+      "attribute_002_mirrs",
+      "attribute_003_subset",
+      "attribute_005_co_noetherian",
+      "attribute_008_infimum_dense"
+    ],
+    [
+      "attribute_001_lattposet",
+      "attribute_002_mirrs",
+      "attribute_003_subset",
+      "attribute_005_co_noetherian",
+      "attribute_007_completely_meet_irreducible",
+      "attribute_008_infimum_dense"
+    ],
+    [
+      "attribute_000_jirrs",
+      "attribute_001_lattposet",
+      "attribute_002_mirrs",
+      "attribute_003_subset",
+      "attribute_005_co_noetherian",
+      "attribute_006_completely_join_irreducible",
+      "attribute_008_infimum_dense",
+      "attribute_010_supremum_dense"
+    ],
+    [
+      "attribute_000_jirrs",
+      "attribute_001_lattposet",
+      "attribute_002_mirrs",
+      "attribute_003_subset",
+      "attribute_004_co_atomic",
+      "attribute_005_co_noetherian",
+      "attribute_006_completely_join_irreducible",
+      "attribute_007_completely_meet_irreducible",
+      "attribute_008_infimum_dense",
+      "attribute_009_is_upper_neighbour_of",
+      "attribute_010_supremum_dense"
+    ]
+  ],
+  "manifest_sha256": "26b7e2de0a429a5db4949a6da64800e5aa0753c37d6139a00e999848384e0272",
+  "matrix_label": "complete positive-occurrence article context",
+  "object_count": 42,
+  "object_symbols": {
+    "definition_1": "object_001_definition_1",
+    "definition_10": "object_037_definition_10",
+    "definition_2": "object_002_definition_2",
+    "definition_3": "object_004_definition_3",
+    "definition_4": "object_008_definition_4",
+    "definition_6": "object_016_definition_6",
+    "definition_7": "object_028_definition_7",
+    "definition_8": "object_031_definition_8",
+    "definition_9": "object_033_definition_9",
+    "notation_1": "object_009_notation_1",
+    "registration_1": "object_000_registration_1",
+    "registration_10": "object_041_registration_10",
+    "registration_3": "object_003_registration_3",
+    "registration_5": "object_005_registration_5",
+    "registration_6": "object_007_registration_6",
+    "registration_8": "object_032_registration_8",
+    "registration_9": "object_040_registration_9",
+    "theorem_1": "object_006_theorem_1",
+    "theorem_10": "object_017_theorem_10",
+    "theorem_11": "object_018_theorem_11",
+    "theorem_12": "object_019_theorem_12",
+    "theorem_13": "object_020_theorem_13",
+    "theorem_14": "object_021_theorem_14",
+    "theorem_15": "object_022_theorem_15",
+    "theorem_16": "object_023_theorem_16",
+    "theorem_17": "object_024_theorem_17",
+    "theorem_18": "object_025_theorem_18",
+    "theorem_19": "object_026_theorem_19",
+    "theorem_2": "object_010_theorem_2",
+    "theorem_20": "object_027_theorem_20",
+    "theorem_21": "object_029_theorem_21",
+    "theorem_22": "object_030_theorem_22",
+    "theorem_23": "object_034_theorem_23",
+    "theorem_24": "object_035_theorem_24",
+    "theorem_25": "object_036_theorem_25",
+    "theorem_26": "object_038_theorem_26",
+    "theorem_27": "object_039_theorem_27",
+    "theorem_3": "object_011_theorem_3",
+    "theorem_4": "object_012_theorem_4",
+    "theorem_5": "object_013_theorem_5",
+    "theorem_6": "object_014_theorem_6",
+    "theorem_8": "object_015_theorem_8"
+  },
+  "objects": [
+    "registration_1",
+    "definition_1",
+    "definition_2",
+    "registration_3",
+    "definition_3",
+    "registration_5",
+    "theorem_1",
+    "registration_6",
+    "definition_4",
+    "notation_1",
+    "theorem_2",
+    "theorem_3",
+    "theorem_4",
+    "theorem_5",
+    "theorem_6",
+    "theorem_8",
+    "definition_6",
+    "theorem_10",
+    "theorem_11",
+    "theorem_12",
+    "theorem_13",
+    "theorem_14",
+    "theorem_15",
+    "theorem_16",
+    "theorem_17",
+    "theorem_18",
+    "theorem_19",
+    "theorem_20",
+    "definition_7",
+    "theorem_21",
+    "theorem_22",
+    "definition_8",
+    "registration_8",
+    "definition_9",
+    "theorem_23",
+    "theorem_24",
+    "theorem_25",
+    "definition_10",
+    "theorem_26",
+    "theorem_27",
+    "registration_9",
+    "registration_10"
+  ],
+  "oracle_agreement": {
+    "covers_equal_concepts_0_9_2_neighbors": true,
+    "lectic_basis_equals_levelwise_nextclosures": true,
+    "lectic_intents_equal_concepts_0_9_2": true,
+    "lectic_intents_equals_levelwise_nextclosures": true
+  },
+  "schema": "wm-fca-cxt-oracle-v1",
+  "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/lattice6.cxt",
+  "true_cell_count": 89,
+  "true_incidence": {
+    "object_000_registration_1": [
+      "attribute_001_lattposet",
+      "attribute_003_subset"
+    ],
+    "object_001_definition_1": [
+      "attribute_001_lattposet",
+      "attribute_003_subset"
+    ],
+    "object_002_definition_2": [
+      "attribute_001_lattposet",
+      "attribute_003_subset"
+    ],
+    "object_003_registration_3": [
+      "attribute_001_lattposet",
+      "attribute_003_subset"
+    ],
+    "object_004_definition_3": [
+      "attribute_001_lattposet",
+      "attribute_005_co_noetherian"
+    ],
+    "object_005_registration_5": [
+      "attribute_001_lattposet",
+      "attribute_005_co_noetherian"
+    ],
+    "object_006_theorem_1": [
+      "attribute_001_lattposet",
+      "attribute_005_co_noetherian"
+    ],
+    "object_007_registration_6": [
+      "attribute_005_co_noetherian"
+    ],
+    "object_008_definition_4": [
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    "object_009_notation_1": [
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    "object_010_theorem_2": [
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    "object_011_theorem_3": [
+      "attribute_001_lattposet",
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    "object_012_theorem_4": [
+      "attribute_001_lattposet",
+      "attribute_005_co_noetherian"
+    ],
+    "object_013_theorem_5": [
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    "object_014_theorem_6": [
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    "object_015_theorem_8": [
+      "attribute_005_co_noetherian"
+    ],
+    "object_016_definition_6": [
+      "attribute_006_completely_join_irreducible",
+      "attribute_007_completely_meet_irreducible"
+    ],
+    "object_017_theorem_10": [
+      "attribute_001_lattposet"
+    ],
+    "object_018_theorem_11": [
+      "attribute_001_lattposet"
+    ],
+    "object_019_theorem_12": [
+      "attribute_007_completely_meet_irreducible",
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    "object_020_theorem_13": [
+      "attribute_006_completely_join_irreducible"
+    ],
+    "object_021_theorem_14": [
+      "attribute_007_completely_meet_irreducible",
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    "object_022_theorem_15": [
+      "attribute_005_co_noetherian",
+      "attribute_006_completely_join_irreducible"
+    ],
+    "object_023_theorem_16": [
+      "attribute_001_lattposet",
+      "attribute_007_completely_meet_irreducible"
+    ],
+    "object_024_theorem_17": [
+      "attribute_007_completely_meet_irreducible",
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    "object_025_theorem_18": [
+      "attribute_001_lattposet",
+      "attribute_006_completely_join_irreducible"
+    ],
+    "object_026_theorem_19": [
+      "attribute_005_co_noetherian",
+      "attribute_006_completely_join_irreducible"
+    ],
+    "object_027_theorem_20": [
+      "attribute_006_completely_join_irreducible",
+      "attribute_007_completely_meet_irreducible"
+    ],
+    "object_028_definition_7": [
+      "attribute_004_co_atomic",
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    "object_029_theorem_21": [
+      "attribute_006_completely_join_irreducible",
+      "attribute_009_is_upper_neighbour_of"
+    ],
+    "object_030_theorem_22": [
+      "attribute_004_co_atomic",
+      "attribute_007_completely_meet_irreducible"
+    ],
+    "object_031_definition_8": [
+      "attribute_003_subset"
+    ],
+    "object_032_registration_8": [
+      "attribute_003_subset"
+    ],
+    "object_033_definition_9": [
+      "attribute_003_subset",
+      "attribute_008_infimum_dense",
+      "attribute_010_supremum_dense"
+    ],
+    "object_034_theorem_23": [
+      "attribute_003_subset",
+      "attribute_010_supremum_dense"
+    ],
+    "object_035_theorem_24": [
+      "attribute_003_subset",
+      "attribute_008_infimum_dense"
+    ],
+    "object_036_theorem_25": [
+      "attribute_001_lattposet",
+      "attribute_003_subset",
+      "attribute_008_infimum_dense"
+    ],
+    "object_037_definition_10": [
+      "attribute_000_jirrs",
+      "attribute_002_mirrs",
+      "attribute_003_subset",
+      "attribute_006_completely_join_irreducible",
+      "attribute_007_completely_meet_irreducible"
+    ],
+    "object_038_theorem_26": [
+      "attribute_000_jirrs",
+      "attribute_003_subset",
+      "attribute_006_completely_join_irreducible",
+      "attribute_010_supremum_dense"
+    ],
+    "object_039_theorem_27": [
+      "attribute_001_lattposet",
+      "attribute_002_mirrs",
+      "attribute_003_subset",
+      "attribute_005_co_noetherian",
+      "attribute_007_completely_meet_irreducible",
+      "attribute_008_infimum_dense"
+    ],
+    "object_040_registration_9": [
+      "attribute_000_jirrs",
+      "attribute_001_lattposet",
+      "attribute_002_mirrs",
+      "attribute_003_subset",
+      "attribute_005_co_noetherian",
+      "attribute_006_completely_join_irreducible",
+      "attribute_008_infimum_dense",
+      "attribute_010_supremum_dense"
+    ],
+    "object_041_registration_10": [
+      "attribute_000_jirrs",
+      "attribute_010_supremum_dense"
+    ]
+  },
+  "upstream": {
+    "commit": "f93a93f7d4d62d90e22812295b7e46c036458603",
+    "license": "MIT",
+    "repository": "https://github.com/zariuq/MeTTapedia",
+    "source_id": "mettapedia-mizar-family",
+    "validation_role": "project semantic case study, not independent external validation"
+  }
+}

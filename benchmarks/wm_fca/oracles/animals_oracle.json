@@ -1,0 +1,2335 @@
+{
+  "attribute_count": 11,
+  "attribute_symbols": {
+    "airbreather": "attribute_006_airbreather",
+    "eggs": "attribute_000_eggs",
+    "four-legged": "attribute_008_four_legged",
+    "fur": "attribute_009_fur",
+    "lives in water": "attribute_005_lives_in_water",
+    "livestock": "attribute_004_livestock",
+    "man-eater": "attribute_002_man_eater",
+    "nocturnal": "attribute_001_nocturnal",
+    "pet": "attribute_003_pet",
+    "scales": "attribute_010_scales",
+    "warmblooded": "attribute_007_warmblooded"
+  },
+  "attributes": [
+    "eggs",
+    "nocturnal",
+    "man-eater",
+    "pet",
+    "livestock",
+    "lives in water",
+    "airbreather",
+    "warmblooded",
+    "four-legged",
+    "fur",
+    "scales"
+  ],
+  "canonical_basis": [
+    {
+      "antecedent": [
+        "attribute_001_nocturnal"
+      ],
+      "consequent": [
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_pet"
+      ],
+      "consequent": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_livestock"
+      ],
+      "consequent": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_007_warmblooded"
+      ],
+      "consequent": [
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_four_legged"
+      ],
+      "consequent": [
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_009_fur"
+      ],
+      "consequent": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_eggs",
+        "attribute_002_man_eater"
+      ],
+      "consequent": [
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_eggs",
+        "attribute_005_lives_in_water"
+      ],
+      "consequent": [
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water"
+      ],
+      "consequent": [
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_man_eater",
+        "attribute_006_airbreather"
+      ],
+      "consequent": [
+        "attribute_008_four_legged"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_man_eater",
+        "attribute_010_scales"
+      ],
+      "consequent": [
+        "attribute_005_lives_in_water"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_airbreather",
+        "attribute_010_scales"
+      ],
+      "consequent": [
+        "attribute_000_eggs"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ],
+      "consequent": [
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_nocturnal",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather"
+      ],
+      "consequent": [
+        "attribute_000_eggs",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "consequent": [
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ],
+      "consequent": [
+        "attribute_007_warmblooded",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ],
+      "consequent": [
+        "attribute_000_eggs",
+        "attribute_002_man_eater",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_eggs",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_010_scales"
+      ],
+      "consequent": [
+        "attribute_002_man_eater",
+        "attribute_008_four_legged"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_010_scales"
+      ],
+      "consequent": [
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_man_eater",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged"
+      ],
+      "consequent": [
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "consequent": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_pet",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "consequent": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_004_livestock",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged"
+      ],
+      "consequent": [
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "consequent": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged"
+      ],
+      "consequent": [
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "consequent": [
+        "attribute_000_eggs",
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_nocturnal",
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "consequent": [
+        "attribute_000_eggs",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "consequent": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_man_eater",
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "consequent": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_003_pet",
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    }
+  ],
+  "canonical_basis_count": 29,
+  "citation": "Ganter, B., Wille, R., and Stumme, G. (2005). Formal Concept Analysis: Foundations and Applications, LNCS 3626, p. 27.",
+  "concept_count": 35,
+  "concepts": [
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_001_rattler",
+        "object_002_pig",
+        "object_003_eagle",
+        "object_004_dog",
+        "object_005_cat",
+        "object_006_dove",
+        "object_007_lion",
+        "object_008_hippo",
+        "object_009_elephant",
+        "object_010_thrasher",
+        "object_011_bull_snake",
+        "object_012_mouse",
+        "object_013_skunk",
+        "object_014_lizard",
+        "object_015_zebra",
+        "object_016_tiger",
+        "object_017_bear",
+        "object_018_ibex",
+        "object_019_antelope",
+        "object_020_moose",
+        "object_021_horse",
+        "object_022_cow",
+        "object_023_shark",
+        "object_024_trout",
+        "object_025_whale",
+        "object_026_dolphin",
+        "object_027_stingray",
+        "object_028_possum",
+        "object_029_barracuda",
+        "object_030_parakeet",
+        "object_031_sheep",
+        "object_032_goat",
+        "object_033_chicken",
+        "object_034_tarantula"
+      ],
+      "intent": []
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_001_rattler",
+        "object_003_eagle",
+        "object_006_dove",
+        "object_010_thrasher",
+        "object_011_bull_snake",
+        "object_014_lizard",
+        "object_024_trout",
+        "object_027_stingray",
+        "object_030_parakeet",
+        "object_033_chicken",
+        "object_034_tarantula"
+      ],
+      "intent": [
+        "attribute_000_eggs"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_007_lion",
+        "object_016_tiger",
+        "object_017_bear",
+        "object_023_shark"
+      ],
+      "intent": [
+        "attribute_002_man_eater"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_023_shark",
+        "object_024_trout",
+        "object_025_whale",
+        "object_026_dolphin",
+        "object_027_stingray",
+        "object_029_barracuda"
+      ],
+      "intent": [
+        "attribute_005_lives_in_water"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_001_rattler",
+        "object_002_pig",
+        "object_003_eagle",
+        "object_004_dog",
+        "object_005_cat",
+        "object_006_dove",
+        "object_007_lion",
+        "object_008_hippo",
+        "object_009_elephant",
+        "object_010_thrasher",
+        "object_011_bull_snake",
+        "object_012_mouse",
+        "object_013_skunk",
+        "object_014_lizard",
+        "object_015_zebra",
+        "object_016_tiger",
+        "object_017_bear",
+        "object_018_ibex",
+        "object_019_antelope",
+        "object_020_moose",
+        "object_021_horse",
+        "object_022_cow",
+        "object_025_whale",
+        "object_026_dolphin",
+        "object_028_possum",
+        "object_030_parakeet",
+        "object_031_sheep",
+        "object_032_goat",
+        "object_033_chicken",
+        "object_034_tarantula"
+      ],
+      "intent": [
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_001_rattler",
+        "object_011_bull_snake",
+        "object_014_lizard",
+        "object_023_shark",
+        "object_024_trout",
+        "object_027_stingray",
+        "object_029_barracuda"
+      ],
+      "intent": [
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_001_rattler",
+        "object_003_eagle",
+        "object_006_dove",
+        "object_010_thrasher",
+        "object_011_bull_snake",
+        "object_014_lizard",
+        "object_030_parakeet",
+        "object_033_chicken",
+        "object_034_tarantula"
+      ],
+      "intent": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_001_rattler",
+        "object_011_bull_snake",
+        "object_014_lizard",
+        "object_024_trout",
+        "object_027_stingray"
+      ],
+      "intent": [
+        "attribute_000_eggs",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_rattler",
+        "object_005_cat",
+        "object_013_skunk",
+        "object_028_possum",
+        "object_034_tarantula"
+      ],
+      "intent": [
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_025_whale",
+        "object_026_dolphin"
+      ],
+      "intent": [
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_023_shark",
+        "object_024_trout",
+        "object_027_stingray",
+        "object_029_barracuda"
+      ],
+      "intent": [
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_pig",
+        "object_003_eagle",
+        "object_004_dog",
+        "object_005_cat",
+        "object_006_dove",
+        "object_007_lion",
+        "object_008_hippo",
+        "object_009_elephant",
+        "object_010_thrasher",
+        "object_012_mouse",
+        "object_013_skunk",
+        "object_015_zebra",
+        "object_016_tiger",
+        "object_017_bear",
+        "object_018_ibex",
+        "object_019_antelope",
+        "object_020_moose",
+        "object_021_horse",
+        "object_022_cow",
+        "object_025_whale",
+        "object_026_dolphin",
+        "object_028_possum",
+        "object_030_parakeet",
+        "object_031_sheep",
+        "object_032_goat",
+        "object_033_chicken"
+      ],
+      "intent": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_002_pig",
+        "object_004_dog",
+        "object_005_cat",
+        "object_007_lion",
+        "object_008_hippo",
+        "object_009_elephant",
+        "object_012_mouse",
+        "object_013_skunk",
+        "object_014_lizard",
+        "object_015_zebra",
+        "object_016_tiger",
+        "object_017_bear",
+        "object_018_ibex",
+        "object_019_antelope",
+        "object_020_moose",
+        "object_021_horse",
+        "object_022_cow",
+        "object_028_possum",
+        "object_031_sheep",
+        "object_032_goat"
+      ],
+      "intent": [
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_rattler",
+        "object_034_tarantula"
+      ],
+      "intent": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_024_trout",
+        "object_027_stingray"
+      ],
+      "intent": [
+        "attribute_000_eggs",
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "extent": [
+        "object_003_eagle",
+        "object_006_dove",
+        "object_010_thrasher",
+        "object_030_parakeet",
+        "object_033_chicken"
+      ],
+      "intent": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_001_rattler",
+        "object_011_bull_snake",
+        "object_014_lizard"
+      ],
+      "intent": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_023_shark"
+      ],
+      "intent": [
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_007_lion",
+        "object_016_tiger",
+        "object_017_bear"
+      ],
+      "intent": [
+        "attribute_002_man_eater",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_dog",
+        "object_005_cat",
+        "object_030_parakeet"
+      ],
+      "intent": [
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "extent": [
+        "object_021_horse",
+        "object_022_cow",
+        "object_031_sheep",
+        "object_032_goat",
+        "object_033_chicken"
+      ],
+      "intent": [
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "extent": [
+        "object_025_whale",
+        "object_026_dolphin"
+      ],
+      "intent": [
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_pig",
+        "object_004_dog",
+        "object_005_cat",
+        "object_007_lion",
+        "object_008_hippo",
+        "object_009_elephant",
+        "object_012_mouse",
+        "object_013_skunk",
+        "object_015_zebra",
+        "object_016_tiger",
+        "object_017_bear",
+        "object_018_ibex",
+        "object_019_antelope",
+        "object_020_moose",
+        "object_021_horse",
+        "object_022_cow",
+        "object_028_possum",
+        "object_031_sheep",
+        "object_032_goat"
+      ],
+      "intent": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_rattler"
+      ],
+      "intent": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "extent": [
+        "object_030_parakeet"
+      ],
+      "intent": [
+        "attribute_000_eggs",
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "extent": [
+        "object_033_chicken"
+      ],
+      "intent": [
+        "attribute_000_eggs",
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator",
+        "object_014_lizard"
+      ],
+      "intent": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "extent": [
+        "object_002_pig",
+        "object_004_dog",
+        "object_005_cat",
+        "object_007_lion",
+        "object_012_mouse",
+        "object_013_skunk",
+        "object_015_zebra",
+        "object_016_tiger",
+        "object_017_bear",
+        "object_018_ibex",
+        "object_019_antelope",
+        "object_020_moose",
+        "object_021_horse",
+        "object_022_cow",
+        "object_028_possum",
+        "object_031_sheep",
+        "object_032_goat"
+      ],
+      "intent": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "extent": [
+        "object_005_cat",
+        "object_013_skunk",
+        "object_028_possum"
+      ],
+      "intent": [
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "extent": [
+        "object_007_lion",
+        "object_016_tiger",
+        "object_017_bear"
+      ],
+      "intent": [
+        "attribute_002_man_eater",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_dog",
+        "object_005_cat"
+      ],
+      "intent": [
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "extent": [
+        "object_021_horse",
+        "object_022_cow",
+        "object_031_sheep",
+        "object_032_goat"
+      ],
+      "intent": [
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_alligator"
+      ],
+      "intent": [
+        "attribute_000_eggs",
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "extent": [
+        "object_005_cat"
+      ],
+      "intent": [
+        "attribute_001_nocturnal",
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "extent": [],
+      "intent": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    }
+  ],
+  "context_id": "animals",
+  "context_name": "",
+  "context_sha256": "8a91853b8189c2e3cf6f9257d05967384c65db8deb55aacb8cff1ee4516828cd",
+  "cover_count": 66,
+  "covers": [
+    {
+      "general": [],
+      "specific": [
+        "attribute_000_eggs"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_002_man_eater"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_005_lives_in_water"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_man_eater"
+      ],
+      "specific": [
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_man_eater"
+      ],
+      "specific": [
+        "attribute_002_man_eater",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_lives_in_water"
+      ],
+      "specific": [
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_lives_in_water"
+      ],
+      "specific": [
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ],
+      "specific": [
+        "attribute_002_man_eater",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ],
+      "specific": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water",
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_man_eater",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ],
+      "specific": [
+        "attribute_002_man_eater",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_man_eater",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged"
+      ],
+      "specific": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather",
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged",
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "specific": [
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "specific": [
+        "attribute_002_man_eater",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "specific": [
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "specific": [
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_nocturnal",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "specific": [
+        "attribute_001_nocturnal",
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_man_eater",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "specific": [
+        "attribute_001_nocturnal",
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_livestock",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_eggs",
+        "attribute_002_man_eater",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_008_four_legged",
+        "attribute_010_scales"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_nocturnal",
+        "attribute_003_pet",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur"
+      ],
+      "specific": [
+        "attribute_000_eggs",
+        "attribute_001_nocturnal",
+        "attribute_002_man_eater",
+        "attribute_003_pet",
+        "attribute_004_livestock",
+        "attribute_005_lives_in_water",
+        "attribute_006_airbreather",
+        "attribute_007_warmblooded",
+        "attribute_008_four_legged",
+        "attribute_009_fur",
+        "attribute_010_scales"
+      ]
+    }
+  ],
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "closed_candidate": [
+      "attribute_000_eggs"
+    ],
+    "false_cell": [
+      "object_000_alligator",
+      "attribute_001_nocturnal"
+    ],
+    "negative_implication": {
+      "antecedent": [
+        "attribute_000_eggs"
+      ],
+      "consequent": [
+        "attribute_001_nocturnal"
+      ]
+    },
+    "nonclosed_candidate": [
+      "attribute_001_nocturnal"
+    ],
+    "nonclosed_closure": [
+      "attribute_001_nocturnal",
+      "attribute_006_airbreather"
+    ],
+    "positive_implication": {
+      "antecedent": [
+        "attribute_001_nocturnal"
+      ],
+      "consequent": [
+        "attribute_006_airbreather"
+      ]
+    },
+    "true_cell": [
+      "object_000_alligator",
+      "attribute_000_eggs"
+    ]
+  },
+  "false_cell_count": 245,
+  "intents": [
+    [],
+    [
+      "attribute_000_eggs"
+    ],
+    [
+      "attribute_002_man_eater"
+    ],
+    [
+      "attribute_005_lives_in_water"
+    ],
+    [
+      "attribute_006_airbreather"
+    ],
+    [
+      "attribute_010_scales"
+    ],
+    [
+      "attribute_000_eggs",
+      "attribute_006_airbreather"
+    ],
+    [
+      "attribute_000_eggs",
+      "attribute_010_scales"
+    ],
+    [
+      "attribute_001_nocturnal",
+      "attribute_006_airbreather"
+    ],
+    [
+      "attribute_005_lives_in_water",
+      "attribute_006_airbreather"
+    ],
+    [
+      "attribute_005_lives_in_water",
+      "attribute_010_scales"
+    ],
+    [
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    [
+      "attribute_006_airbreather",
+      "attribute_008_four_legged"
+    ],
+    [
+      "attribute_000_eggs",
+      "attribute_001_nocturnal",
+      "attribute_006_airbreather"
+    ],
+    [
+      "attribute_000_eggs",
+      "attribute_005_lives_in_water",
+      "attribute_010_scales"
+    ],
+    [
+      "attribute_000_eggs",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    [
+      "attribute_000_eggs",
+      "attribute_006_airbreather",
+      "attribute_010_scales"
+    ],
+    [
+      "attribute_002_man_eater",
+      "attribute_005_lives_in_water",
+      "attribute_010_scales"
+    ],
+    [
+      "attribute_002_man_eater",
+      "attribute_006_airbreather",
+      "attribute_008_four_legged"
+    ],
+    [
+      "attribute_003_pet",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    [
+      "attribute_004_livestock",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    [
+      "attribute_005_lives_in_water",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    [
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged"
+    ],
+    [
+      "attribute_000_eggs",
+      "attribute_001_nocturnal",
+      "attribute_006_airbreather",
+      "attribute_010_scales"
+    ],
+    [
+      "attribute_000_eggs",
+      "attribute_003_pet",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    [
+      "attribute_000_eggs",
+      "attribute_004_livestock",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    [
+      "attribute_000_eggs",
+      "attribute_006_airbreather",
+      "attribute_008_four_legged",
+      "attribute_010_scales"
+    ],
+    [
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    [
+      "attribute_001_nocturnal",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    [
+      "attribute_002_man_eater",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    [
+      "attribute_003_pet",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    [
+      "attribute_004_livestock",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    [
+      "attribute_000_eggs",
+      "attribute_002_man_eater",
+      "attribute_005_lives_in_water",
+      "attribute_006_airbreather",
+      "attribute_008_four_legged",
+      "attribute_010_scales"
+    ],
+    [
+      "attribute_001_nocturnal",
+      "attribute_003_pet",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    [
+      "attribute_000_eggs",
+      "attribute_001_nocturnal",
+      "attribute_002_man_eater",
+      "attribute_003_pet",
+      "attribute_004_livestock",
+      "attribute_005_lives_in_water",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur",
+      "attribute_010_scales"
+    ]
+  ],
+  "manifest_sha256": "ef81ae7691755afb8ce223db7ee7e69b6a338be8ef724eb98f716f22884567d8",
+  "object_count": 35,
+  "object_symbols": {
+    "alligator": "object_000_alligator",
+    "antelope": "object_019_antelope",
+    "barracuda": "object_029_barracuda",
+    "bear": "object_017_bear",
+    "bull-snake": "object_011_bull_snake",
+    "cat": "object_005_cat",
+    "chicken": "object_033_chicken",
+    "cow": "object_022_cow",
+    "dog": "object_004_dog",
+    "dolphin": "object_026_dolphin",
+    "dove": "object_006_dove",
+    "eagle": "object_003_eagle",
+    "elephant": "object_009_elephant",
+    "goat": "object_032_goat",
+    "hippo": "object_008_hippo",
+    "horse": "object_021_horse",
+    "ibex": "object_018_ibex",
+    "lion": "object_007_lion",
+    "lizard": "object_014_lizard",
+    "moose": "object_020_moose",
+    "mouse": "object_012_mouse",
+    "parakeet": "object_030_parakeet",
+    "pig": "object_002_pig",
+    "possum": "object_028_possum",
+    "rattler": "object_001_rattler",
+    "shark": "object_023_shark",
+    "sheep": "object_031_sheep",
+    "skunk": "object_013_skunk",
+    "stingray": "object_027_stingray",
+    "tarantula": "object_034_tarantula",
+    "thrasher": "object_010_thrasher",
+    "tiger": "object_016_tiger",
+    "trout": "object_024_trout",
+    "whale": "object_025_whale",
+    "zebra": "object_015_zebra"
+  },
+  "objects": [
+    "alligator",
+    "rattler",
+    "pig",
+    "eagle",
+    "dog",
+    "cat",
+    "dove",
+    "lion",
+    "hippo",
+    "elephant",
+    "thrasher",
+    "bull-snake",
+    "mouse",
+    "skunk",
+    "lizard",
+    "zebra",
+    "tiger",
+    "bear",
+    "ibex",
+    "antelope",
+    "moose",
+    "horse",
+    "cow",
+    "shark",
+    "trout",
+    "whale",
+    "dolphin",
+    "stingray",
+    "possum",
+    "barracuda",
+    "parakeet",
+    "sheep",
+    "goat",
+    "chicken",
+    "tarantula"
+  ],
+  "oracle_agreement": {
+    "bruteforce_equals_concepts_0_9_2": true,
+    "covers_equal_concepts_0_9_2_neighbors": true,
+    "set_basis_equals_bitset_basis": true
+  },
+  "schema": "wm-fca-cxt-oracle-v1",
+  "source_path": "contexts/animals_en.cxt",
+  "true_cell_count": 140,
+  "true_incidence": {
+    "object_000_alligator": [
+      "attribute_000_eggs",
+      "attribute_002_man_eater",
+      "attribute_005_lives_in_water",
+      "attribute_006_airbreather",
+      "attribute_008_four_legged",
+      "attribute_010_scales"
+    ],
+    "object_001_rattler": [
+      "attribute_000_eggs",
+      "attribute_001_nocturnal",
+      "attribute_006_airbreather",
+      "attribute_010_scales"
+    ],
+    "object_002_pig": [
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_003_eagle": [
+      "attribute_000_eggs",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    "object_004_dog": [
+      "attribute_003_pet",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_005_cat": [
+      "attribute_001_nocturnal",
+      "attribute_003_pet",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_006_dove": [
+      "attribute_000_eggs",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    "object_007_lion": [
+      "attribute_002_man_eater",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_008_hippo": [
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged"
+    ],
+    "object_009_elephant": [
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged"
+    ],
+    "object_010_thrasher": [
+      "attribute_000_eggs",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    "object_011_bull_snake": [
+      "attribute_000_eggs",
+      "attribute_006_airbreather",
+      "attribute_010_scales"
+    ],
+    "object_012_mouse": [
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_013_skunk": [
+      "attribute_001_nocturnal",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_014_lizard": [
+      "attribute_000_eggs",
+      "attribute_006_airbreather",
+      "attribute_008_four_legged",
+      "attribute_010_scales"
+    ],
+    "object_015_zebra": [
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_016_tiger": [
+      "attribute_002_man_eater",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_017_bear": [
+      "attribute_002_man_eater",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_018_ibex": [
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_019_antelope": [
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_020_moose": [
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_021_horse": [
+      "attribute_004_livestock",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_022_cow": [
+      "attribute_004_livestock",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_023_shark": [
+      "attribute_002_man_eater",
+      "attribute_005_lives_in_water",
+      "attribute_010_scales"
+    ],
+    "object_024_trout": [
+      "attribute_000_eggs",
+      "attribute_005_lives_in_water",
+      "attribute_010_scales"
+    ],
+    "object_025_whale": [
+      "attribute_005_lives_in_water",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    "object_026_dolphin": [
+      "attribute_005_lives_in_water",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    "object_027_stingray": [
+      "attribute_000_eggs",
+      "attribute_005_lives_in_water",
+      "attribute_010_scales"
+    ],
+    "object_028_possum": [
+      "attribute_001_nocturnal",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_029_barracuda": [
+      "attribute_005_lives_in_water",
+      "attribute_010_scales"
+    ],
+    "object_030_parakeet": [
+      "attribute_000_eggs",
+      "attribute_003_pet",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    "object_031_sheep": [
+      "attribute_004_livestock",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_032_goat": [
+      "attribute_004_livestock",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded",
+      "attribute_008_four_legged",
+      "attribute_009_fur"
+    ],
+    "object_033_chicken": [
+      "attribute_000_eggs",
+      "attribute_004_livestock",
+      "attribute_006_airbreather",
+      "attribute_007_warmblooded"
+    ],
+    "object_034_tarantula": [
+      "attribute_000_eggs",
+      "attribute_001_nocturnal",
+      "attribute_006_airbreather"
+    ]
+  },
+  "upstream": {
+    "commit": "9306d256c8a212ffa0c60a52f883a516d8b87b58",
+    "license": "CC0-1.0",
+    "repository": "https://github.com/fcatools/contexts"
+  }
+}

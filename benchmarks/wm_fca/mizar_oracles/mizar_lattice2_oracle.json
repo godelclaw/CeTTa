@@ -1,0 +1,1474 @@
+{
+  "algorithm_counts": {
+    "lectic_logical_closures": 42,
+    "levelwise_candidates": 119
+  },
+  "attribute_count": 9,
+  "attribute_symbols": {
+    "D0_Lattice": "attribute_000_d0_lattice",
+    "FinJoin": "attribute_001_finjoin",
+    "FinMeet": "attribute_002_finmeet",
+    "H_Lattice": "attribute_003_h_lattice",
+    "Heyting": "attribute_004_heyting",
+    "IT": "attribute_005_it",
+    "LattStr": "attribute_006_lattstr",
+    "Lattice": "attribute_007_lattice",
+    "lower-bounded": "attribute_008_lower_bounded"
+  },
+  "attributes": [
+    "D0_Lattice",
+    "FinJoin",
+    "FinMeet",
+    "H_Lattice",
+    "Heyting",
+    "IT",
+    "LattStr",
+    "Lattice",
+    "lower-bounded"
+  ],
+  "canonical_basis": [
+    {
+      "antecedent": [
+        "attribute_000_d0_lattice"
+      ],
+      "consequent": [
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_it"
+      ],
+      "consequent": [
+        "attribute_004_heyting",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_lower_bounded"
+      ],
+      "consequent": [
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_finjoin",
+        "attribute_003_h_lattice"
+      ],
+      "consequent": [
+        "attribute_000_d0_lattice",
+        "attribute_002_finmeet",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_006_lattstr",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_finjoin",
+        "attribute_006_lattstr"
+      ],
+      "consequent": [
+        "attribute_000_d0_lattice",
+        "attribute_002_finmeet",
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_finmeet",
+        "attribute_003_h_lattice"
+      ],
+      "consequent": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_006_lattstr",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_finmeet",
+        "attribute_004_heyting"
+      ],
+      "consequent": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_003_h_lattice",
+        "attribute_005_it",
+        "attribute_006_lattstr",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_finmeet",
+        "attribute_006_lattstr"
+      ],
+      "consequent": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_finmeet",
+        "attribute_007_lattice"
+      ],
+      "consequent": [
+        "attribute_001_finjoin"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_h_lattice",
+        "attribute_004_heyting"
+      ],
+      "consequent": [
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_h_lattice",
+        "attribute_006_lattstr"
+      ],
+      "consequent": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_h_lattice",
+        "attribute_007_lattice"
+      ],
+      "consequent": [
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_heyting",
+        "attribute_006_lattstr"
+      ],
+      "consequent": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_003_h_lattice",
+        "attribute_005_it",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_007_lattice"
+      ],
+      "consequent": [
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_d0_lattice",
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ],
+      "consequent": [
+        "attribute_001_finjoin"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_d0_lattice",
+        "attribute_006_lattstr",
+        "attribute_007_lattice"
+      ],
+      "consequent": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_finjoin",
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ],
+      "consequent": [
+        "attribute_000_d0_lattice"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_finjoin",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ],
+      "consequent": [
+        "attribute_002_finmeet"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_006_lattstr",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ],
+      "consequent": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_005_it"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ],
+      "consequent": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_005_it",
+        "attribute_006_lattstr"
+      ]
+    }
+  ],
+  "canonical_basis_count": 20,
+  "citation": "MeTTapedia concept-ontology extraction from Mizar Mathematical Library article lattice2.miz.",
+  "concept_count": 22,
+  "concepts": [
+    {
+      "extent": [
+        "object_000_notation_1",
+        "object_001_definition_2",
+        "object_002_registration_1",
+        "object_003_theorem_13",
+        "object_004_definition_3",
+        "object_005_theorem_28",
+        "object_006_theorem_29",
+        "object_007_theorem_30",
+        "object_008_theorem_31",
+        "object_009_theorem_32",
+        "object_010_theorem_33",
+        "object_011_theorem_34",
+        "object_012_theorem_35",
+        "object_013_registration_8",
+        "object_014_theorem_36",
+        "object_015_theorem_40",
+        "object_016_theorem_41",
+        "object_017_theorem_42",
+        "object_018_theorem_43",
+        "object_019_theorem_44",
+        "object_020_theorem_45",
+        "object_021_theorem_46",
+        "object_022_theorem_47",
+        "object_023_theorem_48",
+        "object_024_theorem_49",
+        "object_025_theorem_53",
+        "object_026_theorem_54",
+        "object_027_theorem_55",
+        "object_028_theorem_58",
+        "object_029_theorem_59",
+        "object_030_theorem_60",
+        "object_031_definition_4",
+        "object_032_theorem_64",
+        "object_033_theorem_65",
+        "object_034_theorem_66",
+        "object_035_definition_5",
+        "object_036_registration_11",
+        "object_037_registration_12",
+        "object_038_definition_6",
+        "object_039_registration_13",
+        "object_040_theorem_67",
+        "object_041_theorem_68",
+        "object_042_registration_14",
+        "object_043_registration_15",
+        "object_044_registration_16"
+      ],
+      "intent": []
+    },
+    {
+      "extent": [
+        "object_004_definition_3",
+        "object_005_theorem_28",
+        "object_006_theorem_29",
+        "object_007_theorem_30",
+        "object_008_theorem_31",
+        "object_009_theorem_32",
+        "object_010_theorem_33",
+        "object_011_theorem_34",
+        "object_012_theorem_35",
+        "object_014_theorem_36",
+        "object_015_theorem_40",
+        "object_016_theorem_41",
+        "object_020_theorem_45",
+        "object_021_theorem_46",
+        "object_025_theorem_53",
+        "object_026_theorem_54",
+        "object_027_theorem_55",
+        "object_028_theorem_58",
+        "object_029_theorem_59",
+        "object_032_theorem_64",
+        "object_033_theorem_65",
+        "object_034_theorem_66",
+        "object_042_registration_14",
+        "object_044_registration_16"
+      ],
+      "intent": [
+        "attribute_001_finjoin"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_3",
+        "object_014_theorem_36",
+        "object_015_theorem_40",
+        "object_016_theorem_41",
+        "object_017_theorem_42",
+        "object_018_theorem_43",
+        "object_019_theorem_44",
+        "object_020_theorem_45",
+        "object_021_theorem_46",
+        "object_022_theorem_47",
+        "object_028_theorem_58",
+        "object_029_theorem_59",
+        "object_030_theorem_60",
+        "object_042_registration_14"
+      ],
+      "intent": [
+        "attribute_002_finmeet"
+      ]
+    },
+    {
+      "extent": [
+        "object_038_definition_6",
+        "object_040_theorem_67"
+      ],
+      "intent": [
+        "attribute_003_h_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_034_theorem_66",
+        "object_035_definition_5",
+        "object_036_registration_11",
+        "object_037_registration_12",
+        "object_038_definition_6",
+        "object_039_registration_13",
+        "object_044_registration_16"
+      ],
+      "intent": [
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_notation_1",
+        "object_001_definition_2",
+        "object_002_registration_1",
+        "object_003_theorem_13"
+      ],
+      "intent": [
+        "attribute_006_lattstr"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_notation_1",
+        "object_003_theorem_13",
+        "object_004_definition_3",
+        "object_013_registration_8",
+        "object_014_theorem_36",
+        "object_023_theorem_48",
+        "object_024_theorem_49",
+        "object_031_definition_4",
+        "object_035_definition_5",
+        "object_036_registration_11",
+        "object_037_registration_12",
+        "object_038_definition_6",
+        "object_039_registration_13",
+        "object_041_theorem_68",
+        "object_042_registration_14",
+        "object_043_registration_15",
+        "object_044_registration_16"
+      ],
+      "intent": [
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_031_definition_4",
+        "object_044_registration_16"
+      ],
+      "intent": [
+        "attribute_000_d0_lattice",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_3",
+        "object_014_theorem_36",
+        "object_015_theorem_40",
+        "object_016_theorem_41",
+        "object_020_theorem_45",
+        "object_021_theorem_46",
+        "object_028_theorem_58",
+        "object_029_theorem_59",
+        "object_042_registration_14"
+      ],
+      "intent": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet"
+      ]
+    },
+    {
+      "extent": [
+        "object_034_theorem_66",
+        "object_044_registration_16"
+      ],
+      "intent": [
+        "attribute_001_finjoin",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_3",
+        "object_014_theorem_36",
+        "object_042_registration_14",
+        "object_044_registration_16"
+      ],
+      "intent": [
+        "attribute_001_finjoin",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_035_definition_5",
+        "object_036_registration_11",
+        "object_037_registration_12",
+        "object_038_definition_6",
+        "object_039_registration_13",
+        "object_044_registration_16"
+      ],
+      "intent": [
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_notation_1",
+        "object_003_theorem_13"
+      ],
+      "intent": [
+        "attribute_006_lattstr",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_023_theorem_48",
+        "object_024_theorem_49",
+        "object_031_definition_4",
+        "object_035_definition_5",
+        "object_036_registration_11",
+        "object_037_registration_12",
+        "object_042_registration_14"
+      ],
+      "intent": [
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "extent": [
+        "object_031_definition_4"
+      ],
+      "intent": [
+        "attribute_000_d0_lattice",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "extent": [
+        "object_004_definition_3",
+        "object_014_theorem_36",
+        "object_042_registration_14"
+      ],
+      "intent": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_038_definition_6"
+      ],
+      "intent": [
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_035_definition_5",
+        "object_036_registration_11",
+        "object_037_registration_12"
+      ],
+      "intent": [
+        "attribute_004_heyting",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "extent": [
+        "object_044_registration_16"
+      ],
+      "intent": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "extent": [
+        "object_042_registration_14"
+      ],
+      "intent": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "extent": [
+        "object_035_definition_5"
+      ],
+      "intent": [
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "extent": [],
+      "intent": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_006_lattstr",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    }
+  ],
+  "context_id": "mizar_lattice2",
+  "context_name": "",
+  "context_sha256": "46fe11c557ac85009434ad17aca60a49a15ba9fa56a25f67d79d0ff418645a9b",
+  "cover_count": 39,
+  "covers": [
+    {
+      "general": [],
+      "specific": [
+        "attribute_001_finjoin"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_002_finmeet"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_003_h_lattice"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_006_lattstr"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_finjoin"
+      ],
+      "specific": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_finjoin"
+      ],
+      "specific": [
+        "attribute_001_finjoin",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_finjoin"
+      ],
+      "specific": [
+        "attribute_001_finjoin",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_finmeet"
+      ],
+      "specific": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_h_lattice"
+      ],
+      "specific": [
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_001_finjoin",
+        "attribute_004_heyting"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_lattstr"
+      ],
+      "specific": [
+        "attribute_006_lattstr",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_001_finjoin",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_006_lattstr",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_d0_lattice",
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_d0_lattice",
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet"
+      ],
+      "specific": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_finjoin",
+        "attribute_004_heyting"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_finjoin",
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_finjoin",
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_lattstr",
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_006_lattstr",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ],
+      "specific": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_d0_lattice",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_006_lattstr",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_006_lattstr",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ],
+      "specific": [
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_004_heyting",
+        "attribute_007_lattice"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_006_lattstr",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_006_lattstr",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ],
+      "specific": [
+        "attribute_000_d0_lattice",
+        "attribute_001_finjoin",
+        "attribute_002_finmeet",
+        "attribute_003_h_lattice",
+        "attribute_004_heyting",
+        "attribute_005_it",
+        "attribute_006_lattstr",
+        "attribute_007_lattice",
+        "attribute_008_lower_bounded"
+      ]
+    }
+  ],
+  "dependence_group": "mizar-lattice2-extraction",
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "closed_candidate": [
+      "attribute_001_finjoin"
+    ],
+    "false_cell": [
+      "object_000_notation_1",
+      "attribute_000_d0_lattice"
+    ],
+    "negative_implication": {
+      "antecedent": [
+        "attribute_000_d0_lattice"
+      ],
+      "consequent": [
+        "attribute_001_finjoin"
+      ]
+    },
+    "nonclosed_candidate": [
+      "attribute_000_d0_lattice"
+    ],
+    "nonclosed_closure": [
+      "attribute_000_d0_lattice",
+      "attribute_007_lattice"
+    ],
+    "positive_implication": {
+      "antecedent": [
+        "attribute_000_d0_lattice"
+      ],
+      "consequent": [
+        "attribute_007_lattice"
+      ]
+    },
+    "true_cell": [
+      "object_000_notation_1",
+      "attribute_006_lattstr"
+    ]
+  },
+  "false_cell_count": 327,
+  "intents": [
+    [],
+    [
+      "attribute_001_finjoin"
+    ],
+    [
+      "attribute_002_finmeet"
+    ],
+    [
+      "attribute_003_h_lattice"
+    ],
+    [
+      "attribute_004_heyting"
+    ],
+    [
+      "attribute_006_lattstr"
+    ],
+    [
+      "attribute_007_lattice"
+    ],
+    [
+      "attribute_000_d0_lattice",
+      "attribute_007_lattice"
+    ],
+    [
+      "attribute_001_finjoin",
+      "attribute_002_finmeet"
+    ],
+    [
+      "attribute_001_finjoin",
+      "attribute_004_heyting"
+    ],
+    [
+      "attribute_001_finjoin",
+      "attribute_007_lattice"
+    ],
+    [
+      "attribute_004_heyting",
+      "attribute_007_lattice"
+    ],
+    [
+      "attribute_006_lattstr",
+      "attribute_007_lattice"
+    ],
+    [
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ],
+    [
+      "attribute_000_d0_lattice",
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ],
+    [
+      "attribute_001_finjoin",
+      "attribute_002_finmeet",
+      "attribute_007_lattice"
+    ],
+    [
+      "attribute_003_h_lattice",
+      "attribute_004_heyting",
+      "attribute_007_lattice"
+    ],
+    [
+      "attribute_004_heyting",
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ],
+    [
+      "attribute_000_d0_lattice",
+      "attribute_001_finjoin",
+      "attribute_004_heyting",
+      "attribute_007_lattice"
+    ],
+    [
+      "attribute_001_finjoin",
+      "attribute_002_finmeet",
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ],
+    [
+      "attribute_004_heyting",
+      "attribute_005_it",
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ],
+    [
+      "attribute_000_d0_lattice",
+      "attribute_001_finjoin",
+      "attribute_002_finmeet",
+      "attribute_003_h_lattice",
+      "attribute_004_heyting",
+      "attribute_005_it",
+      "attribute_006_lattstr",
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ]
+  ],
+  "manifest_sha256": "26b7e2de0a429a5db4949a6da64800e5aa0753c37d6139a00e999848384e0272",
+  "matrix_label": "complete positive-occurrence article context",
+  "object_count": 45,
+  "object_symbols": {
+    "definition_2": "object_001_definition_2",
+    "definition_3": "object_004_definition_3",
+    "definition_4": "object_031_definition_4",
+    "definition_5": "object_035_definition_5",
+    "definition_6": "object_038_definition_6",
+    "notation_1": "object_000_notation_1",
+    "registration_1": "object_002_registration_1",
+    "registration_11": "object_036_registration_11",
+    "registration_12": "object_037_registration_12",
+    "registration_13": "object_039_registration_13",
+    "registration_14": "object_042_registration_14",
+    "registration_15": "object_043_registration_15",
+    "registration_16": "object_044_registration_16",
+    "registration_8": "object_013_registration_8",
+    "theorem_13": "object_003_theorem_13",
+    "theorem_28": "object_005_theorem_28",
+    "theorem_29": "object_006_theorem_29",
+    "theorem_30": "object_007_theorem_30",
+    "theorem_31": "object_008_theorem_31",
+    "theorem_32": "object_009_theorem_32",
+    "theorem_33": "object_010_theorem_33",
+    "theorem_34": "object_011_theorem_34",
+    "theorem_35": "object_012_theorem_35",
+    "theorem_36": "object_014_theorem_36",
+    "theorem_40": "object_015_theorem_40",
+    "theorem_41": "object_016_theorem_41",
+    "theorem_42": "object_017_theorem_42",
+    "theorem_43": "object_018_theorem_43",
+    "theorem_44": "object_019_theorem_44",
+    "theorem_45": "object_020_theorem_45",
+    "theorem_46": "object_021_theorem_46",
+    "theorem_47": "object_022_theorem_47",
+    "theorem_48": "object_023_theorem_48",
+    "theorem_49": "object_024_theorem_49",
+    "theorem_53": "object_025_theorem_53",
+    "theorem_54": "object_026_theorem_54",
+    "theorem_55": "object_027_theorem_55",
+    "theorem_58": "object_028_theorem_58",
+    "theorem_59": "object_029_theorem_59",
+    "theorem_60": "object_030_theorem_60",
+    "theorem_64": "object_032_theorem_64",
+    "theorem_65": "object_033_theorem_65",
+    "theorem_66": "object_034_theorem_66",
+    "theorem_67": "object_040_theorem_67",
+    "theorem_68": "object_041_theorem_68"
+  },
+  "objects": [
+    "notation_1",
+    "definition_2",
+    "registration_1",
+    "theorem_13",
+    "definition_3",
+    "theorem_28",
+    "theorem_29",
+    "theorem_30",
+    "theorem_31",
+    "theorem_32",
+    "theorem_33",
+    "theorem_34",
+    "theorem_35",
+    "registration_8",
+    "theorem_36",
+    "theorem_40",
+    "theorem_41",
+    "theorem_42",
+    "theorem_43",
+    "theorem_44",
+    "theorem_45",
+    "theorem_46",
+    "theorem_47",
+    "theorem_48",
+    "theorem_49",
+    "theorem_53",
+    "theorem_54",
+    "theorem_55",
+    "theorem_58",
+    "theorem_59",
+    "theorem_60",
+    "definition_4",
+    "theorem_64",
+    "theorem_65",
+    "theorem_66",
+    "definition_5",
+    "registration_11",
+    "registration_12",
+    "definition_6",
+    "registration_13",
+    "theorem_67",
+    "theorem_68",
+    "registration_14",
+    "registration_15",
+    "registration_16"
+  ],
+  "oracle_agreement": {
+    "covers_equal_concepts_0_9_2_neighbors": true,
+    "lectic_basis_equals_levelwise_nextclosures": true,
+    "lectic_intents_equal_concepts_0_9_2": true,
+    "lectic_intents_equals_levelwise_nextclosures": true
+  },
+  "schema": "wm-fca-cxt-oracle-v1",
+  "source_path": "lean/mettapedia/artifacts/concept_ontology/mizar_family/lattice2.cxt",
+  "true_cell_count": 78,
+  "true_incidence": {
+    "object_000_notation_1": [
+      "attribute_006_lattstr",
+      "attribute_007_lattice"
+    ],
+    "object_001_definition_2": [
+      "attribute_006_lattstr"
+    ],
+    "object_002_registration_1": [
+      "attribute_006_lattstr"
+    ],
+    "object_003_theorem_13": [
+      "attribute_006_lattstr",
+      "attribute_007_lattice"
+    ],
+    "object_004_definition_3": [
+      "attribute_001_finjoin",
+      "attribute_002_finmeet",
+      "attribute_007_lattice"
+    ],
+    "object_005_theorem_28": [
+      "attribute_001_finjoin"
+    ],
+    "object_006_theorem_29": [
+      "attribute_001_finjoin"
+    ],
+    "object_007_theorem_30": [
+      "attribute_001_finjoin"
+    ],
+    "object_008_theorem_31": [
+      "attribute_001_finjoin"
+    ],
+    "object_009_theorem_32": [
+      "attribute_001_finjoin"
+    ],
+    "object_010_theorem_33": [
+      "attribute_001_finjoin"
+    ],
+    "object_011_theorem_34": [
+      "attribute_001_finjoin"
+    ],
+    "object_012_theorem_35": [
+      "attribute_001_finjoin"
+    ],
+    "object_013_registration_8": [
+      "attribute_007_lattice"
+    ],
+    "object_014_theorem_36": [
+      "attribute_001_finjoin",
+      "attribute_002_finmeet",
+      "attribute_007_lattice"
+    ],
+    "object_015_theorem_40": [
+      "attribute_001_finjoin",
+      "attribute_002_finmeet"
+    ],
+    "object_016_theorem_41": [
+      "attribute_001_finjoin",
+      "attribute_002_finmeet"
+    ],
+    "object_017_theorem_42": [
+      "attribute_002_finmeet"
+    ],
+    "object_018_theorem_43": [
+      "attribute_002_finmeet"
+    ],
+    "object_019_theorem_44": [
+      "attribute_002_finmeet"
+    ],
+    "object_020_theorem_45": [
+      "attribute_001_finjoin",
+      "attribute_002_finmeet"
+    ],
+    "object_021_theorem_46": [
+      "attribute_001_finjoin",
+      "attribute_002_finmeet"
+    ],
+    "object_022_theorem_47": [
+      "attribute_002_finmeet"
+    ],
+    "object_023_theorem_48": [
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ],
+    "object_024_theorem_49": [
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ],
+    "object_025_theorem_53": [
+      "attribute_001_finjoin"
+    ],
+    "object_026_theorem_54": [
+      "attribute_001_finjoin"
+    ],
+    "object_027_theorem_55": [
+      "attribute_001_finjoin"
+    ],
+    "object_028_theorem_58": [
+      "attribute_001_finjoin",
+      "attribute_002_finmeet"
+    ],
+    "object_029_theorem_59": [
+      "attribute_001_finjoin",
+      "attribute_002_finmeet"
+    ],
+    "object_030_theorem_60": [
+      "attribute_002_finmeet"
+    ],
+    "object_031_definition_4": [
+      "attribute_000_d0_lattice",
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ],
+    "object_032_theorem_64": [
+      "attribute_001_finjoin"
+    ],
+    "object_033_theorem_65": [
+      "attribute_001_finjoin"
+    ],
+    "object_034_theorem_66": [
+      "attribute_001_finjoin",
+      "attribute_004_heyting"
+    ],
+    "object_035_definition_5": [
+      "attribute_004_heyting",
+      "attribute_005_it",
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ],
+    "object_036_registration_11": [
+      "attribute_004_heyting",
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ],
+    "object_037_registration_12": [
+      "attribute_004_heyting",
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ],
+    "object_038_definition_6": [
+      "attribute_003_h_lattice",
+      "attribute_004_heyting",
+      "attribute_007_lattice"
+    ],
+    "object_039_registration_13": [
+      "attribute_004_heyting",
+      "attribute_007_lattice"
+    ],
+    "object_040_theorem_67": [
+      "attribute_003_h_lattice"
+    ],
+    "object_041_theorem_68": [
+      "attribute_007_lattice"
+    ],
+    "object_042_registration_14": [
+      "attribute_001_finjoin",
+      "attribute_002_finmeet",
+      "attribute_007_lattice",
+      "attribute_008_lower_bounded"
+    ],
+    "object_043_registration_15": [
+      "attribute_007_lattice"
+    ],
+    "object_044_registration_16": [
+      "attribute_000_d0_lattice",
+      "attribute_001_finjoin",
+      "attribute_004_heyting",
+      "attribute_007_lattice"
+    ]
+  },
+  "upstream": {
+    "commit": "f93a93f7d4d62d90e22812295b7e46c036458603",
+    "license": "MIT",
+    "repository": "https://github.com/zariuq/MeTTapedia",
+    "source_id": "mettapedia-mizar-family",
+    "validation_role": "project semantic case study, not independent external validation"
+  }
+}

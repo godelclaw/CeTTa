@@ -1,0 +1,145 @@
+{
+  "schema": "wm-fca-corruption-protocol-v1",
+  "contexts": [
+    "random_10_10_0.1",
+    "random_10_10_0.5",
+    "random_10_10_0.9",
+    "random_30_10_0.1",
+    "random_30_10_0.5",
+    "random_30_10_0.9",
+    "random_100_10_0.1",
+    "random_100_10_0.5",
+    "random_100_10_0.9"
+  ],
+  "seeds": [
+    1729,
+    2718,
+    31415,
+    57721,
+    65537
+  ],
+  "corruption_grid": {
+    "flip_rates": [
+      0.0,
+      0.05,
+      0.1
+    ],
+    "missing_rates": [
+      0.1,
+      0.3,
+      0.5
+    ],
+    "unknown_rate": 0.05
+  },
+  "evidence_design": {
+    "correlated_copy": {
+      "dependence_group": "correlated-pipeline",
+      "shares_status_matrix_with": "primary"
+    },
+    "independent": {
+      "dependence_group": "independent-pipeline"
+    },
+    "primary": {
+      "dependence_group": "correlated-pipeline"
+    }
+  },
+  "models": [
+    {
+      "gate": {
+        "kind": "positive-observations",
+        "threshold": 1
+      },
+      "id": "crisp-single-source",
+      "layers": [
+        "primary"
+      ]
+    },
+    {
+      "gate": {
+        "kind": "positive-observations",
+        "threshold": 2
+      },
+      "id": "raw-majority-2",
+      "layers": [
+        "primary",
+        "correlated_copy",
+        "independent"
+      ]
+    },
+    {
+      "gate": {
+        "kind": "positive-sources",
+        "threshold": 2
+      },
+      "id": "source-majority-2",
+      "layers": [
+        "primary",
+        "correlated_copy",
+        "independent"
+      ]
+    },
+    {
+      "gate": {
+        "kind": "positive-groups",
+        "threshold": 1
+      },
+      "id": "wm-permissive-group-1",
+      "layers": [
+        "primary",
+        "correlated_copy",
+        "independent"
+      ]
+    },
+    {
+      "gate": {
+        "kind": "positive-groups",
+        "threshold": 2
+      },
+      "id": "wm-robust-group-2",
+      "layers": [
+        "primary",
+        "correlated_copy",
+        "independent"
+      ]
+    },
+    {
+      "gate": {
+        "kind": "exact"
+      },
+      "id": "wm-exact-consensus",
+      "layers": [
+        "primary",
+        "correlated_copy",
+        "independent"
+      ]
+    }
+  ],
+  "envelope_model_ids": [
+    "wm-permissive-group-1",
+    "wm-robust-group-2",
+    "wm-exact-consensus"
+  ],
+  "exact_limits": {
+    "basis": 4096,
+    "concepts": 2048,
+    "covers": 100000,
+    "logical_steps": 100000
+  },
+  "metrics": [
+    "cell_precision_recall_f1",
+    "held_out_closure_exact_and_jaccard",
+    "concept_set_recovery",
+    "canonical_basis_recovery",
+    "lattice_cover_recovery",
+    "envelope_brier_ece_coverage_sharpness",
+    "closure_envelope_coverage_sharpness",
+    "exact_duplicate_invariance",
+    "correlated_copy_invariance"
+  ],
+  "preregistered_hypotheses": [
+    "All models are invariant to an exact duplicate carrying the same layer identity.",
+    "Dependence-group models are invariant to a distinct-source copy in the same declared dependence group; raw and source-counting thresholds need not be.",
+    "The robust/permissive WM envelope improves uncertainty coverage in sparse or corrupted regimes without being reported as a point-prediction accuracy win.",
+    "No model is selected or tuned after inspecting benchmark outcomes."
+  ]
+}

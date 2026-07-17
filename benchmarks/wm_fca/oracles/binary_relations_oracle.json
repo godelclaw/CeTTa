@@ -1,0 +1,2710 @@
+{
+  "attribute_count": 9,
+  "attribute_symbols": {
+    "antisymmetric": "attribute_004_antisymmetric",
+    "asymmetric": "attribute_003_asymmetric",
+    "connex": "attribute_007_connex",
+    "irreflexive": "attribute_001_irreflexive",
+    "negatively transitive": "attribute_006_negatively_transitive",
+    "reflexive": "attribute_000_reflexive",
+    "strictly connex": "attribute_008_strictly_connex",
+    "symmetric": "attribute_002_symmetric",
+    "transitive": "attribute_005_transitive"
+  },
+  "attributes": [
+    "reflexive",
+    "irreflexive",
+    "symmetric",
+    "asymmetric",
+    "antisymmetric",
+    "transitive",
+    "negatively transitive",
+    "connex",
+    "strictly connex"
+  ],
+  "canonical_basis": [
+    {
+      "antecedent": [
+        "attribute_003_asymmetric"
+      ],
+      "consequent": [
+        "attribute_001_irreflexive",
+        "attribute_004_antisymmetric"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_008_strictly_connex"
+      ],
+      "consequent": [
+        "attribute_000_reflexive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_reflexive",
+        "attribute_001_irreflexive"
+      ],
+      "consequent": [
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_reflexive",
+        "attribute_006_negatively_transitive"
+      ],
+      "consequent": [
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_reflexive",
+        "attribute_007_connex"
+      ],
+      "consequent": [
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_irreflexive",
+        "attribute_004_antisymmetric"
+      ],
+      "consequent": [
+        "attribute_003_asymmetric"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_irreflexive",
+        "attribute_005_transitive"
+      ],
+      "consequent": [
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric"
+      ],
+      "consequent": [
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_002_symmetric",
+        "attribute_007_connex"
+      ],
+      "consequent": [
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_004_antisymmetric",
+        "attribute_006_negatively_transitive"
+      ],
+      "consequent": [
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_005_transitive",
+        "attribute_007_connex"
+      ],
+      "consequent": [
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ],
+      "consequent": [
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "antecedent": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ],
+      "consequent": [
+        "attribute_006_negatively_transitive"
+      ]
+    }
+  ],
+  "canonical_basis_count": 13,
+  "citation": "Ganter, B. and Wille, R. (2024). Formal Concept Analysis: Mathematical Foundations, Figure 2.15.",
+  "concept_count": 50,
+  "concepts": [
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3",
+        "object_003_object_4",
+        "object_004_object_5",
+        "object_005_object_6",
+        "object_006_object_7",
+        "object_007_object_8",
+        "object_008_object_9",
+        "object_009_object_10",
+        "object_010_object_11",
+        "object_011_object_12",
+        "object_012_object_13",
+        "object_013_object_14"
+      ],
+      "intent": []
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_003_object_4",
+        "object_004_object_5",
+        "object_007_object_8",
+        "object_008_object_9",
+        "object_012_object_13",
+        "object_013_object_14"
+      ],
+      "intent": [
+        "attribute_000_reflexive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_002_object_3",
+        "object_005_object_6",
+        "object_006_object_7",
+        "object_009_object_10",
+        "object_010_object_11",
+        "object_011_object_12"
+      ],
+      "intent": [
+        "attribute_001_irreflexive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3",
+        "object_003_object_4",
+        "object_006_object_7",
+        "object_007_object_8",
+        "object_011_object_12",
+        "object_013_object_14"
+      ],
+      "intent": [
+        "attribute_002_symmetric"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3",
+        "object_003_object_4",
+        "object_004_object_5",
+        "object_005_object_6",
+        "object_008_object_9",
+        "object_009_object_10",
+        "object_010_object_11"
+      ],
+      "intent": [
+        "attribute_004_antisymmetric"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3",
+        "object_003_object_4",
+        "object_004_object_5",
+        "object_005_object_6",
+        "object_007_object_8",
+        "object_010_object_11"
+      ],
+      "intent": [
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3",
+        "object_004_object_5",
+        "object_005_object_6",
+        "object_006_object_7",
+        "object_007_object_8",
+        "object_012_object_13"
+      ],
+      "intent": [
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_004_object_5",
+        "object_005_object_6",
+        "object_006_object_7",
+        "object_007_object_8",
+        "object_008_object_9",
+        "object_009_object_10",
+        "object_012_object_13"
+      ],
+      "intent": [
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_003_object_4",
+        "object_007_object_8",
+        "object_013_object_14"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_003_object_4",
+        "object_004_object_5",
+        "object_008_object_9"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_003_object_4",
+        "object_004_object_5",
+        "object_007_object_8"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_002_object_3",
+        "object_006_object_7",
+        "object_011_object_12"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_002_object_3",
+        "object_005_object_6",
+        "object_006_object_7"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_005_object_6",
+        "object_006_object_7",
+        "object_009_object_10"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3",
+        "object_003_object_4",
+        "object_007_object_8"
+      ],
+      "intent": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3",
+        "object_006_object_7",
+        "object_007_object_8"
+      ],
+      "intent": [
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3",
+        "object_003_object_4",
+        "object_004_object_5",
+        "object_005_object_6",
+        "object_010_object_11"
+      ],
+      "intent": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_004_object_5",
+        "object_005_object_6",
+        "object_008_object_9",
+        "object_009_object_10"
+      ],
+      "intent": [
+        "attribute_004_antisymmetric",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3",
+        "object_004_object_5",
+        "object_005_object_6",
+        "object_007_object_8"
+      ],
+      "intent": [
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_004_object_5",
+        "object_005_object_6",
+        "object_006_object_7",
+        "object_007_object_8",
+        "object_012_object_13"
+      ],
+      "intent": [
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_003_object_4",
+        "object_007_object_8"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_003_object_4",
+        "object_004_object_5"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_004_object_5",
+        "object_007_object_8",
+        "object_008_object_9",
+        "object_012_object_13"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_002_object_3",
+        "object_006_object_7"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_002_object_3",
+        "object_005_object_6",
+        "object_009_object_10",
+        "object_010_object_11"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_005_object_6",
+        "object_006_object_7"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3",
+        "object_003_object_4"
+      ],
+      "intent": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3",
+        "object_007_object_8"
+      ],
+      "intent": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_006_object_7",
+        "object_007_object_8"
+      ],
+      "intent": [
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3",
+        "object_004_object_5",
+        "object_005_object_6"
+      ],
+      "intent": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_004_object_5",
+        "object_005_object_6",
+        "object_007_object_8"
+      ],
+      "intent": [
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_003_object_4"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_004_object_5",
+        "object_008_object_9"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_004_object_5",
+        "object_007_object_8",
+        "object_012_object_13"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_006_object_7"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_002_object_3",
+        "object_005_object_6",
+        "object_010_object_11"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_005_object_6",
+        "object_009_object_10"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_002_object_3"
+      ],
+      "intent": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_007_object_8"
+      ],
+      "intent": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2",
+        "object_004_object_5",
+        "object_005_object_6"
+      ],
+      "intent": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_004_object_5",
+        "object_007_object_8"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_002_object_3",
+        "object_005_object_6"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_001_object_2"
+      ],
+      "intent": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_007_object_8"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2",
+        "object_004_object_5"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_002_object_3"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1",
+        "object_005_object_6"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_001_object_2"
+      ],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "extent": [
+        "object_000_object_1"
+      ],
+      "intent": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "extent": [],
+      "intent": [
+        "attribute_000_reflexive",
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    }
+  ],
+  "context_id": "binary_relations",
+  "context_name": "Properties of binary relations",
+  "context_sha256": "165a56063f0f3487382a5835e5cd6414fe99e88e6602f22350817caff963108d",
+  "cover_count": 116,
+  "covers": [
+    {
+      "general": [],
+      "specific": [
+        "attribute_000_reflexive"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_001_irreflexive"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_002_symmetric"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_004_antisymmetric"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [],
+      "specific": [
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric"
+      ],
+      "specific": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric"
+      ],
+      "specific": [
+        "attribute_004_antisymmetric",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_004_antisymmetric",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_000_reflexive",
+        "attribute_002_symmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    },
+    {
+      "general": [
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex"
+      ],
+      "specific": [
+        "attribute_000_reflexive",
+        "attribute_001_irreflexive",
+        "attribute_002_symmetric",
+        "attribute_003_asymmetric",
+        "attribute_004_antisymmetric",
+        "attribute_005_transitive",
+        "attribute_006_negatively_transitive",
+        "attribute_007_connex",
+        "attribute_008_strictly_connex"
+      ]
+    }
+  ],
+  "dependency_versions": {
+    "bitsets": "0.9.1",
+    "concepts": "0.9.2"
+  },
+  "examples": {
+    "closed_candidate": [
+      "attribute_000_reflexive"
+    ],
+    "false_cell": [
+      "object_000_object_1",
+      "attribute_000_reflexive"
+    ],
+    "negative_implication": {
+      "antecedent": [
+        "attribute_000_reflexive"
+      ],
+      "consequent": [
+        "attribute_001_irreflexive"
+      ]
+    },
+    "nonclosed_candidate": [
+      "attribute_003_asymmetric"
+    ],
+    "nonclosed_closure": [
+      "attribute_001_irreflexive",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric"
+    ],
+    "positive_implication": {
+      "antecedent": [
+        "attribute_003_asymmetric"
+      ],
+      "consequent": [
+        "attribute_001_irreflexive",
+        "attribute_004_antisymmetric"
+      ]
+    },
+    "true_cell": [
+      "object_000_object_1",
+      "attribute_001_irreflexive"
+    ]
+  },
+  "false_cell_count": 60,
+  "intents": [
+    [],
+    [
+      "attribute_000_reflexive"
+    ],
+    [
+      "attribute_001_irreflexive"
+    ],
+    [
+      "attribute_002_symmetric"
+    ],
+    [
+      "attribute_004_antisymmetric"
+    ],
+    [
+      "attribute_005_transitive"
+    ],
+    [
+      "attribute_006_negatively_transitive"
+    ],
+    [
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_002_symmetric"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_004_antisymmetric"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_005_transitive"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_002_symmetric"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_006_negatively_transitive"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_002_symmetric",
+      "attribute_005_transitive"
+    ],
+    [
+      "attribute_002_symmetric",
+      "attribute_006_negatively_transitive"
+    ],
+    [
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive"
+    ],
+    [
+      "attribute_004_antisymmetric",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive"
+    ],
+    [
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_002_symmetric",
+      "attribute_005_transitive"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_002_symmetric",
+      "attribute_006_negatively_transitive"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_002_symmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive"
+    ],
+    [
+      "attribute_002_symmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive"
+    ],
+    [
+      "attribute_002_symmetric",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive"
+    ],
+    [
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_002_symmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_004_antisymmetric",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_002_symmetric",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_002_symmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive"
+    ],
+    [
+      "attribute_002_symmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive"
+    ],
+    [
+      "attribute_002_symmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_002_symmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_002_symmetric",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_002_symmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ],
+    [
+      "attribute_001_irreflexive",
+      "attribute_002_symmetric",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    [
+      "attribute_000_reflexive",
+      "attribute_001_irreflexive",
+      "attribute_002_symmetric",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ]
+  ],
+  "manifest_sha256": "ef81ae7691755afb8ce223db7ee7e69b6a338be8ef724eb98f716f22884567d8",
+  "object_count": 14,
+  "object_symbols": {
+    "1": "object_000_object_1",
+    "10": "object_009_object_10",
+    "11": "object_010_object_11",
+    "12": "object_011_object_12",
+    "13": "object_012_object_13",
+    "14": "object_013_object_14",
+    "2": "object_001_object_2",
+    "3": "object_002_object_3",
+    "4": "object_003_object_4",
+    "5": "object_004_object_5",
+    "6": "object_005_object_6",
+    "7": "object_006_object_7",
+    "8": "object_007_object_8",
+    "9": "object_008_object_9"
+  },
+  "objects": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14"
+  ],
+  "oracle_agreement": {
+    "bruteforce_equals_concepts_0_9_2": true,
+    "covers_equal_concepts_0_9_2_neighbors": true,
+    "set_basis_equals_bitset_basis": true
+  },
+  "schema": "wm-fca-cxt-oracle-v1",
+  "source_path": "contexts/binary_relations_en.cxt",
+  "true_cell_count": 66,
+  "true_incidence": {
+    "object_000_object_1": [
+      "attribute_001_irreflexive",
+      "attribute_002_symmetric",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    "object_001_object_2": [
+      "attribute_000_reflexive",
+      "attribute_002_symmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ],
+    "object_002_object_3": [
+      "attribute_001_irreflexive",
+      "attribute_002_symmetric",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive"
+    ],
+    "object_003_object_4": [
+      "attribute_000_reflexive",
+      "attribute_002_symmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive"
+    ],
+    "object_004_object_5": [
+      "attribute_000_reflexive",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ],
+    "object_005_object_6": [
+      "attribute_001_irreflexive",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    "object_006_object_7": [
+      "attribute_001_irreflexive",
+      "attribute_002_symmetric",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex"
+    ],
+    "object_007_object_8": [
+      "attribute_000_reflexive",
+      "attribute_002_symmetric",
+      "attribute_005_transitive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ],
+    "object_008_object_9": [
+      "attribute_000_reflexive",
+      "attribute_004_antisymmetric",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ],
+    "object_009_object_10": [
+      "attribute_001_irreflexive",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric",
+      "attribute_007_connex"
+    ],
+    "object_010_object_11": [
+      "attribute_001_irreflexive",
+      "attribute_003_asymmetric",
+      "attribute_004_antisymmetric",
+      "attribute_005_transitive"
+    ],
+    "object_011_object_12": [
+      "attribute_001_irreflexive",
+      "attribute_002_symmetric"
+    ],
+    "object_012_object_13": [
+      "attribute_000_reflexive",
+      "attribute_006_negatively_transitive",
+      "attribute_007_connex",
+      "attribute_008_strictly_connex"
+    ],
+    "object_013_object_14": [
+      "attribute_000_reflexive",
+      "attribute_002_symmetric"
+    ]
+  },
+  "upstream": {
+    "commit": "9306d256c8a212ffa0c60a52f883a516d8b87b58",
+    "license": "CC0-1.0",
+    "repository": "https://github.com/fcatools/contexts"
+  }
+}
