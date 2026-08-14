@@ -13318,6 +13318,60 @@ test-petta-search-machine: $(PETTA_SEARCH_MACHINE_TEST_BIN) $(BIN) test-petta-ty
 		exit 1; \
 	fi; \
 	result=$$(CETTA_PETTA_SEARCH_MACHINE=1 ./$(BIN) --lang petta \
+		tests/petta/search_machine_imported_sread.metta 2>&1); \
+	expected=$$(cat tests/petta/search_machine_imported_sread.expected); \
+	if [ "$$result" != "$$expected" ]; then \
+		echo "FAIL: explicit import preserves native PeTTa sread"; \
+		diff <(printf '%s\n' "$$expected") \
+			<(printf '%s\n' "$$result") | head -40; \
+		exit 1; \
+	fi; \
+	result=$$(CETTA_PETTA_SEARCH_MACHINE=1 ./$(BIN) --lang petta \
+		tests/petta/search_machine_imported_swrite.metta 2>&1); \
+	expected=$$(cat tests/petta/search_machine_imported_swrite.expected); \
+	if [ "$$result" != "$$expected" ]; then \
+		echo "FAIL: explicit PeTTa swrite serializes parseable MeTTa"; \
+		diff <(printf '%s\n' "$$expected") \
+			<(printf '%s\n' "$$result") | head -40; \
+		exit 1; \
+	fi; \
+	result=$$(CETTA_PETTA_SEARCH_MACHINE=1 ./$(BIN) --lang petta \
+		tests/petta/search_machine_libpl_eval_bridge.metta 2>&1); \
+	expected=$$(cat tests/petta/search_machine_libpl_eval_bridge.expected); \
+	if [ "$$result" != "$$expected" ]; then \
+		echo "FAIL: imported Prolog predicates can call native PeTTa eval"; \
+		diff <(printf '%s\n' "$$expected") \
+			<(printf '%s\n' "$$result") | head -40; \
+		exit 1; \
+	fi; \
+	result=$$(CETTA_PETTA_SEARCH_MACHINE=1 ./$(BIN) --lang petta \
+		tests/petta/search_machine_argv.metta default extra 17 2.5 2>&1); \
+	expected=$$(cat tests/petta/search_machine_argv.expected); \
+	if [ "$$result" != "$$expected" ]; then \
+		echo "FAIL: native PeTTa argv retains script-indexed arguments"; \
+		diff <(printf '%s\n' "$$expected") \
+			<(printf '%s\n' "$$result") | head -40; \
+		exit 1; \
+	fi; \
+	result=$$(CETTA_PETTA_SEARCH_MACHINE=1 ./$(BIN) --lang petta \
+		tests/petta/search_machine_py_str_expr.metta 2>&1); \
+	expected=$$(cat tests/petta/search_machine_py_str_expr.expected); \
+	if [ "$$result" != "$$expected" ]; then \
+		echo "FAIL: PeTTa py-str preserves expression rendering"; \
+		diff <(printf '%s\n' "$$expected") \
+			<(printf '%s\n' "$$result") | head -40; \
+		exit 1; \
+	fi; \
+	result=$$(CETTA_PETTA_SEARCH_MACHINE=1 ./$(BIN) --lang petta \
+		tests/petta/search_machine_imported_format_time.metta 2>&1); \
+	expected=$$(cat tests/petta/search_machine_imported_format_time.expected); \
+	if [ "$$result" != "$$expected" ]; then \
+		echo "FAIL: PeTTa translated format_time binds typed output"; \
+		diff <(printf '%s\n' "$$expected") \
+			<(printf '%s\n' "$$result") | head -40; \
+		exit 1; \
+	fi; \
+	result=$$(CETTA_PETTA_SEARCH_MACHINE=1 ./$(BIN) --lang petta \
 		tests/petta/unsupported/committed_choice.metta 2>&1); \
 	expected=$$(cat tests/petta/search_machine_committed.expected); \
 	if [ "$$result" != "$$expected" ]; then \
@@ -13704,6 +13758,15 @@ test-petta-search-machine: $(PETTA_SEARCH_MACHINE_TEST_BIN) $(BIN) test-petta-ty
 	expected=$$(cat tests/petta/search_machine_import_forward.expected); \
 	if [ "$$result" != "$$expected" ]; then \
 		echo "FAIL: PeTTa imported forward relation predeclaration"; \
+		diff <(printf '%s\n' "$$expected") \
+			<(printf '%s\n' "$$result") | head -40; \
+		exit 1; \
+	fi; \
+	result=$$(CETTA_PETTA_SEARCH_MACHINE=1 ./$(BIN) --lang petta \
+		tests/petta/search_machine_nested_import.metta 2>&1); \
+	expected=$$(cat tests/petta/search_machine_nested_import.expected); \
+	if [ "$$result" != "$$expected" ]; then \
+		echo "FAIL: nested PeTTa import commits transitive equations"; \
 		diff <(printf '%s\n' "$$expected") \
 			<(printf '%s\n' "$$result") | head -40; \
 		exit 1; \

@@ -330,6 +330,7 @@ void cetta_library_context_init_for_language_profile(CettaLibraryContext *ctx,
     if (!getcwd(ctx->working_dir, sizeof(ctx->working_dir))) {
         ctx->working_dir[0] = '\0';
     }
+    ctx->script_path[0] = '\0';
     ctx->script_dir[0] = '\0';
     ctx->import_dir_len = 0;
     ctx->module_mount_len = 0;
@@ -1095,8 +1096,10 @@ static void copy_parent_dir(char *dst, size_t dst_sz, const char *path) {
 void cetta_library_context_set_script_path(CettaLibraryContext *ctx, const char *filename) {
     char resolved[PATH_MAX];
 
+    ctx->script_path[0] = '\0';
     ctx->script_dir[0] = '\0';
     if (!filename) return;
+    (void)snprintf(ctx->script_path, sizeof(ctx->script_path), "%s", filename);
     if (!realpath(filename, resolved)) return;
     copy_parent_dir(ctx->script_dir, sizeof(ctx->script_dir), resolved);
     if (ctx->lib_prolog && ctx->script_dir[0] != '\0') {

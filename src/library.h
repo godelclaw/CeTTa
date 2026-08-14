@@ -96,6 +96,7 @@ typedef struct CettaLibraryContext {
     uint32_t active_mask;
     char root_dir[4096];
     char working_dir[PATH_MAX];
+    char script_path[PATH_MAX];
     char script_dir[PATH_MAX];
     char import_dirs[CETTA_MAX_IMPORT_DIR_DEPTH][PATH_MAX];
     uint32_t import_dir_len;

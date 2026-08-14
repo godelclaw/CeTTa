@@ -13652,9 +13652,53 @@ static bool petta_machine_dispatch_solve(
             *failure = PETTA_MACHINE_STEP_CAPACITY;
             return false;
         }
-        return recognized ||
-               petta_machine_unify_resolved(
-                   machine, expression, expected);
+        if (recognized)
+            return true;
+
+        /*
+         * translatePredicate also admits an existing Prolog predicate
+         * without first granting it function-call authority through
+         * import_prolog_function.  Probe only the exact predicate arity,
+         * then reuse the callPredicate boundary so bindings flow back while
+         * the predicate's success is represented by PeTTa's truth value.
+         * An unknown predicate remains inert exactly as on the reference.
+         */
+        if (predicate && predicate->kind == ATOM_EXPR &&
+            predicate->expr.len >= 2u &&
+            predicate->expr.elems[0]->kind == ATOM_SYMBOL) {
+            PeTTaNamedArity foreign =
+                petta_machine_extension_named_arity_resolving(
+                    machine,
+                    predicate->expr.elems[0]->sym_id,
+                    predicate->expr.len - 2u);
+            if (foreign.exact) {
+                Atom *predicate_parts[2] = {
+                    atom_symbol(&machine->heap, "Predicate"),
+                    predicate,
+                };
+                Atom *wrapper = atom_expr(
+                    &machine->heap, predicate_parts, 2u);
+                Atom *call_parts[2] = {
+                    atom_symbol(&machine->heap, "callPredicate"),
+                    wrapper,
+                };
+                Atom *call = wrapper
+                    ? atom_expr(&machine->heap, call_parts, 2u)
+                    : NULL;
+                if (!call) {
+                    *failure = PETTA_MACHINE_STEP_CAPACITY;
+                    return false;
+                }
+                bool foreign_recognized = false;
+                bool dispatched = petta_machine_try_extension_call(
+                    machine, call, expected, goal->barrier,
+                    &foreign_recognized, failure);
+                if (foreign_recognized || !dispatched)
+                    return dispatched;
+            }
+        }
+        return petta_machine_unify_resolved(
+            machine, expression, expected);
     }
 
     /*

@@ -27,6 +27,7 @@
 #include "variant_shape.h"
 #include "langdef_pack.h"
 #include "generated/cetta_execution_contracts.generated.h"
+#include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stdatomic.h>
@@ -2777,6 +2778,14 @@ static PeTTaNamedArity petta_eval_extension_named_arity(
     SymbolId head, CettaExprLen supplied) {
     if (!g_library_context || head == SYMBOL_ID_NONE)
         return (PeTTaNamedArity){0};
+    if (symbol_eq_cstr(g_symbols, head, "argv")) {
+        return (PeTTaNamedArity){
+            .known = true,
+            .exact = supplied == 1u,
+            .larger = supplied < 1u,
+            .smaller = supplied > 1u,
+        };
+    }
     PeTTaNamedArity native =
         cetta_library_petta_memo_control_named_arity(
             g_library_context, head, supplied);
@@ -2791,6 +2800,14 @@ petta_eval_extension_named_arity_including_resolved(
     SymbolId head, CettaExprLen supplied) {
     if (!g_library_context || head == SYMBOL_ID_NONE)
         return (PeTTaNamedArity){0};
+    if (symbol_eq_cstr(g_symbols, head, "argv")) {
+        return (PeTTaNamedArity){
+            .known = true,
+            .exact = supplied == 1u,
+            .larger = supplied < 1u,
+            .smaller = supplied > 1u,
+        };
+    }
     PeTTaNamedArity native =
         cetta_library_petta_memo_control_named_arity(
             g_library_context, head, supplied);
@@ -19809,6 +19826,32 @@ static void eval_for_caller(Space *s, Arena *a, Atom *type, Atom *atom, int fuel
     outcome_set_free(&inner);
 }
 
+bool eval_petta_from_lib_prolog(
+    Arena *arena, Atom *expression, ResultSet *results) {
+    if (!arena || !expression || !results ||
+        eval_current_language_id() != CETTA_LANGUAGE_PETTA ||
+        !g_eval_root_space || !g_library_context) {
+        return false;
+    }
+    result_set_init(results);
+    OutcomeSet outcomes;
+    outcome_set_init_with_owner(&outcomes, arena);
+    Bindings empty;
+    bindings_init(&empty);
+    eval_for_caller(
+        g_eval_root_space, arena, NULL, expression,
+        eval_current_effective_fuel_limit(), &empty, false, &outcomes);
+    bindings_free(&empty);
+    for (CettaCount index = 0u; index < outcomes.len; index++) {
+        Atom *value = outcome_atom_materialize(
+            arena, &outcomes.items[index]);
+        if (value && !atom_is_legacy_empty_sentinel(value))
+            result_set_add(results, value);
+    }
+    outcome_set_free(&outcomes);
+    return true;
+}
+
 static void eval_direct_outcomes(Space *s, Arena *a, Atom *type, Atom *atom, int fuel,
                                  OutcomeSet *os) {
     Bindings empty;
@@ -29742,6 +29785,55 @@ static bool petta_memo_add_result(
     return outcomes->len == before + 1u;
 }
 
+static Atom *petta_argv_value(Arena *arena, const char *text) {
+    if (!arena || !text)
+        return NULL;
+    char *end = NULL;
+    errno = 0;
+    long long integer = strtoll(text, &end, 10);
+    if (end && *end == '\0' && errno == 0)
+        return atom_int(arena, (int64_t)integer);
+    errno = 0;
+    double floating = strtod(text, &end);
+    if (end && end != text && *end == '\0' && errno == 0)
+        return atom_float(arena, floating);
+    return atom_symbol(arena, text);
+}
+
+static bool petta_argv_native_try(
+    CettaLibraryContext *library_context, Arena *arena,
+    Atom *expression, OutcomeSet *outcomes, bool *recognized) {
+    if (!library_context || !arena || !expression || !outcomes ||
+        !recognized || expression->kind != ATOM_EXPR ||
+        expression->expr.len != 2u ||
+        expression->expr.elems[0]->kind != ATOM_SYMBOL ||
+        !symbol_eq_cstr(
+            g_symbols, expression->expr.elems[0]->sym_id, "argv")) {
+        return false;
+    }
+    *recognized = true;
+    int64_t index = -1;
+    Atom *index_atom = expression->expr.elems[1];
+    if (!index_atom || index_atom->kind != ATOM_GROUNDED ||
+        index_atom->ground.gkind != GV_INT)
+        return true;
+    index = index_atom->ground.ival;
+    if (index < 0)
+        return true;
+    const char *text = NULL;
+    if (index == 0) {
+        text = library_context->script_path[0]
+            ? library_context->script_path : NULL;
+    } else if ((uint64_t)(index - 1) <
+               (uint64_t)library_context->cmdline_arg_len) {
+        text = library_context->cmdline_args[index - 1];
+    }
+    if (!text)
+        return true;
+    return petta_memo_add_result(
+        arena, outcomes, petta_argv_value(arena, text));
+}
+
 static bool petta_memo_integer(
     const Atom *atom, int64_t *value) {
     if (!atom || !value || atom->kind != ATOM_GROUNDED ||
@@ -30138,6 +30230,11 @@ static bool petta_eval_machine_extension_call(
         expression, outcomes, recognized);
     if (*recognized)
         return memo_import_called;
+    bool argv_called = petta_argv_native_try(
+        eval_context->library_context, arena,
+        expression, outcomes, recognized);
+    if (*recognized)
+        return argv_called;
     const char *library_member = NULL;
     if (petta_semantics_library_descriptor(
             expression, &library_member)) {

@@ -1,0 +1,7 @@
+(= (render-parts () $output) $output)
+(= (render-parts $parts $output)
+   (let* (($head (car-atom $parts))
+          ($tail (cdr-atom $parts))
+          ($next (py-call (operator.add $output (py-call (str $head))))))
+     (render-parts $tail $next)))
+!(println! (render-parts ("prefix=" (event "hello" 17)) ""))
