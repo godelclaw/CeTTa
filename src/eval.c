@@ -29791,7 +29791,7 @@ static Atom *petta_argv_value(Arena *arena, const char *text) {
     char *end = NULL;
     errno = 0;
     long long integer = strtoll(text, &end, 10);
-    if (end && *end == '\0' && errno == 0)
+    if (end && end != text && *end == '\0' && errno == 0)
         return atom_int(arena, (int64_t)integer);
     errno = 0;
     double floating = strtod(text, &end);

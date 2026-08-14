@@ -13355,6 +13355,13 @@ test-petta-search-machine: $(PETTA_SEARCH_MACHINE_TEST_BIN) $(BIN) test-petta-ty
 		exit 1; \
 	fi; \
 	result=$$(CETTA_PETTA_SEARCH_MACHINE=1 ./$(BIN) --lang petta \
+		tests/petta/search_machine_argv_empty.metta "" 2>&1); \
+	if [ -n "$$result" ]; then \
+		echo "FAIL: native PeTTa argv preserves an empty atom instead of coercing it to zero"; \
+		printf '%s\n' "$$result"; \
+		exit 1; \
+	fi; \
+	result=$$(CETTA_PETTA_SEARCH_MACHINE=1 ./$(BIN) --lang petta \
 		tests/petta/search_machine_py_str_expr.metta 2>&1); \
 	expected=$$(cat tests/petta/search_machine_py_str_expr.expected); \
 	if [ "$$result" != "$$expected" ]; then \
