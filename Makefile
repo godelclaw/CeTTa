@@ -1389,7 +1389,8 @@ PETTA_TYPECHECK_V2_MANIFEST = tests/petta/typecheck_v2_acceptance_manifest.json
 PETTA_TYPECHECK_V2_OMISSION_BIN = runtime/cetta-$(BUILD_CANON)-no-petta-typecheck-v2
 PETTA_CORPUS_RESULTS ?= runtime/petta-corpus-differential
 PETTA_NATIVE_CORE_RESULTS ?= runtime/petta-corpus-native-core-no-libpl
-PETTA_CORPUS_TIMEOUT ?= 30
+PETTA_CORPUS_TIMEOUT ?=
+PETTA_CORPUS_TIMEOUT_ARG = $(if $(strip $(PETTA_CORPUS_TIMEOUT)),--timeout "$(PETTA_CORPUS_TIMEOUT)",)
 PETTA_CHAINER_ROOT ?=
 PETTA_CHAINER_COMPAT_MANIFEST = tests/petta/chainer_compat/manifest.json
 PETTA_CHAINER_COMPAT_RESULTS ?= runtime/petta-chainer-compat
@@ -14463,8 +14464,7 @@ probe-petta-corpus-differential: $(BIN) probe-petta-corpus-manifest
 		--petta-dir "$(PETTA_ORACLE_ROOT)" \
 		--manifest "$(PETTA_CORPUS_MANIFEST)" \
 		--cetta "./$(BIN)" \
-		--out "$(PETTA_CORPUS_RESULTS)" \
-		--timeout "$(PETTA_CORPUS_TIMEOUT)"
+		--out "$(PETTA_CORPUS_RESULTS)" $(PETTA_CORPUS_TIMEOUT_ARG)
 
 test-petta-corpus-differential: $(BIN) test-petta-corpus-manifest
 	@CETTA_PETTA_SEARCH_MACHINE=1 PYTHONDONTWRITEBYTECODE=1 \
@@ -14472,8 +14472,7 @@ test-petta-corpus-differential: $(BIN) test-petta-corpus-manifest
 		--petta-dir "$(PETTA_ORACLE_ROOT)" \
 		--manifest "$(PETTA_CORPUS_MANIFEST)" \
 		--cetta "./$(BIN)" \
-		--out "$(PETTA_CORPUS_RESULTS)" \
-		--timeout "$(PETTA_CORPUS_TIMEOUT)" \
+		--out "$(PETTA_CORPUS_RESULTS)" $(PETTA_CORPUS_TIMEOUT_ARG) \
 		--require-complete \
 		--require-match
 
@@ -14483,8 +14482,7 @@ test-petta-corpus-native-core: $(BIN) test-petta-corpus-manifest
 		--petta-dir "$(PETTA_ORACLE_ROOT)" \
 		--manifest "$(PETTA_CORPUS_MANIFEST)" \
 		--cetta "./$(BIN)" \
-		--out "$(PETTA_NATIVE_CORE_RESULTS)" \
-		--timeout "$(PETTA_CORPUS_TIMEOUT)" \
+		--out "$(PETTA_NATIVE_CORE_RESULTS)" $(PETTA_CORPUS_TIMEOUT_ARG) \
 		--exclude-capability lib-prolog \
 		--require-complete \
 		--require-match

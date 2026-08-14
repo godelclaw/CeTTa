@@ -1,8 +1,8 @@
 {
   "schema": "cetta-petta-corpus-v1",
   "petta_revision": "43705f5d9ff8958ffe7f0aa6777fb8477f2401f2",
-  "run_sh_sha256": "175291accc8004f3721c9286d14323fc8d3d8045a621b841e6041268595ba096",
-  "generator_sha256": "75641e7f71c9aff2ad611baa0701c55d507e090e471cc355130547f6c2a51f8f",
+  "run_sh_sha256": "b0ee9930c7fbca5d221ff2e31a7cce30bc8e8902f463c5f80be2a971414e3aae",
+  "generator_sha256": "975fd2cadb567349caf7c9f20339f6a1323857d85695787c94ee7cc1d1a6436f",
   "normalization": {
     "line_endings": "LF",
     "strip_ansi_csi": true,
@@ -21,8 +21,8 @@
     "max_captured_output_bytes": 16777216
   },
   "counts": {
-    "total": 183,
-    "hermetic": 177,
+    "total": 162,
+    "hermetic": 156,
     "controlled": 6
   },
   "entries": [
@@ -71,29 +71,6 @@
       }
     },
     {
-      "name": "assert_probe.metta",
-      "source": "examples/assert_probe.metta",
-      "source_sha256": "8e51a7383d6bd860a292b49f07b06fdc4384ded492a46d6036d01a2cc8f3040c",
-      "git_state": "untracked",
-      "class": "hermetic-negative",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/assert_probe.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "negative_contract": "intentional-failed-assertion",
-      "oracle": {
-        "status": "pinned",
-        "exit": 1,
-        "stdout": "\"Test 1: assertEqual with matching values (should print success or be silent)\"\n\"Test 2: assertEqual with NON-matching values (should print failure or error)\"\nAssertion failed: false\n",
-        "stdout_sha256": "890535fafb6ca31b4fcc0d566b5c81b28831286950bcdad665a04b9387d1bf54",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
       "name": "atomops.metta",
       "source": "examples/atomops.metta",
       "source_sha256": "0510852506d2a16d7b0d8a24dcdb60f72dde1ecd9846d1222c378f5c1466bdbc",
@@ -111,28 +88,6 @@
         "exit": 0,
         "stdout": "is (0 1 2 3), should (0 1 2 3). ✅ \nis 1, should 1. ✅ \nis (2 3), should (2 3). ✅ \nis 2, should 2. ✅ \nis 5, should 5. ✅ \nis true, should true. ✅ \nis false, should false. ✅ \nis A, should A. ✅ \nis B, should B. ✅ \nis (), should (). ✅ \nis (), should (). ✅ \nis (), should (). ✅ \nis (), should (). ✅ \nis (), should (). ✅ \nis (), should (). ✅ \nis (), should (). ✅ \nis (), should (). ✅ \nis (), should (). ✅ \ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
         "stdout_sha256": "4c110f8ca8c8c7c6bd874a15b970be22a0aacc62ee43c213ddc018433800f68f",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "audit_probe.metta",
-      "source": "examples/audit_probe.metta",
-      "source_sha256": "ee89590434a466d5f8d10f019d85ecb69720883c67bc58c03923a419fc3f3af3",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/audit_probe.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 1,
-        "stdout": "\"PROBE 1: bare (audit15) call\"\n(PLN.QueryAudit ((Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)) (Sentence ((Inheritance B D) (stv 0.5 0.9)) (2)) (Sentence ((Inheritance A C) (stv 0.25 0.9)) (3)) (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4))) (Inheritance A D) 15)\n\"PROBE 2: TupleCount of audit15\"\n4\n\"PROBE 3: assertEqual of TupleCount to 3 (should be silent if true, error if false)\"\nAssertion failed: false\n",
-        "stdout_sha256": "f53705a64866f57ba5bf62ae11b0e3bc6267d0c89ed1d02f9d92fb6fa46db56a",
         "stderr": "",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
@@ -353,28 +308,6 @@
         "exit": 0,
         "stdout": "is 18, should 18. ✅ \nis 12, should 12. ✅ \ntrue\ntrue\n",
         "stdout_sha256": "e317f71a53f498dcd020c925e43333d660642c8e10c6e451894d7db021a50cd3",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "codex_with_he.metta",
-      "source": "examples/codex_with_he.metta",
-      "source_sha256": "d68cee33206df654226d5527f3acbe4723014ae9615a1733a75919254a83102e",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/codex_with_he.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 1,
-        "stdout": "(\"audit15\" (PLN.QueryAudit ((Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)) (Sentence ((Inheritance B D) (stv 0.5 0.9)) (2)) (Sentence ((Inheritance A C) (stv 0.25 0.9)) (3)) (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4))) (Inheritance A D) 15))\n(\"top15\" (PLN.QueryTopTiesFromAudit (PLN.QueryAudit ((Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)) (Sentence ((Inheritance B D) (stv 0.5 0.9)) (2)) (Sentence ((Inheritance A C) (stv 0.25 0.9)) (3)) (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4))) (Inheritance A D) 15)))\n(\"audit25\" (PLN.QueryAudit ((Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)) (Sentence ((Inheritance B D) (stv 0.5 0.9)) (2)) (Sentence ((Inheritance A C) (stv 0.25 0.9)) (3)) (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4))) (Inheritance A D) 25))\n(\"pruned25\" (PLN.QueryPrunedAuditFromAudit (PLN.QueryAudit ((Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)) (Sentence ((Inheritance B D) (stv 0.5 0.9)) (2)) (Sentence ((Inheritance A C) (stv 0.25 0.9)) (3)) (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4))) (Inheritance A D) 25)))\nAssertion failed: false\n",
-        "stdout_sha256": "b37ac50a8c560383b19cecec8c560a0028ed970d51494c53a932cad283ecd8ee",
         "stderr": "",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
@@ -876,19 +809,28 @@
         "--silent"
       ],
       "timeout_seconds": 120.0,
-      "required_files": [
-        {
-          "path": "repos/test_metta_lib/test.metta",
-          "sha256": "d7e05ad2b992ac3a4c5fbc8386889266161f7c6c1bd84b4eebb4e24202bd0d41"
-        }
-      ],
+      "fixture": {
+        "name": "preprovisioned-local-library",
+        "mode": "complete",
+        "kind": "preprovisioned-repo",
+        "repo_name": "test_metta_lib",
+        "stdin": "",
+        "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "files": [
+          {
+            "path": "tests/petta/fixtures/test_metta_lib/test.metta",
+            "sha256": "d7e05ad2b992ac3a4c5fbc8386889266161f7c6c1bd84b4eebb4e24202bd0d41"
+          }
+        ]
+      },
       "oracle": {
         "status": "pinned",
         "exit": 0,
         "stdout": "is 10, should 10. ✅ \ntrue\ntrue\ntrue\ntrue\n",
         "stdout_sha256": "8915faf1991d105b8774a350f517e23f97bdb55850dac37e3f29e8ef1d7b45ae",
         "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fixture": "preprovisioned-local-library"
       }
     },
     {
@@ -1417,160 +1359,6 @@
         "exit": 0,
         "stdout": "is 42, should 42. ✅ \ntrue\n",
         "stdout_sha256": "040f2f0da929319f80f7fbb40414ad39ce075ab747919367ad120c84020e5c45",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "intensional_probe.metta",
-      "source": "examples/intensional_probe.metta",
-      "source_sha256": "73184639102721d210bf8cfb94aab3078cb73e32fa09ddbbad9aeba277878226",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/intensional_probe.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "\"Probe 1: PLN.Query direct lookup\"\n(SELECTED 1 (Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10)))\n((stv 0.9 0.9) (10))\n\"Probe 2: PropertyBelief wrapper\"\n(PropertyBelief ((Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10))) alice double-checks-work 5)\n\"Probe 3: PropertyFound on the result\"\n(\"PropertyFound:\" (PropertyFound (PropertyBelief ((Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10))) alice double-checks-work 5)))\n\"Probe 4: match for ConceptProp\"\n((double-checks-work 1.0))\n\"Probe 5: full IntensionalMemberSTV\"\n(IntensionalMemberSTV ((Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10))) alice careful 5)\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "352b0eb08f7d6a2ac945e2e488d58a68f8258c6118fb903a466b092b84fd1707",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "intensional_probe2.metta",
-      "source": "examples/intensional_probe2.metta",
-      "source_sha256": "3c97db74f0ac63db58a7b13bc59550993fa95034b936ea692085e7126be694c4",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/intensional_probe2.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "\"A: ConceptProp match collapse\"\n((double-checks-work 1.0))\n\"B: superpose then bind into let, identity body\"\n((partial let ((($V0 $V1) (double-checks-work 1.0)) ($V0 $V1))))\n\"C: superpose with PropertyBelief in body, no condition\"\n((partial let ((($V0 $V1) (double-checks-work 1.0)) (PropertyBelief ((Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10))) alice $V0 5))))\n\"D: superpose with PropertyBelief and IntensionalPacket\"\n((partial let ((($V0 $V1) (double-checks-work 1.0)) (IntensionalPacket (PropertyBelief ((Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10))) alice $V0 5) $V1))))\n\"E: with let* then if\"\n()\n\"F: pass through GuardedPacketFold\"\n(\"packets:\" ((partial let ((($V0 $V1) (double-checks-work 1.0)) (IntensionalPacket (PropertyBelief ((Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10))) alice $V0 5) $V1)))) \" -> fold:\" (GuardedPacketFold ((partial let ((($V0 $V1) (double-checks-work 1.0)) (IntensionalPacket (PropertyBelief ((Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10))) alice $V0 5) $V1))))))\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "eb3dde5ae4ceaf28e01e8bb329c1a1cbd46e7cf72cb724b10802210cc68ef2f7",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "intensional_probe3.metta",
-      "source": "examples/intensional_probe3.metta",
-      "source_sha256": "987ff5846f4b6c9ae23ac1d0de895531068dea9ffe66c48f77025d4407a4fe0f",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/intensional_probe3.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "\"TestA: bare superpose+case to find alice's belief\"\n()\n\"TestB: same but for bob\"\n()\n\"TestC: parameterized via a helper function\"\n(((stv 0.9 0.9) (10)))\n(((stv 0.3 0.8) (20)))\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "860ce4609b4af58b8d51813c89718bb16bc284348bac7df202231c0d8e34cbba",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "intensional_probe4.metta",
-      "source": "examples/intensional_probe4.metta",
-      "source_sha256": "cad1d4af1bba76fb0f1c9b4777a691a86aec1a4f5f1c8ceff4d9ae37ba996ada",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/intensional_probe4.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "\"1. PropertyBelief direct call\"\n(PropertyBelief ((Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10))) alice double-checks-work 5)\n\"2. IntensionalMemberSTV --- single property\"\n(IntensionalMemberSTV ((Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10))) alice careful 5)\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "3d895deafa6b34586c30704bb481af7ba4f09e9db77433ea77395e015bc346cd",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "intensional_probe5.metta",
-      "source": "examples/intensional_probe5.metta",
-      "source_sha256": "924f6d3d1961c046875c799fa13fac01111fa50002b306925ad9ffc6aa0efe71",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/intensional_probe5.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "\"alice / careful (4 props, only alice in KB):\"\n(IntensionalMemberSTV ((Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10)) (Sentence ((Inheritance alice (IntSet reads-instructions)) (stv 0.85 0.9)) (11)) (Sentence ((Inheritance alice (IntSet asks-for-clarification)) (stv 0.7 0.85)) (12)) (Sentence ((Inheritance alice (IntSet shows-up-on-time)) (stv 0.8 0.9)) (13))) alice careful 5)\ntrue\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "e6a9e7468d338130f97f8e1883e69e461292d28564d6a731cb80a137ef7bc274",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "intensional_probe6.metta",
-      "source": "examples/intensional_probe6.metta",
-      "source_sha256": "6171cf9394760f4a96ab67c2f9b16270e3faa83cb69383b0f733c96873b556d2",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/intensional_probe6.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "\"alice / careful (7-entry KB, collapsed result):\"\n(IntensionalMemberSTV ((Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10)) (Sentence ((Inheritance alice (IntSet reads-instructions)) (stv 0.85 0.9)) (11)) (Sentence ((Inheritance alice (IntSet asks-for-clarification)) (stv 0.7 0.85)) (12)) (Sentence ((Inheritance alice (IntSet shows-up-on-time)) (stv 0.8 0.9)) (13)) (Sentence ((Inheritance bob (IntSet double-checks-work)) (stv 0.3 0.8)) (20)) (Sentence ((Inheritance bob (IntSet reads-instructions)) (stv 0.4 0.7)) (21)) (Sentence ((Inheritance bob (IntSet shows-up-on-time)) (stv 0.6 0.7)) (23))) alice careful 5)\n\"bob / careful (7-entry KB, collapsed result):\"\n(IntensionalMemberSTV ((Sentence ((Inheritance alice (IntSet double-checks-work)) (stv 0.9 0.9)) (10)) (Sentence ((Inheritance alice (IntSet reads-instructions)) (stv 0.85 0.9)) (11)) (Sentence ((Inheritance alice (IntSet asks-for-clarification)) (stv 0.7 0.85)) (12)) (Sentence ((Inheritance alice (IntSet shows-up-on-time)) (stv 0.8 0.9)) (13)) (Sentence ((Inheritance bob (IntSet double-checks-work)) (stv 0.3 0.8)) (20)) (Sentence ((Inheritance bob (IntSet reads-instructions)) (stv 0.4 0.7)) (21)) (Sentence ((Inheritance bob (IntSet shows-up-on-time)) (stv 0.6 0.7)) (23))) bob careful 5)\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "cb66c8e0235456c1151b6681dc93e55378d7a76391186a854977a535cfc8e050",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "intensional_probe7.metta",
-      "source": "examples/intensional_probe7.metta",
-      "source_sha256": "9c534ab9790315be0bb438648427bf27826d0cbc3884c6e9520177ecf0b4d000",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/intensional_probe7.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "\"Probe: single PropertyBelief call\"\n(PropertyBelief () alice double-checks-work 5)\n\"Probe: bob double-checks\"\n(PropertyBelief () bob double-checks-work 5)\n\"Probe: missing property (alice / asks-for-clarification)\"\n(PropertyBelief () alice asks-for-clarification 5)\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "c7306b183b37972fc2f97cee7508db5fe6976edd49447d634cca459951f8407f",
         "stderr": "",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
@@ -2139,34 +1927,6 @@
       }
     },
     {
-      "name": "metamo_tea_break.metta",
-      "source": "examples/metamo_tea_break.metta",
-      "source_sha256": "e9fdd0aab39bdd489656cdbb2f8e6cc23db353591927d3ebe20c2a0f3aa07c4e",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/metamo_tea_break.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "required_files": [
-        {
-          "path": "lib/lib_metamo.metta",
-          "sha256": "38d382e4f246a597ac850e5fe1e789b42930525f5695b11bafb52c492a558a89"
-        }
-      ],
-      "oracle": {
-        "status": "pinned",
-        "exit": 1,
-        "stdout": "is (if (Metamo__primitive-goal (Goal (prepare_tea_break alice) urgent (cups kettle tea biscuits))) ((Goal (prepare_tea_break alice) urgent (cups kettle tea biscuits))) (let $V0 (Metamo__expand-once (Goal (prepare_tea_break alice) urgent (cups kettle tea biscuits))) (if (== $V0 ()) (Metamo__blocked-leaf (Goal (prepare_tea_break alice) urgent (cups kettle tea biscuits))) (Metamo__plan-goals $V0)))), should ((Goal boil_water urgent (cups kettle tea biscuits)) (Goal steep_tea urgent (cups kettle tea biscuits)) (Goal plate_biscuits urgent (cups kettle tea biscuits)) (Goal (serve_tray alice) urgent (cups kettle tea biscuits))). ❌ \n",
-        "stdout_sha256": "92f3e4d548cc8d18a39b556e421efdfb04bef3559a743c867f5a9fecf9f439dd",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
       "name": "metta4_prog.metta",
       "source": "examples/metta4_prog.metta",
       "source_sha256": "85e174c3bc70c36ad815487f6f9421c0aabca3599ab5dc241840c2de5222ca67",
@@ -2338,28 +2098,6 @@
         "exit": 0,
         "stdout": "is (((grandfather a c) (stv 1.0 0.7290000000000001))), should (((grandfather a c) (stv 1.0 0.7290000000000001))). ✅ \nis (((grandfather a c) (stv 1.0 0.7290000000000001))), should (((grandfather a c) (stv 1.0 0.7290000000000001))). ✅ \nis (((old a) (stv 1.0 0.6561000000000001))), should (((old a) (stv 1.0 0.6561000000000001))). ✅ \ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
         "stdout_sha256": "1eb083234e87c0c8c1f1d2b31a468c46ba9e72c0ee93642c5d4f87b695c8e92e",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "nars_temporal_sequence_probe.metta",
-      "source": "examples/nars_temporal_sequence_probe.metta",
-      "source_sha256": "57943e6a7facfa62b47c6135f32f7896139fae81efa0dee5e05462af06bea1c2",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/nars_temporal_sequence_probe.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "(\"q -> r\" (stv 0.7777777777777778 0.9))\n(\"r -> m\" (stv 0.5555555555555556 0.9))\n(\"q r -> m\" (stv 0.7142857142857143 0.875))\n(\"q -> m direct\" (stv 0 0.9))\n(\"q -> m chain\" (stv 0.4320987654320988 0.35000000000000003))\n(\"q -> m revised\" (stv 0.024392672242134608 0.9051094890510949))\n(\"q r -> r induced\" (stv 0.7142857142857143 0.30434782608695654))\n(\"r -> q r abduced\" (stv 0.5555555555555556 0.36))\n(\"r -> m comparison\" (stv 0.0 0.3865030674846626))\nis (stv 0.7777777777777778 0.9), should (stv 0.7777777777777778 0.9). ✅ \nis (stv 0.5555555555555556 0.9), should (stv 0.5555555555555556 0.9). ✅ \nis (stv 0.7142857142857143 0.875), should (stv 0.7142857142857143 0.875). ✅ \nis (stv 0 0.9), should (stv 0 0.9). ✅ \nis (stv 0.4320987654320988 0.35000000000000003), should (stv 0.4320987654320988 0.35000000000000003). ✅ \nis (stv 0.024392672242134608 0.9051094890510949), should (stv 0.024392672242134608 0.9051094890510949). ✅ \nis (stv 0.7142857142857143 0.30434782608695654), should (stv 0.7142857142857143 0.30434782608695654). ✅ \nis (stv 0.5555555555555556 0.36), should (stv 0.5555555555555556 0.36). ✅ \nis (stv 0.0 0.3865030674846626), should (stv 0.0 0.3865030674846626). ✅ \ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "bc04d515f0a53ad2a62c416323ddeef3a09271ce63c3d48a4d18a139a6d129dd",
         "stderr": "",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
@@ -2695,28 +2433,6 @@
       }
     },
     {
-      "name": "pln_didactic_witnesses.metta",
-      "source": "examples/pln_didactic_witnesses.metta",
-      "source_sha256": "b8d268dbb56da86d65355495c076937e56159360b1c368fc162e2fdbb766610f",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/pln_didactic_witnesses.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "is 1.0, should 1.0. ✅ \nis 0.3333333333333333, should 0.3333333333333333. ✅ \nis 0.5, should 0.5. ✅ \nis true, should true. ✅ \nis true, should true. ✅ \nis 2.0, should 2.0. ✅ \nis 4.0, should 4.0. ✅ \nis 0.0, should 0.0. ✅ \nis false, should false. ✅ \nis false, should false. ✅ \nis 0.6666666666666666, should 0.6666666666666666. ✅ \nis 0.75, should 0.75. ✅ \nis 0.8, should 0.8. ✅ \nis false, should false. ✅ \nis false, should false. ✅ \nis 25.0, should 25.0. ✅ \nis 9.0, should 9.0. ✅ \nis -7.0, should -7.0. ✅ \nis true, should true. ✅ \nis 0.75, should 0.75. ✅ \nis 0.9, should 0.9. ✅ \nis 0.75, should 0.75. ✅ \nis false, should false. ✅ \ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "dcd5eeedf1080c0102fc1e9a64bbdaaaca2569cc9ce51c924a17bd23915c6458",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
       "name": "pln_direct.metta",
       "source": "examples/pln_direct.metta",
       "source_sha256": "245de02e538983ccb2518028d1a91107af860500d371422122ed5bcc5d5f28e5",
@@ -2739,50 +2455,6 @@
       }
     },
     {
-      "name": "pln_itv_idm_parity_golden.metta",
-      "source": "examples/pln_itv_idm_parity_golden.metta",
-      "source_sha256": "c14b53eed1c2a6eaea8321e3678d8fb49fcd1c63f375ce6d45dfcb262503b03b",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/pln_itv_idm_parity_golden.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 1,
-        "stdout": "is 0.0, should 0.0. ✅ \nis 0.5, should 0.5. ✅ \nis 1.0, should 1.0. ✅ \nis 1.0, should 1.0. ✅ \nis 0.16666666666666666, should 0.16666666666666666. ✅ \nis 0.3333333333333333, should 0.3333333333333333. ✅ \nis 0.16666666666666666, should 0.16666666666666666. ✅ \nis 1.0, should 1.0. ✅ \nis (idm-lower 2.0 10.0 2.0), should 0.16666666666666666. ❌ \n",
-        "stdout_sha256": "4b1cb8dbe0469291beb1f5c7d994e053ff8c0df2f8d9378cc8592e15bb3677ba",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "pln_projection_tower_bool_canary.metta",
-      "source": "examples/pln_projection_tower_bool_canary.metta",
-      "source_sha256": "f4b480ede6e70d94c9a836a5e623e3e2c83260ce21bd54f49347d7cf87892372",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/pln_projection_tower_bool_canary.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 1,
-        "stdout": "is (), should 0.0. ❌ \n",
-        "stdout_sha256": "9a0bfbab18aa8098d71c44d928b3de4971d994b5d7c36b4b4c5299d7c370d035",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
       "name": "pln_roman.metta",
       "source": "examples/pln_roman.metta",
       "source_sha256": "ecc6283c64769c5963ffe6c433081217102b00d55e361633ec7d284c19575afb",
@@ -2800,72 +2472,6 @@
         "exit": 0,
         "stdout": "(SELECTED 1 (Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)))\n(SELECTED 2 (Sentence ((Inheritance A C) (stv 0.25 0.9)) (2)))\n(SELECTED 3 (Sentence ((Inheritance B D) (stv 0.5 0.9)) (3)))\n(SELECTED 4 (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4)))\n(SELECTED 5 (Sentence ((Inheritance C D) (stv 0.5 0.908256880733945)) (1 2 3 4)))\n(SELECTED 6 (Sentence ((Inheritance C D) (stv 0.48719165085388993 0.9046347510967003)) (1 2 3 4)))\n(SELECTED 7 (Sentence ((Inheritance C D) (stv 0.5 0.9045226130653267)) (1 2 3 4)))\n(SELECTED 8 (Sentence ((Inheritance A D) (stv 0.5 0.9)) (1 3)))\n(SELECTED 9 (Sentence ((Inheritance A D) (stv 0.5 0.9473684210526316)) (1 2 3 4)))\n(SELECTED 10 (Sentence ((Inheritance A D) (stv 0.48078747628083485 0.9046347510967003)) (1 2 3 4)))\n(SELECTED 11 (Sentence ((Inheritance A D) (stv 0.5 0.9)) (2 4)))\n(SELECTED 12 (Sentence ((Inheritance A D) (stv 0.5 0.9473684210526316)) (1 2 3 4)))\n(SELECTED 13 (Sentence ((Inheritance A D) (stv 0.48078747628083485 0.9046347510967003)) (1 2 3 4)))\n(SELECTED 14 (Sentence ((Inheritance D A) (stv 0.5 0.511578947368421)) (1 2 3 4)))\n(SELECTED 15 (Sentence ((Inheritance D C) (stv 0.5 0.49045871559633025)) (1 2 3 4)))\n(SELECTED 16 (Sentence ((Inheritance D C) (stv 0.48719165085388993 0.48850276559221817)) (1 2 3 4)))\n(SELECTED 17 (Sentence ((Inheritance D A) (stv 0.48078747628083485 0.48850276559221817)) (1 2 3 4)))\n(SELECTED 18 (Sentence ((Inheritance D C) (stv 0.5 0.4884422110552764)) (1 2 3 4)))\n(SELECTED 19 (Sentence ((Inheritance D D) (stv 0.5 0.48600000000000004)) (1 2 3 4)))\n(SELECTED 20 (Sentence ((Inheritance D A) (stv 0.5 0.48600000000000004)) (2 4)))\n(SELECTED 21 (Sentence ((Inheritance D A) (stv 0.5 0.6541049798115747)) (1 2 3 4)))\n(SELECTED 22 (Sentence ((Inheritance D A) (stv 0.41512549537648613 0.5887355137285527)) (1 2 3 4)))\n(SELECTED 23 (Sentence ((Inheritance D B) (stv 0.25 0.48600000000000004)) (1 2 4)))\n(SELECTED 24 (Sentence ((Inheritance D B) (stv 0.375 0.6541049798115747)) (1 2 3 4)))\n(SELECTED 25 (Sentence ((Inheritance B A) (stv 0.5 0.48600000000000004)) (2 3 4)))\n(SELECTED 26 (Sentence ((Inheritance B A) (stv 0.375 0.6541049798115747)) (1 2 3 4)))\n(SELECTED 27 (Sentence ((Inheritance D D) (stv 0.5 0.48600000000000004)) (1 2 3 4)))\n(SELECTED 28 (Sentence ((Inheritance A A) (stv 0.5 0.48600000000000004)) (1 2 3 4)))\n(SELECTED 29 (Sentence ((Inheritance B B) (stv 0.25 0.48600000000000004)) (1 2 3 4)))\n(SELECTED 30 (Sentence ((Inheritance A D) (stv 0.5 0.3532166890982503)) (1 2 3 4)))\n(SELECTED 31 (Sentence ((Inheritance B D) (stv 0.375 0.3532166890982503)) (1 2 3 4)))\n(SELECTED 32 (Sentence ((Inheritance A B) (stv 0.375 0.3532166890982503)) (1 2 3 4)))\n(SELECTED 33 (Sentence ((Inheritance B B) (stv 0.4166666666666667 0.3270524899057874)) (1 2 3 4)))\n(SELECTED 34 (Sentence ((Inheritance A A) (stv 0.25 0.3270524899057874)) (1 2 3 4)))\n(SELECTED 35 (Sentence ((Inheritance A A) (stv 0.125 0.3270524899057874)) (1 2 3 4)))\n(SELECTED 36 (Sentence ((Inheritance D D) (stv 0.5 0.26244)) (1 2 3 4)))\n(SELECTED 37 (Sentence ((Inheritance A A) (stv 0.5 0.26244)) (1 2 3 4)))\n(SELECTED 38 (Sentence ((Inheritance B B) (stv 0.25 0.26244)) (1 2 3 4)))\n(SELECTED 39 (Sentence ((Inheritance D A) (stv 0.5 0.19073701211305516)) (1 2 3 4)))\n(SELECTED 40 (Sentence ((Inheritance D B) (stv 0.375 0.19073701211305516)) (1 2 3 4)))\n(SELECTED 41 (Sentence ((Inheritance B A) (stv 0.375 0.19073701211305516)) (1 2 3 4)))\n(SELECTED 42 (Sentence ((Inheritance B B) (stv 0.4166666666666667 0.1766083445491252)) (1 2 3 4)))\n(SELECTED 43 (Sentence ((Inheritance A A) (stv 0.25 0.1766083445491252)) (1 2 3 4)))\n(SELECTED 44 (Sentence ((Inheritance A A) (stv 0.125 0.1766083445491252)) (1 2 3 4)))\n(SELECTED 45 (Sentence ((Inheritance D D) (stv 0.5 0.1417176)) (1 2 3 4)))\n(SELECTED 46 (Sentence ((Inheritance A A) (stv 0.5 0.1417176)) (1 2 3 4)))\n(SELECTED 47 (Sentence ((Inheritance B B) (stv 0.25 0.1417176)) (1 2 3 4)))\n(SELECTED 48 (Sentence ((Inheritance A D) (stv 0.5 0.10299798654104979)) (1 2 3 4)))\n(SELECTED 49 (Sentence ((Inheritance B D) (stv 0.375 0.10299798654104979)) (1 2 3 4)))\n(SELECTED 50 (Sentence ((Inheritance A B) (stv 0.375 0.10299798654104979)) (1 2 3 4)))\n(SELECTED 51 (Sentence ((Inheritance B B) (stv 0.4166666666666667 0.0953685060565276)) (1 2 3 4)))\n(SELECTED 52 (Sentence ((Inheritance A A) (stv 0.25 0.0953685060565276)) (1 2 3 4)))\n(SELECTED 53 (Sentence ((Inheritance A A) (stv 0.125 0.0953685060565276)) (1 2 3 4)))\n(SELECTED 54 (Sentence ((Inheritance D D) (stv 0.5 0.076527504)) (1 2 3 4)))\n(SELECTED 55 (Sentence ((Inheritance A A) (stv 0.5 0.076527504)) (1 2 3 4)))\n(SELECTED 56 (Sentence ((Inheritance B B) (stv 0.25 0.076527504)) (1 2 3 4)))\n(SELECTED 57 (Sentence ((Inheritance D A) (stv 0.5 0.05561891273216688)) (1 2 3 4)))\n(SELECTED 58 (Sentence ((Inheritance D B) (stv 0.375 0.05561891273216688)) (1 2 3 4)))\n(SELECTED 59 (Sentence ((Inheritance B A) (stv 0.375 0.05561891273216688)) (1 2 3 4)))\n(SELECTED 60 (Sentence ((Inheritance B B) (stv 0.4166666666666667 0.0514989932705249)) (1 2 3 4)))\n(SELECTED 61 (Sentence ((Inheritance A A) (stv 0.25 0.0514989932705249)) (1 2 3 4)))\n(SELECTED 62 (Sentence ((Inheritance A A) (stv 0.125 0.0514989932705249)) (1 2 3 4)))\n(SELECTED 63 (Sentence ((Inheritance D D) (stv 0.5 0.041324852159999995)) (1 2 3 4)))\n(SELECTED 64 (Sentence ((Inheritance A A) (stv 0.5 0.041324852159999995)) (1 2 3 4)))\n(SELECTED 65 (Sentence ((Inheritance B B) (stv 0.25 0.041324852159999995)) (1 2 3 4)))\n(SELECTED 66 (Sentence ((Inheritance A D) (stv 0.5 0.030034212875370118)) (1 2 3 4)))\n(SELECTED 67 (Sentence ((Inheritance B D) (stv 0.375 0.030034212875370118)) (1 2 3 4)))\n(SELECTED 68 (Sentence ((Inheritance A B) (stv 0.375 0.030034212875370118)) (1 2 3 4)))\n(SELECTED 69 (Sentence ((Inheritance B B) (stv 0.4166666666666667 0.027809456366083445)) (1 2 3 4)))\n(SELECTED 70 (Sentence ((Inheritance A A) (stv 0.25 0.027809456366083445)) (1 2 3 4)))\n(SELECTED 71 (Sentence ((Inheritance A A) (stv 0.125 0.027809456366083445)) (1 2 3 4)))\n(SELECTED 72 (Sentence ((Inheritance D D) (stv 0.5 0.022315420166399997)) (1 2 3 4)))\n(SELECTED 73 (Sentence ((Inheritance A A) (stv 0.5 0.022315420166399997)) (1 2 3 4)))\n(SELECTED 74 (Sentence ((Inheritance B B) (stv 0.25 0.022315420166399997)) (1 2 3 4)))\n(SELECTED 75 (Sentence ((Inheritance D A) (stv 0.5 0.016218474952699864)) (1 2 3 4)))\n(SELECTED 76 (Sentence ((Inheritance D B) (stv 0.375 0.016218474952699864)) (1 2 3 4)))\n(SELECTED 77 (Sentence ((Inheritance B A) (stv 0.375 0.016218474952699864)) (1 2 3 4)))\n(SELECTED 78 (Sentence ((Inheritance B B) (stv 0.4166666666666667 0.015017106437685059)) (1 2 3 4)))\n(SELECTED 79 (Sentence ((Inheritance A A) (stv 0.25 0.015017106437685059)) (1 2 3 4)))\n(SELECTED 80 (Sentence ((Inheritance A A) (stv 0.125 0.015017106437685059)) (1 2 3 4)))\n(SELECTED 81 (Sentence ((Inheritance D D) (stv 0.5 0.012050326889855998)) (1 2 3 4)))\n(SELECTED 82 (Sentence ((Inheritance A A) (stv 0.5 0.012050326889855998)) (1 2 3 4)))\n(SELECTED 83 (Sentence ((Inheritance B B) (stv 0.25 0.012050326889855998)) (1 2 3 4)))\n(SELECTED 84 (Sentence ((Inheritance A D) (stv 0.5 0.008757976474457927)) (1 2 3 4)))\n(SELECTED 85 (Sentence ((Inheritance B D) (stv 0.375 0.008757976474457927)) (1 2 3 4)))\n(SELECTED 86 (Sentence ((Inheritance A B) (stv 0.375 0.008757976474457927)) (1 2 3 4)))\n(SELECTED 87 (Sentence ((Inheritance B B) (stv 0.4166666666666667 0.008109237476349932)) (1 2 3 4)))\n(SELECTED 88 (Sentence ((Inheritance A A) (stv 0.25 0.008109237476349932)) (1 2 3 4)))\n(SELECTED 89 (Sentence ((Inheritance A A) (stv 0.125 0.008109237476349932)) (1 2 3 4)))\n(SELECTED 90 (Sentence ((Inheritance D D) (stv 0.5 0.006507176520522239)) (1 2 3 4)))\n(SELECTED 91 (Sentence ((Inheritance A A) (stv 0.5 0.006507176520522239)) (1 2 3 4)))\n(SELECTED 92 (Sentence ((Inheritance B B) (stv 0.25 0.006507176520522239)) (1 2 3 4)))\n(SELECTED 93 (Sentence ((Inheritance D A) (stv 0.5 0.00472930729620728)) (1 2 3 4)))\n(SELECTED 94 (Sentence ((Inheritance D B) (stv 0.375 0.00472930729620728)) (1 2 3 4)))\n(SELECTED 95 (Sentence ((Inheritance B A) (stv 0.375 0.00472930729620728)) (1 2 3 4)))\n(SELECTED 96 (Sentence ((Inheritance B B) (stv 0.4166666666666667 0.004378988237228963)) (1 2 3 4)))\n(SELECTED 97 (Sentence ((Inheritance A A) (stv 0.25 0.004378988237228963)) (1 2 3 4)))\n(SELECTED 98 (Sentence ((Inheritance A A) (stv 0.125 0.004378988237228963)) (1 2 3 4)))\n(SELECTED 99 (Sentence ((Inheritance D D) (stv 0.5 0.003513875321082009)) (1 2 3 4)))\n(SELECTED 100 (Sentence ((Inheritance A A) (stv 0.5 0.003513875321082009)) (1 2 3 4)))\nis ((stv 0.5 0.9473684210526316) (1 2 3 4)), should ((stv 0.5 0.9473684210526316) (1 2 3 4)). ✅ \ntrue\ntrue\n",
         "stdout_sha256": "ed5360ee1a4d12db50ce6d2600a566de1cd328ead97b80c3aaccab51ab30d91a",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "pln_strength_prior_canary.metta",
-      "source": "examples/pln_strength_prior_canary.metta",
-      "source_sha256": "27a52a265864bafe8044ee6beaa0d4018dabd8ad2034ffae34eacb06d51bbf1e",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/pln_strength_prior_canary.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "is 0.0, should 0.0. ✅ \nis 0.25, should 0.25. ✅ \nis 0.3333333333333333, should 0.3333333333333333. ✅ \nis false, should false. ✅ \nis false, should false. ✅ \nis 1.0, should 1.0. ✅ \nis 0.75, should 0.75. ✅ \nis 0.6666666666666666, should 0.6666666666666666. ✅ \nis 0.0, should 0.0. ✅ \nis 0.25, should 0.25. ✅ \nis 0.3333333333333333, should 0.3333333333333333. ✅ \nis true, should true. ✅ \nis true, should true. ✅ \ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "fa1fe115b24854649110abe5600ec05f070dd3f11e8871f0dc8bd200354883e9",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "pln_temporal_sequence_probe.metta",
-      "source": "examples/pln_temporal_sequence_probe.metta",
-      "source_sha256": "97361aeb29b7d71e1a7faf39ae7117fb2164ce4cc9c5afe245c10694245b6b3d",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/pln_temporal_sequence_probe.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "(\"base q\" (stv 0.2 0.9782608695652174))\n(\"base r\" (stv 0.2 0.9782608695652174))\n(\"base m\" (stv 0.13333333333333333 0.9782608695652174))\n(\"q -> r direct\" (stv 0.7777777777777778 0.9))\n(\"r -> m direct\" (stv 0.5555555555555556 0.9))\n(\"q -> m direct\" (stv 0 0.9))\n(\"q -> m scalar PLN chain\" (stv 0.4382716049382716 0.9))\n(\"q -> m naive scalar PLN revised\" (stv 0.2191358024691358 0.9473684210526316))\nis (stv 0.2 0.9782608695652174), should (stv 0.2 0.9782608695652174). ✅ \nis (stv 0.2 0.9782608695652174), should (stv 0.2 0.9782608695652174). ✅ \nis (stv 0.13333333333333333 0.9782608695652174), should (stv 0.13333333333333333 0.9782608695652174). ✅ \nis (stv 0.7777777777777778 0.9), should (stv 0.7777777777777778 0.9). ✅ \nis (stv 0.5555555555555556 0.9), should (stv 0.5555555555555556 0.9). ✅ \nis (stv 0 0.9), should (stv 0 0.9). ✅ \nis (stv 0.4382716049382716 0.9), should (stv 0.4382716049382716 0.9). ✅ \nis (stv 0.2191358024691358 0.9473684210526316), should (stv 0.2191358024691358 0.9473684210526316). ✅ \ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "6cce72775ae36a29abce72ab329965c0a765f534c05956da8b3c3a79ba9956f7",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "pln_truth_parity_golden.metta",
-      "source": "examples/pln_truth_parity_golden.metta",
-      "source_sha256": "2ecb03da5b11bcadfd57f73ae453c0121345f29c2bde97e2db32857258bef838",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/pln_truth_parity_golden.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 1,
-        "stdout": "is 1.0, should 1.0. ✅ \nis -0.3333333333333333, should 0.0. ❌ \n",
-        "stdout_sha256": "54dcb4624c6cf15cf8652922d7c8fcdc882701a871ea2bcc33183046844e0589",
         "stderr": "",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
@@ -2932,28 +2538,6 @@
         "exit": 0,
         "stdout": "is (stv 0.8166666666666668 0.9), should (stv 0.8166666666666668 0.9). ✅ \ntrue\n",
         "stdout_sha256": "502bda82905115c4586c5930acdb82f8a4584630650b0a9f0ab0b90d37e52d96",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "println_probe.metta",
-      "source": "examples/println_probe.metta",
-      "source_sha256": "d87cb09c433eb71119c7e40b20f5e13ae68f0e6c7220e3d0e8f51e9cadd5e827",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/println_probe.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "\"STAGE 1: plain string before audit calls\"\n\"STAGE 2: print TupleCount of audit15\"\n4\n\"STAGE 3: print first audit candidate\"\nPLN.QueryAudit\n\"STAGE 4: print whole audit15\"\n(PLN.QueryAudit ((Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)) (Sentence ((Inheritance B D) (stv 0.5 0.9)) (2)) (Sentence ((Inheritance A C) (stv 0.25 0.9)) (3)) (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4))) (Inheritance A D) 15)\n\"STAGE 5: final\"\n(\"audit25 TupleCount =\" 4)\n(\"pruned25 TupleCount =\" 2)\n(\"audit25 contents:\")\n(PLN.QueryAudit ((Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)) (Sentence ((Inheritance B D) (stv 0.5 0.9)) (2)) (Sentence ((Inheritance A C) (stv 0.25 0.9)) (3)) (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4))) (Inheritance A D) 25)\n(\"pruned25 contents:\")\n(PLN.QueryPrunedAuditFromAudit (PLN.QueryAudit ((Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)) (Sentence ((Inheritance B D) (stv 0.5 0.9)) (2)) (Sentence ((Inheritance A C) (stv 0.25 0.9)) (3)) (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4))) (Inheritance A D) 25))\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "c918f39fd34a0af39d43af975ca440d88c6dbd6b76ab9915fb4a835da21d596d",
         "stderr": "",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
@@ -3209,41 +2793,6 @@
         "stdout_sha256": "4445ca25626d02b0d25a62cfceaa1c0b1eac398b3929ee797db05fe4f41eba3b",
         "stderr": "",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "space_let_probe.metta",
-      "source": "examples/space_let_probe.metta",
-      "source_sha256": "0bb1a628874b922973be7890d3ee1926212fc0523d307046d0476bc2bf75eaf0",
-      "git_state": "untracked",
-      "class": "hermetic-corrected",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/space_let_probe.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "fixture": {
-        "name": "space-let-root-allocation-correction",
-        "mode": "complete",
-        "kind": "source-file",
-        "source_file": "tests/petta/fixtures/space_let_corrected.metta",
-        "files": [
-          {
-            "path": "tests/petta/fixtures/space_let_corrected.metta",
-            "sha256": "f8c082b7f1efadbf0ce05545bf555bd3ab0fc60a962a72ac5d631f57b40c8592"
-          }
-        ]
-      },
-      "oracle": {
-        "status": "pinned",
-        "exit": 0,
-        "stdout": "\"before\"\n(1 2)\n\"after\"\ntrue\ntrue\ntrue\n",
-        "stdout_sha256": "7b9f2442fc3360fb4fe642777089b3729f438eaf52ca5b0e84cf71ecd9e19d86",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "fixture": "space-let-root-allocation-correction"
       }
     },
     {
@@ -4167,28 +3716,6 @@
         "exit": 0,
         "stdout": "is T1out, should T1out. ✅ \nis T2out, should T2out. ✅ \nis (), should (). ✅ \nis Tdefault, should Tdefault. ✅ \ntrue\ntrue\ntrue\ntrue\n",
         "stdout_sha256": "d835fdde97d65067f11eaa5eac87b55a9aa0bc96431ab5120c669a7e39b26da4",
-        "stderr": "",
-        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    {
-      "name": "with_explicit_count.metta",
-      "source": "examples/with_explicit_count.metta",
-      "source_sha256": "a3369de2667cc4589c27837e2ba01466bbbe1e61bfd2bbb32afe267c6562336b",
-      "git_state": "untracked",
-      "class": "hermetic",
-      "command": [
-        "sh",
-        "run.sh",
-        "examples/with_explicit_count.metta",
-        "--silent"
-      ],
-      "timeout_seconds": 120.0,
-      "oracle": {
-        "status": "pinned",
-        "exit": 1,
-        "stdout": "(\"audit15\" (PLN.QueryAudit ((Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)) (Sentence ((Inheritance B D) (stv 0.5 0.9)) (2)) (Sentence ((Inheritance A C) (stv 0.25 0.9)) (3)) (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4))) (Inheritance A D) 15))\n(\"top15\" (PLN.QueryTopTiesFromAudit (PLN.QueryAudit ((Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)) (Sentence ((Inheritance B D) (stv 0.5 0.9)) (2)) (Sentence ((Inheritance A C) (stv 0.25 0.9)) (3)) (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4))) (Inheritance A D) 15)))\n(\"audit25\" (PLN.QueryAudit ((Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)) (Sentence ((Inheritance B D) (stv 0.5 0.9)) (2)) (Sentence ((Inheritance A C) (stv 0.25 0.9)) (3)) (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4))) (Inheritance A D) 25))\n(\"pruned25\" (PLN.QueryPrunedAuditFromAudit (PLN.QueryAudit ((Sentence ((Inheritance A B) (stv 0.25 0.9)) (1)) (Sentence ((Inheritance B D) (stv 0.5 0.9)) (2)) (Sentence ((Inheritance A C) (stv 0.25 0.9)) (3)) (Sentence ((Inheritance C D) (stv 0.5 0.9)) (4))) (Inheritance A D) 25)))\nAssertion failed: false\n",
-        "stdout_sha256": "b37ac50a8c560383b19cecec8c560a0028ed970d51494c53a932cad283ecd8ee",
         "stderr": "",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }

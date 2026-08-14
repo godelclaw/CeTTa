@@ -25,6 +25,7 @@ SPEC.loader.exec_module(MANIFEST)
 
 class CorpusManifestTests(unittest.TestCase):
     def setUp(self) -> None:
+        test_total = 32
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         self.examples = self.root / "examples"
@@ -47,13 +48,20 @@ class CorpusManifestTests(unittest.TestCase):
             - set(controlled_names)
             - set(corrected_names)
         )
+        fixture_only_names = sorted(
+            set(MANIFEST.FIXTURE_CASES)
+            - set(controlled_names)
+            - set(corrected_names)
+            - set(capability_only_names)
+        )
         hermetic_names = [
             f"case{index:03d}.metta"
             for index in range(
-                MANIFEST.EXPECTED_TOTAL
+                test_total
                 - len(controlled_names)
                 - len(corrected_names)
                 - len(capability_only_names)
+                - len(fixture_only_names)
             )
         ]
         names = sorted(
@@ -61,6 +69,7 @@ class CorpusManifestTests(unittest.TestCase):
             + controlled_names
             + corrected_names
             + capability_only_names
+            + fixture_only_names
         )
         entries = []
         for name in names:
@@ -72,7 +81,7 @@ class CorpusManifestTests(unittest.TestCase):
                 "name": name,
                 "source": f"examples/{name}",
                 "source_sha256": MANIFEST.sha256_file(source),
-                "git_state": "untracked",
+                "git_state": "tracked",
                 "class": (
                     fixture["class"]
                     if fixture is not None
@@ -153,7 +162,10 @@ class CorpusManifestTests(unittest.TestCase):
                 MANIFEST, "git_revision", return_value="test-revision"
             ),
             mock.patch.object(
-                MANIFEST, "tracked_examples", return_value=set()
+                MANIFEST, "tracked_examples",
+                return_value={
+                    entry["name"] for entry in self.manifest["entries"]
+                },
             ),
         ):
             MANIFEST.verify_manifest(
@@ -431,7 +443,7 @@ class CorpusManifestTests(unittest.TestCase):
         )
         self.assertEqual(
             len(selected),
-            MANIFEST.EXPECTED_TOTAL
+            len(self.manifest["entries"])
             - len(MANIFEST.CASE_CAPABILITY_REQUIREMENTS),
         )
         with self.assertRaisesRegex(
@@ -448,7 +460,7 @@ class CorpusManifestTests(unittest.TestCase):
             self.verify()
 
     def test_exact_match_gate_rejects_every_non_match_status(self) -> None:
-        total = MANIFEST.EXPECTED_TOTAL
+        total = len(self.manifest["entries"])
         MANIFEST.verify_exact_match_counts({"MATCH": total}, total)
         with self.assertRaisesRegex(RuntimeError, "not exact"):
             MANIFEST.verify_exact_match_counts(

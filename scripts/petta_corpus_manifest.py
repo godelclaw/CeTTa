@@ -22,7 +22,6 @@ from typing import Any
 
 
 SCHEMA = "cetta-petta-corpus-v1"
-EXPECTED_TOTAL = 183
 EXPECTED_CONTROLLED = 6
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 MORK_READY_BANNER = "MORK init: done\n"
@@ -133,6 +132,20 @@ CONTROLLED_CASES: dict[str, dict[str, Any]] = {
     },
 }
 
+HERMETIC_FIXTURE_CASES: dict[str, dict[str, Any]] = {
+    "git_import.metta": {
+        "class": "hermetic",
+        "name": "preprovisioned-local-library",
+        "mode": "complete",
+        "kind": "preprovisioned-repo",
+        "stdin": "",
+        "repo_name": "test_metta_lib",
+        "files": [
+            "tests/petta/fixtures/test_metta_lib/test.metta",
+        ],
+    },
+}
+
 CORRECTED_CASES: dict[str, dict[str, Any]] = {
     "space_let_probe.metta": {
         "class": "hermetic-corrected",
@@ -143,7 +156,7 @@ CORRECTED_CASES: dict[str, dict[str, Any]] = {
     },
 }
 
-FIXTURE_CASES = CONTROLLED_CASES | CORRECTED_CASES
+FIXTURE_CASES = CONTROLLED_CASES | HERMETIC_FIXTURE_CASES | CORRECTED_CASES
 
 NEGATIVE_CASES = {
     "assert_probe.metta": "intentional-failed-assertion",
@@ -155,7 +168,6 @@ NEGATIVE_CASES = {
 # already-present local package; git_import2.metta separately exercises a
 # controlled clone/build fixture.
 HERMETIC_REQUIRED_FILES: dict[str, tuple[str, ...]] = {
-    "git_import.metta": ("repos/test_metta_lib/test.metta",),
     "llm_cities.metta": ("lib/lib_llm.metta", "lib/lib_llm.py"),
     "metamo_tea_break.metta": ("lib/lib_metamo.metta",),
     "test_datetime.metta": (
@@ -454,6 +466,29 @@ def patched_library_fixture_workspace(
                 library_dir / child.name,
                 target_is_directory=child.is_dir(),
             )
+        yield workspace, transformed_source
+
+
+@contextmanager
+def preprovisioned_repo_fixture_workspace(
+    repo_root: Path,
+    source: Path,
+    fixture: dict[str, Any],
+):
+    with tempfile.TemporaryDirectory(
+        prefix="cetta-petta-preprovisioned-repo-"
+    ) as temporary:
+        workspace = Path(temporary)
+        examples_dir = workspace / "examples"
+        examples_dir.mkdir()
+        transformed_source = examples_dir / source.name
+        shutil.copy2(source, transformed_source)
+
+        repository_dir = workspace / "repos" / fixture["repo_name"]
+        repository_dir.mkdir(parents=True)
+        for relative in fixture["files"]:
+            fixture_file = repo_root / relative
+            shutil.copy2(fixture_file, repository_dir / fixture_file.name)
         yield workspace, transformed_source
 
 
@@ -767,6 +802,32 @@ def run_oracle(
                     stderr, petta_dir, (workspace,)
                 ),
             )
+    if fixture and fixture.get("kind") == "preprovisioned-repo":
+        with preprovisioned_repo_fixture_workspace(
+            repo_root, source, fixture
+        ) as (workspace, transformed_source):
+            exit_code, stdout, stderr = run_complete_process(
+                [
+                    "sh",
+                    str(petta_dir / "run.sh"),
+                    str(transformed_source),
+                    "--silent",
+                ],
+                workspace,
+                environment,
+                fixture.get("stdin", ""),
+                timeout_seconds,
+                f"SWI oracle for {source.name}",
+            )
+            return (
+                exit_code,
+                normalize_oracle_stdout(
+                    stdout, petta_dir, (workspace,)
+                ),
+                normalize_oracle_stderr(
+                    stderr, petta_dir, (workspace,)
+                ),
+            )
     if fixture and fixture.get("kind") == "local-git":
         with local_git_fixture_workspace(
             repo_root, petta_dir, source, fixture
@@ -879,6 +940,35 @@ def run_cetta(
                     fixture.get("stdin", ""),
                     timeout_seconds,
                     f"CeTTa corrected run for {source.name}",
+                )
+                return (
+                    exit_code,
+                    normalize_cetta_stdout(
+                        stdout, petta_dir, (cetta.parent, workspace)
+                    ),
+                    normalize_oracle_stderr(
+                        stderr, petta_dir, (cetta.parent, workspace)
+                    ),
+                )
+        except RuntimeError as error:
+            return "controlled-failure", "", f"{error}\n"
+    if fixture and fixture.get("kind") == "preprovisioned-repo":
+        try:
+            with preprovisioned_repo_fixture_workspace(
+                repo_root, source, fixture
+            ) as (workspace, transformed_source):
+                exit_code, stdout, stderr = run_complete_process(
+                    [
+                        str(cetta),
+                        "--lang",
+                        "petta",
+                        str(transformed_source),
+                    ],
+                    workspace,
+                    environment,
+                    fixture.get("stdin", ""),
+                    timeout_seconds,
+                    f"CeTTa controlled run for {source.name}",
                 )
                 return (
                     exit_code,
@@ -1030,6 +1120,8 @@ def fixture_record(
         record["kind"] = fixture["kind"]
     if "source_file" in fixture:
         record["source_file"] = fixture["source_file"]
+    if "repo_name" in fixture:
+        record["repo_name"] = fixture["repo_name"]
     if "stdin" in fixture:
         record["stdin"] = fixture["stdin"]
         record["stdin_sha256"] = sha256_bytes(
@@ -1130,14 +1222,18 @@ def build_manifest(
 ) -> dict[str, Any]:
     repo_root = Path(__file__).resolve().parents[1]
     examples_dir = petta_dir / "examples"
-    examples = sorted(examples_dir.glob("*.metta"), key=lambda path: path.name)
-    if len(examples) != EXPECTED_TOTAL:
-        raise RuntimeError(
-            f"expected {EXPECTED_TOTAL} PeTTa examples, found {len(examples)}"
-        )
+    tracked = tracked_examples(petta_dir)
+    examples = sorted(
+        (path for path in examples_dir.glob("*.metta")
+         if path.name in tracked),
+        key=lambda path: path.name,
+    )
 
     names = {path.name for path in examples}
-    missing_fixtures = sorted(set(FIXTURE_CASES) - names)
+    required_fixture_cases = (
+        set(CONTROLLED_CASES) | set(HERMETIC_FIXTURE_CASES)
+    )
+    missing_fixtures = sorted(required_fixture_cases - names)
     if missing_fixtures:
         raise RuntimeError(
             "fixture-backed corpus entries are missing: "
@@ -1145,7 +1241,6 @@ def build_manifest(
         )
     validate_case_capability_requirements(names)
 
-    tracked = tracked_examples(petta_dir)
     entries: list[dict[str, Any]] = []
     for index, source in enumerate(examples, start=1):
         source_bytes = source.read_bytes()
@@ -1291,31 +1386,26 @@ def verify_manifest(
     entries = manifest.get("entries")
     if not isinstance(entries, list):
         raise RuntimeError("PeTTa corpus manifest entries must be a list")
-    if len(entries) != EXPECTED_TOTAL:
-        raise RuntimeError(
-            f"manifest has {len(entries)} entries, expected {EXPECTED_TOTAL}"
-        )
     names_in_order = [entry.get("name") for entry in entries]
     if not all(isinstance(name, str) for name in names_in_order):
         raise RuntimeError("manifest entry names must be strings")
     if names_in_order != sorted(names_in_order):
         raise RuntimeError("PeTTa corpus manifest entries are not name-sorted")
 
-    disk_paths = sorted((petta_dir / "examples").glob("*.metta"))
-    disk_names = {path.name for path in disk_paths}
+    tracked = tracked_examples(petta_dir)
     manifest_names = set(names_in_order)
     if len(manifest_names) != len(entries):
         raise RuntimeError("PeTTa corpus manifest contains duplicate names")
-    if manifest_names != disk_names:
-        missing = sorted(disk_names - manifest_names)
-        extra = sorted(manifest_names - disk_names)
+    if manifest_names != tracked:
+        missing = sorted(tracked - manifest_names)
+        extra = sorted(manifest_names - tracked)
         raise RuntimeError(
-            f"manifest/disk name mismatch: missing={missing}, extra={extra}"
+            "manifest/tracked-corpus name mismatch: "
+            f"missing={missing}, extra={extra}"
         )
     validate_case_capability_requirements(manifest_names)
 
     repo_root = Path(__file__).resolve().parents[1]
-    tracked = tracked_examples(petta_dir)
     controlled = 0
     hermetic = 0
     for entry in entries:
