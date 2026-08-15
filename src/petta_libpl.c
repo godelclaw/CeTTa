@@ -1830,8 +1830,9 @@ static bool petta_libpl_to_term(
     case GV_STRING: {
         const char *value =
             atom->ground.sval ? atom->ground.sval : "";
-        return PL_put_string_nchars(
-            output, strlen(value), value);
+        return PL_put_chars(
+            output, PL_STRING | REP_UTF8,
+            strlen(value), value);
     }
     case GV_BIGINT: {
         const char *value = atom_bigint_cstr(atom);
@@ -2042,14 +2043,21 @@ static Atom *petta_libpl_from_term_mode(
     if (type == PL_STRING) {
         char *text = NULL;
         size_t length = 0u;
-        if (!PL_get_string(term, &text, &length))
+        if (!PL_get_nchars(
+                term, &length, &text,
+                CVT_STRING | BUF_MALLOC |
+                    REP_UTF8)) {
             return NULL;
+        }
         char *copy = arena_alloc(arena, length + 1u);
-        if (!copy)
+        if (!copy) {
+            PL_free(text);
             return NULL;
+        }
         if (length)
             memcpy(copy, text, length);
         copy[length] = '\0';
+        PL_free(text);
         return atom_string(arena, copy);
     }
     if (type == PL_ATOM) {

@@ -288,13 +288,14 @@ GMP_CFLAGS =
 GMP_LDFLAGS =
 endif
 ifeq ($(ENABLE_PYTHON),1)
-PYTHON_CONFIG := $(strip $(shell command -v python3-config 2>/dev/null))
+PYTHON_CONFIG ?= $(strip $(shell command -v python3-config 2>/dev/null))
 ifeq ($(PYTHON_CONFIG),)
 $(error BUILD=$(BUILD_CANON) requires python3-config)
 endif
-PY_CFLAGS = $(shell python3-config --includes)
-PY_LDFLAGS = $(shell python3-config --embed --ldflags)
-PY_RPATH = -Wl,-rpath,$(shell python3 -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')
+PYTHON_EXECUTABLE ?= $(patsubst %-config,%,$(PYTHON_CONFIG))
+PY_CFLAGS = $(shell $(PYTHON_CONFIG) --includes)
+PY_LDFLAGS = $(shell $(PYTHON_CONFIG) --embed --ldflags)
+PY_RPATH = -Wl,-rpath,$(shell $(PYTHON_EXECUTABLE) -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')
 PYTHON_SRC = src/foreign.c
 endif
 empty :=
@@ -14329,6 +14330,15 @@ test-petta-imported-host-bridges: $(BIN)
 	expected=$$(cat tests/petta/imported_swrite.expected); \
 	if [ "$$actual" != "$$expected" ]; then \
 		echo "FAIL: imported PeTTa swrite bridge"; \
+		diff <(printf '%s\n' "$$expected") \
+			<(printf '%s\n' "$$actual") | head -60; \
+		exit 1; \
+	fi; \
+	actual=$$(./$(BIN) --lang petta \
+		tests/petta/libpl_unicode.metta); \
+	expected=$$(cat tests/petta/libpl_unicode.expected); \
+	if [ "$$actual" != "$$expected" ]; then \
+		echo "FAIL: imported PeTTa UTF-8 string bridge"; \
 		diff <(printf '%s\n' "$$expected") \
 			<(printf '%s\n' "$$actual") | head -60; \
 		exit 1; \
