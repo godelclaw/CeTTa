@@ -14343,6 +14343,20 @@ test-petta-imported-host-bridges: $(BIN)
 			<(printf '%s\n' "$$actual") | head -60; \
 		exit 1; \
 	fi; \
+	actual=$$(./$(BIN) --lang petta \
+		tests/petta/libpl_nested_string_replace.metta); \
+	expected=$$(cat tests/petta/libpl_nested_string_replace.expected); \
+	if [ "$$actual" != "$$expected" ]; then \
+		echo "FAIL: imported PeTTa UTF-8 atom bridge"; \
+		diff <(printf '%s\n' "$$expected") \
+			<(printf '%s\n' "$$actual") | head -60; \
+		exit 1; \
+	fi; \
+	if grep -nE 'PL_(put_atom_chars|put_atom_nchars|get_atom_nchars|new_atom_nchars|atom_nchars)' \
+		src/petta_libpl.c; then \
+		echo "FAIL: imported PeTTa text boundary uses implicit atom encoding"; \
+		exit 1; \
+	fi; \
 	echo "PASS: imported Prolog eval and swrite host bridges"
 
 test-petta-search-machine: $(PETTA_SEARCH_MACHINE_TEST_BIN) $(BIN) test-petta-type-langdef-source-binding-v1 test-petta-boundary-langdef-source-binding-v1 test-petta-capability-ledger test-petta-specializer-relevance-filter test-petta-mam-contender-mutations test-petta-extended-query-algebra test-petta-prepared-register-loop test-petta-specialized-pure-call test-petta-memoization test-petta-match-existence-fusion test-petta-clause-slot-admission test-petta-equation-template-c0 test-petta-relational-equation-view test-petta-argv-native test-petta-native-host-runtime test-petta-imported-host-bridges

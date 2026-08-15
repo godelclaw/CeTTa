@@ -864,6 +864,34 @@ static char *petta_libpl_copy_bytes(
     return copy;
 }
 
+/*
+ * SWI's legacy *_nchars atom helpers use the ISO-Latin-1 representation.
+ * CeTTa symbols are UTF-8 byte strings, so every atom crossing this boundary
+ * must select UTF-8 explicitly just as the string bridge does.
+ */
+static bool petta_libpl_put_utf8_atom(
+    term_t output, const char *bytes, size_t length) {
+    return output && bytes &&
+           PL_put_chars(
+               output, PL_ATOM | REP_UTF8,
+               length, bytes);
+}
+
+static atom_t petta_libpl_new_utf8_atom(
+    const char *bytes, size_t length) {
+    return bytes
+        ? PL_new_atom_mbchars(REP_UTF8, length, bytes)
+        : 0;
+}
+
+static bool petta_libpl_get_utf8_atom(
+    atom_t atom, size_t *length, char **bytes) {
+    return atom && length && bytes &&
+           PL_atom_mbchars(
+               atom, length, bytes,
+               BUF_MALLOC | REP_UTF8);
+}
+
 static bool petta_libpl_install_working_dir(
     CettaLibPrologRuntime *runtime, const char *path,
     bool replace) {
@@ -892,7 +920,8 @@ static bool petta_libpl_install_working_dir(
         term_t path_term = PL_new_term_ref();
         term_t fact = PL_new_term_ref();
         ok = path_term && fact &&
-             PL_put_atom_chars(path_term, path) &&
+             petta_libpl_put_utf8_atom(
+                 path_term, path, strlen(path)) &&
              PL_cons_functor_v(fact, functor, path_term) &&
              PL_assert(fact, runtime->module, PL_ASSERTZ);
     }
@@ -930,7 +959,8 @@ static bool petta_libpl_prepare_locked(
     if (!module_name)
         return false;
     atom_t module_symbol =
-        PL_new_atom_nchars((size_t)length, name);
+        petta_libpl_new_utf8_atom(
+            name, (size_t)length);
     module_t module = module_symbol
         ? PL_new_module(module_symbol) : NULL;
     if (module_symbol)
@@ -1141,8 +1171,8 @@ static bool petta_libpl_make_indicator(
         return false;
     term_t arguments = PL_new_term_refs(2u);
     if (!arguments ||
-        !PL_put_atom_nchars(
-            arguments, entry->name_len, entry->name) ||
+        !petta_libpl_put_utf8_atom(
+            arguments, entry->name, entry->name_len) ||
         !PL_put_variable(arguments + 1u)) {
         return false;
     }
@@ -1284,8 +1314,8 @@ static void petta_libpl_probe_arity_facts(
         return;
     term_t arguments = PL_new_term_refs(2u);
     if (!arguments ||
-        !PL_put_atom_nchars(
-            arguments, entry->name_len, entry->name) ||
+        !petta_libpl_put_utf8_atom(
+            arguments, entry->name, entry->name_len) ||
         !PL_put_variable(arguments + 1u)) {
         PL_discard_foreign_frame(frame);
         return;
@@ -1561,9 +1591,9 @@ static bool petta_libpl_to_callable(
     }
 
     if (atom->kind == ATOM_SYMBOL) {
-        return PL_put_atom_nchars(
-            output, symbol_len(g_symbols, atom->sym_id),
-            symbol_bytes(g_symbols, atom->sym_id));
+        return petta_libpl_put_utf8_atom(
+            output, symbol_bytes(g_symbols, atom->sym_id),
+            symbol_len(g_symbols, atom->sym_id));
     }
     if (atom->kind != ATOM_EXPR ||
         atom->expr.len == 0u ||
@@ -1632,10 +1662,10 @@ static bool petta_libpl_to_callable(
                     &cursor, &extra) != PETTA_LOGICAL_LIST_END) {
                 return false;
             }
-            atom_t univ_name = PL_new_atom_nchars(
-                symbol_len(
-                    g_symbols, atom->expr.elems[1]->sym_id),
+            atom_t univ_name = petta_libpl_new_utf8_atom(
                 symbol_bytes(
+                    g_symbols, atom->expr.elems[1]->sym_id),
+                symbol_len(
                     g_symbols, atom->expr.elems[1]->sym_id));
             functor_t univ_functor =
                 PL_new_functor_sz(univ_name, univ_arity);
@@ -1669,10 +1699,10 @@ static bool petta_libpl_to_callable(
             return false;
     }
 
-    atom_t name = PL_new_atom_nchars(
-        symbol_len(
-            g_symbols, atom->expr.elems[0]->sym_id),
+    atom_t name = petta_libpl_new_utf8_atom(
         symbol_bytes(
+            g_symbols, atom->expr.elems[0]->sym_id),
+        symbol_len(
             g_symbols, atom->expr.elems[0]->sym_id));
     functor_t functor = PL_new_functor_sz(name, arity);
     bool built = functor &&
@@ -1719,9 +1749,9 @@ static bool petta_libpl_to_term(
     }
     switch (atom->kind) {
     case ATOM_SYMBOL:
-        return PL_put_atom_nchars(
-            output, symbol_len(g_symbols, atom->sym_id),
-            symbol_bytes(g_symbols, atom->sym_id));
+        return petta_libpl_put_utf8_atom(
+            output, symbol_bytes(g_symbols, atom->sym_id),
+            symbol_len(g_symbols, atom->sym_id));
     case ATOM_VAR: {
         PettaLibplVar *variable =
             petta_libpl_var_add(variables, atom);
@@ -2063,14 +2093,17 @@ static Atom *petta_libpl_from_term_mode(
     if (type == PL_ATOM) {
         char *text = NULL;
         size_t length = 0u;
-        if (!PL_get_atom_nchars(
-                term, &length, &text) ||
+        if (!PL_get_nchars(
+                term, &length, &text,
+                CVT_ATOM | BUF_MALLOC |
+                    REP_UTF8) ||
             length > UINT32_MAX) {
             return NULL;
         }
         SymbolId symbol = symbol_intern_bytes(
             g_symbols, (const uint8_t *)text,
             (uint32_t)length);
+        PL_free(text);
         return symbol == SYMBOL_ID_NONE
             ? NULL : atom_symbol_id(arena, symbol);
     }
@@ -2124,13 +2157,16 @@ static Atom *petta_libpl_from_term_mode(
         return NULL;
     }
     size_t name_len = 0u;
-    const char *name_bytes =
-        PL_atom_nchars(name, &name_len);
-    if (!name_bytes || name_len > UINT32_MAX)
+    char *name_bytes = NULL;
+    if (!petta_libpl_get_utf8_atom(
+            name, &name_len, &name_bytes) ||
+        name_len > UINT32_MAX) {
         return NULL;
+    }
     SymbolId symbol = symbol_intern_bytes(
         g_symbols, (const uint8_t *)name_bytes,
         (uint32_t)name_len);
+    PL_free(name_bytes);
     if (symbol == SYMBOL_ID_NONE)
         return NULL;
 
@@ -2357,8 +2393,8 @@ static bool petta_libpl_registered_call(
 
     term_t callable = PL_new_term_ref();
     term_t result = PL_new_term_ref();
-    atom_t name = PL_new_atom_nchars(
-        entry->name_len, entry->name);
+    atom_t name = petta_libpl_new_utf8_atom(
+        entry->name, entry->name_len);
     functor_t functor =
         PL_new_functor_sz(name, predicate_arity);
     bool built =
@@ -2482,13 +2518,16 @@ static foreign_t petta_libpl_grounded_bridge(
         return false;
     }
     size_t name_len = 0u;
-    const char *name =
-        PL_atom_nchars(predicate_name, &name_len);
-    if (!name || name_len > UINT32_MAX)
+    char *name = NULL;
+    if (!petta_libpl_get_utf8_atom(
+            predicate_name, &name_len, &name) ||
+        name_len > UINT32_MAX) {
         return false;
+    }
     SymbolId head_id = symbol_intern_bytes(
         g_symbols, (const uint8_t *)name,
         (uint32_t)name_len);
+    PL_free(name);
     CettaExprLen function_arity = 0u;
     if (head_id == SYMBOL_ID_NONE ||
         !grounded_op_is_type_pure(head_id) ||
@@ -2568,8 +2607,8 @@ static bool petta_libpl_predicate_exists(
     bool built =
         indicator && indicator_args &&
         indicator_functor &&
-        PL_put_atom_nchars(
-            indicator_args, name_len, name) &&
+        petta_libpl_put_utf8_atom(
+            indicator_args, name, name_len) &&
         PL_put_int64(
             indicator_args + 1u, (int64_t)arity) &&
         PL_cons_functor_v(
