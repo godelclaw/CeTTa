@@ -655,7 +655,7 @@ SRC = src/symbol.c src/atom.c src/binding/frame_identity.c src/name_key.c src/at
 SRC += src/shared_transition.c
 SRC += src/gslt_language_manifest_v1.c
 SRC += src/gslt_support_profile_v1.c
-SRC += src/library_io.c src/library_durable.c $(DURABLE_SRC)
+SRC += src/library_io.c src/http_worker.c src/library_durable.c $(DURABLE_SRC)
 SRC += $(JSON_GSLT_RUNTIME_SRC)
 SRC += $(PETTA_TYPECHECK_CENSUS_SRC)
 SRC += \
@@ -37905,7 +37905,7 @@ test-io-browser: $(IO_HTTP_FIXTURE_BIN)
 		-DCETTA_BUILD_HTTP_PROVIDER_CURL=0 \
 		-DCETTA_BUILD_HTTP_PROVIDER_EMSCRIPTEN=1 \
 		-O2 -Wall -Werror -std=c11 \
-		tests/test_io_browser.c src/library_io.c src/symbol.c src/atom.c src/binding/frame_identity.c \
+		tests/test_io_browser.c src/library_io.c src/http_worker.c src/symbol.c src/atom.c src/binding/frame_identity.c \
 		-sFETCH=1 -sFETCH_STREAMING=1 -sEXIT_RUNTIME=1 \
 		-sALLOW_MEMORY_GROWTH=1 -sENVIRONMENT=web \
 		-o "$$work/io_browser_test.js"; \
@@ -38142,5 +38142,29 @@ test-durable-library: $(BIN)
 else
 test-durable-library:
 	@echo "test-durable-library requires ENABLE_DURABLE=1" >&2
+	@exit 1
+endif
+
+.PHONY: test-http-worker
+ifeq ($(HTTP_PROVIDER_CURL),1)
+HTTP_WORKER_TEST_BIN = runtime/test-http-worker-$(BUILD_OBJ_TAG)
+$(HTTP_WORKER_TEST_BIN): tests/test_http_worker.c src/http_worker.c src/http_worker.h src/durable_store.c src/durable_store.h runtime/sqlite-durable-test.o
+	$(CC) -O2 -Wall -Wextra -Werror -std=c11 -pthread -Isrc -Ivendor/sqlite $(HTTP_CFLAGS) -DCETTA_BUILD_HTTP_PROVIDER_CURL=1 tests/test_http_worker.c src/http_worker.c src/durable_store.c runtime/sqlite-durable-test.o $(HTTP_LDFLAGS) -ldl -lm -o $@
+
+test-http-worker: $(HTTP_WORKER_TEST_BIN) $(IO_HTTP_FIXTURE_BIN)
+	python3 tests/test_http_worker.py $(IO_HTTP_FIXTURE_BIN) $(HTTP_WORKER_TEST_BIN)
+else
+test-http-worker:
+	@echo "test-http-worker requires the native HTTP provider" >&2
+	@exit 1
+endif
+
+.PHONY: test-io-library
+ifeq ($(HTTP_PROVIDER_CURL),1)
+test-io-library: $(BIN) $(IO_HTTP_FIXTURE_BIN)
+	python3 tests/test_io_library.py ./$(BIN) $(IO_HTTP_FIXTURE_BIN)
+else
+test-io-library:
+	@echo "test-io-library requires the native HTTP provider" >&2
 	@exit 1
 endif

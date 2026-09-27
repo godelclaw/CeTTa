@@ -258,6 +258,12 @@ int main(int argc, char **argv) {
           "bounded failure retains its correlation ID");
     CHECK(response_too_large(large_result, 4),
           "response bound fails explicitly instead of truncating");
+    CHECK(atom_is_error(large_result) &&
+              large_result->expr.elems[1]->kind == ATOM_EXPR &&
+              large_result->expr.elems[1]->expr.len == 2u &&
+              atom_is_symbol(large_result->expr.elems[1]->expr.elems[0], "io:request") &&
+              large_result->expr.elems[1]->expr.elems[1]->ground.ival == large_id,
+          "asynchronous errors expose only the correlation ID");
     CHECK(idle(dispatch(runtime, &arena, "__cetta_lib_io_poll", NULL, 0u)),
           "bounded failure is also consumed at most once");
 
@@ -320,6 +326,29 @@ int main(int argc, char **argv) {
 
     CHECK(idle(dispatch(runtime, &arena, "__cetta_lib_io_poll", NULL, 0u)),
           "conformance completions leave the queue empty");
+
+    Atom *secret = http_request_full(&arena, "POST", "file:///FAKE-TOKEN",
+                                     "FAKE-BODY", 1000, 64);
+    Atom *refused = dispatch(runtime, &arena, "__cetta_lib_io_submit", &secret, 1u);
+    CHECK(atom_is_error(refused) && refused->expr.elems[1]->kind == ATOM_EXPR &&
+              refused->expr.elems[1]->expr.len == 1u &&
+              atom_is_symbol(refused->expr.elems[1]->expr.elems[0], "io:submit"),
+          "validation errors omit token-bearing arguments");
+
+    Atom *wait_request = http_request(&arena, slow_url, 64);
+    int64_t wait_id = 0;
+    CHECK(pending_id(dispatch(runtime, &arena, "__cetta_lib_io_submit", &wait_request, 1u), &wait_id),
+          "blocking wait candidate is admitted");
+    Atom *timeout = atom_int(&arena, 5000);
+    Atom *wait_event = dispatch(runtime, &arena, "__cetta_lib_io_wait", &timeout, 1u);
+    Atom *wait_result = NULL;
+    int64_t event_id = 0;
+    CHECK(event_parts(wait_event, &event_id, &wait_result) && event_id == wait_id &&
+              http_response(wait_result, 200, "slow"),
+          "blocking wait consumes the independent owner's completion");
+    timeout = atom_int(&arena, 0);
+    CHECK(idle(dispatch(runtime, &arena, "__cetta_lib_io_wait", &timeout, 1u)),
+          "zero-time wait consumes nothing after completion");
 
     printf("(IoRuntimeSummary %u %u %u)\n",
            checks, checks - failures, failures);
