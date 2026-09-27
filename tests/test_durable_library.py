@@ -8,10 +8,13 @@ import sys
 import tempfile
 
 
-def run(binary, language, directory, source, normalize=True):
+def run(binary, language, directory, source, normalize=True, admin=True):
     program = directory / "probe.metta"
     program.write_text('!(import! &self durable)\n' + source)
-    result = subprocess.run([binary, "--lang", language, str(program)],
+    arguments = [binary, "--lang", language]
+    if admin:
+        arguments.append("--durable-admin")
+    result = subprocess.run(arguments + [str(program)],
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, (language, result.returncode, result.stderr, result.stdout)
     assert not result.stderr.strip(), result.stderr
@@ -35,6 +38,11 @@ def main():
         with tempfile.TemporaryDirectory(prefix="cetta-durable-library-") as temporary:
             directory = pathlib.Path(temporary)
             opening = '!(durable:open "' + str(directory / "coordination.db") + '")\n'
+            # Editable bootstrap files are ordinary programs. Merely passing
+            # them on the command line must not create a durable store.
+            denied = '(durable:failure commit-boundary-required)'
+            assert run(binary, language, directory, opening, admin=False) == [denied]
+            assert not (directory / "coordination.db").exists()
             seed = run(binary, language, directory, opening + '!(durable:close)\n', normalize=False)
             epoch = re.search(r'"([0-9a-f]{32})"', seed[0]).group(1)
             source = opening
@@ -67,6 +75,15 @@ def main():
                 '(durable:record "data" "inert" (println! "DO_NOT_EXECUTE"))))'), lines
             assert lines[2] == '(durable:closed)', lines
             attempt = f'(durable:commit "{epoch}" 2 ((durable:insert "outbox" "forbidden" hidden)))'
+            # Even literal root directives with the correct epoch and revision
+            # require the opt-in. Deny reads and maintenance as well as writes.
+            assert run(binary, language, directory, opening + f'!{attempt}\n'
+                       '!(durable:read "outbox")\n!(durable:checkpoint)\n!(durable:close)\n',
+                       admin=False) == [denied] * 5
+            lines = run(binary, language, directory, opening +
+                        '!(durable:read "outbox")\n!(durable:close)\n')
+            assert lines[1] == ('(durable:snapshot "EPOCH" 2 ('
+                '(durable:record "outbox" "send:1" (send "test" "reply"))))'), lines
             probes = [
                 f'(superpose ({attempt} {attempt}))',
                 f'(collapse {attempt})',
@@ -112,7 +129,7 @@ def main():
             assert lines[0] == '(durable:failure corrupt "data" "inert")', lines
             assert lines[1] == ('(durable:snapshot "EPOCH" 2 ('
                 '(durable:record "state" "worker" (continuation 1))))'), lines
-    print("durable library: PeTTa and HE, atomic input/state/outbox, stale reads, rollback, inert data, process recovery, evaluator and rho isolation passed")
+    print("durable library: PeTTa and HE, explicit admin opt-in, atomic input/state/outbox, stale reads, rollback, inert data, process recovery, evaluator and rho isolation passed")
 
 
 if __name__ == "__main__":

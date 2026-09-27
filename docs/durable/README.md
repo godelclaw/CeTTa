@@ -9,8 +9,15 @@ amalgamation in `vendor/sqlite`. `SQLITE_PROVIDER=system` uses a development
 package discoverable through pkg-config (SQLite 3.37 or newer). A build without
 the feature returns `(durable:failure unavailable)`.
 
-The CLI recognizes explicit top-level administrative directives after
-`!(import! &self durable)`. Their arguments are literal data. For example,
+CLI administration is off by default. A dedicated maintenance invocation,
+`cetta --durable-admin repair.metta`, enables literal top-level administrative
+directives after `!(import! &self durable)`. Service and cognitive-worker
+invocations must never pass this flag: their editable bootstrap files are
+ordinary application code. Without the flag, even literal root directives
+return `(durable:failure commit-boundary-required)`.
+
+Administrative commits are repair-only, never application transitions. Their
+arguments are literal data. For example,
 `!(durable:open "coordination.db")` opens the store and returns its epoch and
 revision. A subsequent `!(durable:commit "EPOCH-FROM-OPEN" 0 ((durable:insert
 "state" "worker" (waiting 0))))` uses the actual 32-character epoch from that
@@ -44,9 +51,8 @@ remain distinct. Insert requires an absent key; replace and remove require an
 existing key. A batch may name a key once. All preconditions must hold or the
 whole batch rolls back. Success is `(durable:committed epoch new-revision)`.
 
-The simple commit API still validates the expected epoch and global revision.
-It suits short coordination transactions. The scoped C API supports longer
-pure decisions:
+The administrative commit API validates the expected epoch and global revision
+without a read set. Use the scoped C API for application decisions:
 
 1. `cetta_durable_observe` reads declared keys, prefixes and whole spaces in
    one transaction, returning an owned observation with immutable views.
@@ -55,6 +61,17 @@ pure decisions:
 3. `cetta_durable_commit_observed` validates the exact keys and revisions in
    each view under `BEGIN IMMEDIATE`, then applies the batch. Every written
    key must also be covered by a declared scope. Empty views validate absence.
+
+The host must enforce three observation invariants:
+
+- Every durable value visible to a decision comes from this observation. Do not
+  supply cached state from an earlier snapshot, including remembered routing.
+- The host pairs a proposal with the exact observation it supplied. A proposal
+  cannot declare, widen or replace its own read scopes.
+- LLM output, clock readings and randomness enter as recorded observations.
+
+Together with denial of durable reads during evaluation, these rules make the
+host-supplied observation the complete durable read set of the decision.
 
 Validation uses exact comparisons, not hashes, and needs no tombstone table.
 Unrelated writes do not conflict. A removed and reinserted record has a new
@@ -158,7 +175,8 @@ cap, a concurrent writer between metadata and record reads, and scoped decisions
 amid unrelated traffic and conflicting positive/negative reads.
 `make test-durable-value` checks the codec. With an enabled binary,
 `python3 tests/test_durable_library.py ./cetta` checks the MeTTa boundary and
-recovery and speculative denial in PeTTa and HE, including rho payloads.
+recovery, refusal without administrative opt-in, and speculative denial in
+PeTTa and HE, including rho payloads even during an administrative invocation.
 
 This layer does not yet provide the durable host's effect capabilities,
 credential handling, transport, or Telegram policy. The durable-administration

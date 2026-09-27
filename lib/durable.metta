@@ -1,4 +1,5 @@
-; Top-level CLI administrative commands with literal data arguments.
+; Repair-only CLI commands with literal data arguments require --durable-admin.
+; Service and cognitive-worker invocations must never enable that flag.
 ; Ordinary reduction (including rho payloads) cannot invoke the native store.
 ; Reactions produce proposals; the durable host commits a selected transition.
 ; Keep consumed input, state/continuation and outbox in one atomic batch.
