@@ -310,6 +310,13 @@ static void *fixture_client_main(void *opaque) {
     } else if (strcmp(request.method, "GET") == 0) {
         fixture_get(fd, root, request.path);
     } else if (strcmp(request.method, "POST") == 0 &&
+               strcmp(request.path, "/redirect-counted") == 0) {
+        fixture_response(fd, 307, "Temporary Redirect", "text/plain", "", 0u,
+                         "Location: /counted\r\n");
+    } else if (strcmp(request.method, "POST") == 0 &&
+               strcmp(request.path, "/counted") == 0) {
+        fixture_get(fd, root, request.path);
+    } else if (strcmp(request.method, "POST") == 0 &&
                strcmp(request.path, "/echo") == 0) {
         fixture_response(fd, 200, "OK", "text/plain", request.body,
                          request.body_len, NULL);

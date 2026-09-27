@@ -15,29 +15,57 @@ must yield to its event loop. Ephemeral `io:cancel` abandons the completion,
 which is not evidence that the peer did not receive the request.
 
 `CettaHttpWorker` is also the transport mechanism for the durable host. Its
-optional pair of hooks executes on the owner thread:
+optional hooks execute on the owner thread, without the worker mutex:
 
 1. `prepare(id)` returns READY only after the attempt claim is durable. DEFER
    keeps the request queued without networking; DROP produces a not-started
    cancellation observation.
 2. Networking records status, bounded response bytes and a transport result.
-3. `observe(result)` returns true only after durable recording, or after
-   confirming that the same observation is already recorded. False retains
-   the exact result and retries recording after a bounded wait, without
-   repeating HTTP. New requests do not start while an observation is waiting
-   for persistence; already active transfers continue.
+3. `observe(result, mode)` returns ACK only after durable recording, or after
+   confirming that the same fact is already recorded. RETRY retains the exact
+   result and retries recording with bounded exponential delays, never HTTP.
+   The default budget is five attempts per mode; hosts can set `record_attempts`.
+   Exhaustion parks the job and invokes the required `recording_stalled` hook.
+   This hook must surface degraded health through an operator/supervisor path
+   that does not depend on the failing journal or on a cognitive turn.
+4. A permanently unrecordable full result may return USE_MINIMAL. The next
+   observation has MINIMAL mode and the same metadata, but no body. The host
+   must durably record an explicit `OutcomeUnrecordable` fact identifying the
+   effect/attempt and transport outcome before returning ACK. This is neither
+   remote success nor remote failure. The original body remains retained
+   until that acknowledgement. Minimal recording has its own bounded retries
+   and escalation; returning USE_MINIMAL again cannot create an infinite loop.
+
+New requests do not start while an observation awaits persistence; already
+active transfers continue. A parked job has no automatic recording retries.
+After storage repair, `resume_recording(id)` grants another bounded budget
+without repeating HTTP. Retry exhaustion alone never authorizes discarding
+the body or inventing a minimal outcome. If even a minimal fact cannot be
+recorded, dispatch remains visibly degraded until repair or shutdown.
 
 Hooks must perform bounded work: no application evaluation or network calls.
 Database operations must be short and fail promptly under contention. A hook
 must not join or free its own worker. The host owns effect identities, attempt
 identities, routing, retry policy, response redaction and completion delivery.
 A worker handle is only a process-local transport identifier.
+The worker does not enforce per-chat order. The host submits only eligible
+attempts, after checking its durable lanes, dependencies and uncertainty policy.
 
 A durable worker cannot abandon a completion or expose it through `take`.
-Cancellation before starting produces `started=false`; after starting it cannot
-establish remote non-execution. A completed response remains a fact even if
+The native cancellation enum distinguishes UNKNOWN, NOT_STARTED, REQUESTED and
+TOO_LATE. NOT_STARTED prevents admission to curl, including a cancellation
+racing the prepare hook or curl setup. REQUESTED means the transfer may already
+have executed remotely. The recorded result, not the cancellation request,
+settles the local outcome. A completed response remains a fact even if
 cancellation arrives while its durable recording is pending. The host must
 interpret ambiguous transport outcomes according to the effect's policy.
+A cancelled transfer may have status 200 and a truncated body. Status alone
+does not establish Telegram success or supply a usable message ID: validate the
+complete response and application receipt. `request_size_known/request_size`
+record libcurl's `CURLINFO_REQUEST_SIZE` diagnostic. A zero value is not, by
+itself, a supported automatic-retry rule; `started=false` remains this layer's
+proof of non-send. The host may refine failure classes against a qualified
+transport contract separately.
 
 Stopping closes admission, cancels transfers, offers outstanding observations
 to the recording hook one last time and joins the owner. It returns the count
@@ -50,7 +78,9 @@ recover conservatively as uncertain; orderly teardown does not prove delivery.
 Defaults are 64 outstanding jobs, 8 MiB of copied requests and job metadata,
 and 32 MiB of response buffers. Results awaiting consumption or recording
 continue to occupy those budgets. The C API can set other limits. Admission
-checks capacity before copying a request body. Curl, TLS and resolver internals
+reserves capacity and identity before copying a request body outside the worker
+mutex. Pending reservations prevent duplicate admission and count against the
+same quotas. Curl, TLS and resolver internals
 use additional implementation-owned memory; these budgets are not a cap on
 process RSS.
 
@@ -75,6 +105,23 @@ Raw `io` still accepts caller-supplied URLs; this change does not make it a
 credential vault or sanitize errors produced earlier by general evaluation.
 Credential references must keep secrets out of application atoms altogether.
 
+## Redirect policy
+
+`http:request` accepts an optional final Bool, `follow-redirects`, defaulting to
+False. For example:
+
+```metta
+(http:request "GET" "https://example.org/" () "" 30000 1024 True)
+```
+
+Native default requests return the original 3xx response. Opted-in requests
+follow at most eight redirects using libcurl's redirect/method rules. Explicit
+False and omission have the same meaning. Telegram's host requests must keep
+redirect following disabled. The browser's Emscripten XHR backend cannot
+suppress redirects: it rejects requests without explicit True before starting
+network I/O. Existing browser callers must opt in, including those replacing
+the no-redirect `http:get`/`http:post` convenience calls.
+
 ## Checks and scope
 
 `make ENABLE_HTTP=1 test-http-worker` runs a private loopback fixture with a
@@ -82,6 +129,8 @@ SQLite journal. It checks independent progress, copied binary data, duplicate
 handles, admission and response bounds, cancellation, durable claims before
 dispatch, retained completion bytes through repeated recording failures, no
 HTTP replay, recovery, unrecorded shutdown outcomes and concurrent producers.
+It also checks bounded recording failure, escalation, explicit resume, durable
+minimal facts, blocked-job recovery and POST redirects with a remote counter.
 The fixture counts requests independently of the worker.
 
 `test-io-runtime` checks the evaluator adapter, wait, safe error sources and
@@ -91,6 +140,10 @@ and PeTTa. The wrappers return Expression and dispatch directly so PeTTa does
 not leave them as unevaluated function bodies.
 `test-io-syntax`, `test-io-no-http` and `test-io-rho-bridge` cover the
 library surface. `test-io-browser` requires an Emscripten/browser toolchain.
+
+The service orchestration profile is HE with the qualified rho/rhometta library.
+The cognitive worker can independently use PeTTa. Cross-process data does not
+grant the worker durable-store or transport authority.
 
 The recording hooks are a mechanism, not a production durable dispatcher.
 Credential references, the speculative-effect gate, durable timers, Telegram

@@ -125,8 +125,9 @@ static CettaHttpPrepare prepare(void *ctx, uint64_t id) {
     commit(j->store,&claim,1);
     return HTTP_PREPARE_READY;
 }
-static bool observe(void *ctx, const CettaHttpResult *r) {
+static CettaHttpRecord observe(void *ctx, const CettaHttpResult *r, CettaHttpRecordMode mode) {
     Journal *j=ctx;
+    assert(mode==HTTP_RECORD_FULL);
     assert(r->id==j->id && r->started==j->expected_started);
     if (j->expected_started) assert(!r->cancelled && r->status==200 && !r->transport_code);
     else assert(r->cancelled);
@@ -136,7 +137,7 @@ static bool observe(void *ctx, const CettaHttpResult *r) {
     }
     j->retained=r->body; j->retained_size=r->body_size;
     atomic_fetch_add(&j->observations,1);
-    if (!atomic_load(&j->allow_observe)) return false;
+    if (!atomic_load(&j->allow_observe)) return HTTP_RECORD_RETRY;
     CettaDurableSnapshot v=snapshot(j->store,"pending");
     assert(v.count==1);
     if (r->started) assert(v.records[0].size==9 && !memcmp(v.records[0].data,"attempted",9));
@@ -147,7 +148,11 @@ static bool observe(void *ctx, const CettaHttpResult *r) {
     };
     commit(j->store,ops,2);
     atomic_fetch_add(&j->acknowledged,1);
-    return true;
+    return HTTP_RECORD_ACK;
+}
+static void unexpected_stall(void *ctx, uint64_t id, CettaHttpRecordMode mode, unsigned attempts) {
+    (void)ctx; (void)id; (void)mode; (void)attempts;
+    assert(!"unexpected recording stall");
 }
 static unsigned remote_count(const char *base) {
     char path[512]; url(path,base,"/counted-total");
@@ -162,7 +167,8 @@ static void durable(const char *base, const char *path) {
     assert(cetta_durable_open(path,NULL,&j.store)==DURABLE_OK);
     CettaDurableOp accepted={DURABLE_INSERT,"pending","one","accepted",8};
     commit(j.store,&accepted,1);
-    CettaHttpWorkerHooks hooks={&j,prepare,observe};
+    CettaHttpWorkerHooks hooks={.context=&j,.prepare=prepare,.observe=observe,
+                               .recording_stalled=unexpected_stall};
     CettaHttpWorker *w=worker(NULL,&hooks);
     char endpoint[512]; url(endpoint,base,"/counted"); CettaHttpRequest r=request(1,endpoint);
     assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_OK);
@@ -173,7 +179,7 @@ static void durable(const char *base, const char *path) {
     assert(remote_count(base)==1);
     /* Cancelling after a response was observed cannot erase that fact, even
      * while its durable recording is being retried. */
-    assert(cetta_http_worker_cancel(w,1));
+    assert(cetta_http_worker_cancel(w,1)==HTTP_CANCEL_TOO_LATE);
     CettaHttpResult unavailable; assert(!cetta_http_worker_take(w,&unavailable));
     CettaDurableSnapshot v=snapshot(j.store,"completion"); assert(v.count==0); cetta_durable_snapshot_free(&v);
     atomic_store(&j.allow_observe,true); wait_flag(&j.acknowledged,1);
@@ -190,7 +196,7 @@ static void durable(const char *base, const char *path) {
     atomic_store(&j.prepare_calls,0); atomic_store(&j.observations,0); atomic_store(&j.acknowledged,0);
     atomic_store(&j.allow_prepare,false);
     w=worker(NULL,&hooks); assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_OK);
-    wait_flag(&j.prepare_calls,1); assert(cetta_http_worker_cancel(w,1));
+    wait_flag(&j.prepare_calls,1); assert(cetta_http_worker_cancel(w,1)==HTTP_CANCEL_NOT_STARTED);
     wait_flag(&j.acknowledged,1); assert(cetta_http_worker_free(w)==0);
     assert(remote_count(base)==1);
     commit(j.store,reset,2);
@@ -239,9 +245,152 @@ static void concurrency(const char *base) {
     assert(cetta_http_worker_free(w)==0);
 }
 
+typedef struct {
+    CettaDurableStore *store;
+    bool minimal;
+    atomic_bool allow_record;
+    atomic_uint full_calls, minimal_calls, stalls, acknowledgements;
+    const unsigned char *retained;
+    size_t retained_size;
+} RecordingFailure;
+
+static CettaHttpPrepare failure_prepare(void *ctx, uint64_t id) {
+    RecordingFailure *f=ctx;
+    CettaDurableOp op={DURABLE_REPLACE,"failure-pending",id==1?"one":"two","attempted",9};
+    commit(f->store,&op,1);
+    return HTTP_PREPARE_READY;
+}
+static CettaHttpRecord failure_observe(void *ctx, const CettaHttpResult *r, CettaHttpRecordMode mode) {
+    RecordingFailure *f=ctx;
+    assert(r->started && r->status==200 && !r->cancelled && r->transport_code==0);
+    if (r->id==1) {
+        if (mode==HTTP_RECORD_FULL) {
+            if (atomic_load(&f->full_calls))
+                assert(r->body==f->retained && r->body_size==f->retained_size);
+            f->retained=r->body; f->retained_size=r->body_size;
+            atomic_fetch_add(&f->full_calls,1);
+            if (f->minimal) return HTTP_RECORD_USE_MINIMAL;
+        } else {
+            assert(f->minimal && !r->body && !r->body_size);
+            atomic_fetch_add(&f->minimal_calls,1);
+        }
+        if (!atomic_load(&f->allow_record)) return HTTP_RECORD_RETRY;
+    }
+    char fact[128];
+    int n=snprintf(fact,sizeof(fact),"OutcomeUnrecordable(%llu,%d,%ld)",
+                   (unsigned long long)r->id,r->transport_code,r->status);
+    const char *key=r->id==1?"one":"two";
+    CettaDurableOp ops[]={
+        {DURABLE_REMOVE,"failure-pending",key,NULL,0},
+        {DURABLE_INSERT,"failure-outcomes",key,
+            mode==HTTP_RECORD_MINIMAL?(const void *)fact:r->body,
+            mode==HTTP_RECORD_MINIMAL?(size_t)n:r->body_size}
+    };
+    commit(f->store,ops,2);
+    atomic_fetch_add(&f->acknowledgements,1);
+    return HTTP_RECORD_ACK;
+}
+static void recording_stalled(void *ctx, uint64_t id, CettaHttpRecordMode mode, unsigned attempts) {
+    RecordingFailure *f=ctx;
+    assert(id==1 && attempts==3);
+    assert(mode==(f->minimal?HTTP_RECORD_MINIMAL:HTTP_RECORD_FULL));
+    /* Store access here also tests that escalation runs without the worker lock. */
+    CettaDurableSnapshot v=snapshot(f->store,"failure-pending");
+    assert(v.count>=1); cetta_durable_snapshot_free(&v);
+    atomic_fetch_add(&f->stalls,1);
+}
+static void recording_failure(const char *base, const char *path, bool minimal) {
+    RecordingFailure f={.minimal=minimal};
+    assert(cetta_durable_open(path,NULL,&f.store)==DURABLE_OK);
+    CettaDurableOp ops[]={
+        {DURABLE_INSERT,"failure-pending","one","accepted",8},
+        {DURABLE_INSERT,"failure-pending","two","accepted",8}
+    };
+    commit(f.store,ops,2);
+    CettaHttpWorkerHooks hooks={.context=&f,.prepare=failure_prepare,.observe=failure_observe,
+        .recording_stalled=recording_stalled,.record_attempts=3};
+    CettaHttpWorker *w=worker(NULL,&hooks);
+    unsigned before=remote_count(base);
+    char endpoint[512]; url(endpoint,base,"/counted");
+    CettaHttpRequest r=request(1,endpoint);
+    assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_OK);
+    wait_flag(&f.stalls,1);
+    r.id=2; assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_OK);
+    struct timespec pause={0,350000000}; nanosleep(&pause,NULL);
+    assert(atomic_load(&f.full_calls)==(minimal?1u:3u));
+    assert(atomic_load(&f.minimal_calls)==(minimal?3u:0u));
+    assert(atomic_load(&f.stalls)==1 && atomic_load(&f.acknowledgements)==0);
+    assert(remote_count(base)==before+1); /* blocked, with no retry spin or replay */
+    assert(cetta_http_worker_cancel(w,1)==HTTP_CANCEL_TOO_LATE);
+    assert(cetta_http_worker_cancel(w,999)==HTTP_CANCEL_UNKNOWN);
+    atomic_store(&f.allow_record,true);
+    assert(!cetta_http_worker_resume_recording(w,2));
+    assert(cetta_http_worker_resume_recording(w,1));
+    wait_flag(&f.acknowledgements,2);
+    assert(cetta_http_worker_free(w)==0 && remote_count(base)==before+2);
+    cetta_durable_close(f.store);
+    assert(cetta_durable_open(path,NULL,&f.store)==DURABLE_OK);
+    CettaDurableSnapshot v=snapshot(f.store,"failure-pending");
+    assert(v.count==0); cetta_durable_snapshot_free(&v);
+    v=snapshot(f.store,"failure-outcomes");
+    assert(v.count==2);
+    if (minimal) {
+        const char fact[]="OutcomeUnrecordable(1,0,200)";
+        assert(!strcmp(v.records[0].key,"one") && v.records[0].size==sizeof(fact)-1 &&
+               !memcmp(v.records[0].data,fact,sizeof(fact)-1));
+    }
+    cetta_durable_snapshot_free(&v);
+    CettaDurableOp cleanup[]={
+        {DURABLE_REMOVE,"failure-outcomes","one",NULL,0},
+        {DURABLE_REMOVE,"failure-outcomes","two",NULL,0}
+    };
+    commit(f.store,cleanup,2); cetta_durable_close(f.store);
+}
+
+typedef struct { atomic_uint entered, release, observed; } CancelPrepare;
+static CettaHttpPrepare held_prepare(void *ctx, uint64_t id) {
+    CancelPrepare *c=ctx; assert(id==1);
+    atomic_store(&c->entered,1); wait_flag(&c->release,1);
+    return HTTP_PREPARE_READY;
+}
+static CettaHttpRecord cancelled_observe(void *ctx, const CettaHttpResult *r, CettaHttpRecordMode mode) {
+    CancelPrepare *c=ctx;
+    assert(mode==HTTP_RECORD_FULL && r->cancelled && !r->started && !r->status);
+    atomic_store(&c->observed,1); return HTTP_RECORD_ACK;
+}
+static void cancellation_and_redirects(const char *base) {
+    unsigned before=remote_count(base);
+    CancelPrepare c={0};
+    CettaHttpWorkerHooks hooks={.context=&c,.prepare=held_prepare,.observe=cancelled_observe,
+                               .recording_stalled=unexpected_stall};
+    CettaHttpWorker *w=worker(NULL,&hooks);
+    char endpoint[512]; url(endpoint,base,"/counted");
+    CettaHttpRequest r=request(1,endpoint);
+    assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_OK);
+    wait_flag(&c.entered,1);
+    assert(cetta_http_worker_cancel(w,1)==HTTP_CANCEL_NOT_STARTED);
+    atomic_store(&c.release,1); wait_flag(&c.observed,1);
+    assert(cetta_http_worker_free(w)==0 && remote_count(base)==before);
+    w=worker(NULL,NULL);
+    url(endpoint,base,"/redirect-counted"); r=request(2,endpoint); r.method="POST";
+    r.body="payload"; r.body_size=7;
+    assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_OK);
+    CettaHttpResult result=take(w);
+    assert(result.status==307 && !result.transport_code && result.request_size_known && result.request_size>0);
+    cetta_http_result_free(&result);
+    assert(remote_count(base)==before);
+    r.id=3; r.follow_redirects=true;
+    assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_OK);
+    result=take(w); assert(result.status==200 && !result.transport_code);
+    cetta_http_result_free(&result);
+    assert(remote_count(base)==before+1 && cetta_http_worker_free(w)==0);
+}
+
 int main(int argc, char **argv) {
     assert(argc==3);
     ephemeral(argv[1]); durable(argv[1],argv[2]); concurrency(argv[1]);
-    puts("HTTP worker: independent progress, binary copies, bounds, cancellation, durable claim, retained completion, no HTTP replay, recovery, shutdown and concurrent producers passed");
+    recording_failure(argv[1],argv[2],false); recording_failure(argv[1],argv[2],true);
+    cancellation_and_redirects(argv[1]);
+    puts("HTTP worker: bounds, concurrency, durable claims, no replay, bounded recording retries, escalation/resume, minimal fact recovery, cancellation and redirect policy passed");
     return 0;
 }

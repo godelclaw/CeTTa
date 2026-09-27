@@ -11,6 +11,7 @@
 (: io:cancel (-> Number Expression))
 
 (: http:request (-> Atom Atom Expression String Number Number Atom))
+(: http:request (-> Atom Atom Expression String Number Number Bool Atom))
 (: http:header (-> String String Atom))
 (: http:response (-> Number String Atom))
 

@@ -33,6 +33,8 @@ typedef struct Job {
     CettaHttpResult result;
     JobState state;
     bool cancel, abandon;
+    CettaHttpRecordMode record_mode;
+    unsigned record_attempts;
     uint64_t retry_at;
     size_t request_bytes, response_capacity;
     CURL *easy;
@@ -41,12 +43,19 @@ typedef struct Job {
     struct CettaHttpWorker *owner;
 } Job;
 
+/* submit's stack-owned reservation is visible only while holding the mutex. */
+typedef struct Reservation {
+    uint64_t id;
+    struct Reservation *next;
+} Reservation;
+
 struct CettaHttpWorker {
     pthread_mutex_t mutex;
     pthread_cond_t changed;
     pthread_t thread;
     CURLM *multi;
     Job *jobs, *tail;
+    Reservation *reservations;
     CettaHttpWorkerLimits limits;
     CettaHttpWorkerHooks hooks;
     size_t count, request_bytes, response_bytes, unacknowledged;
@@ -173,11 +182,16 @@ static void clear_easy(CettaHttpWorker *w, Job *j, bool added) {
 }
 
 static void finish(CettaHttpWorker *w, Job *j, CURLcode code, bool cancelled) {
-    long response=0;
-    if (j->easy) curl_easy_getinfo(j->easy,CURLINFO_RESPONSE_CODE,&response);
+    long response=0, request_size=0;
+    bool known=false;
+    if (j->easy) {
+        curl_easy_getinfo(j->easy,CURLINFO_RESPONSE_CODE,&response);
+        known=curl_easy_getinfo(j->easy,CURLINFO_REQUEST_SIZE,&request_size)==CURLE_OK && request_size>=0;
+    }
     clear_easy(w,j,j->result.started);
     pthread_mutex_lock(&w->mutex);
     j->result.transport_code=code; j->result.status=response; j->result.cancelled=cancelled;
+    j->result.request_size_known=known; j->result.request_size=request_size;
     j->state=OBSERVING; j->retry_at=0;
     pthread_mutex_unlock(&w->mutex);
 }
@@ -198,14 +212,31 @@ static void process_observations(CettaHttpWorker *w, bool final) {
             if (p->state==OBSERVING && (final || p->retry_at<=now)) { j=p; break; }
         if (!j) { pthread_mutex_unlock(&w->mutex); return; }
         pthread_mutex_unlock(&w->mutex);
-        bool ack= (w->hooks.observe && w->hooks.observe(w->hooks.context,&j->result));
+        CettaHttpResult minimal=j->result;
+        minimal.body=NULL; minimal.body_size=0;
+        CettaHttpRecord recorded=w->hooks.observe
+            ? w->hooks.observe(w->hooks.context,
+                j->record_mode==HTTP_RECORD_FULL?&j->result:&minimal,j->record_mode)
+            : HTTP_RECORD_RETRY;
         pthread_mutex_lock(&w->mutex);
-        if (ack || j->abandon) retire(w,j);
+        bool stalled=false;
+        if (recorded==HTTP_RECORD_ACK || j->abandon) retire(w,j);
         else if (w->hooks.observe) {
-            if (final) { ++w->unacknowledged; retire(w,j); }
-            else j->retry_at=milliseconds()+100;
+            if (recorded==HTTP_RECORD_USE_MINIMAL && j->record_mode==HTTP_RECORD_FULL) {
+                j->record_mode=HTTP_RECORD_MINIMAL; j->record_attempts=0; j->retry_at=0;
+            } else if (final) { ++w->unacknowledged; retire(w,j); }
+            else if (++j->record_attempts>=w->hooks.record_attempts) {
+                j->retry_at=UINT64_MAX; stalled=true; changed(w);
+            } else {
+                unsigned shift=j->record_attempts-1;
+                j->retry_at=milliseconds()+(shift<4?(100u<<shift):1000u);
+            }
         } else { j->state=READY; changed(w); }
+        uint64_t stalled_id=stalled?j->request.id:0;
+        CettaHttpRecordMode stalled_mode=stalled?j->record_mode:HTTP_RECORD_FULL;
+        unsigned attempts=stalled?j->record_attempts:0;
         pthread_mutex_unlock(&w->mutex);
+        if (stalled) w->hooks.recording_stalled(w->hooks.context,stalled_id,stalled_mode,attempts);
     }
 }
 
@@ -238,12 +269,15 @@ static void process_jobs(CettaHttpWorker *w) {
             pthread_mutex_unlock(&w->mutex); continue;
         }
         CURLcode code=configure(j);
-        if (code==CURLE_OK && curl_multi_add_handle(w->multi,j->easy)!=CURLM_OK)
-            code=CURLE_FAILED_INIT;
-        if (code!=CURLE_OK) { finish(w,j,code,false); continue; }
+        /* Serialize the last cancellation check and start admission. No
+         * networking occurs until this owner later calls multi_perform. */
         pthread_mutex_lock(&w->mutex);
-        j->result.started=true; j->state=RUNNING;
+        cancel=j->cancel || w->stopping;
+        if (!cancel && code==CURLE_OK && curl_multi_add_handle(w->multi,j->easy)!=CURLM_OK)
+            code=CURLE_FAILED_INIT;
+        if (!cancel && code==CURLE_OK) { j->result.started=true; j->state=RUNNING; }
         pthread_mutex_unlock(&w->mutex);
+        if (cancel || code!=CURLE_OK) finish(w,j,cancel?CURLE_ABORTED_BY_CALLBACK:code,cancel);
     }
 }
 
@@ -283,9 +317,10 @@ static void *owner(void *context) {
         }
         process_observations(w,false);
         pthread_mutex_lock(&w->mutex);
-        bool retry=false;
+        bool retry=false, blocked=persistence_pending(w);
         for (Job *j=w->jobs;j;j=j->next)
-            if (j->state==QUEUED || j->state==OBSERVING) { retry=true; break; }
+            if ((j->state==QUEUED && !blocked) ||
+                (j->state==OBSERVING && j->retry_at!=UINT64_MAX)) { retry=true; break; }
         pthread_mutex_unlock(&w->mutex);
         int events;
         if (curl_multi_poll(multi,NULL,0,retry?100:1000,&events)!=CURLM_OK) {
@@ -314,10 +349,12 @@ CettaHttpWorkerStatus cetta_http_worker_new(const CettaHttpWorkerLimits *limits,
     CettaHttpWorkerLimits l=limits?*limits:cetta_http_worker_default_limits();
     if (!l.jobs || l.jobs>65536 || !l.request_bytes || !l.response_bytes ||
         l.request_bytes>INT_MAX || l.response_bytes>INT_MAX ||
-        (hooks && (!hooks->prepare || !hooks->observe))) return HTTP_WORKER_INVALID;
+        (hooks && (!hooks->prepare || !hooks->observe || !hooks->recording_stalled ||
+                   hooks->record_attempts>1000))) return HTTP_WORKER_INVALID;
     CettaHttpWorker *w=calloc(1,sizeof(*w));
     if (!w) return HTTP_WORKER_NOMEM;
     w->limits=l; if (hooks) w->hooks=*hooks;
+    if (!w->hooks.record_attempts) w->hooks.record_attempts=5;
     if (pthread_mutex_init(&w->mutex,NULL)) { free(w); return HTTP_WORKER_NOMEM; }
     pthread_condattr_t attr;
     if (pthread_condattr_init(&attr)) { pthread_mutex_destroy(&w->mutex); free(w); return HTTP_WORKER_NOMEM; }
@@ -384,36 +421,72 @@ CettaHttpWorkerStatus cetta_http_worker_submit(CettaHttpWorker *w, const CettaHt
     CettaHttpWorkerStatus status=measure_request(request,&bytes);
     if (status!=HTTP_WORKER_OK) return status;
     pthread_mutex_lock(&w->mutex);
+    bool reserved=false;
+    for (Reservation *r=w->reservations;r;r=r->next)
+        if (r->id==request->id) { reserved=true; break; }
     if (w->stopping) status=HTTP_WORKER_CLOSED;
-    else if (find_job(w,request->id)) status=HTTP_WORKER_DUPLICATE;
+    else if (reserved || find_job(w,request->id)) status=HTTP_WORKER_DUPLICATE;
     else if (w->count>=w->limits.jobs || bytes>w->limits.request_bytes-w->request_bytes)
         status=HTTP_WORKER_FULL;
-    else if ((status=clone_request(request,bytes,&j))==HTTP_WORKER_OK) {
-        /* Admission bounds are checked before copying a single body byte. */
+    if (status!=HTTP_WORKER_OK) { pthread_mutex_unlock(&w->mutex); return status; }
+    Reservation reservation={request->id,w->reservations}; w->reservations=&reservation;
+    ++w->count; w->request_bytes+=bytes;
+    pthread_mutex_unlock(&w->mutex);
+    /* Reserve bounds and identity before copying; do not block receive on a
+     * potentially large allocation/copy. free excludes concurrent API users. */
+    status=clone_request(request,bytes,&j);
+    pthread_mutex_lock(&w->mutex);
+    Reservation **link=&w->reservations;
+    while (*link!=&reservation) link=&(*link)->next;
+    *link=reservation.next;
+    if (w->stopping) status=HTTP_WORKER_CLOSED;
+    if (status==HTTP_WORKER_OK) {
         j->owner=w;
         if (w->tail) w->tail->next=j; else w->jobs=j;
-        w->tail=j; ++w->count; w->request_bytes+=j->request_bytes;
+        w->tail=j;
         wake(w);
-    }
+    } else { --w->count; w->request_bytes-=bytes; if (j) free_job(j); changed(w); }
     pthread_mutex_unlock(&w->mutex);
     return status;
 }
 
-static bool cancel(CettaHttpWorker *w, uint64_t id, bool abandon) {
+bool cetta_http_worker_abandon(CettaHttpWorker *w, uint64_t id) {
     if (!w) return false;
     pthread_mutex_lock(&w->mutex);
     Job *j=find_job(w,id);
-    bool accepted=j && (!abandon || !w->hooks.observe);
+    bool accepted=j && !w->hooks.observe;
     if (accepted) {
-        j->cancel=true; j->abandon=j->abandon || abandon;
-        if (abandon && j->state==READY) retire(w,j);
+        j->cancel=true; j->abandon=true;
+        if (j->state==READY) retire(w,j);
         wake(w);
     }
     pthread_mutex_unlock(&w->mutex); return accepted;
 }
 
-bool cetta_http_worker_cancel(CettaHttpWorker *w,uint64_t id) { return cancel(w,id,false); }
-bool cetta_http_worker_abandon(CettaHttpWorker *w,uint64_t id) { return cancel(w,id,true); }
+CettaHttpCancel cetta_http_worker_cancel(CettaHttpWorker *w,uint64_t id) {
+    if (!w) return HTTP_CANCEL_UNKNOWN;
+    pthread_mutex_lock(&w->mutex);
+    Job *j=find_job(w,id);
+    CettaHttpCancel result=HTTP_CANCEL_UNKNOWN;
+    if (j) {
+        if (j->state==OBSERVING || j->state==READY) result=HTTP_CANCEL_TOO_LATE;
+        else {
+            j->cancel=true;
+            result=j->result.started?HTTP_CANCEL_REQUESTED:HTTP_CANCEL_NOT_STARTED;
+            wake(w);
+        }
+    }
+    pthread_mutex_unlock(&w->mutex); return result;
+}
+
+bool cetta_http_worker_resume_recording(CettaHttpWorker *w,uint64_t id) {
+    if (!w) return false;
+    pthread_mutex_lock(&w->mutex);
+    Job *j=find_job(w,id);
+    bool resumed=!w->stopping && j && j->state==OBSERVING && j->retry_at==UINT64_MAX;
+    if (resumed) { j->record_attempts=0; j->retry_at=0; wake(w); }
+    pthread_mutex_unlock(&w->mutex); return resumed;
+}
 
 bool cetta_http_worker_take(CettaHttpWorker *w, CettaHttpResult *out) {
     if (!w || !out || w->hooks.observe) return false;
@@ -455,7 +528,8 @@ CettaHttpWorkerStatus cetta_http_worker_new(const CettaHttpWorkerLimits *l,
 CettaHttpWorkerStatus cetta_http_worker_submit(CettaHttpWorker *w,const CettaHttpRequest *r) {
     (void)w; (void)r; return HTTP_WORKER_UNAVAILABLE;
 }
-bool cetta_http_worker_cancel(CettaHttpWorker *w,uint64_t id) { (void)w; (void)id; return false; }
+CettaHttpCancel cetta_http_worker_cancel(CettaHttpWorker *w,uint64_t id) { (void)w; (void)id; return HTTP_CANCEL_UNKNOWN; }
+bool cetta_http_worker_resume_recording(CettaHttpWorker *w,uint64_t id) { (void)w; (void)id; return false; }
 bool cetta_http_worker_abandon(CettaHttpWorker *w,uint64_t id) { (void)w; (void)id; return false; }
 bool cetta_http_worker_take(CettaHttpWorker *w,CettaHttpResult *r) { (void)w; (void)r; return false; }
 uint64_t cetta_http_worker_wait(CettaHttpWorker *w,uint64_t g,uint32_t ms) { (void)w; (void)ms; return g; }

@@ -22,6 +22,12 @@ with tempfile.TemporaryDirectory(prefix="cetta-io-library-") as directory:
 !(io:wait 5000)
 !(io:poll)
 !(io:wait 0)
+!(io:submit (http:request "GET" "http://127.0.0.1:{port}/redirect/2" () "" 2000 1024))
+!(io:wait 5000)
+!(io:submit (http:request "GET" "http://127.0.0.1:{port}/redirect/2" () "" 2000 1024 True))
+!(io:wait 5000)
+!(io:submit (http:request "GET" "http://127.0.0.1:{port}/redirect/2" () "" 2000 1024 False))
+!(io:wait 5000)
 ''')
         for language in ("he", "petta"):
             result = subprocess.run([binary, "--lang", language, str(program)],
@@ -34,8 +40,11 @@ with tempfile.TemporaryDirectory(prefix="cetta-io-library-") as directory:
             assert lines.pop(0) in ("true", "()"), lines
             assert lines == ['(http)', '(io:idle)', '(io:pending 1)',
                              '(io:event 1 (http:response 200 "one"))',
-                             '(io:idle)', '(io:idle)'], (language, lines)
-        print("I/O library: HE and PeTTa submit/wait/poll, exact correlation and one-time consumption passed")
+                             '(io:idle)', '(io:idle)',
+                             '(io:pending 2)', '(io:event 2 (http:response 302 ""))',
+                             '(io:pending 3)', '(io:event 3 (http:response 200 "one"))',
+                             '(io:pending 4)', '(io:event 4 (http:response 302 ""))'], (language, lines)
+        print("I/O library: HE and PeTTa submit/wait/poll, redirect default/opt-in, exact correlation and one-time consumption passed")
     finally:
         server.terminate()
         server.wait(timeout=5)

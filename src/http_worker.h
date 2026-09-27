@@ -41,6 +41,8 @@ typedef struct {
     bool allocation_failed;
     int transport_code;             /* CURLcode; no token-bearing error text */
     long status;
+    bool request_size_known;
+    long request_size;              /* libcurl diagnostic, not a retry permit */
     unsigned char *body;
     size_t body_size;
 } CettaHttpResult;
@@ -51,28 +53,52 @@ typedef enum {
     HTTP_PREPARE_DROP               /* no network; observe a not-started result */
 } CettaHttpPrepare;
 
+typedef enum { HTTP_RECORD_FULL, HTTP_RECORD_MINIMAL } CettaHttpRecordMode;
+typedef enum {
+    HTTP_RECORD_ACK,                /* the supplied fact is durable */
+    HTTP_RECORD_RETRY,              /* keep bytes; retry recording, never HTTP */
+    HTTP_RECORD_USE_MINIMAL         /* full result cannot be recorded */
+} CettaHttpRecord;
+
+typedef enum {
+    HTTP_CANCEL_UNKNOWN,
+    HTTP_CANCEL_NOT_STARTED,        /* owner will not start this request */
+    HTTP_CANCEL_REQUESTED,          /* may already have executed remotely */
+    HTTP_CANCEL_TOO_LATE            /* completed; preserve its observation */
+} CettaHttpCancel;
+
 typedef struct {
     void *context;
     /* Hooks must be bounded, must not evaluate application code or perform
      * network I/O, and must not join/free this worker from its owner thread. */
     CettaHttpPrepare (*prepare)(void *context, uint64_t id);
-    /* true acknowledges durable recording, or a result already recorded.
-     * false retains the exact result and retries without repeating HTTP.
-     * Results are observations: a cancelled started request can still have
-     * executed remotely. Never interpret cancellation as proof of non-send. */
-    bool (*observe)(void *context, const CettaHttpResult *result);
+    /* MINIMAL supplies metadata with body=NULL/body_size=0. In this mode ACK records
+     * an explicit outcome-unrecordable fact, never fabricate remote failure
+     * or success. Original bytes remain owned until ACK or worker shutdown. */
+    CettaHttpRecord (*observe)(void *context, const CettaHttpResult *result,
+                              CettaHttpRecordMode mode);
+    /* Required with hooks: signal degraded health outside the failing store.
+     * After the retry budget is exhausted the job parks, retaining its bytes
+     * and blocking new starts until resume_recording or shutdown. Runs unlocked.
+     * It may call resume_recording; never blindly resume an unrepaired failure. */
+    void (*recording_stalled)(void *context, uint64_t id,
+                             CettaHttpRecordMode mode, unsigned attempts);
+    unsigned record_attempts;       /* per mode/resume, 0 selects default 5 */
 } CettaHttpWorkerHooks;
 
 CettaHttpWorkerLimits cetta_http_worker_default_limits(void);
 CettaHttpWorkerStatus cetta_http_worker_new(const CettaHttpWorkerLimits *limits,
     const CettaHttpWorkerHooks *hooks, CettaHttpWorker **out);
 
-/* Copies request bytes on admission. Outstanding jobs and owned request/body
+/* Copies request bytes on admission. The handle becomes usable after OK.
+ * Outstanding jobs and owned request/body
  * buffers are bounded, including completed but unacknowledged results. Curl,
  * TLS and resolver internals have additional implementation-owned memory. */
 CettaHttpWorkerStatus cetta_http_worker_submit(CettaHttpWorker *worker,
     const CettaHttpRequest *request);
-bool cetta_http_worker_cancel(CettaHttpWorker *worker, uint64_t id);
+CettaHttpCancel cetta_http_worker_cancel(CettaHttpWorker *worker, uint64_t id);
+/* Resume a parked recording after storage repair. Does not restart HTTP. */
+bool cetta_http_worker_resume_recording(CettaHttpWorker *worker, uint64_t id);
 
 /* Ephemeral clients may abandon a result. This operation is refused on a
  * durable worker (one with hooks). Cancellation there must remain observable. */

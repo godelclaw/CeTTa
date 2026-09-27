@@ -300,8 +300,15 @@ int main(int argc, char **argv) {
     Atom *redirect_result = submit_and_poll(runtime, &arena,
                                              redirect_request, &redirect_id);
     CHECK(redirect_id > status_id &&
-              http_response(redirect_result, 200, "one"),
-          "bounded redirect chain reaches its final response");
+              http_response(redirect_result, 302, ""),
+          "redirects are not followed by default");
+    Atom *follow_items[8];
+    memcpy(follow_items, redirect_request->expr.elems, 7 * sizeof(Atom *));
+    follow_items[7] = atom_bool(&arena, true);
+    redirect_request = atom_expr(&arena, follow_items, 8);
+    redirect_result = submit_and_poll(runtime, &arena, redirect_request, &redirect_id);
+    CHECK(http_response(redirect_result, 200, "one"),
+          "explicit redirect opt-in reaches the final response");
 
     char json_url[512];
     make_url(json_url, sizeof(json_url), argv[1], "/json");

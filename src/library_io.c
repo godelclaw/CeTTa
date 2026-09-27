@@ -42,6 +42,7 @@ typedef struct CettaIoRequest {
     char *body;
     int64_t timeout_ms;
     size_t max_bytes;
+    bool follow_redirects;
     char *response;
     size_t response_len;
     size_t response_cap;
@@ -277,7 +278,7 @@ static CettaIoRequest *io_parse_http_request(Atom *atom, char *error,
     const char *body;
     int64_t timeout_ms;
     int64_t max_bytes;
-    if (!atom || atom->kind != ATOM_EXPR || atom->expr.len != 7u ||
+    if (!atom || atom->kind != ATOM_EXPR || (atom->expr.len != 7u && atom->expr.len != 8u) ||
         !atom_is_symbol(atom->expr.elems[0], "http:request") ||
         !(method = io_text_arg(atom->expr.elems[1])) ||
         !(url = io_text_arg(atom->expr.elems[2])) ||
@@ -290,6 +291,20 @@ static CettaIoRequest *io_parse_http_request(Atom *atom, char *error,
         snprintf(error, error_size,
                  "expected (http:request method url headers body nonnegative-timeout-ms nonnegative-max-bytes)");
         return NULL;
+    }
+    bool follow_redirects=false;
+    if (atom->expr.len==8u) {
+        Atom *follow=atom->expr.elems[7];
+        if (follow && follow->kind==ATOM_GROUNDED && follow->ground.gkind==GV_BOOL)
+            follow_redirects=follow->ground.bval;
+        else if (atom_is_symbol(follow,"True") || atom_is_symbol(follow,"true"))
+            follow_redirects=true;
+        else if (atom_is_symbol(follow,"False") || atom_is_symbol(follow,"false"))
+            follow_redirects=false;
+        else {
+            snprintf(error, error_size, "follow-redirects must be Bool");
+            return NULL;
+        }
     }
     if (!io_valid_http_method(method)) {
         snprintf(error, error_size, "invalid HTTP method");
@@ -311,6 +326,7 @@ static CettaIoRequest *io_parse_http_request(Atom *atom, char *error,
     request->body = io_strdup(body);
     request->timeout_ms = timeout_ms;
     request->max_bytes = (size_t)max_bytes;
+    request->follow_redirects = follow_redirects;
     if (!io_parse_headers(atom->expr.elems[3], &request->headers,
                           error, error_size)) {
         io_request_free(NULL, request);
@@ -379,7 +395,7 @@ static bool io_http_start(CettaIoRuntime *runtime, CettaIoRequest *request,
         .headers=(const char *const *)headers, .header_count=count,
         .body=request->body, .body_size=strlen(request->body),
         .timeout_ms=(uint32_t)request->timeout_ms,
-        .max_response_bytes=request->max_bytes, .follow_redirects=true
+        .max_response_bytes=request->max_bytes, .follow_redirects=request->follow_redirects
     };
     CettaHttpWorkerStatus status = cetta_http_worker_submit(runtime->worker, &input);
     for (i = 0; i < count; ++i) free(headers[i]);
@@ -502,6 +518,12 @@ static bool io_fetch_header_array(CettaIoRequest *request) {
 
 static bool io_http_start(CettaIoRuntime *runtime, CettaIoRequest *request,
                           char *error, size_t error_size) {
+    /* Emscripten's XHR backend cannot suppress redirects. Refuse before any
+     * networking unless the caller has explicitly opted into following. */
+    if (!request->follow_redirects) {
+        snprintf(error, error_size, "browser HTTP requires explicit follow-redirects=true");
+        return false;
+    }
     if (!runtime) {
         snprintf(error, error_size, "HTTP provider is unavailable");
         return false;
