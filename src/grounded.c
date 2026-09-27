@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "grounded.h"
+#include "effect_policy.h"
 #include "abt.h"
 #include "eval.h"
 #include "he_typing.h"
@@ -3073,6 +3074,8 @@ static Atom *grounded_petta_math_result(Arena *a, SymbolId head_id,
 
 Atom *grounded_dispatch(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     if (head->kind != ATOM_SYMBOL) return NULL;
+    if (cetta_speculative_active() && !cetta_speculative_op_allowed(head->sym_id))
+        return is_grounded_op(head->sym_id) ? cetta_effect_denied(a) : NULL;
     {
         Atom *abt = abt_grounded_dispatch(a, head, args, nargs);
         if (abt) return abt;

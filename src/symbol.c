@@ -303,6 +303,12 @@ void symbol_table_init_builtins(SymbolTable *st, BuiltinSyms *builtins) {
     CETTA_BUILTIN_SYMBOLS(CETTA_INIT_BUILTIN)
 #undef CETTA_INIT_BUILTIN
 
+    /* Includes append-only extensions outside the legacy contiguous range. */
+#define CETTA_MARK_BUILTIN(field, text) \
+    symbol_table_add_flags(st, builtins->field, CETTA_SYMBOL_FLAG_BUILTIN);
+    CETTA_BUILTIN_SYMBOLS(CETTA_MARK_BUILTIN)
+#undef CETTA_MARK_BUILTIN
+
 #define CETTA_MARK_STATIC_GROUNDED(field) \
     symbol_table_add_flags( \
         st, builtins->field, CETTA_SYMBOL_FLAG_STATIC_GROUNDED_OP);
@@ -316,6 +322,12 @@ void symbol_table_init_builtins(SymbolTable *st, BuiltinSyms *builtins) {
     CETTA_TYPE_PURE_GROUNDED_SYMBOL_FIELDS(
         CETTA_MARK_TYPE_PURE_GROUNDED)
 #undef CETTA_MARK_TYPE_PURE_GROUNDED
+
+#define CETTA_MARK_SPECULATIVE(field) \
+    symbol_table_add_flags(st, builtins->field, CETTA_SYMBOL_FLAG_SPECULATIVE_OP);
+    CETTA_PURE_GROUNDED_SYMBOL_FIELDS(CETTA_MARK_SPECULATIVE)
+    CETTA_SPECULATIVE_SYMBOL_FIELDS(CETTA_MARK_SPECULATIVE)
+#undef CETTA_MARK_SPECULATIVE
 
     /* The library ABI reserves this prefix for native grounded operators.
        Mark builtins eagerly; later dynamically interned ABI names retain the

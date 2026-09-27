@@ -38168,3 +38168,15 @@ test-io-library:
 	@echo "test-io-library requires the native HTTP provider" >&2
 	@exit 1
 endif
+
+.PHONY: test-speculative-eval
+SPECULATIVE_EVAL_TEST_BIN = runtime/test-speculative-eval-$(BUILD_OBJ_TAG)
+SPECULATIVE_EVAL_TEST_OBJ = runtime/bootstrap/test-speculative-eval.$(BUILD_OBJ_TAG).o
+-include $(SPECULATIVE_EVAL_TEST_OBJ:.o=.d)
+$(SPECULATIVE_EVAL_TEST_OBJ): tests/test_speculative_eval.c $(BUILD_CONFIG_HEADER)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -MF $(@:.o=.d) -c $< -o $@
+$(SPECULATIVE_EVAL_TEST_BIN): $(SPECULATIVE_EVAL_TEST_OBJ) $(FALLBACK_EVAL_TEST_LINK_OBJ) $(BRIDGE_DEPS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+test-speculative-eval: $(SPECULATIVE_EVAL_TEST_BIN) $(IO_HTTP_FIXTURE_BIN)
+	python3 tests/test_speculative_eval.py $(IO_HTTP_FIXTURE_BIN) $(SPECULATIVE_EVAL_TEST_BIN)

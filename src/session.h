@@ -222,6 +222,9 @@ typedef struct {
     CettaModulePolicy module_policy;
     CettaEvaluatorOptions options;
     CettaProcessControl process_control;
+    /* Native host authority, never a pragma/environment/MeTTa option. The
+     * host supplies a fresh observation and accepts only closed proposals. */
+    bool speculative;
 } CettaEvalSession;
 
 typedef struct {

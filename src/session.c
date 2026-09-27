@@ -839,6 +839,7 @@ void cetta_eval_session_init(CettaEvalSession *session,
                              CettaLanguageId language_id,
                              const CettaProfile *profile) {
     session->language_id = language_id;
+    session->speculative = false;
     session->profile = cetta_profile_is_valid_for_language(language_id, profile)
         ? profile
         : NULL;

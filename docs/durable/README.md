@@ -178,7 +178,48 @@ amid unrelated traffic and conflicting positive/negative reads.
 recovery, refusal without administrative opt-in, and speculative denial in
 PeTTa and HE, including rho payloads even during an administrative invocation.
 
-This layer does not yet provide the durable host's effect capabilities,
-credential handling, transport, or Telegram policy. The durable-administration
-gate is in place; the remaining effect boundaries must be in place before using
-this store to dispatch external work.
+## Speculative evaluation
+
+The native host uses `eval_top_speculative` with an HE library context to compute
+proposals. This policy is native authority: no MeTTa option, pragma, CLI repair
+flag or environment variable enables effects within it. Nested choices and rho
+payloads inherit the same session policy. The previous policy and context are
+restored on return. Other language profiles remain available to an independent
+cognitive worker; this service evaluation entry currently accepts HE only.
+
+An explicit allowlist admits arithmetic, structural computation, control forms,
+in-memory queries and the audited string, JSON and rho interfaces. Core
+operations and native library extensions are denied by default until audited.
+The checks apply at execution, so quoted effect descriptions are ordinary data.
+Filesystem access, ambient process observations, raw transport, foreign calls,
+module loading, mutable state/space operations and durable-store operations are
+unavailable. Rejection produces `(Error speculative-evaluation EffectNotAllowed)`
+without echoing arguments. Existing HE control forms retain their error
+semantics: for example, `collapse` may omit a rejected branch. Denial prevents
+the effect; it does not make an error survive every surrounding expression.
+State changes are returned as proposals. Prepared execution and
+the relational machine are deferred at this boundary pending separate
+qualification; ordinary evaluations retain their existing optimizations.
+
+The host must load its trusted, versioned program before this entry and provide
+fresh in-memory query spaces for the exact durable observation. Never provide
+external backends, foreign handles, mutable live resources or cached state from
+another snapshot. This is an evaluator effect boundary, not an OS sandbox for
+untrusted native code. The host must validate closed proposal values, pair them
+with the original observation and commit the selected transition. Returning a
+term named `telegram:send` does not confer channel authority or dispatch it.
+The host also supplies input/result limits and an evaluation budget; this
+entry does not implement service admission or scheduling policy.
+
+`make ENABLE_HTTP=1 ENABLE_DURABLE=1 test-speculative-eval` exercises the native
+entry against a private counted HTTP peer and a file sentinel. It checks pure
+proposals, quoted data, computed heads, nested choices and rho payloads, denied
+operations and policy restoration. Qualification uses HE's extended profile,
+including a two-thread configuration; unsafe branch syntax can select the
+existing cooperative fallback. Python-enabled builds also load a callable
+before evaluation and verify that neither a direct nor computed call executes
+it. Other language entries are refused before execution. The normal HE and
+PeTTa corpus paths run with the policy off.
+
+The storage and evaluation layers do not yet supply registered channel
+capabilities, credential references or the production Telegram dispatcher.

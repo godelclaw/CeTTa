@@ -14,6 +14,8 @@ typedef uint32_t SymbolId;
 enum {
     CETTA_SYMBOL_FLAG_STATIC_GROUNDED_OP = 1u << 0,
     CETTA_SYMBOL_FLAG_TYPE_PURE_GROUNDED_OP = 1u << 1,
+    CETTA_SYMBOL_FLAG_SPECULATIVE_OP = 1u << 2,
+    CETTA_SYMBOL_FLAG_BUILTIN = 1u << 3,
 };
 
 typedef struct {
@@ -595,11 +597,10 @@ static inline uint64_t symbol_table_instance_id(const SymbolTable *st) {
     X(range_atom) \
     X(repeat_atom)
 
-/* Builtin grounded operations whose result type is a pure function of their
-   argument atoms.  Compile this effect/type license into SymbolEntry flags
-   during builtin initialization, before the table is exposed, so admission
-   paths do not repeatedly reclassify opcodes. */
-#define CETTA_TYPE_PURE_GROUNDED_SYMBOL_FIELDS(X) \
+/* Grounded value operations without ambient observations or mutation, given
+ * closed values from the host. This is also an execution permission list:
+ * additions require an effect audit, not merely a predictable result type. */
+#define CETTA_PURE_GROUNDED_SYMBOL_FIELDS(X) \
     X(abt_default_signatures) \
     X(abt_signature_admitted) \
     X(abt_shift) \
@@ -663,6 +664,98 @@ static inline uint64_t symbol_table_instance_id(const SymbolTable *st) {
     X(remove_all_atom) \
     X(intersection_atom) \
     X(subtraction_atom)
+
+/* Result-type purity is weaker than effect freedom. Additional type-only
+ * licenses belong here, not in the shared execution-permission list above. */
+#define CETTA_TYPE_PURE_GROUNDED_SYMBOL_FIELDS(X) \
+    CETTA_PURE_GROUNDED_SYMBOL_FIELDS(X)
+
+/* Additional operations admitted in a host-owned speculative HE context.
+ * Query spaces must be fresh in-memory projections of the supplied observation.
+ * Changes are returned as proposals, never applied through mutation builtins.
+ * Native extensions and future builtins are excluded until explicitly audited. */
+#define CETTA_SPECULATIVE_SYMBOL_FIELDS(X) \
+    X(quote) \
+    X(capture) \
+    X(function) \
+    X(colon) \
+    X(arrow) \
+    X(comma) \
+    X(pipe) \
+    X(match) \
+    X(superpose) \
+    X(hyperpose) \
+    X(collapse) \
+    X(reify) \
+    X(cons_atom) \
+    X(union_atom) \
+    X(decons_atom) \
+    X(car_atom) \
+    X(cdr_atom) \
+    X(unify) \
+    X(case_text) \
+    X(switch_text) \
+    X(switch_minimal) \
+    X(let_star) \
+    X(let) \
+    X(chain) \
+    X(abt_chain_v1) \
+    X(abt_let_v1) \
+    X(collect) \
+    X(fold) \
+    X(fold_by_key) \
+    X(reduce) \
+    X(select) \
+    X(once) \
+    X(return_text) \
+    X(eval) \
+    X(foldl_atom_in_space) \
+    X(get_atoms) \
+    X(count_atoms) \
+    X(collapse_bind) \
+    X(superpose_bind) \
+    X(metta) \
+    X(evalc) \
+    X(nop) \
+    X(get_metatype) \
+    X(get_type) \
+    X(get_type_space) \
+    X(if_text) \
+    X(sealed_text) \
+    X(minimal_foldl_atom) \
+    X(minimal_foldl_llist) \
+    X(minimal_foldl_sequence) \
+    X(minimal_retain_top_k_by_number) \
+    X(minimal_space_contains_exact) \
+    X(minimal_space_revision) \
+    X(size) \
+    X(format_args) \
+    X(parse) \
+    X(parse_first) \
+    X(lib_json_parse_v1) \
+    X(lib_json_parse) \
+    X(lib_json_stringify_v1) \
+    X(lib_json_stringify) \
+    X(lib_json_members_v1) \
+    X(lib_json_get_all_v1) \
+    X(lib_json_get_first_v1) \
+    X(lib_json_get_last_v1) \
+    X(lib_json_object_get) \
+    X(lib_str_length) \
+    X(lib_str_concat) \
+    X(lib_str_split) \
+    X(lib_str_split_whitespace) \
+    X(lib_str_join) \
+    X(lib_str_slice) \
+    X(lib_str_find) \
+    X(lib_str_starts_with) \
+    X(lib_str_ends_with) \
+    X(lib_str_trim) \
+    X(lib_lts_rho_transitions) \
+    X(lib_rhometta_run) \
+    X(lib_rhometta_run_canonical) \
+    X(lib_rhometta_transitions) \
+    X(lib_rhometta_values)
 
 typedef struct {
 #define CETTA_BUILTIN_SYMBOL_FIELD(field, text) SymbolId field;

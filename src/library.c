@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "library.h"
+#include "effect_policy.h"
 
 #include "eval.h"
 #include "mm2_lower.h"
@@ -9877,6 +9878,28 @@ Atom *cetta_library_dispatch_native(CettaLibraryContext *ctx, Space *space,
                                     Arena *a,
                                     Atom *head, Atom **args, uint32_t nargs) {
     if (!ctx || !head || head->kind != ATOM_SYMBOL) return NULL;
+    if (ctx->session.speculative) {
+        if (!cetta_speculative_op_allowed(head->sym_id))
+            return is_grounded_op(head->sym_id) ? cetta_effect_denied(a) : NULL;
+        /* Only these audited mechanisms are reachable. Do not fall through
+         * to dynamically registered modules or a foreign runtime. */
+        Atom *result=NULL;
+        if (ctx->active_mask & CETTA_LIBRARY_STR)
+            result=cetta_library_dispatch_str(a,head,args,nargs);
+        if (result) return result;
+#if CETTA_BUILD_WITH_JSON_GSLT
+        if (ctx->active_mask & CETTA_LIBRARY_JSON)
+            result=cetta_json_library_dispatch_v1(ctx->json_runtime,a,head,args,nargs);
+        if (result) return result;
+#endif
+        if (ctx->active_mask & CETTA_LIBRARY_RHOMETTA)
+            result=cetta_library_dispatch_rhometta(ctx,space,a,head,args,nargs);
+        if (result) return result;
+        if (head->sym_id==g_builtin_syms.lib_lts_rho_transitions &&
+            (ctx->active_mask & CETTA_LIBRARY_LTS))
+            return cetta_library_dispatch_lts(ctx,space,a,head,args,nargs);
+        return NULL;
+    }
     {
         Atom *result = cetta_rule_machine_dispatch(a, head, args, nargs);
         if (result) return result;

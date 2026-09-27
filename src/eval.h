@@ -143,6 +143,16 @@ void eval_top_with_registry_outcome(
     Space *s, Arena *a, Arena *persistent, Registry *r, Atom *expr,
     EvalOutcome *outcome, CettaPrimeNeedAnswerObserver observer,
     void *observer_context);
+
+/* Evaluate a proposal in a host-owned HE context. Load trusted program modules
+ * before calling; registry/query spaces must be fresh in-memory projections of
+ * the exact observation being validated. No live handles or cached state may
+ * be supplied. Context must not be concurrently used by another caller.
+ * Nested rho evaluation inherits the policy. The host validates closed output
+ * and commits a selected proposal; this API performs no durable commitment. */
+void eval_top_speculative(CettaLibraryContext *context, Space *space,
+    Arena *arena, Arena *persistent, Registry *registry, Atom *expression,
+    EvalOutcome *outcome);
 /* Re-entrant callback used only by the optional PeTTa/libpl adapter. */
 bool eval_petta_from_lib_prolog(Arena *a, Atom *expr, ResultSet *results);
 void eval_release_temporary_spaces(void);
