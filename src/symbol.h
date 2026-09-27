@@ -300,6 +300,11 @@ static inline uint64_t symbol_table_instance_id(const SymbolTable *st) {
     X(lib_fs_append_text, "__cetta_lib_fs_append_text") \
     X(lib_fs_read_lines, "__cetta_lib_fs_read_lines") \
     X(lib_io_capabilities, "__cetta_lib_io_capabilities") \
+    X(lib_durable_open, "__cetta_lib_durable_open") \
+    X(lib_durable_read, "__cetta_lib_durable_read") \
+    X(lib_durable_commit, "__cetta_lib_durable_commit") \
+    X(lib_durable_checkpoint, "__cetta_lib_durable_checkpoint") \
+    X(lib_durable_close, "__cetta_lib_durable_close") \
     X(lib_io_submit, "__cetta_lib_io_submit") \
     X(lib_io_poll, "__cetta_lib_io_poll") \
     X(lib_io_cancel, "__cetta_lib_io_cancel") \

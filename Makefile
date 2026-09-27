@@ -379,6 +379,29 @@ LIB_PROLOG_CONFIG_ID := disabled
 LIB_PROLOG_RPATH :=
 LIB_PROLOG_SRC := src/petta_libpl_stub.c
 endif
+ENABLE_DURABLE ?= 0
+SQLITE_PROVIDER ?= vendored
+DURABLE_CFLAGS := -DCETTA_BUILD_WITH_DURABLE=$(ENABLE_DURABLE)
+DURABLE_LDFLAGS :=
+DURABLE_SRC :=
+ifneq ($(filter $(ENABLE_DURABLE),0 1),$(ENABLE_DURABLE))
+$(error ENABLE_DURABLE must be 0 or 1)
+endif
+ifeq ($(ENABLE_DURABLE),1)
+DURABLE_SRC += src/durable_store.c src/durable_value.c
+ifeq ($(SQLITE_PROVIDER),vendored)
+DURABLE_CFLAGS += -Ivendor/sqlite -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION
+DURABLE_SRC += vendor/sqlite/sqlite3.c
+else ifeq ($(SQLITE_PROVIDER),system)
+ifeq ($(shell pkg-config --exists sqlite3 && echo yes),)
+$(error SQLITE_PROVIDER=system requires the sqlite3 development package)
+endif
+DURABLE_CFLAGS += $(shell pkg-config --cflags sqlite3)
+DURABLE_LDFLAGS += $(shell pkg-config --libs sqlite3)
+else
+$(error SQLITE_PROVIDER must be vendored or system)
+endif
+endif
 HTTP_ENABLED := 0
 HTTP_PROVIDER_CURL := 0
 HTTP_PROVIDER_EMSCRIPTEN := 0
@@ -487,6 +510,9 @@ ifeq ($(LIB_PROLOG_ENABLED),1)
 BUILD_OBJ_TAG := $(BUILD_OBJ_TAG).lib-prolog
 BUILD_OBJ_TAG := $(BUILD_OBJ_TAG).swipl-config-$(LIB_PROLOG_CONFIG_ID)
 endif
+ifeq ($(ENABLE_DURABLE),1)
+BUILD_OBJ_TAG := $(BUILD_OBJ_TAG).durable-$(SQLITE_PROVIDER)
+endif
 ifeq ($(HTTP_ENABLED),1)
 BUILD_OBJ_TAG := $(BUILD_OBJ_TAG).http-config-$(HTTP_CONFIG_ID)
 endif
@@ -569,10 +595,10 @@ PRIME_EVAL_STACK_CPPFLAGS =
 ifeq ($(ENABLE_PRIME_EVAL_STACK),1)
 PRIME_EVAL_STACK_CPPFLAGS = -DCETTA_PRIME_EVAL_STACK=1
 endif
-CPPFLAGS = -Isrc -I. -Iexperiments/gslt2parse_foundation/native $(BRIDGE_CFLAGS) $(PY_CFLAGS) $(GMP_CFLAGS) $(LIB_PROLOG_CFLAGS) $(HTTP_CFLAGS) $(PROVENANCE_CPPFLAGS) $(PRIME_RECEIPT_INDEX_CPPFLAGS) $(PRIME_NEED_HEAP_INDEX_CPPFLAGS) $(PRIME_NEED_CLOSURE_CAPTURE_CPPFLAGS) $(PRIME_EVAL_STACK_CPPFLAGS) -include $(BUILD_CONFIG_HEADER)
+CPPFLAGS = -Isrc -I. -Iexperiments/gslt2parse_foundation/native $(BRIDGE_CFLAGS) $(PY_CFLAGS) $(GMP_CFLAGS) $(LIB_PROLOG_CFLAGS) $(HTTP_CFLAGS) $(DURABLE_CFLAGS) $(PROVENANCE_CPPFLAGS) $(PRIME_RECEIPT_INDEX_CPPFLAGS) $(PRIME_NEED_HEAP_INDEX_CPPFLAGS) $(PRIME_NEED_CLOSURE_CAPTURE_CPPFLAGS) $(PRIME_EVAL_STACK_CPPFLAGS) -include $(BUILD_CONFIG_HEADER)
 CFLAGS = -O3 -Wall -Werror -std=c11 -pthread
 DEPFLAGS = -MMD -MP
-LDFLAGS = $(BRIDGE_LDFLAGS) -ldl -lm -pthread $(GMP_LDFLAGS) $(LIB_PROLOG_LDFLAGS) $(LIB_PROLOG_RPATH) $(HTTP_LDFLAGS) $(PY_LDFLAGS) $(PY_RPATH)
+LDFLAGS = $(BRIDGE_LDFLAGS) -ldl -lm -pthread $(GMP_LDFLAGS) $(LIB_PROLOG_LDFLAGS) $(LIB_PROLOG_RPATH) $(HTTP_LDFLAGS) $(DURABLE_LDFLAGS) $(PY_LDFLAGS) $(PY_RPATH)
 ifeq ($(ENABLE_SANITIZERS),1)
 CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=$(SANITIZERS) -fno-sanitize-recover=all -Wall -Werror -std=c11 -pthread
 LDFLAGS += -fsanitize=$(SANITIZERS) -fno-sanitize-recover=all
@@ -629,7 +655,7 @@ SRC = src/symbol.c src/atom.c src/binding/frame_identity.c src/name_key.c src/at
 SRC += src/shared_transition.c
 SRC += src/gslt_language_manifest_v1.c
 SRC += src/gslt_support_profile_v1.c
-SRC += src/library_io.c
+SRC += src/library_io.c src/library_durable.c $(DURABLE_SRC)
 SRC += $(JSON_GSLT_RUNTIME_SRC)
 SRC += $(PETTA_TYPECHECK_CENSUS_SRC)
 SRC += \
@@ -5197,7 +5223,7 @@ $(STAGE0_BUILD_CONFIG_STAMP): $(BUILD_CONFIG_INPUTS)
 	touch "$@"
 
 %.$(BUILD_OBJ_TAG).stage0.o: %.c $(STAGE0_BUILD_CONFIG_HEADER)
-	$(CC) -Isrc -I. -Iexperiments/gslt2parse_foundation/native $(BRIDGE_CFLAGS) $(PY_CFLAGS) $(GMP_CFLAGS) $(LIB_PROLOG_CFLAGS) $(HTTP_CFLAGS) -include $(STAGE0_BUILD_CONFIG_HEADER) $(CFLAGS) $(DEPFLAGS) -DCETTA_NO_STDLIB -MF $(@:.o=.d) -c -o $@ $<
+	$(CC) -Isrc -I. -Iexperiments/gslt2parse_foundation/native $(BRIDGE_CFLAGS) $(PY_CFLAGS) $(GMP_CFLAGS) $(LIB_PROLOG_CFLAGS) $(HTTP_CFLAGS) $(DURABLE_CFLAGS) -include $(STAGE0_BUILD_CONFIG_HEADER) $(CFLAGS) $(DEPFLAGS) -DCETTA_NO_STDLIB -MF $(@:.o=.d) -c -o $@ $<
 
 $(STAGE0_BIN): $(STAGE0_OBJ) $(BRIDGE_DEPS)
 	@mkdir -p $(BOOTSTRAP_TMPDIR) $(dir $@)
@@ -38083,3 +38109,37 @@ endif
 .PHONY: test-rhometta-macro-audit test-eval-gc-adversarial test-eval-gc-survivor-reset test-eval-gc-asan-selected test-eval-gc-asan-selected-body test-eval-gc-asan-full-differential test-eval-gc-asan-full-differential-body test-tsan test-tsan-main test-tsan-mork test-rhocalc-cost-differential-required test-rhocalc-cost-observer-transparency test-rhocalc-cost-commit-audit test-rhocalc-cost-commit-audit-asan test-rhocalc-cost-commit-audit-tsan test-rhocalc-cost-commit-audit-body bench-rho-rhometta-deduction-farm bench-rho-hot-frontier bench-rho-hot-successors bench-rho-threaded bench-rho-threaded-heavy bench-rho-cost-threaded bench-rho-cost-threaded-heavy bench-rho-threaded-corpus bench-rho-threaded-generated bench-rho-threaded-generated-runtime-stats perf-bench-rhocalc test-main-readiness-model main-readiness-space-ladders main-readiness-space-ladders-exhaustive main-readiness-space-frontier main-readiness-thresholds main-readiness-mutation-qualification main-readiness-rho-adaptive main-readiness-routine main-readiness-routine-authoritative main-readiness-exhaustive main-readiness-calibration-status main-readiness-calibrate main-readiness-cost-rho
 .PHONY: probe-d4-nodup-capability-backends
 .PHONY: test-backends-lanes test-manifest-strict test-mork-lane-core-body test-mork-add-atoms-runtime-stats-body test-mork-bridge-contextual-exact-rows test-mork-cursor-byte-buffer-count-abi test-mork-cursor-expr-row-stream-abi test-mork-query-row-stream-abi probe-core-lane probe-pathmap-lane probe-pathmap-lane-body
+
+# The durable store test is independent of the evaluator and can run before a
+# full CeTTa build. Production objects contain no crash-injection callbacks.
+# Keep upstream SQLite unmodified and outside the project's warning policy.
+vendor/sqlite/sqlite3.$(BUILD_OBJ_TAG).o vendor/sqlite/sqlite3.$(BUILD_OBJ_TAG).stage0.o vendor/sqlite/sqlite3.$(BUILD_OBJ_TAG).runtime-stats.o: CFLAGS := $(filter-out -Werror -O3,$(CFLAGS)) -O2
+
+.PHONY: test-durable-store
+runtime/sqlite-durable-test.o: vendor/sqlite/sqlite3.c vendor/sqlite/sqlite3.h
+	@mkdir -p runtime
+	$(CC) -O2 -std=c11 -pthread -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION -c $< -o $@
+
+runtime/test-durable-store: tests/test_durable_store.c src/durable_store.c src/durable_store.h runtime/sqlite-durable-test.o
+	$(CC) -O2 -Wall -Wextra -Werror -std=c11 -pthread -Isrc -Ivendor/sqlite -DCETTA_DURABLE_TEST tests/test_durable_store.c src/durable_store.c runtime/sqlite-durable-test.o -ldl -lm -o $@
+
+test-durable-store: runtime/test-durable-store
+	./runtime/test-durable-store
+
+.PHONY: test-durable-value
+runtime/test-durable-value-$(BUILD_OBJ_TAG): tests/test_durable_value.c src/durable_value.c src/durable_value.h src/symbol.c src/atom.c src/binding/frame_identity.c $(BUILD_CONFIG_HEADER)
+	@mkdir -p runtime
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_durable_value.c src/durable_value.c src/symbol.c src/atom.c src/binding/frame_identity.c $(LDFLAGS)
+
+test-durable-value: runtime/test-durable-value-$(BUILD_OBJ_TAG)
+	./runtime/test-durable-value-$(BUILD_OBJ_TAG)
+
+.PHONY: test-durable-library
+ifeq ($(ENABLE_DURABLE),1)
+test-durable-library: $(BIN)
+	python3 tests/test_durable_library.py ./$(BIN)
+else
+test-durable-library:
+	@echo "test-durable-library requires ENABLE_DURABLE=1" >&2
+	@exit 1
+endif

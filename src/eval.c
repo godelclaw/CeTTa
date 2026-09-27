@@ -11780,6 +11780,7 @@ static bool symbol_name_equals(Atom *atom, const char *name) {
 
 static bool hyperpose_external_unsafe_head(Atom *head) {
     return symbol_name_has_prefix(head, "mork:") ||
+           symbol_name_has_prefix(head, "durable:") ||
            symbol_name_has_prefix(head, "mm2:") ||
            symbol_name_has_prefix(head, "prolog:") ||
            symbol_name_equals(head, "fs:write") ||
@@ -11803,6 +11804,7 @@ static bool hyperpose_internal_unsafe_head(SymbolId head_id, Atom *head) {
         return true;
     }
     return symbol_name_has_prefix(head, "__cetta_lib_mork_") ||
+           symbol_name_has_prefix(head, "__cetta_lib_durable_") ||
            symbol_name_has_prefix(head, "__cetta_lib_mm2_") ||
            symbol_name_has_prefix(head, "__cetta_lib_prolog_");
 }
@@ -30297,7 +30299,11 @@ handle_dispatch(Space *s, Arena *a, Atom *atom, Atom *etype, int fuel,
         }
     }
     if (op->kind == ATOM_SYMBOL &&
-        (head_id == g_builtin_syms.lib_mork_space_add_atoms ||
+        /* Mutation batches carry data, including continuation expressions.
+         * Like MORK's atom insertion ABI, durable commit must not recursively
+         * evaluate a batch while crossing the native boundary. */
+        (head_id == g_builtin_syms.lib_durable_commit ||
+         head_id == g_builtin_syms.lib_mork_space_add_atoms ||
          head_id == g_builtin_syms.lib_mork_space_add_stream ||
          head_id == g_builtin_syms.mork_add_atoms ||
          head_id == g_builtin_syms.mork_add_atom ||

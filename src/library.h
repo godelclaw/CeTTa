@@ -182,6 +182,7 @@ typedef struct CettaLibraryContext {
     CettaLibPrologRuntime *lib_prolog;
     CettaForeignRuntime *foreign_runtime;
     struct CettaIoRuntime *io_runtime;
+    struct CettaDurableRuntime *durable_runtime;
     struct CettaJsonLibraryRuntimeV1 *json_runtime;
 } CettaLibraryContext;
 

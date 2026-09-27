@@ -18,6 +18,7 @@
 #include "text_source.h"
 #include "langdef_pack.h"
 #include "library_io.h"
+#include "library_durable.h"
 #include "library_json.h"
 #include <ctype.h>
 #include <dirent.h>
@@ -50,6 +51,7 @@ enum {
     CETTA_LIBRARY_LIB_PROLOG = 1u << 8,
     CETTA_LIBRARY_PETTA_MEMO = 1u << 9,
     CETTA_LIBRARY_IO = 1u << 10,
+    CETTA_LIBRARY_DURABLE = 1u << 13,
     CETTA_LIBRARY_PETTA_TABLING = 1u << 11,
 #if CETTA_BUILD_WITH_JSON_GSLT
     CETTA_LIBRARY_JSON = 1u << 12
@@ -74,6 +76,7 @@ static const CettaLibrarySpec CETTA_LIBRARIES[] = {
     {"lib_memo", CETTA_LIBRARY_PETTA_MEMO},
     {"lib_tabling", CETTA_LIBRARY_PETTA_TABLING},
     {"io", CETTA_LIBRARY_IO},
+    {"durable", CETTA_LIBRARY_DURABLE},
 #if CETTA_BUILD_WITH_JSON_GSLT
     {"json", CETTA_LIBRARY_JSON},
 #endif
@@ -438,6 +441,7 @@ void cetta_library_context_init_for_language_profile(CettaLibraryContext *ctx,
     }
     ctx->foreign_runtime = cetta_foreign_runtime_new();
     ctx->io_runtime = NULL;
+    ctx->durable_runtime = NULL;
     ctx->json_runtime = NULL;
 }
 
@@ -501,6 +505,8 @@ void cetta_library_context_free(CettaLibraryContext *ctx) {
         cetta_foreign_runtime_free(ctx->foreign_runtime);
         ctx->foreign_runtime = NULL;
     }
+    cetta_durable_runtime_free(ctx->durable_runtime);
+    ctx->durable_runtime = NULL;
     cetta_io_runtime_free(ctx->io_runtime);
     ctx->io_runtime = NULL;
 #if CETTA_BUILD_WITH_JSON_GSLT
@@ -9269,6 +9275,8 @@ bool cetta_library_import(CettaLibraryContext *ctx, const char *name,
         ctx->active_mask &= ~import_bit;
         return false;
     }
+    if (import_bit == CETTA_LIBRARY_DURABLE && !ctx->durable_runtime)
+        ctx->durable_runtime = cetta_durable_runtime_new();
     if (import_bit == CETTA_LIBRARY_IO && !ctx->io_runtime)
         ctx->io_runtime = cetta_io_runtime_new();
     return true;
@@ -9878,6 +9886,11 @@ Atom *cetta_library_dispatch_native(CettaLibraryContext *ctx, Space *space,
     if (ctx->active_mask & CETTA_LIBRARY_FS) {
         Atom *result = cetta_library_dispatch_fs(a, head, args, nargs);
         if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_DURABLE) {
+        Atom *result = cetta_durable_dispatch(ctx->durable_runtime, a, head, args, nargs);
+        if (result) return atom_is_symbol_id(head, g_builtin_syms.lib_durable_commit)
+            ? result : library_value_result(a, result);
     }
     if (ctx->active_mask & CETTA_LIBRARY_IO) {
         Atom *result = cetta_io_dispatch(ctx->io_runtime, a, head, args, nargs);
