@@ -247,7 +247,8 @@ static void concurrency(const char *base) {
 
 typedef struct {
     CettaDurableStore *store;
-    bool minimal;
+    CettaHttpWorker *worker;
+    bool minimal, full_repair, resume_inside;
     atomic_bool allow_record;
     atomic_uint full_calls, minimal_calls, stalls, acknowledgements;
     const unsigned char *retained;
@@ -269,7 +270,8 @@ static CettaHttpRecord failure_observe(void *ctx, const CettaHttpResult *r, Cett
                 assert(r->body==f->retained && r->body_size==f->retained_size);
             f->retained=r->body; f->retained_size=r->body_size;
             atomic_fetch_add(&f->full_calls,1);
-            if (f->minimal) return HTTP_RECORD_USE_MINIMAL;
+            if (f->minimal && !(f->full_repair && atomic_load(&f->allow_record)))
+                return HTTP_RECORD_USE_MINIMAL;
         } else {
             assert(f->minimal && !r->body && !r->body_size);
             atomic_fetch_add(&f->minimal_calls,1);
@@ -294,13 +296,18 @@ static void recording_stalled(void *ctx, uint64_t id, CettaHttpRecordMode mode, 
     RecordingFailure *f=ctx;
     assert(id==1 && attempts==3);
     assert(mode==(f->minimal?HTTP_RECORD_MINIMAL:HTTP_RECORD_FULL));
-    /* Store access here also tests that escalation runs without the worker lock. */
     CettaDurableSnapshot v=snapshot(f->store,"failure-pending");
     assert(v.count>=1); cetta_durable_snapshot_free(&v);
+    if (f->resume_inside) {
+        /* Re-enter the worker API: this deadlocks if escalation holds its lock. */
+        atomic_store(&f->allow_record,true);
+        assert(cetta_http_worker_resume_recording(f->worker,id));
+    }
     atomic_fetch_add(&f->stalls,1);
 }
-static void recording_failure(const char *base, const char *path, bool minimal) {
-    RecordingFailure f={.minimal=minimal};
+static void recording_failure(const char *base, const char *path,
+                              bool minimal, bool full_repair, bool resume_inside) {
+    RecordingFailure f={.minimal=minimal,.full_repair=full_repair,.resume_inside=resume_inside};
     assert(cetta_durable_open(path,NULL,&f.store)==DURABLE_OK);
     CettaDurableOp ops[]={
         {DURABLE_INSERT,"failure-pending","one","accepted",8},
@@ -310,34 +317,43 @@ static void recording_failure(const char *base, const char *path, bool minimal) 
     CettaHttpWorkerHooks hooks={.context=&f,.prepare=failure_prepare,.observe=failure_observe,
         .recording_stalled=recording_stalled,.record_attempts=3};
     CettaHttpWorker *w=worker(NULL,&hooks);
+    f.worker=w;
     unsigned before=remote_count(base);
     char endpoint[512]; url(endpoint,base,"/counted");
     CettaHttpRequest r=request(1,endpoint);
     assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_OK);
     wait_flag(&f.stalls,1);
     r.id=2; assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_OK);
-    struct timespec pause={0,350000000}; nanosleep(&pause,NULL);
-    assert(atomic_load(&f.full_calls)==(minimal?1u:3u));
-    assert(atomic_load(&f.minimal_calls)==(minimal?3u:0u));
-    assert(atomic_load(&f.stalls)==1 && atomic_load(&f.acknowledgements)==0);
-    assert(remote_count(base)==before+1); /* blocked, with no retry spin or replay */
-    assert(cetta_http_worker_cancel(w,1)==HTTP_CANCEL_TOO_LATE);
-    assert(cetta_http_worker_cancel(w,999)==HTTP_CANCEL_UNKNOWN);
-    atomic_store(&f.allow_record,true);
-    assert(!cetta_http_worker_resume_recording(w,2));
-    assert(cetta_http_worker_resume_recording(w,1));
+    if (!resume_inside) {
+        struct timespec pause={0,350000000}; nanosleep(&pause,NULL);
+        assert(atomic_load(&f.full_calls)==(minimal?1u:3u));
+        assert(atomic_load(&f.minimal_calls)==(minimal?3u:0u));
+        assert(atomic_load(&f.stalls)==1 && atomic_load(&f.acknowledgements)==0);
+        assert(remote_count(base)==before+1); /* blocked, with no retry spin or replay */
+        assert(cetta_http_worker_cancel(w,1)==HTTP_CANCEL_TOO_LATE);
+        assert(cetta_http_worker_cancel(w,999)==HTTP_CANCEL_UNKNOWN);
+        atomic_store(&f.allow_record,true);
+        assert(!cetta_http_worker_resume_recording(w,2));
+        assert(cetta_http_worker_resume_recording(w,1));
+    }
     wait_flag(&f.acknowledgements,2);
     assert(cetta_http_worker_free(w)==0 && remote_count(base)==before+2);
+    assert(atomic_load(&f.full_calls)==(minimal?2u:4u));
+    assert(atomic_load(&f.minimal_calls)==(minimal?(full_repair?3u:4u):0u));
     cetta_durable_close(f.store);
     assert(cetta_durable_open(path,NULL,&f.store)==DURABLE_OK);
     CettaDurableSnapshot v=snapshot(f.store,"failure-pending");
     assert(v.count==0); cetta_durable_snapshot_free(&v);
     v=snapshot(f.store,"failure-outcomes");
     assert(v.count==2);
-    if (minimal) {
+    if (minimal && !full_repair) {
         const char fact[]="OutcomeUnrecordable(1,0,200)";
         assert(!strcmp(v.records[0].key,"one") && v.records[0].size==sizeof(fact)-1 &&
                !memcmp(v.records[0].data,fact,sizeof(fact)-1));
+    } else {
+        char receipt[32]; int n=snprintf(receipt,sizeof(receipt),"%u",before+1);
+        assert(!strcmp(v.records[0].key,"one") && v.records[0].size==(size_t)n &&
+               !memcmp(v.records[0].data,receipt,(size_t)n));
     }
     cetta_durable_snapshot_free(&v);
     CettaDurableOp cleanup[]={
@@ -345,6 +361,29 @@ static void recording_failure(const char *base, const char *path, bool minimal) 
         {DURABLE_REMOVE,"failure-outcomes","two",NULL,0}
     };
     commit(f.store,cleanup,2); cetta_durable_close(f.store);
+}
+
+/* Driven by the keep-alive fixture in test_http_worker.py. An idempotent warmup
+ * leaves a pooled connection; default requests must neither use nor replenish it. */
+static void connection_policy(const char *base, bool idempotent, const char *method) {
+    CettaHttpWorker *w=worker(NULL,NULL);
+    const char *paths[]={"/isolated-success","/isolated-after","/warm","/success","/drop-once","/after"};
+    for (unsigned i=0;i<6;++i) {
+        char endpoint[512]; url(endpoint,base,paths[i]);
+        CettaHttpRequest r=request(i+1,endpoint);
+        r.method=method;
+        r.idempotent=(i==1 || i==2 || i==5)?true:idempotent;
+        if (!strcmp(method,"POST")) { r.body=paths[i]; r.body_size=strlen(paths[i]); }
+        assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_OK);
+        CettaHttpResult result=take(w);
+        if (i==4 && !idempotent)
+            assert(result.started && result.transport_code!=0 && result.status==0);
+        else body(&result,"ok",2);
+        printf("%s: started=%d status=%ld transport=%d\n",paths[i],
+               result.started,result.status,result.transport_code);
+        cetta_http_result_free(&result);
+    }
+    assert(cetta_http_worker_free(w)==0);
 }
 
 typedef struct { atomic_uint entered, release, observed; } CancelPrepare;
@@ -387,9 +426,15 @@ static void cancellation_and_redirects(const char *base) {
 }
 
 int main(int argc, char **argv) {
+    if (argc==5 && !strcmp(argv[1],"--connection-policy")) {
+        connection_policy(argv[2],!strcmp(argv[3],"idempotent"),argv[4]); return 0;
+    }
     assert(argc==3);
     ephemeral(argv[1]); durable(argv[1],argv[2]); concurrency(argv[1]);
-    recording_failure(argv[1],argv[2],false); recording_failure(argv[1],argv[2],true);
+    recording_failure(argv[1],argv[2],false,false,false);
+    recording_failure(argv[1],argv[2],true,false,false);
+    recording_failure(argv[1],argv[2],true,true,false);
+    recording_failure(argv[1],argv[2],true,true,true);
     cancellation_and_redirects(argv[1]);
     puts("HTTP worker: bounds, concurrency, durable claims, no replay, bounded recording retries, escalation/resume, minimal fact recovery, cancellation and redirect policy passed");
     return 0;

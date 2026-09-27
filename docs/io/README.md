@@ -38,13 +38,18 @@ optional hooks execute on the owner thread, without the worker mutex:
 
 New requests do not start while an observation awaits persistence; already
 active transfers continue. A parked job has no automatic recording retries.
-After storage repair, `resume_recording(id)` grants another bounded budget
-without repeating HTTP. Retry exhaustion alone never authorizes discarding
+After storage repair, `resume_recording(id)` restarts at FULL with the retained
+body and grants another bounded budget without repeating HTTP. If the full
+receipt still cannot be stored, the hook may request MINIMAL again. The stall
+hook may call resume after repair; it runs without the worker mutex.
+Retry exhaustion alone never authorizes discarding
 the body or inventing a minimal outcome. If even a minimal fact cannot be
 recorded, dispatch remains visibly degraded until repair or shutdown.
 
 Hooks must perform bounded work: no application evaluation or network calls.
-Database operations must be short and fail promptly under contention. A hook
+Database operations must be short and fail promptly under contention. Outcome
+commits should validate the effect's own keys, so unrelated inbox traffic cannot
+exhaust the recording budget. A hook
 must not join or free its own worker. The host owns effect identities, attempt
 identities, routing, retry policy, response redaction and completion delivery.
 A worker handle is only a process-local transport identifier.
@@ -59,6 +64,8 @@ have executed remotely. The recorded result, not the cancellation request,
 settles the local outcome. A completed response remains a fact even if
 cancellation arrives while its durable recording is pending. The host must
 interpret ambiguous transport outcomes according to the effect's policy.
+UNKNOWN includes a job already acknowledged and retired: consult the durable
+record rather than treating it as proof that the request was never submitted.
 A cancelled transfer may have status 200 and a truncated body. Status alone
 does not establish Telegram success or supply a usable message ID: validate the
 complete response and application receipt. `request_size_known/request_size`
@@ -122,6 +129,29 @@ suppress redirects: it rejects requests without explicit True before starting
 network I/O. Existing browser callers must opt in, including those replacing
 the no-redirect `http:get`/`http:post` convenience calls.
 
+## Connection reuse and implicit resends
+
+`CettaHttpRequest.idempotent` defaults to false. Such requests set both
+[`CURLOPT_FRESH_CONNECT`](https://curl.se/libcurl/c/CURLOPT_FRESH_CONNECT.html)
+and [`CURLOPT_FORBID_REUSE`](https://curl.se/libcurl/c/CURLOPT_FORBID_REUSE.html):
+use a new connection and close it after the transfer. This avoids libcurl's
+silent resend after a reused connection produces no response bytes. That retry
+can duplicate a POST accepted by the server before its response was lost.
+The cost is a fresh TCP/TLS connection for each attempt.
+
+Only an explicit host declaration of repeat safety enables pooling. HTTP method
+is not sufficient: Telegram permits effectful operations through GET too. A
+Telegram send must keep `idempotent=false` and redirects disabled. A poll may
+opt in when repeating that exact offset is safe under the durable inbox
+protocol. The MeTTa `io` adapter currently retains the conservative false
+default for every method; it does not infer safety from source expressions.
+
+This closes the demonstrated stale-connection resend path; it is not an
+exactly-once delivery guarantee. A started failure after remote acceptance
+still requires the host's uncertain-outcome policy. Redirect opt-in is a
+separate permission to make further HTTP requests. Other protocol-level retry
+behaviour must be qualified before making broader transport guarantees.
+
 ## Checks and scope
 
 `make ENABLE_HTTP=1 test-http-worker` runs a private loopback fixture with a
@@ -131,6 +161,12 @@ dispatch, retained completion bytes through repeated recording failures, no
 HTTP replay, recovery, unrecorded shutdown outcomes and concurrent producers.
 It also checks bounded recording failure, escalation, explicit resume, durable
 minimal facts, blocked-job recovery and POST redirects with a remote counter.
+Keep-alive tests additionally prime the pool, lose a response after accepting
+the whole request, and independently count receipts and connections. Both POST
+and GET effects must arrive once and report a transport failure; explicitly
+idempotent requests exercise the automatic resend as a positive control.
+Repair tests recover the full receipt after a parked MINIMAL observation and
+re-enter resume from the stall callback to check that it runs unlocked.
 The fixture counts requests independently of the worker.
 
 `test-io-runtime` checks the evaluator adapter, wait, safe error sources and

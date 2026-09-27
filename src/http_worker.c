@@ -156,6 +156,10 @@ static CURLcode configure(Job *j) {
     SET(CURLOPT_WRITEFUNCTION,receive); SET(CURLOPT_WRITEDATA,j); SET(CURLOPT_PRIVATE,j);
     SET(CURLOPT_NOSIGNAL,1L); SET(CURLOPT_FOLLOWLOCATION,j->request.follow_redirects?1L:0L);
     SET(CURLOPT_MAXREDIRS,8L);
+    /* Curl may silently resend even a POST after a dead reused connection.
+     * Opt into pooling only when repeating the operation is explicitly safe. */
+    SET(CURLOPT_FRESH_CONNECT,j->request.idempotent?0L:1L);
+    SET(CURLOPT_FORBID_REUSE,j->request.idempotent?0L:1L);
     SET(CURLOPT_PROTOCOLS_STR,"http,https"); SET(CURLOPT_REDIR_PROTOCOLS_STR,"http,https");
     SET(CURLOPT_ACCEPT_ENCODING,"");
     if (j->request.timeout_ms) {
@@ -484,7 +488,10 @@ bool cetta_http_worker_resume_recording(CettaHttpWorker *w,uint64_t id) {
     pthread_mutex_lock(&w->mutex);
     Job *j=find_job(w,id);
     bool resumed=!w->stopping && j && j->state==OBSERVING && j->retry_at==UINT64_MAX;
-    if (resumed) { j->record_attempts=0; j->retry_at=0; wake(w); }
+    if (resumed) {
+        j->record_mode=HTTP_RECORD_FULL;
+        j->record_attempts=0; j->retry_at=0; wake(w);
+    }
     pthread_mutex_unlock(&w->mutex); return resumed;
 }
 

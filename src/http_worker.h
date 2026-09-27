@@ -30,6 +30,10 @@ typedef struct {
     uint32_t timeout_ms;
     size_t max_response_bytes;
     bool follow_redirects;
+    /* Host-declared repeat safety, never inferred from the HTTP method.
+     * False (default) uses a fresh connection and closes it after the transfer
+     * to prevent curl's implicit resend on a dead pooled connection. */
+    bool idempotent;
 } CettaHttpRequest;
 
 typedef struct {
@@ -61,7 +65,7 @@ typedef enum {
 } CettaHttpRecord;
 
 typedef enum {
-    HTTP_CANCEL_UNKNOWN,
+    HTTP_CANCEL_UNKNOWN,            /* absent, including ACKed/retired: consult journal */
     HTTP_CANCEL_NOT_STARTED,        /* owner will not start this request */
     HTTP_CANCEL_REQUESTED,          /* may already have executed remotely */
     HTTP_CANCEL_TOO_LATE            /* completed; preserve its observation */
@@ -97,7 +101,8 @@ CettaHttpWorkerStatus cetta_http_worker_new(const CettaHttpWorkerLimits *limits,
 CettaHttpWorkerStatus cetta_http_worker_submit(CettaHttpWorker *worker,
     const CettaHttpRequest *request);
 CettaHttpCancel cetta_http_worker_cancel(CettaHttpWorker *worker, uint64_t id);
-/* Resume a parked recording after storage repair. Does not restart HTTP. */
+/* Resume a parked recording at FULL after storage repair, using its retained
+ * body. The hook may request MINIMAL again. Does not restart HTTP. */
 bool cetta_http_worker_resume_recording(CettaHttpWorker *worker, uint64_t id);
 
 /* Ephemeral clients may abandon a result. This operation is refused on a
