@@ -145,7 +145,7 @@ static CettaDurableStatus decode(Reader *r, Arena *arena, unsigned depth, Atom *
             if (!valid) return DURABLE_CORRUPT;
             *out=atom_rational(arena,text);
         }
-    } else return DURABLE_VERSION;
+    } else return DURABLE_CORRUPT;
     return *out ? DURABLE_OK : DURABLE_NOMEM;
 }
 
@@ -154,7 +154,8 @@ CettaDurableStatus cetta_durable_value_decode(Arena *arena, const unsigned char 
     if (!arena || !bytes || !out) return DURABLE_INVALID;
     *out=NULL;
     if (n>VALUE_BYTES) return DURABLE_LIMIT;
-    if (n<4 || memcmp(bytes,"CDV1",4)) return DURABLE_VERSION;
+    if (n<4 || memcmp(bytes,"CDV",3) || bytes[3]<'1' || bytes[3]>'9') return DURABLE_CORRUPT;
+    if (bytes[3]!='1') return DURABLE_VERSION;
     Reader r={bytes,n,4,0}; Atom *a=NULL;
     CettaDurableStatus s=decode(&r,arena,0,&a);
     if (s==DURABLE_OK && r.pos!=r.size) s=DURABLE_CORRUPT;

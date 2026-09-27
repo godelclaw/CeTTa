@@ -9854,6 +9854,25 @@ bool cetta_library_import_petta_reference_at(
     return false;
 }
 
+/* Administrative directives are data, not expressions to reduce. Keeping
+ * this entry separate means no evaluator path (including nested eval, imports,
+ * superpose, or rho payloads) can manufacture durable commit authority. */
+Atom *cetta_library_durable_admin(CettaLibraryContext *ctx, Arena *a, Atom *form) {
+    if (!ctx || !(ctx->active_mask & CETTA_LIBRARY_DURABLE) ||
+        !form || form->kind!=ATOM_EXPR || !form->expr.len ||
+        form->expr.elems[0]->kind!=ATOM_SYMBOL) return NULL;
+    const char *name=atom_name_cstr(form->expr.elems[0]);
+    if (strncmp(name,"durable:",8)) return NULL;
+    const char *operations[]={"open","read","commit","checkpoint","close"};
+    for (size_t i=0;i<sizeof(operations)/sizeof(*operations);++i) {
+        if (strcmp(name+8,operations[i])) continue;
+        char native[64]; snprintf(native,sizeof(native),"__cetta_lib_durable_%s",operations[i]);
+        return cetta_durable_admin_dispatch(ctx->durable_runtime,a,atom_symbol(a,native),
+            form->expr.elems+1,form->expr.len-1);
+    }
+    return NULL;
+}
+
 Atom *cetta_library_dispatch_native(CettaLibraryContext *ctx, Space *space,
                                     Arena *a,
                                     Atom *head, Atom **args, uint32_t nargs) {

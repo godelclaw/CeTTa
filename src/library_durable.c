@@ -41,7 +41,11 @@ static Atom *view(Arena *a, CettaDurableSnapshot *v) {
     for (size_t i=0;i<v->count;++i) {
         CettaDurableRecord *r=&v->records[i]; Atom *value=NULL;
         CettaDurableStatus s=cetta_durable_value_decode(a,r->data,r->size,&value);
-        if (s!=DURABLE_OK) return failure(a,s);
+        if (s!=DURABLE_OK) {
+            Atom *error[]={atom_symbol(a,"durable:failure"),atom_symbol(a,cetta_durable_status_name(s)),
+                atom_string(a,r->space),atom_string(a,r->key)};
+            return atom_expr(a,error,4);
+        }
         Atom *items[]={atom_symbol(a,"durable:record"),atom_string(a,r->space),
             atom_string(a,r->key),value};
         records[i]=atom_expr(a,items,4);
@@ -128,7 +132,7 @@ CettaDurableRuntime *cetta_durable_runtime_new(void) { return NULL; }
 void cetta_durable_runtime_free(CettaDurableRuntime *r) { (void)r; }
 #endif
 
-Atom *cetta_durable_dispatch(CettaDurableRuntime *r, Arena *a, Atom *head,
+Atom *cetta_durable_admin_dispatch(CettaDurableRuntime *r, Arena *a, Atom *head,
         Atom **args, uint32_t n) {
     if (!head || head->kind!=ATOM_SYMBOL) return NULL;
     const char *name=atom_name_cstr(head), *prefix="__cetta_lib_durable_";
@@ -143,4 +147,15 @@ Atom *cetta_durable_dispatch(CettaDurableRuntime *r, Arena *a, Atom *head,
     (void)r; (void)args; (void)n;
     return result(a,"durable:failure","unavailable");
 #endif
+}
+
+/* Ordinary reduction, including hidden calls through user equations, never
+ * owns commit authority. A selected transition uses the store API; the CLI
+ * handles explicit administrative directives outside the evaluator. */
+Atom *cetta_durable_dispatch(CettaDurableRuntime *r, Arena *a, Atom *head,
+        Atom **args, uint32_t n) {
+    (void)r; (void)args; (void)n;
+    if (!head || head->kind!=ATOM_SYMBOL ||
+        strncmp(atom_name_cstr(head),"__cetta_lib_durable_",20)) return NULL;
+    return result(a,"durable:failure","commit-boundary-required");
 }

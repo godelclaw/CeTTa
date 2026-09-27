@@ -12,7 +12,8 @@ typedef struct CettaDurableStore CettaDurableStore;
 typedef enum {
     DURABLE_OK, DURABLE_INVALID, DURABLE_BUSY, DURABLE_CONFLICT,
     DURABLE_PRECONDITION, DURABLE_LIMIT, DURABLE_NOMEM,
-    DURABLE_IO, DURABLE_CORRUPT, DURABLE_VERSION
+    DURABLE_IO, DURABLE_CORRUPT, DURABLE_VERSION,
+    DURABLE_UNKNOWN, DURABLE_POISONED
 } CettaDurableStatus;
 
 typedef struct {
@@ -45,6 +46,18 @@ typedef struct {
     size_t count;
 } CettaDurableSnapshot;
 
+typedef struct {
+    int64_t live_bytes, records, history_bytes, database_pages;
+    int limits_exceeded; /* readable and reclaimable; admission is restricted */
+} CettaDurableUsage;
+
+typedef enum { DURABLE_KEY, DURABLE_PREFIX, DURABLE_SPACE } CettaDurableScopeKind;
+typedef struct {
+    CettaDurableScopeKind kind;
+    const char *space, *key; /* prefix may be empty; space scope ignores key */
+} CettaDurableScope;
+typedef struct CettaDurableObservation CettaDurableObservation;
+
 CettaDurableLimits cetta_durable_default_limits(void);
 const char *cetta_durable_status_name(CettaDurableStatus status);
 
@@ -61,6 +74,23 @@ void cetta_durable_close(CettaDurableStore *store);
 CettaDurableStatus cetta_durable_snapshot(CettaDurableStore *store,
     const char *space, CettaDurableSnapshot *out);
 void cetta_durable_snapshot_free(CettaDurableSnapshot *snapshot);
+CettaDurableStatus cetta_durable_usage(CettaDurableStore *store, CettaDurableUsage *out);
+
+/* Read all declared scopes in one snapshot, without retaining a transaction.
+ * Observations own immutable views. Empty key/prefix/space views are absence
+ * dependencies. No hashing, tombstones or global-revision conflicts are used.
+ * At commit, the current keys and their revisions must match each view exactly.
+ * A transient insert followed by removal preserves an absence dependency.
+ * Every written key must be covered by a declared scope. The host must also
+ * declare every read that influenced the decision, including negative reads. */
+CettaDurableStatus cetta_durable_observe(CettaDurableStore *store,
+    const CettaDurableScope *scopes, size_t count, CettaDurableObservation **out);
+const CettaDurableSnapshot *cetta_durable_observation_view(
+    const CettaDurableObservation *observation, size_t index);
+void cetta_durable_observation_free(CettaDurableObservation *observation);
+CettaDurableStatus cetta_durable_commit_observed(CettaDurableStore *store,
+    const CettaDurableObservation *observation, const CettaDurableOp *ops,
+    size_t count, int64_t *published_revision);
 
 /* Commits all operations, their log, and the new revision atomically.
  * expected_epoch/revision come from the evaluated snapshot. No evaluation or

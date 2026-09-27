@@ -1523,8 +1523,11 @@ static int run_rhocalc_cli(const char *filename,
         if (semantic_profile == RHOCALC_SEMANTIC_PROFILE_RHOMETTA &&
             atom_is_symbol_id(process, g_builtin_syms.bang) && i + 1 < n) {
             result_set_init(&evaluated);
-            eval_top_with_registry(
-                &space, &arena, &arena, &registry, atoms[++i], &evaluated);
+            Atom *command=atoms[++i];
+            Atom *administrative=cetta_library_durable_admin(&libraries,&arena,command);
+            if (administrative) result_set_add(&evaluated,administrative);
+            else eval_top_with_registry(
+                &space, &arena, &arena, &registry, command, &evaluated);
             if (!main_rhometta_print_eval_results(
                     &evaluated, syntax, stdout) ||
                 result_set_has_error(&evaluated)) {
@@ -3917,7 +3920,9 @@ process_petta_document:
                 Atom *expr = atoms[i + 1];
                 ResultSet rs;
                 result_set_init(&rs);
-                eval_top_with_registry(&space, &eval_arena, &arena, &registry, expr, &rs);
+                Atom *administrative=cetta_library_durable_admin(&libraries,&eval_arena,expr);
+                if (administrative) result_set_add(&rs,administrative);
+                else eval_top_with_registry(&space, &eval_arena, &arena, &registry, expr, &rs);
                 if (cetta_eval_session_process_exit_requested(
                         &libraries.session)) {
                     rc = cetta_eval_session_process_exit_code(
@@ -4015,7 +4020,11 @@ process_petta_document:
                 rc = 1;
                 goto cleanup;
             }
-            if (emit_prime_need_trace) {
+            Atom *administrative=cetta_library_durable_admin(&libraries,&eval_arena,expr);
+            if (administrative) {
+                result_set_init(&rs);
+                result_set_add(&rs,administrative);
+            } else if (emit_prime_need_trace) {
                 eval_outcome_init(&detailed);
                 detailed_initialized = true;
                 results = &detailed.results;

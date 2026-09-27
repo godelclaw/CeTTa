@@ -50,6 +50,10 @@ int main(void) {
     assert(cetta_durable_value_decode(&a,zero_denominator,sizeof(zero_denominator),&bad)==DURABLE_CORRUPT);
     const unsigned char huge_expr[]={'C','D','V','1','E',255,255,255,255};
     assert(cetta_durable_value_decode(&a,huge_expr,sizeof(huge_expr),&bad)==DURABLE_CORRUPT);
+    const unsigned char unknown_tag[]="CDV1?", unknown_version[]="CDV2Y", bad_header[]="bad1Y";
+    assert(cetta_durable_value_decode(&a,unknown_tag,sizeof(unknown_tag)-1,&bad)==DURABLE_CORRUPT);
+    assert(cetta_durable_value_decode(&a,unknown_version,sizeof(unknown_version)-1,&bad)==DURABLE_VERSION);
+    assert(cetta_durable_value_decode(&a,bad_header,sizeof(bad_header)-1,&bad)==DURABLE_CORRUPT);
     arena_free(&a); symbol_table_free(&symbols); g_symbols=NULL;
     puts("durable values: bit-exact roundtrips, truncation, trailing data, unsafe values, depth and expansion limits passed");
 }

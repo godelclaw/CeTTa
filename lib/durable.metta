@@ -1,10 +1,9 @@
-; One commit domain across named spaces. Each key is an occurrence identity.
-; A snapshot is immutable data. It carries an epoch and a global revision;
-; committing a decision made from a stale snapshot fails, including absence
-; queries. Keep input consumption, state/continuation, and outbox in one batch.
-;
-; Stored values are closed data. Name the continuation and save its arguments;
-; do not capture a runtime space, state cell, variable, or native handle.
+; Top-level CLI administrative commands with literal data arguments.
+; Ordinary reduction (including rho payloads) cannot invoke the native store.
+; Reactions produce proposals; the durable host commits a selected transition.
+; Keep consumed input, state/continuation and outbox in one atomic batch.
+; Use strings for unbounded identifiers; symbols are a finite protocol vocabulary.
+; Stored continuations contain names, versions and ground arguments, not pointers.
 
 (: durable:open (-> String Expression))
 (: durable:read (-> String Expression))

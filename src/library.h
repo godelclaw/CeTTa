@@ -288,6 +288,9 @@ Atom *cetta_library_module_inventory_space(CettaLibraryContext *ctx,
 bool cetta_library_print_loaded_modules(CettaLibraryContext *ctx, FILE *out,
                                         Arena *eval_arena, Atom **error_out);
 
+/* Explicit top-level administration, outside speculative evaluation. The
+ * runner passes literal data; callbacks within evaluation must not call it. */
+Atom *cetta_library_durable_admin(CettaLibraryContext *ctx, Arena *arena, Atom *form);
 Atom *cetta_library_dispatch_native(CettaLibraryContext *ctx, Space *space,
                                     Arena *a,
                                     Atom *head, Atom **args, uint32_t nargs);

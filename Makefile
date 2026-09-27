@@ -390,7 +390,7 @@ endif
 ifeq ($(ENABLE_DURABLE),1)
 DURABLE_SRC += src/durable_store.c src/durable_value.c
 ifeq ($(SQLITE_PROVIDER),vendored)
-DURABLE_CFLAGS += -Ivendor/sqlite -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION
+DURABLE_CFLAGS += -Ivendor/sqlite -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DQS=0 -DSQLITE_OMIT_SHARED_CACHE -DSQLITE_DEFAULT_MEMSTATUS=0
 DURABLE_SRC += vendor/sqlite/sqlite3.c
 else ifeq ($(SQLITE_PROVIDER),system)
 ifeq ($(shell pkg-config --exists sqlite3 && echo yes),)
@@ -38113,12 +38113,13 @@ endif
 # The durable store test is independent of the evaluator and can run before a
 # full CeTTa build. Production objects contain no crash-injection callbacks.
 # Keep upstream SQLite unmodified and outside the project's warning policy.
+vendor/sqlite/sqlite3.$(BUILD_OBJ_TAG).o vendor/sqlite/sqlite3.$(BUILD_OBJ_TAG).stage0.o vendor/sqlite/sqlite3.$(BUILD_OBJ_TAG).runtime-stats.o: Makefile
 vendor/sqlite/sqlite3.$(BUILD_OBJ_TAG).o vendor/sqlite/sqlite3.$(BUILD_OBJ_TAG).stage0.o vendor/sqlite/sqlite3.$(BUILD_OBJ_TAG).runtime-stats.o: CFLAGS := $(filter-out -Werror -O3,$(CFLAGS)) -O2
 
 .PHONY: test-durable-store
-runtime/sqlite-durable-test.o: vendor/sqlite/sqlite3.c vendor/sqlite/sqlite3.h
+runtime/sqlite-durable-test.o: vendor/sqlite/sqlite3.c vendor/sqlite/sqlite3.h Makefile
 	@mkdir -p runtime
-	$(CC) -O2 -std=c11 -pthread -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION -c $< -o $@
+	$(CC) -O2 -std=c11 -pthread -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DQS=0 -DSQLITE_OMIT_SHARED_CACHE -DSQLITE_DEFAULT_MEMSTATUS=0 -c $< -o $@
 
 runtime/test-durable-store: tests/test_durable_store.c src/durable_store.c src/durable_store.h runtime/sqlite-durable-test.o
 	$(CC) -O2 -Wall -Wextra -Werror -std=c11 -pthread -Isrc -Ivendor/sqlite -DCETTA_DURABLE_TEST tests/test_durable_store.c src/durable_store.c runtime/sqlite-durable-test.o -ldl -lm -o $@
