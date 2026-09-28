@@ -6,7 +6,10 @@
 #include "durable_worker_host.h"
 #include "durable_value.h"
 #include "library.h"
+#include <errno.h>
+#include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static const char *text(const Atom *a) {
@@ -60,18 +63,167 @@ static bool forbidden_batch(const CettaHostDecision *d, const CettaTelegramActio
     return forbidden;
 }
 bool cetta_telegram_agent_valid(const CettaTelegramAgent *c) {
-    return c && c->program && c->program->version && !strcmp(c->program->version,"telegram-agent/1") &&
+    return c && c->program && c->program->version &&
+        (!strcmp(c->program->version,"telegram-agent/1") || !strcmp(c->program->version,"telegram-channel/1")) &&
         c->program->context && c->program->space && component(c->source) && component(c->worker) &&
         c->actions && c->actions->chats && c->actions->chat_count && c->actions->chat_count<=128 &&
         !(c->actions->methods&~7u) && c->fuel>0 && c->fuel<=2000000 &&
         c->program->context->session.language_id==CETTA_LANGUAGE_HE && c->program->context->session.profile &&
         c->program->context->session.profile->id==CETTA_PROFILE_HE_EXTENDED;
 }
+static bool channel_mode(const CettaTelegramAgent *c) {
+    return !strcmp(c->program->version,"telegram-channel/1");
+}
+/* Canonical CHAT.THREAD, as the intake policy writes lanes. */
+static bool lane_numbers(const char *lane, int64_t *chat, int64_t *thread) {
+    if (!component(lane)) return false;
+    char *end; errno=0; *chat=strtoll(lane,&end,10);
+    if (errno || end==lane || *end!='.' || !*chat) return false;
+    const char *part=end+1; errno=0; *thread=strtoll(part,&end,10);
+    if (errno || end==part || *end || *thread<0) return false;
+    char canonical[64]; snprintf(canonical,sizeof(canonical),"%" PRId64 ".%" PRId64,*chat,*thread);
+    return !strcmp(lane,canonical);
+}
+/* A submission key is LANE.SEQUENCE with a fixed 20-digit sequence, so key
+ * order within a lane is submission order. */
+static bool submission_lane(const char *key, char lane[65], int64_t *chat, int64_t *thread) {
+    size_t n=key?strnlen(key,65):0;
+    if (n<22 || n>64 || key[n-21]!='.') return false;
+    for (size_t i=n-20;i<n;++i) if (key[i]<'0' || key[i]>'9') return false;
+    memcpy(lane,key,n-21); lane[n-21]=0;
+    return lane_numbers(lane,chat,thread);
+}
+/* telegram-channel/1: the client reads deliveries and receipts as tasks and
+ * acts only through keyed submissions. The sending state machine and its
+ * admission are telegram-agent/1's; see cetta_telegram_agent_admit. */
+static CettaDurableStatus channel_decide(CettaDurableStore *store,
+        const CettaTelegramAgent *c, const char *input_key, CettaHostDecision **out) {
+    Arena a; arena_init(&a);
+    CettaDurableObservation *initial=NULL, *origin=NULL, *intent=NULL;
+    Atom *input=NULL, *prior=NULL, *request=NULL, *call=NULL;
+    CettaHostDecision *decision=NULL;
+    CettaDurableStatus s=read(store,"host.inbox",input_key,&a,&initial,&input);
+    if (s!=DURABLE_OK) goto done;
+    char actor[160], ledger[96], expected[168], task[130], pending[160], lane[65];
+    CettaHostSpaceGrant scopes[3]; size_t count=0;
+    CettaHostChannelGrant channels[2]; size_t channel_count=0;
+    int64_t submit_chat=0, submit_thread=0;
+    const CettaHostChannelGrant worker={"worker.request","1",cetta_worker_validate,(void *)c->worker};
+    const CettaHostChannelGrant actions={"telegram.action","1",cetta_telegram_action_validate,(void *)c->actions};
+    bool submission=false, oldest_needed=false;
+    if (form(input,"host:input",7)) {
+        Atom **v=input->expr.elems;
+        if (!text(v[2]) || strcmp(text(v[2]),c->source)) { s=DURABLE_PRECONDITION; goto done; }
+        const char *routed_lane=text(v[5]);
+        if (!component(routed_lane) || v[3]->kind!=ATOM_GROUNDED || v[3]->ground.gkind!=GV_INT || !text(v[4]) ||
+            cetta_inbox_keys(c->source,routed_lane,v[3]->ground.ival,ledger,expected)!=DURABLE_OK ||
+            strcmp(expected,input_key) || strcmp(ledger,text(v[4]))) { s=DURABLE_CORRUPT; goto done; }
+        bool routed=atom_is_symbol(v[6],"routed");
+        if (!routed && !atom_is_symbol(v[6],"unauthorized") && !atom_is_symbol(v[6],"unsupported")) { s=DURABLE_CORRUPT; goto done; }
+        snprintf(actor,sizeof(actor),"telegram/%s/%s",c->source,routed?"intake":"ignored");
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.received",ledger},false};
+        channels[channel_count++]=worker;
+        Atom *args[]={atom_symbol(&a,"tg-channel:receive"),atom_string(&a,c->worker),atom_string(&a,c->source),atom_string(&a,routed_lane)};
+        call=atom_expr(&a,args,4);
+    } else if (form(input,"host:worker-result",6)) {
+        if (!text(input->expr.elems[2]) || strcmp(text(input->expr.elems[2]),c->worker)) { s=DURABLE_PRECONDITION; goto done; }
+        const char *id=text(input->expr.elems[3]);
+        if (!component(id)) { s=DURABLE_CORRUPT; goto done; }
+        snprintf(task,sizeof(task),"%s/%s",c->worker,id);
+        snprintf(expected,sizeof(expected),"worker/%s",task);
+        if (strcmp(expected,input_key)) { s=DURABLE_CORRUPT; goto done; }
+        s=read(store,"host.worker-origins",task,&a,&origin,&prior); if (s!=DURABLE_OK) goto done;
+        if (!form(prior,"host:worker-origin",6) || !text(prior->expr.elems[2]) ||
+            strcmp(text(prior->expr.elems[2]),cetta_durable_observation_view(initial,0)->epoch)) { s=DURABLE_CORRUPT; goto done; }
+        const char *outkey=text(prior->expr.elems[3]);
+        s=read(store,"host.outbox",outkey,&a,&intent,&request); if (s!=DURABLE_OK) goto done;
+        if (!form(request,"host:intent",6)) { s=DURABLE_VERSION; goto done; }
+        Atom *reply=request->expr.elems[5];
+        if (!text(request->expr.elems[2]) || strcmp(text(request->expr.elems[2]),"worker.request") ||
+            !text(request->expr.elems[3]) || strcmp(text(request->expr.elems[3]),"1") ||
+            !(form(reply,"tg-channel:delivered",5) || form(reply,"tg-channel:notified",4))) { s=DURABLE_VERSION; goto done; }
+        if (!text(reply->expr.elems[2]) || strcmp(text(reply->expr.elems[2]),c->source)) { s=DURABLE_PRECONDITION; goto done; }
+        snprintf(actor,sizeof(actor),"telegram/%s/intake",c->source);
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.worker-tasks",task},false};
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.worker-origins",task},false};
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.outbox",outkey},false};
+        call=atom_expr2(&a,atom_symbol(&a,"tg-channel:ack"),atom_string(&a,c->worker));
+    } else if (form(input,"host:worker-submission",5)) {
+        Atom **v=input->expr.elems; int64_t chat=0, thread=0;
+        const char *key=text(v[3]);
+        if (!text(v[2]) || strcmp(text(v[2]),c->worker)) { s=DURABLE_PRECONDITION; goto done; }
+        if (!component(key) || !text(v[4])) { s=DURABLE_CORRUPT; goto done; }
+        snprintf(expected,sizeof(expected),"submission/%s/%s",c->worker,key);
+        if (strcmp(expected,input_key)) { s=DURABLE_CORRUPT; goto done; }
+        submission=true;
+        channels[channel_count++]=actions; channels[channel_count++]=worker;
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.decisions",key},true};
+        if (submission_lane(key,lane,&chat,&thread)) {
+            snprintf(actor,sizeof(actor),"telegram/%s/%s",c->source,lane);
+            snprintf(pending,sizeof(pending),"submission/%s/%s.",c->worker,lane);
+            scopes[count++]=(CettaHostSpaceGrant){{DURABLE_PREFIX,"host.inbox",pending},false};
+            oldest_needed=true; submit_chat=chat; submit_thread=thread;
+        } else {
+            /* No lane can be named: reject without touching any chat actor. */
+            snprintf(actor,sizeof(actor),"telegram/%s/ignored",c->source);
+            Atom *args[]={atom_symbol(&a,"tg-channel:reject"),atom_string(&a,c->worker),atom_string(&a,c->source),
+                atom_string(&a,key),atom_symbol(&a,"malformed-key")};
+            call=atom_expr(&a,args,5);
+        }
+    } else if (form(input,"host:completion",4)) {
+        const char *outkey=text(input->expr.elems[3]);
+        s=read(store,"host.outbox",outkey,&a,&intent,&request); if (s!=DURABLE_OK) goto done;
+        if (!form(request,"host:intent",6) || !text(request->expr.elems[2]) || strcmp(text(request->expr.elems[2]),"telegram.action") ||
+            !text(request->expr.elems[3]) || strcmp(text(request->expr.elems[3]),"1") ||
+            !form(request->expr.elems[5],"tg-agent:sent",7)) { s=DURABLE_PRECONDITION; goto done; }
+        Atom **reply=request->expr.elems[5]->expr.elems;
+        if (!text(reply[2]) || strcmp(text(reply[2]),c->source)) { s=DURABLE_PRECONDITION; goto done; }
+        const char *sent_lane=text(reply[3]); if (!component(sent_lane)) { s=DURABLE_CORRUPT; goto done; }
+        snprintf(actor,sizeof(actor),"telegram/%s/%s",c->source,sent_lane);
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.outbox",outkey},false};
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.outcomes",outkey},false};
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.deliveries",outkey},true};
+        channels[channel_count++]=worker;
+        call=atom_expr2(&a,atom_symbol(&a,"tg-channel:complete"),atom_string(&a,c->worker));
+    } else { s=DURABLE_PRECONDITION; goto done; }
+    CettaHostDecisionSpec spec={input_key,actor,c->program->version,scopes,count,channels,channel_count};
+    s=cetta_host_begin(store,&spec,&decision); if (s!=DURABLE_OK) goto done;
+    if (!same(cetta_durable_observation_view(initial,0),cetta_host_view(decision,0)) ||
+        (origin && !same(cetta_durable_observation_view(origin,0),cetta_host_view(decision,3))) ||
+        (intent && !same(cetta_durable_observation_view(intent,0),cetta_host_view(decision,origin?4:2)))) {
+        s=DURABLE_CONFLICT; goto done;
+    }
+    if (oldest_needed) {
+        /* Computed from this ticket's own snapshot, which the commit validates:
+         * an older pending submission for the lane makes this one wait. */
+        const CettaDurableSnapshot *lane_inputs=cetta_host_view(decision,3);
+        bool oldest=true;
+        for (size_t i=0;i<lane_inputs->count;++i)
+            if (strcmp(lane_inputs->records[i].key,input_key)<0) { oldest=false; break; }
+        Atom *args[]={atom_symbol(&a,"tg-channel:submit"),atom_string(&a,c->worker),atom_string(&a,c->source),
+            atom_string(&a,lane),atom_int(&a,submit_chat),atom_int(&a,submit_thread),
+            atom_symbol(&a,oldest?"True":"False")};
+        call=atom_expr(&a,args,7);
+    }
+    call=atom_expr2(&a,atom_symbol(&a,"tg-agent:reaction"),call);
+    s=cetta_host_evaluate(decision,c->program,call,c->fuel);
+    if (s==DURABLE_OK && submission && oldest_needed && forbidden_batch(decision,c->actions)) {
+        Atom *args[]={atom_symbol(&a,"tg-channel:reject-invalid-submission"),atom_string(&a,c->worker),atom_string(&a,c->source)};
+        call=atom_expr2(&a,atom_symbol(&a,"tg-agent:reaction"),atom_expr(&a,args,3));
+        s=cetta_host_evaluate(decision,c->program,call,c->fuel);
+    }
+    if (s==DURABLE_OK) { *out=decision; decision=NULL; }
+done:
+    cetta_host_decision_free(decision);
+    cetta_durable_observation_free(initial); cetta_durable_observation_free(origin); cetta_durable_observation_free(intent);
+    arena_free(&a); return s;
+}
 CettaDurableStatus cetta_telegram_agent_decide(CettaDurableStore *store,
         const CettaTelegramAgent *c, const char *input_key, CettaHostDecision **out) {
     if (!out) return DURABLE_INVALID;
     *out=NULL;
     if (!store || !cetta_telegram_agent_valid(c)) return DURABLE_INVALID;
+    if (channel_mode(c)) return channel_decide(store,c,input_key,out);
     Arena a; arena_init(&a);
     CettaDurableObservation *initial=NULL, *origin=NULL, *intent=NULL;
     Atom *input=NULL, *prior=NULL, *request=NULL, *call=NULL;
@@ -190,7 +342,10 @@ CettaDurableStatus cetta_telegram_agent_admit(CettaDurableStore *store,
     const char *channel=text(intent->expr.elems[2]), *version=text(intent->expr.elems[3]);
     Atom *payload=intent->expr.elems[4], *reply=intent->expr.elems[5];
     if (!strcmp(channel,"worker.request")) {
-        if (!form(reply,"tg-agent:return",7) || !text(reply->expr.elems[2]) || strcmp(text(reply->expr.elems[2]),c->source)) {
+        bool ours=channel_mode(c)
+            ? form(reply,"tg-channel:delivered",5) || form(reply,"tg-channel:notified",4)
+            : form(reply,"tg-agent:return",7);
+        if (!ours || !text(reply->expr.elems[2]) || strcmp(text(reply->expr.elems[2]),c->source)) {
             *admission=TELEGRAM_FOREIGN; goto done;
         }
         if (strcmp(version,"1")) { s=DURABLE_VERSION; goto done; }
@@ -221,7 +376,7 @@ CettaDurableStatus cetta_telegram_agent_admit(CettaDurableStore *store,
             atom_string(&e->persistent,v->records[0].key),value};
         space_add(&e->space,atom_expr(&e->persistent,fact,4));
     }
-    Atom *head=atom_symbol(&a,"tg-agent:dispatchable");
+    Atom *head=atom_symbol(&a,channel_mode(c)?"tg-channel:dispatchable":"tg-agent:dispatchable");
     s=cetta_host_eval_run(e,c->program,atom_expr(&a,&head,1),c->fuel); if (s!=DURABLE_OK) goto done;
     const EvalOutcome *out=&e->outcome;
     if (out->completion!=CETTA_EVAL_COMPLETE || out->effect_denials || out->results.len!=1 ||

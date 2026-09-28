@@ -38393,6 +38393,24 @@ test-telegram-agent:
 	@exit 1
 endif
 
+.PHONY: test-telegram-channel
+ifeq ($(ENABLE_DURABLE)$(ENABLE_JSON_GSLT),11)
+TELEGRAM_CHANNEL_TEST_BIN = runtime/test-telegram-channel-$(BUILD_OBJ_TAG)
+TELEGRAM_CHANNEL_TEST_OBJ = runtime/bootstrap/test-telegram-channel.$(BUILD_OBJ_TAG).o
+-include $(TELEGRAM_CHANNEL_TEST_OBJ:.o=.d)
+$(TELEGRAM_CHANNEL_TEST_OBJ): tests/test_telegram_channel.c $(BUILD_CONFIG_HEADER)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -MF $(@:.o=.d) -c $< -o $@
+$(TELEGRAM_CHANNEL_TEST_BIN): $(TELEGRAM_CHANNEL_TEST_OBJ) $(FALLBACK_EVAL_TEST_LINK_OBJ) $(BRIDGE_DEPS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+test-telegram-channel: $(TELEGRAM_CHANNEL_TEST_BIN)
+	./$(TELEGRAM_CHANNEL_TEST_BIN)
+else
+test-telegram-channel:
+	@echo "test-telegram-channel requires ENABLE_DURABLE=1 and ENABLE_JSON_GSLT=1" >&2
+	@exit 1
+endif
+
 .PHONY: test-telegram-scheduler
 ifeq ($(ENABLE_DURABLE)$(HTTP_PROVIDER_CURL)$(ENABLE_JSON_GSLT),111)
 TELEGRAM_SCHEDULER_TEST_BIN = runtime/test-telegram-scheduler-$(BUILD_OBJ_TAG)
