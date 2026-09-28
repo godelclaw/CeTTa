@@ -811,3 +811,60 @@ UTF-8 and packet limits, immutable task/result pairing, peer identity and
 capacity, a stalled reader, quota rollback, and service exit after commitment
 but before the client reads its acknowledgment. The test keeps the listener
 open across service restart, then verifies receipt recovery without reinjection.
+
+## Accepted worker requests and continuation selection
+
+`durable_worker_host.h` joins the endpoint to the host's existing acceptance
+boundary. Register `worker.request`, handler version `1`, with
+`cetta_worker_validate` and an immutable authorized worker ID as its native
+context. The pure `durable:worker:request` constructor proposes:
+
+```metta
+(host:send grant (worker:request 1 "worker" "observation") reply-continuation)
+```
+
+The selected host transition commits the consumed input, waiting actor
+continuation and this request intent together. `cetta_worker_register` then
+projects an existing accepted intent into the IPC queue. It validates the
+channel, handler version, worker authorization and data bounds again. It never
+evaluates a proposal or accepts an uncommitted request.
+
+The task ID is 64 hexadecimal digits: journal epoch (32), intent revision
+(16), and operation position (16). Publication atomically inserts task text,
+readiness and a `host.worker-origins` record. The original immutable intent
+participates in that transaction's read set. The origin records its epoch,
+outbox key, revision and position. On restart, register the same accepted
+intent again: existing task and origin must match exactly. A crash between
+acceptance and publication leaves recoverable committed work; a refused
+publication does not remove the accepted intent or waiting continuation.
+
+Worker replies still enter as recorded input. Their durable receipt binds the
+task revision; the origin joins that task to the accepted intent and its reply
+continuation. `host.worker-results` is the worker completion ledger; this
+channel does not create an HTTP claim or an HTTP outcome. Re-registering after
+result consumption does not publish another task or inject another input.
+
+Fresh host projections now include `(host:record-version view-index "key"
+revision position)` beside each `host:record`. Both kinds of projection fact
+are rejected in a supplied program space. A trusted policy can join a worker
+receipt to its exact task, origin, intent and waiting continuation, and compare
+state revisions captured before cognition with current observed revisions.
+Version facts describe only the ticket's authorized views. They do not add
+authority or make a worker's stated dependencies trustworthy.
+
+Stale-draft handling remains explicit application policy. The native endpoint
+does not decide that an old draft is suitable for current state. The trusted
+reaction must check its captured dependencies and continuation, including
+newer messages that arrived before the reaction began. A read-only chat-prefix
+grant additionally catches arrivals between evaluation and commitment. It
+cannot, by itself, detect staleness predating that snapshot. Every accepted send
+remains a commitment; discarding a stale worker draft is a different transition.
+
+`test-durable-worker-host` exercises a trusted preparation/resume program,
+accepted-request recovery after process exit, publication quota rollback,
+origin corruption refusal, worker/channel/version checks and exact task
+pairing. Code-looking reply text remains a message string. The example policy
+retires a draft after a relevant state revision changes or newer chat input
+appears; an arrival after evaluation conflicts at commit, while unrelated
+traffic does not. This is a coordinator integration fixture, not the complete
+production Telegram service or its general conversation policy.

@@ -1,9 +1,12 @@
 #define _GNU_SOURCE
 #include "durable_worker.h"
+#include "durable_worker_host.h"
 #include "durable_value.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <inttypes.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -67,27 +70,99 @@ static bool task_body(const CettaDurableRecord *r, const unsigned char **body, s
     if (n!=r->size-9 || !text_valid(r->data+9,n)) return false;
     *body=r->data+9; *size=n; return true;
 }
-CettaDurableStatus cetta_worker_publish(CettaDurableStore *store, const char *worker,
-                                      const char *id, const void *body, size_t size) {
+static CettaDurableStatus publish(CettaDurableStore *store, const char *worker,
+        const char *id, const void *body, size_t size,
+        const CettaDurableRecord *intent, const char *epoch) {
     if (!store || !component(worker) || !component(id) || !text_valid(body,size)) return DURABLE_INVALID;
     char name[130], prefix[66]; key(name,worker,id); key(prefix,worker,"");
     CettaDurableScope q[]={{DURABLE_KEY,"host.worker-tasks",name},
-        {DURABLE_KEY,"host.worker-results",name},{DURABLE_PREFIX,"host.worker-ready",prefix}};
+        {DURABLE_KEY,"host.worker-results",name},{DURABLE_PREFIX,"host.worker-ready",prefix},
+        {DURABLE_KEY,"host.outbox",intent?intent->key:""},
+        {DURABLE_KEY,"host.worker-origins",name}};
     CettaDurableObservation *o=NULL;
-    CettaDurableStatus s=cetta_durable_observe(store,q,3,&o); if (s!=DURABLE_OK) return s;
+    CettaDurableStatus s=cetta_durable_observe(store,q,intent?5:3,&o); if (s!=DURABLE_OK) return s;
     const CettaDurableSnapshot *v=view(o,0), *ready=view(o,2);
     const CettaDurableRecord *old=v->count?&v->records[0]:NULL;
-    unsigned char *data=NULL; size_t n=0;
+    unsigned char *data=NULL, *origin=NULL; size_t n=0, on=0;
+    if (intent) {
+        const CettaDurableSnapshot *seen=view(o,3);
+        const CettaDurableRecord *r=seen->count?&seen->records[0]:NULL;
+        if (strcmp(seen->epoch,epoch) || !r || r->revision!=intent->revision ||
+            r->position!=intent->position || r->size!=intent->size ||
+            memcmp(r->data,intent->data,intent->size)) { s=DURABLE_CONFLICT; goto done; }
+        CettaDurableField f[]={
+            {.kind=DURABLE_FIELD_SYMBOL,.text={"host:worker-origin",18}},
+            {.kind=DURABLE_FIELD_INT,.integer=1},
+            {.kind=DURABLE_FIELD_TEXT,.text={epoch,strlen(epoch)}},
+            {.kind=DURABLE_FIELD_TEXT,.text={intent->key,strlen(intent->key)}},
+            {.kind=DURABLE_FIELD_INT,.integer=intent->revision},
+            {.kind=DURABLE_FIELD_INT,.integer=intent->position}};
+        CettaDurableField value={.kind=DURABLE_FIELD_EXPR,.expression={f,6}};
+        s=cetta_durable_fields_encode(&value,&origin,&on); if (s!=DURABLE_OK) goto done;
+        const CettaDurableSnapshot *prior=view(o,4);
+        if ((old && (!prior->count || prior->records[0].size!=on || memcmp(prior->records[0].data,origin,on))) ||
+            (!old && prior->count)) { s=DURABLE_CONFLICT; goto done; }
+    }
     s=encoded_text(body,size,&data,&n);
     if (s==DURABLE_OK && old) s=old->size==n && !memcmp(old->data,data,n)?DURABLE_OK:DURABLE_CONFLICT;
     else if (s==DURABLE_OK && (view(o,1)->count || find(ready,name))) s=DURABLE_CONFLICT;
     else if (s==DURABLE_OK && ready->count>=TASKS) s=DURABLE_LIMIT;
     else if (s==DURABLE_OK) {
         CettaDurableOp ops[]={{DURABLE_INSERT,"host.worker-tasks",name,data,n},
-            {DURABLE_INSERT,"host.worker-ready",name,ready_marker,sizeof(ready_marker)}}; int64_t rev;
-        s=cetta_durable_commit_observed(store,o,ops,2,&rev);
+            {DURABLE_INSERT,"host.worker-ready",name,ready_marker,sizeof(ready_marker)},
+            {DURABLE_INSERT,"host.worker-origins",name,origin,on}}; int64_t rev;
+        s=cetta_durable_commit_observed(store,o,ops,intent?3:2,&rev);
     }
-    free(data); cetta_durable_observation_free(o); return s;
+done:
+    free(origin); free(data); cetta_durable_observation_free(o); return s;
+}
+CettaDurableStatus cetta_worker_publish(CettaDurableStore *store, const char *worker,
+                                      const char *id, const void *body, size_t size) {
+    return publish(store,worker,id,body,size,NULL,NULL);
+}
+static bool form(const Atom *a, const char *head, size_t n) {
+    return a && a->kind==ATOM_EXPR && a->expr.len==n && atom_is_symbol(a->expr.elems[0],head);
+}
+static const char *string(const Atom *a) {
+    return a && a->kind==ATOM_GROUNDED && a->ground.gkind==GV_STRING?a->ground.sval:NULL;
+}
+static bool version(const Atom *a) {
+    return a && a->kind==ATOM_GROUNDED && a->ground.gkind==GV_INT && a->ground.ival==1;
+}
+bool cetta_worker_validate(void *context, const Atom *p, const Atom *reply_value) {
+    const char *worker=context, *who, *body;
+    if (!component(worker) || !form(p,"worker:request",4) || !version(p->expr.elems[1]) ||
+        !(who=string(p->expr.elems[2])) || strcmp(who,worker) || !(body=string(p->expr.elems[3])) ||
+        !text_valid((const unsigned char *)body,strnlen(body,CETTA_WORKER_BODY_MAX+1))) return false;
+    unsigned char *bytes=NULL; size_t n=0;
+    CettaDurableStatus s=cetta_durable_value_encode(reply_value,&bytes,&n); free(bytes);
+    return s==DURABLE_OK && n<=CETTA_WORKER_BODY_MAX;
+}
+CettaDurableStatus cetta_worker_register(CettaDurableStore *store,
+        const char *outbox_key, const char *worker, char task_id[65]) {
+    if (!task_id) return DURABLE_INVALID;
+    task_id[0]=0;
+    if (!store || !component(worker) || !outbox_key || !*outbox_key || strnlen(outbox_key,256)>255)
+        return DURABLE_INVALID;
+    CettaDurableScope q={DURABLE_KEY,"host.outbox",outbox_key}; CettaDurableObservation *o=NULL;
+    CettaDurableStatus s=cetta_durable_observe(store,&q,1,&o); if (s!=DURABLE_OK) return s;
+    const CettaDurableSnapshot *v=view(o,0); Arena a; arena_init(&a); Atom *p=NULL;
+    if (!v->count) { s=DURABLE_PRECONDITION; goto done; }
+    const CettaDurableRecord *r=&v->records[0];
+    s=cetta_durable_value_decode(&a,r->data,r->size,&p); if (s!=DURABLE_OK) goto done;
+    if (!form(p,"host:intent",6) || !version(p->expr.elems[1]) || r->revision<0 || r->position<0) {
+        s=DURABLE_CORRUPT; goto done;
+    }
+    if (!string(p->expr.elems[2]) || strcmp(string(p->expr.elems[2]),"worker.request") ||
+        !string(p->expr.elems[3]) || strcmp(string(p->expr.elems[3]),"1")) { s=DURABLE_VERSION; goto done; }
+    if (!cetta_worker_validate((void *)worker,p->expr.elems[4],p->expr.elems[5])) { s=DURABLE_INVALID; goto done; }
+    char id[65];
+    snprintf(id,sizeof(id),"%.32s%016" PRIx64 "%016" PRIx64,v->epoch,(uint64_t)r->revision,(uint64_t)r->position);
+    const char *body=string(p->expr.elems[4]->expr.elems[3]);
+    s=publish(store,worker,id,body,strlen(body),r,v->epoch);
+    if (s==DURABLE_OK) memcpy(task_id,id,sizeof(id));
+done:
+    arena_free(&a); cetta_durable_observation_free(o); return s;
 }
 static CettaWorkerCode status_code(CettaDurableStatus s) {
     switch (s) {

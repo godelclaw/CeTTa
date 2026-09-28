@@ -11,7 +11,8 @@ typedef struct {
     const char *version;
     /* Trusted, immutable program only; never append observation/worker data.
      * The context contains its loaded pure libraries, not a previous decision's
-     * registry or spaces. No concurrent use. Both outlive pending decisions. */
+     * registry or spaces. host:record and host:record-version facts are reserved
+     * for the fresh projection. No concurrent use. Both outlive decisions. */
     const Space *space;
     CettaLibraryContext *context;
 } CettaHostProgram;
@@ -54,7 +55,11 @@ const char *cetta_host_decision_key(const CettaHostDecision *decision);
 const CettaDurableSnapshot *cetta_host_view(const CettaHostDecision *decision, size_t index);
 
 /* Build fresh spaces and a private registry from this ticket's exact views,
- * run the speculative gate, and retain the outcome on this ticket. Previous
+ * projecting (host:record view-index "key" value) and the corresponding
+ * (host:record-version view-index "key" revision position). Version facts
+ * permit pure policies to pair recorded worker results with their task or
+ * detect stale captured state; they do not grant additional read authority.
+ * Run the speculative gate and retain the outcome on this ticket. Previous
  * results are discarded even if this call fails. Expression is host-owned
  * trusted code; worker proposals must enter through recorded input data.
  * DURABLE_OK means evaluation ran, not that it completed or can be accepted. */

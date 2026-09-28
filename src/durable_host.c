@@ -172,7 +172,9 @@ CettaDurableStatus cetta_host_eval_create(const CettaHostProgram *program,
     for (CettaCount i=0;i<space_length64(program->space);++i) {
         Atom *a=space_get_at64(program->space,i);
         if (!a || (a->flags&ATOM_FLAG_HAS_IDENTITY_GROUNDED) ||
-            (a->kind==ATOM_EXPR && a->expr.len && atom_is_symbol(a->expr.elems[0],"host:record"))) goto fail;
+            (a->kind==ATOM_EXPR && a->expr.len &&
+                (atom_is_symbol(a->expr.elems[0],"host:record") ||
+                 atom_is_symbol(a->expr.elems[0],"host:record-version")))) goto fail;
         Atom *copy=atom_deep_copy(&e->persistent,a);
         if (!copy) { status=DURABLE_NOMEM; goto fail; }
         space_add(&e->space,copy);
@@ -214,6 +216,10 @@ CettaDurableStatus cetta_host_evaluate(CettaHostDecision *d,
             Atom *fact[]={atom_symbol(&e->persistent,"host:record"),atom_int(&e->persistent,(int64_t)i),
                 atom_string(&e->persistent,v->records[j].key),value};
             space_add(&e->space,atom_expr(&e->persistent,fact,4));
+            Atom *meta[]={atom_symbol(&e->persistent,"host:record-version"),
+                atom_int(&e->persistent,(int64_t)i),atom_string(&e->persistent,v->records[j].key),
+                atom_int(&e->persistent,v->records[j].revision),atom_int(&e->persistent,v->records[j].position)};
+            space_add(&e->space,atom_expr(&e->persistent,meta,5));
         }
     }
     status=cetta_host_eval_run(e,program,expression,fuel);

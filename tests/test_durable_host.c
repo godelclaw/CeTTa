@@ -110,6 +110,9 @@ int main(int argc, char **argv) {
     CettaHostProgram stale_program=host_program; stale_program.space=&cached;
     assert(cetta_host_evaluate(d,&stale_program,parse(proposal),10000)==DURABLE_INVALID);
     assert(!cetta_host_outcome(d)); space_free(&cached);
+    space_init(&cached); space_add(&cached,parse("(host:record-version 0 \"old\" 1 0)"));
+    assert(cetta_host_evaluate(d,&stale_program,parse(proposal),10000)==DURABLE_INVALID);
+    assert(!cetta_host_outcome(d)); space_free(&cached);
     /* Reusing the trusted library context does not reuse decision data. */
     write_record("host.inbox","input-1","(received \"changed\")");
     CettaHostDecision *newer=begin();

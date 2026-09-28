@@ -38319,3 +38319,21 @@ test-durable-worker:
 	@echo "test-durable-worker requires ENABLE_DURABLE=1" >&2
 	@exit 1
 endif
+
+.PHONY: test-durable-worker-host
+ifeq ($(ENABLE_DURABLE),1)
+DURABLE_WORKER_HOST_TEST_BIN = runtime/test-durable-worker-host-$(BUILD_OBJ_TAG)
+DURABLE_WORKER_HOST_TEST_OBJ = runtime/bootstrap/test-durable-worker-host.$(BUILD_OBJ_TAG).o
+-include $(DURABLE_WORKER_HOST_TEST_OBJ:.o=.d)
+$(DURABLE_WORKER_HOST_TEST_OBJ): tests/test_durable_worker_host.c $(BUILD_CONFIG_HEADER)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -MF $(@:.o=.d) -c $< -o $@
+$(DURABLE_WORKER_HOST_TEST_BIN): $(DURABLE_WORKER_HOST_TEST_OBJ) $(FALLBACK_EVAL_TEST_LINK_OBJ) $(BRIDGE_DEPS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+test-durable-worker-host: $(DURABLE_WORKER_HOST_TEST_BIN)
+	./$(DURABLE_WORKER_HOST_TEST_BIN)
+else
+test-durable-worker-host:
+	@echo "test-durable-worker-host requires ENABLE_DURABLE=1" >&2
+	@exit 1
+endif
