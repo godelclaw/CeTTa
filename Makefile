@@ -388,7 +388,7 @@ ifneq ($(filter $(ENABLE_DURABLE),0 1),$(ENABLE_DURABLE))
 $(error ENABLE_DURABLE must be 0 or 1)
 endif
 ifeq ($(ENABLE_DURABLE),1)
-DURABLE_SRC += src/durable_store.c src/durable_value.c
+DURABLE_SRC += src/durable_store.c src/durable_value.c src/durable_host.c
 ifeq ($(SQLITE_PROVIDER),vendored)
 DURABLE_CFLAGS += -Ivendor/sqlite -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DQS=0 -DSQLITE_OMIT_SHARED_CACHE -DSQLITE_DEFAULT_MEMSTATUS=0
 DURABLE_SRC += vendor/sqlite/sqlite3.c
@@ -38191,5 +38191,23 @@ test-telegram-transport: $(TELEGRAM_TRANSPORT_TEST_BIN)
 else
 test-telegram-transport:
 	@echo "test-telegram-transport requires the native HTTP provider" >&2
+	@exit 1
+endif
+
+.PHONY: test-durable-host
+ifeq ($(ENABLE_DURABLE),1)
+DURABLE_HOST_TEST_BIN = runtime/test-durable-host-$(BUILD_OBJ_TAG)
+DURABLE_HOST_TEST_OBJ = runtime/bootstrap/test-durable-host.$(BUILD_OBJ_TAG).o
+-include $(DURABLE_HOST_TEST_OBJ:.o=.d)
+$(DURABLE_HOST_TEST_OBJ): tests/test_durable_host.c $(BUILD_CONFIG_HEADER)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -MF $(@:.o=.d) -c $< -o $@
+$(DURABLE_HOST_TEST_BIN): $(DURABLE_HOST_TEST_OBJ) $(FALLBACK_EVAL_TEST_LINK_OBJ) $(BRIDGE_DEPS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+test-durable-host: $(DURABLE_HOST_TEST_BIN)
+	./$(DURABLE_HOST_TEST_BIN)
+else
+test-durable-host:
+	@echo "test-durable-host requires ENABLE_DURABLE=1" >&2
 	@exit 1
 endif

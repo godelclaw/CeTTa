@@ -1,0 +1,61 @@
+#ifndef CETTA_DURABLE_HOST_H
+#define CETTA_DURABLE_HOST_H
+#include "durable_store.h"
+#include "eval.h"
+
+/* Native coordination boundary; deliberately not an evaluator builtin.
+ * A ticket owns the exact observation and authority supplied by the host.
+ * Grant indexes in data select this authority; they cannot manufacture it. */
+typedef struct CettaHostDecision CettaHostDecision;
+typedef struct {
+    CettaDurableScope scope;
+    bool writable;
+} CettaHostSpaceGrant;
+typedef struct {
+    const char *name, *version;
+    /* Pure, bounded validation. Must enforce method/routing permissions for
+     * transport channels. Context is immutable and outlives the decision. */
+    bool (*validate)(void *context, const Atom *payload, const Atom *reply);
+    void *context;
+} CettaHostChannelGrant;
+typedef struct {
+    const char *input_key, *actor_key, *program_version;
+    const CettaHostSpaceGrant *spaces;
+    size_t space_count;
+    const CettaHostChannelGrant *channels;
+    size_t channel_count;
+} CettaHostDecisionSpec;
+typedef struct {
+    char epoch[33], commit_key[33];
+    int64_t revision;
+    size_t effects;
+} CettaHostCommit;
+
+/* Host-supplied specs only, never decoded from a worker proposal. Reads input
+ * and actor plus all supplied scopes in one snapshot. Private absence scopes
+ * reserve this transition's receipt/outbox without a global revision fence.
+ * Store must outlive its decisions; each decision has one caller at a time. */
+CettaDurableStatus cetta_host_begin(CettaDurableStore *store,
+    const CettaHostDecisionSpec *spec, CettaHostDecision **out);
+void cetta_host_decision_free(CettaHostDecision *decision);
+/* Receipt key remains available after UNKNOWN for recovery inspection. */
+const char *cetta_host_decision_key(const CettaHostDecision *decision);
+/* View 0 = input, 1 = actor, 2+i = space grant i. Only these views may inform
+ * this decision. Build fresh in-memory query spaces from them, without cached
+ * state. LLM/time/random observations must first have been recorded as input. */
+const CettaDurableSnapshot *cetta_host_view(const CettaHostDecision *decision, size_t index);
+
+/* Pass the actual outcome evaluated against this ticket's views, never an
+ * outcome/status deserialized from a worker. Incomplete/denied evaluation is
+ * rejected. The host selects one alternative and records its index.
+ * Shape: (host:transition continuation (writes...) (effects...))
+ *   (host:put space-grant "key" value) | (host:remove space-grant "key")
+ *   (host:send channel-grant payload reply-continuation)
+ * All data must be closed and bounded. Acceptance atomically consumes input,
+ * replaces actor continuation, changes granted state, appends immutable intents
+ * and a commit receipt. The ticket is spent once a commit is attempted, including
+ * UNKNOWN; recover from the journal instead of guessing or repeating effects.
+ * No evaluation, policy callback or HTTP runs inside the storage transaction. */
+CettaDurableStatus cetta_host_accept(CettaHostDecision *decision,
+    const EvalOutcome *outcome, size_t selected, CettaHostCommit *commit);
+#endif

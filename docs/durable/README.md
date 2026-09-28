@@ -283,3 +283,79 @@ or a universal absence of every protocol-level retry.
 This native adapter is not an evaluator builtin. The production durable host
 must still connect credential lookup and response screening to its registered
 channel and observation-recording boundaries.
+
+## Native decision acceptance
+
+`durable_host.h` joins the scoped store and the speculative evaluator. It is a
+native host API, not a library operation available to evaluated code. The host
+opens a decision with an input occurrence, actor identity, program version,
+read/write space grants and channel grants. It receives immutable views from
+one snapshot. Input and actor dependencies are always included; other scopes
+include negative key/prefix/space observations. Unrelated inbox arrivals or
+HTTP outcomes do not invalidate the decision.
+
+The embedding host must evaluate against **only** these views, projected into
+fresh in-memory query spaces alongside its trusted, versioned program. Do not
+reuse observations cached from a previous ticket. The actual `EvalOutcome` stays
+native; a worker cannot supply its own `COMPLETE` flag or read scopes. LLM,
+clock and random observations enter through the recorded inbox. Parse and JSON
+inputs must be bounded before symbol interning; use strings for unbounded IDs
+and external text. Pending ticket count and aggregate observation memory also
+require bounded admission in the service.
+
+One selected result has this closed-data shape:
+
+```metta
+(host:transition
+  (waiting "reply")
+  ((host:put 0 "actor/value" 42))
+  ((host:send 0 (sendMessage "approved-chat" "hello") (resume "reply"))))
+```
+
+A write uses a space-grant index and a string key inside its declared scope.
+`host:put` inserts or replaces according to that exact observation;
+`host:remove` requires presence. A send uses a channel-grant index, payload and
+reply continuation. These indices select authority bound to the native ticket;
+writing a channel name or another number grants no additional permission.
+Native channel validators are pure and bounded, and enforce payload/method/chat
+permissions before commitment. Their context must stay immutable until the
+host retires the ticket; a policy change must retire affected tickets. Programs
+cannot write reserved `host.*` spaces through state grants.
+
+`cetta_host_accept` requires bounded, complete evaluation with no effect denials.
+It bounds and encodes the selected result, validates all grants, then atomically:
+
+- consumes the bound `host.inbox` occurrence;
+- replaces `host.actors` with a versioned continuation;
+- applies granted state writes;
+- inserts immutable `host.outbox` intents with channel and handler versions;
+- records program version, input/actor identity and selected alternative in
+  `host.commits`.
+
+No evaluation, callback or networking runs inside the storage transaction.
+Unselected alternatives produce no intents. There is no dispatch operation in
+this API. The thin `durable:rho` module supplies request descriptions and pure
+completion-to-rho projection; the embedding host supplies completions only after
+recording them durably.
+
+Private random receipt keys and outbox prefixes reserve fresh identities using
+absence scopes. This bookkeeping randomness is not exposed as program input or
+used to select branches. The receipt key remains available through the native
+ticket even after an unknown commit acknowledgment. A ticket is spent once
+commit is attempted; recovery inspects its journal receipt. Transport handles
+are not effect IDs: an immutable outbox row's `(epoch, revision, position)` is
+its durable occurrence identity. Keep claims/outcomes separate so later status
+changes never overwrite the acceptance revision. Checkpoints preserve those
+identities and all unresolved intents.
+
+Wire records use CDV1, with schema 1 envelopes `host:actor`, `host:commit` and
+`host:intent`. This records versions, not an automatic upgrade protocol: the
+service must explicitly handle incompatible waiting continuations/handlers.
+Receipts support inspection; they do not constitute deterministic replay.
+
+`make BUILD=core ENABLE_DURABLE=1 test-durable-host` exercises actual speculative
+HE evaluation and rho COMM, authority rejection, hidden effect denial, selection
+of one alternative, absence conflicts, unrelated traffic, atomic rollback and
+process death before/after acceptance. This is the acceptance boundary, not yet
+a service: HTTP claim/outcome integration, timers, worker IPC, ordered lanes and
+Telegram policy remain separate host integration work.
