@@ -868,3 +868,51 @@ retires a draft after a relevant state revision changes or newer chat input
 appears; an arrival after evaluation conflicts at commit, while unrelated
 traffic does not. This is a coordinator integration fixture, not the complete
 production Telegram service or its general conversation policy.
+
+## Service scheduling and independent cognition
+
+`durable_service.h` assembles the HTTP owner, poll intake/recovery, timers and
+local worker endpoint into one native lifetime. The caller supplies a store,
+an inherited worker listener, immutable credentials and a fixed HE extended
+program/policy for each poll source. Construction recovers outstanding claims
+before admission. The configuration must name each actual bot only once;
+different credential objects do not establish different bot identities.
+
+`cetta_service_step` pumps bounded worker requests, due timers, and one poll
+source in round-robin order. Its wait argument bounds idle waiting to at most
+100 ms; evaluation and storage can take longer. It never invokes cognition.
+Polls use committed offsets and recovery deadlines. The fixed, fuel-bounded
+MeTTa policy classifies recorded responses and chooses retry or hold. A held
+response, invalid result or exhausted evaluation does not stop other sources
+or IPC. Incomplete results are not committed. Diagnostics for each parked
+response are reported once per service lifetime; durable holds survive restart.
+
+An ordinary shutdown records cancelled polls with a distinct `shutdown` cause.
+The poll policy schedules their safe retry at the committed cursor, while
+preserving the cancellation metadata. It does not reinterpret cancelled sends,
+privacy suppression or minimal-fact recording failures. The HTTP owner is
+joined before the store or credentials may close.
+
+Storage failures latch, stop new admission and report a host fault. Recovery
+requires reopening the service/store, particularly after an unknown commit;
+repeated steps do not spin on the same error. Bad timer intents are reported
+separately without stopping healthy work. Diagnostics and their deduplication
+cache are bounded. The caller must route host faults and the dispatcher's
+separate recording-failure callback to operational supervision.
+
+Application reactions still use host decision tickets. After a committed
+reaction, `cetta_service_changed` refreshes timer scheduling. The application
+chooses eligible sends using `cetta_service_submit`, handles cancellation, and
+publishes accepted worker requests with `cetta_worker_register`. The loop does
+not infer chat order, replay an ambiguous send, or blindly dispatch every outbox
+record. Ordered lanes and general conversation policy are separate integration
+work, as are the production executable, configuration and supervisor units.
+
+`make BUILD=core ENABLE_HTTP=1 ENABLE_DURABLE=1 test-durable-service` runs actual
+service processes against HTTP, HTTPS and negotiated HTTP/2 mock servers. With
+no cognitive worker, polling, sends and timers continue. Workers disconnect
+and reconnect; graceful and killed service processes recover retained tasks,
+receipts and poll cursors. A send accepted remotely before a crash becomes
+uncertain without being sent again. Other cases cover held polls, exhausted
+policy fuel and a latched storage quota failure. These are synthetic process
+integration tests, not a deployed agent or a complete Telegram application.

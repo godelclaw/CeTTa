@@ -234,6 +234,9 @@ static void recovery_checks(void) {
     for (size_t i=0;i<sizeof(transient)/sizeof(*transient);++i)
         recovery_response(transient[i],0,false,"observed","",1,1000,"(telegram:retry-at 1 3000 transient-poll)");
     recovery_response(52,0,false,"uncertain","",0,1000,"(telegram:retry-at 1 2000 transient-poll)");
+    recovery_response(42,0,true,"shutdown","",0,1000,"(telegram:retry-at 1 2000 host-restart)");
+    recovery_response(42,0,true,"uncertain","",0,1000,"(telegram:hold 1 transport-outcome)");
+    recovery_response(42,0,true,"privacy-suppressed","",0,1000,"(telegram:hold 1 transport-outcome)");
     recovery_response(28,0,false,"uncertain","",1000000,1000,"(telegram:retry-at 1 65000 (telegram:degraded transient-poll))");
     recovery_response(60,0,false,"observed","",0,1000,"(telegram:hold 1 transport-outcome)");
     recovery_response(28,0,true,"observed","",0,1000,"(telegram:hold 1 transport-outcome)");

@@ -34,6 +34,7 @@ struct CettaDurableDispatch {
     Job *jobs;
     size_t count;
     uint64_t next_id;
+    bool stopping;
 };
 static bool name(const char *s) { return s && *s && strnlen(s,256)<256; }
 static CettaDurableField text(const char *s) {
@@ -174,7 +175,7 @@ static CettaHttpPrepare prepare(void *ctx, uint64_t id) {
 }
 static CettaHttpRecord record(void *ctx, const CettaHttpResult *r, CettaHttpRecordMode mode) {
     CettaDurableDispatch *d=ctx;
-    pthread_mutex_lock(&d->mutex); Job *j=find(d,r->id); pthread_mutex_unlock(&d->mutex);
+    pthread_mutex_lock(&d->mutex); Job *j=find(d,r->id); bool stopping=d->stopping; pthread_mutex_unlock(&d->mutex);
     if (!j) return HTTP_RECORD_RETRY;
     const char *kind=r->started?"observed":"not-started";
     const void *body=r->body; size_t size=r->body_size;
@@ -186,6 +187,11 @@ static CettaHttpRecord record(void *ctx, const CettaHttpResult *r, CettaHttpReco
     }
     CettaDurableStatus s;
     if (j->poll) {
+        /* Poll cancellation on owner shutdown is repeat-safe at this window's
+         * committed offset. Preserve its cause; never apply it to sends or
+         * override privacy/minimal-fact outcomes. */
+        if (stopping && r->cancelled && (!strcmp(kind,"observed") || !strcmp(kind,"uncertain") || !strcmp(kind,"not-started")))
+            kind="shutdown";
         CettaDurableField metadata[9]; http_metadata(r,metadata);
         CettaDurableField f[]={symbol("host:poll"),integer(1),text(cetta_inbox_source(j->poll)),
             integer(cetta_inbox_offset(j->poll)),symbol(kind),
@@ -366,6 +372,7 @@ uint64_t cetta_dispatch_wait(CettaDurableDispatch *d, uint64_t generation, uint3
 }
 size_t cetta_dispatch_free(CettaDurableDispatch *d) {
     if (!d) return 0;
+    pthread_mutex_lock(&d->mutex); d->stopping=true; pthread_mutex_unlock(&d->mutex);
     size_t lost=d->worker?cetta_http_worker_free(d->worker):0;
     while (d->jobs) { Job *j=d->jobs; d->jobs=j->next; dispose(j); }
     for (size_t i=0;d->channels && i<d->config.channel_count;++i) {

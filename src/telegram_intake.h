@@ -25,6 +25,8 @@ CettaDurableStatus cetta_telegram_intake_evaluate_recovery(CettaTelegramIntake *
 CettaDurableStatus cetta_telegram_intake_commit_recovery(CettaTelegramIntake *ticket,
                                                        int64_t *revision);
 const EvalOutcome *cetta_telegram_intake_outcome(const CettaTelegramIntake *ticket);
+bool cetta_telegram_intake_held(const CettaTelegramIntake *ticket);
+int64_t cetta_telegram_intake_revision(const CettaTelegramIntake *ticket);
 /* Commit only the ticket's COMPLETE, unique batch result. Holds, retry hints,
  * denied/incomplete evaluations and malformed outputs cannot acknowledge input.
  * The first recorded classification wins across policy/config upgrades, but a

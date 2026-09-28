@@ -30,6 +30,9 @@ CettaDurableStatus cetta_inbox_begin_at(CettaDurableStore *store, const char *so
 CettaDurableStatus cetta_inbox_poll_clock(CettaInboxWindow *window, int64_t sampled_ms,
                                        int64_t *recorded_ms);
 int64_t cetta_inbox_poll_failures(const CettaInboxWindow *window);
+/* True only for a pending response with an already recorded hold decision.
+ * Do not repeatedly reevaluate it; explicit host repair must release it. */
+bool cetta_inbox_poll_held(const CettaInboxWindow *window);
 /* Commit the trusted policy result (telegram:retry-at 1 due-ms reason) or
  * (telegram:hold 1 reason). Record response, clock, version and decision in
  * host.poll-control. A retry releases the response without advancing cursor;

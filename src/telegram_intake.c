@@ -60,6 +60,11 @@ CettaDurableStatus cetta_telegram_intake_begin(CettaDurableStore *store,
 const EvalOutcome *cetta_telegram_intake_outcome(const CettaTelegramIntake *t) {
     return t && t->evaluation?&t->evaluation->outcome:NULL;
 }
+bool cetta_telegram_intake_held(const CettaTelegramIntake *t) { return t && cetta_inbox_poll_held(t->window); }
+int64_t cetta_telegram_intake_revision(const CettaTelegramIntake *t) {
+    const CettaDurableRecord *r=t?cetta_inbox_poll_response(t->window):NULL;
+    return r?r->revision:-1;
+}
 static CettaDurableStatus evaluate(CettaTelegramIntake *t,
     const CettaHostProgram *program, const Atom *config, int64_t now, bool recovery, int fuel) {
     if (!t) return DURABLE_INVALID;

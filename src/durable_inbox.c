@@ -112,6 +112,7 @@ CettaDurableStatus cetta_inbox_begin_at(CettaDurableStore *store, const char *so
     return begin(store,source,false,now,out);
 }
 int64_t cetta_inbox_poll_failures(const CettaInboxWindow *w) { return w?w->failures:-1; }
+bool cetta_inbox_poll_held(const CettaInboxWindow *w) { return w && w->pending_poll && w->recovery_recorded; }
 int64_t cetta_inbox_offset(const CettaInboxWindow *w) { return w?w->offset:-1; }
 const char *cetta_inbox_source(const CettaInboxWindow *w) { return w?w->source:NULL; }
 const CettaDurableRecord *cetta_inbox_poll_response(const CettaInboxWindow *w) {
