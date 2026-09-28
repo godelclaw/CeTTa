@@ -444,3 +444,58 @@ invented credentials.
 This is an embedded transport boundary. The independently supervised service,
 worker IPC, inbox cursor, timers, ordered chat lanes and full Telegram policy
 remain separate integration work.
+
+## Received batches and the remote cursor
+
+`durable_inbox.h` provides the native batch-commit boundary. The host opens a
+window on one source's committed cursor, uses that offset for its poll, and
+commits the screened, validated and classified batch through that window.
+Only a successful commit returns a new offset that may acknowledge the batch
+remotely. Telegram confirms updates when a later poll's offset passes their
+IDs, so constructing offsets from uncommitted responses loses updates across
+a crash. [Telegram getUpdates](https://core.telegram.org/bots/api#getupdates).
+
+One transaction inserts immutable `host.received` occurrences, their
+`host.inbox` references and the new `host.cursors` value. Identity is
+`source/update-id`; the inbox key is `source/lane/update-id`, so a chat-prefix
+read scope can invalidate stale drafts without depending on other chats.
+Source and lane are bounded native-selected string components, not symbols or
+credentials. A source is the stable bot identity across token rotations.
+
+Schema-1 envelopes:
+
+```metta
+(host:received 1 "source" update-id "lane" disposition closed-payload)
+(host:input 1 "source" update-id "source/update-id" "lane" disposition)
+(host:cursor 1 "source" next-offset)
+```
+
+The trusted reaction declares the referenced received-record scope when it
+needs the payload. Core consumption remains a separate input/state/outbox
+transaction. Consuming an inbox reference does not erase its received record;
+repeated delivery therefore cannot recreate consumed work. Different payload,
+lane or disposition under an existing identity is an explicit corruption
+result, never a silent replacement. Retention must preserve this deduplication
+evidence while replay is possible; storage pressure stops admission rather
+than acknowledging data that was not retained.
+
+Gaps, repeated IDs and out-of-order batches are handled without a contiguous-ID
+assumption. A distinct lower ID is retained while the cursor remains monotone.
+Exact duplicate IDs within a batch collapse; conflicting duplicates reject
+the whole batch. `routed`, `unsupported` and `unauthorized` dispositions all
+retain the payload. Application policy decides which inputs enter cognition
+or operator handling; unsupported input is not silently discarded.
+
+A window conflicts if its source cursor changes; unrelated traffic does not
+invalidate it. Commit attempts spend the window even when acknowledgment is
+unknown. Recovery opens a fresh window and reconciles the original batch
+against the ledger. Empty batches spend their window without writing or
+advancing the cursor. Batches contain at most 100 items and at most 4 MiB of
+encoded candidates, subject also to the store's configured limits and the
+closed-value codec's per-value bounds.
+
+`make BUILD=core ENABLE_DURABLE=1 test-durable-inbox` covers these rules,
+capacity-failure rollback and process death before/after the batch commit.
+This native API is not exposed to worker proposals. The HTTP poll owner must
+still bind requests to its window and validate/screen provider data before
+calling it; this module alone is not a receiving service.
