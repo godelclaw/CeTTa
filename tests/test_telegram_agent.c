@@ -153,6 +153,16 @@ static void policy_tests(void) {
         Atom *call[]={atom_symbol(&persistent,"tg-agent:batch"),atom_string(&persistent,body),atom_int(&persistent,42),atom_int(&persistent,0)};
         pure(atom_expr(&persistent,call,4),n==64?expected:"tg-agent:bad");
     }
+    const char *holds[]={"model-outcome-unknown","model-failed","invalid-model-request",
+        "request-too-large","invalid-model-response","invalid-model-commands",
+        "unsupported-command-batch","adapter-version-changed","invented-reason"};
+    for (size_t i=0;i<sizeof(holds)/sizeof(*holds);++i) {
+        char body[128],expected[128];
+        snprintf(body,sizeof(body),"[\"cognitive-hold/1\",\"%s\"]",holds[i]);
+        snprintf(expected,sizeof(expected),"(tg-agent:cognitive-hold \"%s\")",holds[i]);
+        Atom *call[]={atom_symbol(&persistent,"tg-agent:batch"),atom_string(&persistent,body),atom_int(&persistent,42),atom_int(&persistent,0)};
+        pure(atom_expr(&persistent,call,4),i==8?"tg-agent:bad":expected);
+    }
 }
 int main(int argc,char **argv) {
     (void)argc;
@@ -251,6 +261,19 @@ int main(int argc,char **argv) {
     context.session.language_id=CETTA_LANGUAGE_PETTA;
     assert(cetta_telegram_agent_decide(store,&agent,other,&d)==DURABLE_INVALID && !d);
     context.session.language_id=CETTA_LANGUAGE_HE;
+    put("host.actors","telegram/bot/84.0",parse("(host:actor 1 \"telegram-agent/1\" (tg-agent:waiting \"bot\" \"84.0\" 7 84 0))"));
+    result(other_batch,"[\"cognitive-hold/1\",\"model-outcome-unknown\"]",worker_input);
+    before=count("host.outbox"); accept(decide(worker_input,1),0,NULL);
+    assert(count("host.outbox")==before && !record("host.inbox",worker_input));
+    snprintf(expected,sizeof(expected),"(tg-agent:worker-held \"%s\" \"model-outcome-unknown\")",other_batch);
+    state(84,expected);
+    audit=record("telegram.decisions",other_batch);
+    assert(atom_is_symbol(audit->expr.elems[2],"held") && atom_eq(audit->expr.elems[3],parse("(tg-agent:cognitive-hold \"model-outcome-unknown\")")));
+    cetta_durable_close(store); assert(cetta_durable_open(db,NULL,&store)==DURABLE_OK); state(84,expected);
+    incoming(8,84,other); d=decide(other,0); cetta_host_decision_free(d);
+    assert(record("host.inbox",other)); // Later chat input remains durable, without another paid request.
+    erase("host.actors","telegram/bot/42.0"); incoming(9,42,input);
+    accept(decide(input,1),1,request); state(84,expected); // Independent chat still progresses.
     printf("Telegram agent: %u pure policy checks; recorded input, rho reaction, task pairing, atomic batches, chat progress, stale drafts, held uncertainty and profile/fuel checks passed\n",policy_checks);
     cetta_durable_close(store); unlink(db); char path[300]; snprintf(path,sizeof(path),"%s-wal",db); unlink(path); snprintf(path,sizeof(path),"%s-shm",db); unlink(path); rmdir(dir);
     cetta_library_context_free(&context); eval_set_library_context(NULL); registry_free(&registry); space_free(&program);

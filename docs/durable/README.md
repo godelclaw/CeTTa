@@ -1144,3 +1144,25 @@ HTTPS/1.1 and negotiated HTTP/2. No units are installed by tests. The full
 cognitive adapter, operator controls, hold repair and remaining Telegram
 interface are subsequent integration work; this entry is not yet a complete
 replacement for an existing agent.
+
+### Cognitive worker holds
+
+The Telegram agent policy also accepts a bounded diagnostic worker result:
+`["cognitive-hold/1", "reason"]`. The allowed reasons distinguish an unknown
+model outcome, provider failure, invalid request/response/command data, a
+request-size limit, unsupported commands and an adapter-version change.
+Unknown reasons are rejected as malformed results. This is data in the
+existing worker result protocol; it grants no routing, scope or effect authority.
+
+The ordinary task/origin/continuation checks and stale-draft checks still run.
+For a current task, one transaction consumes its result, records a held
+application decision and moves only that chat to `tg-agent:worker-held`.
+It creates no outgoing effects. The worker's result receipt lets it continue
+with other tasks; later input in the held chat remains durable. A stale hold
+cannot replace a newer continuation. Its original result remains recorded.
+
+Worker holds and uncertain Telegram sends are distinct states. Neither is
+permission for an automatic paid model repeat or an ambiguous send retry.
+An operator repair interface is still needed to release held chats. Deploy the
+worker with this matching policy: an older policy can store the diagnostic
+but classify it as an invalid command batch instead of holding the chat.

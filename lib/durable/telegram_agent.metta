@@ -84,7 +84,13 @@
           ($bad tg-agent:bad))))))
 (= (tg-agent:batch $body $chat $thread)
    (case (json-parse $body)
-     (((JsonArray $commands)
+     (((JsonArray ((JsonString "cognitive-hold/1") (JsonString $reason)))
+       (if (telegram:contains $reason
+             ("model-outcome-unknown" "model-failed" "invalid-model-request"
+              "request-too-large" "invalid-model-response" "invalid-model-commands"
+              "unsupported-command-batch" "adapter-version-changed"))
+         (tg-agent:cognitive-hold $reason) tg-agent:bad))
+      ((JsonArray $commands)
        (if (> (size-atom $commands) 64) tg-agent:bad (tg-agent:commands $commands $chat $thread)))
       ($bad tg-agent:bad))))
 (= (tg-agent:intents $actions $source $lane $batch $position $count)
@@ -109,7 +115,10 @@
           (if (== $state (tg-agent:waiting $source $lane $id $chat $thread))
            (if (== (collapse (match &self (host:record 5 $new $value) True)) ())
             (case (tg-agent:batch $body $chat $thread)
-             (((tg-agent:actions $actions)
+             (((tg-agent:cognitive-hold $reason)
+               (host:transition (tg-agent:worker-held $batch $reason)
+                 ((host:put 4 $batch (tg-agent:decision 1 held (tg-agent:cognitive-hold $reason)))) ()))
+              ((tg-agent:actions $actions)
                (let $count (size-atom $actions)
                 (host:transition (if (== $count 0) (tg-agent:idle) (tg-agent:sending $batch 0 $count))
                   ((host:put 4 $batch (tg-agent:decision 1 accepted $actions)))
