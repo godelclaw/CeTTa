@@ -24,7 +24,8 @@ typedef struct {
     const char *root, *directory, *worker, *credential, *origin, *ca;
     int token_fd, listener, operator_fd;
     int64_t chats[128]; size_t count;
-    bool run, check;
+    int64_t operators[16]; size_t operator_count;
+    bool run, check, channel, program_seen;
 } Config;
 static volatile sig_atomic_t stopped;
 static void stop(int sig) { (void)sig; stopped=1; }
@@ -55,7 +56,8 @@ static bool component(const char *s) {
 }
 static void usage(void) {
     puts("Usage: cetta-telegram-service (--check | --run) --root DIR --state-dir DIR\n"
-         "       --worker NAME --chat ID [--chat ID ...]\n"
+         "       --worker NAME --chat ID [--chat ID ...] [--operator ID ...]\n"
+         "       [--program agent|channel]\n"
          "       (--credential-file FILE | --credential-fd FD) [--listener-fd FD]\n"
          "       [--operator-fd FD]\n"
          "       [--mock-origin http[s]://127.0.0.1:PORT [--ca-file FILE]]\n"
@@ -78,6 +80,15 @@ static bool arguments(int argc, char **argv, Config *c) {
             if (c->count==128 || !number(value,INT64_MIN,INT64_MAX,&n) || !n) return false;
             for (size_t j=0;j<c->count;++j) if (c->chats[j]==n) return false;
             c->chats[c->count++]=n; continue;
+        }
+        if (!strcmp(option,"--operator")) {
+            if (c->operator_count==16 || !number(value,1,INT64_MAX,&n)) return false;
+            for (size_t j=0;j<c->operator_count;++j) if (c->operators[j]==n) return false;
+            c->operators[c->operator_count++]=n; continue;
+        }
+        if (!strcmp(option,"--program")) {
+            if (c->program_seen || (strcmp(value,"agent") && strcmp(value,"channel"))) return false;
+            c->program_seen=true; c->channel=!strcmp(value,"channel"); continue;
         }
         size_t j=0; while (j<9 && strcmp(option,names[j])) ++j;
         if (j==9 || (seen&(1u<<j))) return false;
@@ -126,8 +137,12 @@ static int activation_listener(void) {
     unsetenv("LISTEN_PID"); unsetenv("LISTEN_FDS"); unsetenv("LISTEN_FDNAMES");
     return ok?3:-1;
 }
-static CettaDurableStatus bind_identity(CettaDurableStore *store, const char *source, const char *worker) {
-    char identity[180]; int n=snprintf(identity,sizeof(identity),"telegram-service/1|%s|%s",source,worker);
+static CettaDurableStatus bind_identity(CettaDurableStore *store, const char *source, const char *worker,
+                                       const char *program) {
+    /* A journal belongs to one bot, worker and program; the agent keeps its
+     * original identity text, so its existing journals still open. */
+    char identity[220]; int n=program?snprintf(identity,sizeof(identity),"telegram-service/1|%s|%s|%s",source,worker,program):
+        snprintf(identity,sizeof(identity),"telegram-service/1|%s|%s",source,worker);
     CettaDurableField f={.kind=DURABLE_FIELD_TEXT,.text={identity,(size_t)n}};
     unsigned char *data=NULL; size_t size=0;
     CettaDurableStatus s=cetta_durable_fields_encode(&f,&data,&size);
@@ -186,19 +201,29 @@ int main(int argc,char **argv) {
     int result=CONFIG; Atom *import_error=NULL; CettaDurableStore *store=NULL;
     CettaDurableService *service=NULL; CettaTelegramScheduler *scheduler=NULL;
     CettaTelegramControl *control=NULL;
-    if (!cetta_library_import_module(&context,"durable:telegram_agent",&program,false,&scratch,&persistent,&registry,1000000,&import_error)) {
+    /* agent: cognition per message (telegram-agent/1). channel: the agent's own
+     * loop reads deliveries and submits keyed actions (telegram-channel/1). */
+    const char *module=c.channel?"durable:telegram_channel":"durable:telegram_agent";
+    if (!cetta_library_import_module(&context,module,&program,false,&scratch,&persistent,&registry,1000000,&import_error)) {
         error("trusted policy",CONFIG); goto done;
     }
-    CettaHostProgram trusted={"telegram-agent/1",&program,&context};
+    CettaHostProgram trusted={c.channel?"telegram-channel/1":"telegram-agent/1",&program,&context};
     Atom *ids[128]; for (size_t i=0;i<c.count;++i) ids[i]=atom_int(&persistent,c.chats[i]);
+    Atom *operators[16]; for (size_t i=0;i<c.operator_count;++i) operators[i]=atom_int(&persistent,c.operators[i]);
     Atom *args[]={atom_symbol(&persistent,"telegram:policy"),atom_int(&persistent,1),atom_expr(&persistent,ids,c.count),
-        atom_bool(&persistent,false),atom_expr(&persistent,NULL,0),atom_expr(&persistent,NULL,0)};
+        atom_bool(&persistent,false),atom_expr(&persistent,operators,c.operator_count),atom_expr(&persistent,NULL,0)};
     Atom *policy=atom_expr(&persistent,args,6);
-    CettaTelegramActionPolicy actions={c.chats,c.count,TELEGRAM_SEND_TEXT};
-    if (c.check) { puts("cetta-telegram: configuration and trusted policy valid; dispatch disabled"); result=0; goto done; }
+    /* The channel client edits and deletes its own messages; ownership is
+     * recorded in its receipts. The per-message agent only replies. */
+    CettaTelegramActionPolicy actions={c.chats,c.count,
+        c.channel?TELEGRAM_SEND_TEXT|TELEGRAM_EDIT_TEXT|TELEGRAM_DELETE_MESSAGE:TELEGRAM_SEND_TEXT};
+    if (c.check) {
+        printf("cetta-telegram: configuration and trusted %s policy valid; dispatch disabled\n",trusted.version);
+        result=0; goto done;
+    }
     if (stopped) { result=0; goto done; }
     CettaDurableStatus s=cetta_durable_open(database,NULL,&store);
-    if (s==DURABLE_OK) s=bind_identity(store,source_id,c.worker);
+    if (s==DURABLE_OK) s=bind_identity(store,source_id,c.worker,c.channel?trusted.version:NULL);
     if (s!=DURABLE_OK) { fault(NULL,"journal identity/open",s); result=s==DURABLE_VERSION?CONFIG:FAILURE; goto done; }
     const char *updates[]={"message","edited_message","callback_query"};
     CettaServiceSource source={{credential,source_id,20,100,updates,3},&trusted,policy,2000000};

@@ -38429,7 +38429,7 @@ test-telegram-scheduler:
 	@exit 1
 endif
 
-.PHONY: telegram-service telegram-control test-telegram-service test-telegram-control
+.PHONY: telegram-service telegram-control test-telegram-service test-telegram-channel-service test-telegram-control
 runtime/cetta-telegram-control: src/telegram_control_main.c
 	@mkdir -p $(dir $@)
 	$(CC) -O2 -Wall -Wextra -Werror -std=c11 -o $@ $<
@@ -38448,10 +38448,12 @@ telegram-service: $(TELEGRAM_SERVICE_BIN)
 	@echo "Built $(TELEGRAM_SERVICE_BIN)"
 test-telegram-service: $(TELEGRAM_SERVICE_BIN)
 	python3 tests/test_telegram_service.py $(TELEGRAM_SERVICE_BIN)
+test-telegram-channel-service: $(TELEGRAM_SERVICE_BIN)
+	python3 tests/test_telegram_channel_service.py $(TELEGRAM_SERVICE_BIN)
 test-telegram-control: $(TELEGRAM_SERVICE_BIN) runtime/cetta-telegram-control
 	python3 tests/test_telegram_control.py $(TELEGRAM_SERVICE_BIN) runtime/cetta-telegram-control
 else
-telegram-service test-telegram-service test-telegram-control:
+telegram-service test-telegram-service test-telegram-channel-service test-telegram-control:
 	@echo "telegram-service requires ENABLE_DURABLE=1, native HTTP and ENABLE_JSON_GSLT=1" >&2
 	@exit 1
 endif
