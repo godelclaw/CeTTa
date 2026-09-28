@@ -13,6 +13,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 static Arena persistent, scratch;
 static Space program;
@@ -95,10 +96,7 @@ static void long_message(void) {
         (double)(clock()-start)/CLOCKS_PER_SEC,(unsigned long long)out.steps_spent);
     eval_outcome_free(&out); ++checks;
 }
-static void poll(CettaDurableStore *store, const char *source, const char *body,
-                 const char *recorded_source, int64_t status) {
-    CettaInboxWindow *w=NULL;
-    assert(cetta_inbox_begin(store,source,&w)==DURABLE_OK);
+static void record_poll(CettaInboxWindow *w, const char *body, const char *recorded_source, int64_t status) {
     Atom *metadata[]={atom_bool(&persistent,true),atom_bool(&persistent,false),atom_int(&persistent,0),
         atom_int(&persistent,status),atom_bool(&persistent,true),atom_int(&persistent,100),
         atom_bool(&persistent,false),atom_bool(&persistent,false),atom_bool(&persistent,false)};
@@ -109,6 +107,12 @@ static void poll(CettaDurableStore *store, const char *source, const char *body,
     assert(cetta_durable_value_encode(atom_expr(&persistent,fields,7),&data,&size)==DURABLE_OK);
     assert(cetta_inbox_record_poll(w,data,size)==DURABLE_OK);
     free(data); cetta_inbox_window_free(w);
+}
+static void poll(CettaDurableStore *store, const char *source, const char *body,
+                 const char *recorded_source, int64_t status) {
+    CettaInboxWindow *w=NULL;
+    assert(cetta_inbox_begin(store,source,&w)==DURABLE_OK);
+    record_poll(w,body,recorded_source,status);
 }
 static void intake_checks(const char *body, const char *config) {
     char path[]="/tmp/cetta-telegram-policy-XXXXXX";
@@ -189,6 +193,200 @@ static void intake_checks(const char *body, const char *config) {
     cetta_inbox_window_free(w); cetta_durable_close(store); unlink(path);
     char side[300]; snprintf(side,sizeof(side),"%s-wal",path); unlink(side);
     snprintf(side,sizeof(side),"%s-shm",path); unlink(side); ++checks;
+}
+static void recovery_response(int code, int status, bool cancelled, const char *kind,
+    const char *body, int64_t failures, int64_t now, const char *expected) {
+    Atom *meta[]={atom_bool(&persistent,true),atom_bool(&persistent,cancelled),atom_int(&persistent,code),
+        atom_int(&persistent,status),atom_bool(&persistent,true),atom_int(&persistent,100),
+        atom_bool(&persistent,false),atom_bool(&persistent,false),atom_bool(&persistent,false)};
+    Atom *poll[]={atom_symbol(&persistent,"host:poll"),atom_int(&persistent,1),atom_string(&persistent,"bot"),
+        atom_int(&persistent,11),atom_symbol(&persistent,kind),atom_expr(&persistent,meta,9),atom_string(&persistent,body)};
+    Atom *call[]={atom_symbol(&persistent,"telegram:recover-poll"),atom_expr(&persistent,poll,7),parse(policy),
+        atom_int(&persistent,failures),atom_int(&persistent,now)};
+    EvalOutcome out; Atom *result=run(atom_expr(&persistent,call,5),1000000,&out);
+    if (!atom_eq(result,parse(expected))) { atom_print(result,stderr); fprintf(stderr," expected %s\n",expected); abort(); }
+    eval_outcome_free(&out); ++checks;
+}
+static CettaTelegramIntake *retry_ticket(CettaDurableStore *store, const CettaHostProgram *trusted,
+                                        const char *source, int64_t now) {
+    CettaTelegramIntake *t=NULL;
+    assert(cetta_telegram_intake_begin(store,source,trusted->version,&t)==DURABLE_OK);
+    assert(cetta_telegram_intake_evaluate_recovery(t,trusted,parse(policy),now,1000000)==DURABLE_OK);
+    return t;
+}
+static Atom *stored(CettaDurableStore *store, const char *space, size_t count) {
+    CettaDurableSnapshot s; assert(cetta_durable_snapshot(store,space,&s)==DURABLE_OK && s.count==count);
+    Atom *a=NULL;
+    if (count) assert(cetta_durable_value_decode(&persistent,s.records[0].data,s.records[0].size,&a)==DURABLE_OK);
+    cetta_durable_snapshot_free(&s); return a;
+}
+static void recovery_checks(void) {
+    const char *rate="{\"ok\":false,\"error_code\":429,\"parameters\":{\"retry_after\":3}}";
+    const char *empty="{\"ok\":true,\"result\":[]}";
+    recovery_response(0,429,false,"observed",rate,0,1000,"(telegram:retry-at 1 4000 rate-limit)");
+    recovery_response(0,200,false,"observed",rate,0,1000,"(telegram:retry-at 1 4000 rate-limit)");
+    recovery_response(0,429,false,"observed",rate,7,1000,"(telegram:retry-at 1 4000 (telegram:degraded rate-limit))");
+    recovery_response(0,429,false,"observed",rate,0,INT64_MAX-1000,"(telegram:hold 1 deadline-overflow)");
+    recovery_response(0,429,false,"observed",empty,0,1000,"(telegram:hold 1 invalid-retry-delay)");
+    recovery_response(0,503,false,"observed","unavailable",0,1000,"(telegram:retry-at 1 2000 transient-poll)");
+    recovery_response(0,503,false,"observed","unavailable",6,1000,"(telegram:retry-at 1 65000 transient-poll)");
+    const int transient[]={5,6,7,16,18,28,52,55,56,92};
+    for (size_t i=0;i<sizeof(transient)/sizeof(*transient);++i)
+        recovery_response(transient[i],0,false,"observed","",1,1000,"(telegram:retry-at 1 3000 transient-poll)");
+    recovery_response(52,0,false,"uncertain","",0,1000,"(telegram:retry-at 1 2000 transient-poll)");
+    recovery_response(28,0,false,"uncertain","",1000000,1000,"(telegram:retry-at 1 65000 (telegram:degraded transient-poll))");
+    recovery_response(60,0,false,"observed","",0,1000,"(telegram:hold 1 transport-outcome)");
+    recovery_response(28,0,true,"observed","",0,1000,"(telegram:hold 1 transport-outcome)");
+    recovery_response(28,0,false,"minimal","",0,1000,"(telegram:hold 1 transport-outcome)");
+    recovery_response(0,401,false,"observed","",0,1000,"(telegram:hold 1 transport-outcome)");
+    recovery_response(0,409,false,"observed","",0,1000,"(telegram:hold 1 conflicting-poller)");
+    recovery_response(0,200,false,"observed","{",0,1000,"(telegram:hold 1 malformed-json)");
+    recovery_response(0,200,false,"observed",empty,0,1000,"(telegram:ready 1)");
+
+    char path[]="/tmp/cetta-poll-recovery-XXXXXX"; int fd=mkstemp(path); assert(fd>=0); close(fd);
+    CettaDurableStore *store=NULL; assert(cetta_durable_open(path,NULL,&store)==DURABLE_OK);
+    CettaHostProgram trusted={"telegram/intake/1",&program,&context};
+    CettaTelegramIntake *a=NULL,*b=NULL; CettaInboxWindow *w=NULL; CettaInboxCommit batch; int64_t revision;
+    poll(store,"bot","{\"ok\":true,\"result\":[{\"update_id\":10}]}","bot",200);
+    assert(cetta_telegram_intake_begin(store,"bot",trusted.version,&a)==DURABLE_OK);
+    assert(cetta_telegram_intake_evaluate(a,&trusted,parse(policy),1000000)==DURABLE_OK);
+    assert(cetta_telegram_intake_commit(a,&batch)==DURABLE_OK && batch.next_offset==11); cetta_telegram_intake_free(a);
+    poll(store,"bot",rate,"bot",429);
+    assert(cetta_telegram_intake_begin(store,"bot",trusted.version,&a)==DURABLE_OK);
+    assert(cetta_telegram_intake_begin(store,"bot",trusted.version,&b)==DURABLE_OK);
+    assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_PRECONDITION);
+    assert(cetta_telegram_intake_evaluate_recovery(a,&trusted,parse(policy),1000,15)==DURABLE_OK);
+    assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_PRECONDITION);
+    assert(stored(store,"host.poll-clock",1)->expr.elems[4]->ground.ival==1000);
+    assert(cetta_telegram_intake_evaluate_recovery(b,&trusted,parse(policy),2000,1000000)==DURABLE_CONFLICT);
+    cetta_telegram_intake_free(b); cetta_telegram_intake_free(a); cetta_durable_close(store);
+    /* Crash after clock observation, before decision: recovery reuses it. */
+    assert(cetta_durable_open(path,NULL,&store)==DURABLE_OK);
+    a=retry_ticket(store,&trusted,"bot",9000);
+    assert(atom_eq(cetta_telegram_intake_outcome(a)->results.items[0],parse("(telegram:retry-at 1 4000 rate-limit)")));
+    assert(cetta_telegram_intake_commit(a,&batch)==DURABLE_PRECONDITION);
+    assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_OK);
+    cetta_telegram_intake_free(a); stored(store,"host.polls",0); stored(store,"host.poll-clock",0);
+    Atom *control=stored(store,"host.poll-control",1);
+    assert(form(control,"host:poll-control",11) && control->expr.elems[3]->ground.ival==11 &&
+        control->expr.elems[5]->ground.ival==1 && control->expr.elems[7]->ground.ival==4000);
+    assert(cetta_inbox_begin(store,"bot",&w)==DURABLE_PRECONDITION);
+    assert(cetta_inbox_begin_at(store,"bot",3999,&w)==DURABLE_PRECONDITION);
+    /* A damaged control cannot silently substitute a different deadline. */
+    CettaDurableScope control_scope={DURABLE_KEY,"host.poll-control","bot"}; CettaDurableObservation *control_view=NULL;
+    assert(cetta_durable_observe(store,&control_scope,1,&control_view)==DURABLE_OK);
+    control->expr.elems[7]=atom_int(&persistent,5000);
+    unsigned char *bad_control=NULL; size_t bad_size=0;
+    assert(cetta_durable_value_encode(control,&bad_control,&bad_size)==DURABLE_OK);
+    CettaDurableOp damaged={DURABLE_REPLACE,"host.poll-control","bot",bad_control,bad_size};
+    assert(cetta_durable_commit_observed(store,control_view,&damaged,1,&revision)==DURABLE_OK);
+    cetta_durable_observation_free(control_view); free(bad_control);
+    assert(cetta_inbox_begin_at(store,"bot",6000,&w)==DURABLE_CORRUPT && !w);
+    control->expr.elems[7]=atom_int(&persistent,4000);
+    assert(cetta_durable_observe(store,&control_scope,1,&control_view)==DURABLE_OK);
+    assert(cetta_durable_value_encode(control,&bad_control,&bad_size)==DURABLE_OK);
+    damaged.data=bad_control; damaged.size=bad_size;
+    assert(cetta_durable_commit_observed(store,control_view,&damaged,1,&revision)==DURABLE_OK);
+    cetta_durable_observation_free(control_view); free(bad_control); ++checks;
+
+    assert(cetta_inbox_begin_at(store,"other",0,&w)==DURABLE_OK); cetta_inbox_window_free(w);
+    cetta_durable_close(store); ++checks;
+    /* A separate process records a new failure and exits immediately after the
+     * complete scheduling transaction. The parent resumes the same cursor. */
+    pid_t child=fork(); assert(child>=0);
+    if (!child) {
+        assert(cetta_durable_open(path,NULL,&store)==DURABLE_OK);
+        assert(cetta_inbox_begin_at(store,"bot",4000,&w)==DURABLE_OK && cetta_inbox_offset(w)==11);
+        record_poll(w,"temporary","bot",503);
+        a=retry_ticket(store,&trusted,"bot",5000);
+        assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_OK);
+        _exit(0);
+    }
+    int status; assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
+    assert(cetta_durable_open(path,NULL,&store)==DURABLE_OK);
+    control=stored(store,"host.poll-control",1);
+    assert(control->expr.elems[5]->ground.ival==2 && control->expr.elems[7]->ground.ival==7000);
+    assert(cetta_inbox_begin_at(store,"bot",6999,&w)==DURABLE_PRECONDITION);
+    assert(cetta_inbox_begin_at(store,"bot",7000,&w)==DURABLE_OK && cetta_inbox_offset(w)==11);
+    record_poll(w,empty,"bot",200);
+    a=retry_ticket(store,&trusted,"bot",7000);
+    assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_PRECONDITION);
+    assert(cetta_telegram_intake_evaluate(a,&trusted,parse(policy),1000000)==DURABLE_OK);
+    assert(cetta_telegram_intake_commit(a,&batch)==DURABLE_OK && batch.next_offset==11);
+    cetta_telegram_intake_free(a); stored(store,"host.poll-control",0); stored(store,"host.poll-clock",0); ++checks;
+    /* A hold is durable and cannot increment failures repeatedly for one poll. */
+    poll(store,"bot","{","bot",200); a=retry_ticket(store,&trusted,"bot",8000);
+    assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_OK); cetta_telegram_intake_free(a);
+    control=stored(store,"host.poll-control",1);
+    assert(control->expr.elems[5]->ground.ival==1 && control->expr.elems[7]->ground.ival==-1);
+    stored(store,"host.polls",1); stored(store,"host.poll-clock",0);
+    assert(cetta_telegram_intake_begin(store,"bot",trusted.version,&a)==DURABLE_OK);
+    assert(cetta_telegram_intake_evaluate_recovery(a,&trusted,parse(policy),9000,1000000)==DURABLE_PRECONDITION);
+    assert(!cetta_telegram_intake_outcome(a)); cetta_telegram_intake_free(a);
+    assert(cetta_inbox_begin_at(store,"bot",INT64_MAX,&w)==DURABLE_PRECONDITION); ++checks;
+    /* A changed declared control conflicts; unrelated traffic does not. */
+    assert(cetta_inbox_begin_at(store,"conflict",1000,&w)==DURABLE_OK);
+    record_poll(w,rate,"conflict",429); a=retry_ticket(store,&trusted,"conflict",1000);
+    assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_OK); cetta_telegram_intake_free(a);
+    assert(cetta_inbox_begin_at(store,"conflict",4000,&w)==DURABLE_OK);
+    record_poll(w,rate,"conflict",429); a=retry_ticket(store,&trusted,"conflict",4000);
+    CettaDurableScope scope={DURABLE_KEY,"host.poll-control","conflict"}; CettaDurableObservation *o=NULL;
+    assert(cetta_durable_observe(store,&scope,1,&o)==DURABLE_OK);
+    const CettaDurableRecord *record=&cetta_durable_observation_view(o,0)->records[0];
+    CettaDurableOp op={DURABLE_REPLACE,"host.poll-control","conflict",record->data,record->size};
+    assert(cetta_durable_commit_observed(store,o,&op,1,&revision)==DURABLE_OK); cetta_durable_observation_free(o);
+    assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_CONFLICT); cetta_telegram_intake_free(a);
+    a=retry_ticket(store,&trusted,"conflict",9000);
+    poll(store,"unrelated",empty,"unrelated",200);
+    assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_OK); cetta_telegram_intake_free(a); ++checks;
+    /* Counts survive restart; sustained outages get capped backoff and a
+     * degraded status, without requiring manual revival of a safe poll. */
+    int64_t now=1000;
+    for (int n=1;n<=8;++n) {
+        assert(cetta_inbox_begin_at(store,"exhaust",now,&w)==DURABLE_OK);
+        record_poll(w,"temporary","exhaust",503); a=retry_ticket(store,&trusted,"exhaust",now);
+        const Atom *decision=cetta_telegram_intake_outcome(a)->results.items[0];
+        assert(form(decision,"telegram:retry-at",4));
+        int64_t due=decision->expr.elems[2]->ground.ival;
+        assert(due>now && due-now<=64000);
+        if (n==8) assert(form(decision->expr.elems[3],"telegram:degraded",2));
+        now=due;
+        assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_OK); cetta_telegram_intake_free(a);
+        cetta_durable_close(store); assert(cetta_durable_open(path,NULL,&store)==DURABLE_OK);
+    }
+    assert(cetta_inbox_begin_at(store,"exhaust",now-1,&w)==DURABLE_PRECONDITION);
+    assert(cetta_inbox_begin_at(store,"exhaust",now,&w)==DURABLE_OK); cetta_inbox_window_free(w); ++checks;
+    /* A valid-looking recovery answer cannot hide a denied effect. */
+    Atom *original_rule=NULL;
+    for (CettaCount i=0;i<space_length64(&program);++i) {
+        Atom *r=space_get_at64(&program,i);
+        if (form(r,"=",3) && form(r->expr.elems[1],"telegram:recover-poll",5)) { original_rule=r; break; }
+    }
+    assert(original_rule); space_remove(&program,original_rule);
+    Atom *denied=parse("(= (telegram:recover-poll $p $c $n $t) (let $ignored (collapse (superpose (kept (println! denied)))) (telegram:retry-at 1 9000 reason)))");
+    space_add(&program,denied); poll(store,"denied-retry",rate,"denied-retry",429);
+    a=retry_ticket(store,&trusted,"denied-retry",1000);
+    assert(cetta_telegram_intake_outcome(a)->effect_denials>0);
+    assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_PRECONDITION);
+    cetta_telegram_intake_free(a); space_remove(&program,denied); space_add(&program,original_rule); ++checks;
+    cetta_durable_close(store); unlink(path);
+    /* Admission failure cannot remove the pending response or its clock. */
+    assert(cetta_durable_open(path,NULL,&store)==DURABLE_OK); poll(store,"quota",rate,"quota",429);
+    a=retry_ticket(store,&trusted,"quota",1000); cetta_telegram_intake_free(a);
+    CettaDurableSnapshot snap; assert(cetta_durable_snapshot(store,"host.polls",&snap)==DURABLE_OK);
+    CettaDurableLimits limits=cetta_durable_default_limits(); limits.record_bytes=snap.records[0].size;
+    cetta_durable_snapshot_free(&snap); cetta_durable_close(store);
+    assert(cetta_durable_open(path,&limits,&store)==DURABLE_OK);
+    a=retry_ticket(store,&trusted,"quota",9000);
+    assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_LIMIT && revision==-1); cetta_telegram_intake_free(a);
+    stored(store,"host.polls",1); stored(store,"host.poll-clock",1); stored(store,"host.poll-control",0);
+    cetta_durable_close(store); assert(cetta_durable_open(path,NULL,&store)==DURABLE_OK);
+    a=retry_ticket(store,&trusted,"quota",9000);
+    assert(atom_eq(cetta_telegram_intake_outcome(a)->results.items[0],parse("(telegram:retry-at 1 4000 rate-limit)")));
+    assert(cetta_telegram_intake_commit_recovery(a,&revision)==DURABLE_OK); cetta_telegram_intake_free(a); ++checks;
+    cetta_durable_close(store); unlink(path);
+    char side[300]; snprintf(side,sizeof(side),"%s-wal",path); unlink(side);
+    snprintf(side,sizeof(side),"%s-shm",path); unlink(side);
 }
 int main(int argc,char **argv) {
     assert(argc==1 || (argc==2 && !strcmp(argv[1],"--long-message")));
@@ -319,6 +517,7 @@ int main(int argc,char **argv) {
     assert(out.completion==CETTA_EVAL_INCOMPLETE_FUEL && out.steps_spent==30 && !out.effect_denials);
     eval_outcome_free(&out); ++checks;
     intake_checks(group,policy);
+    recovery_checks();
 cleanup:
     eval_set_library_context(NULL); cetta_library_context_free(&context);
     registry_free(&registry); space_free(&program); arena_free(&scratch); arena_free(&persistent);

@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "durable_dispatch.h"
 #include "durable_inbox.h"
+#include "durable_timer.h"
 #include "durable_value.h"
 #include <pthread.h>
 #include <stdio.h>
@@ -298,11 +299,16 @@ done:
     dispose(j); arena_free(&a); return s;
 }
 CettaDurableStatus cetta_dispatch_poll(CettaDurableDispatch *d, const CettaTelegramPoll *p) {
+    CettaClockSample now;
+    if (!cetta_clock_sample(&now)) return DURABLE_IO;
+    return cetta_dispatch_poll_at(d,p,now.utc_ms);
+}
+CettaDurableStatus cetta_dispatch_poll_at(CettaDurableDispatch *d, const CettaTelegramPoll *p, int64_t now) {
     if (!d || !p || !p->credential || !p->limit || p->limit>100 || p->update_count>64 ||
         (p->update_count && !p->allowed_updates) || d->config.timeout_ms<1000 ||
         p->wait_seconds>(d->config.timeout_ms-1000)/1000) return DURABLE_INVALID;
     Job *j=calloc(1,sizeof(*j)); if (!j) return DURABLE_NOMEM;
-    CettaDurableStatus s=cetta_inbox_begin(d->store,p->source,&j->poll);
+    CettaDurableStatus s=cetta_inbox_begin_at(d->store,p->source,now,&j->poll);
     if (s!=DURABLE_OK) { dispose(j); return s; }
     snprintf(j->key,sizeof(j->key),"poll/%s",cetta_inbox_source(j->poll));
     if (handle(d,j->key)) { dispose(j); return DURABLE_BUSY; }

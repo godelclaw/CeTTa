@@ -11,8 +11,8 @@ struct CettaInboxWindow {
     CettaDurableStore *store;
     CettaDurableObservation *cursor;
     char source[65];
-    int64_t offset;
-    bool spent, pending_poll;
+    int64_t offset, failures, clock_ms;
+    bool spent, pending_poll, recovery_recorded;
 };
 static bool component(const char *s) {
     if (!s || !*s || strnlen(s,65)>64) return false;
@@ -37,18 +37,30 @@ static bool number(const Atom *a, int64_t *n) {
     if (a->kind!=ATOM_GROUNDED || a->ground.gkind!=GV_INT) return false;
     *n=a->ground.ival; return true;
 }
+static bool recovery_decision(const Atom *a, int64_t *due) {
+    int64_t schema;
+    bool retry=form(a,"telegram:retry-at",4);
+    *due=-1;
+    return (retry || form(a,"telegram:hold",3)) && number(a->expr.elems[1],&schema) && schema==1 &&
+        (!retry || (number(a->expr.elems[2],due) && *due>=0));
+}
+static bool program_name(const Atom *a) {
+    return a && a->kind==ATOM_GROUNDED && a->ground.gkind==GV_STRING &&
+        *a->ground.sval && strnlen(a->ground.sval,256)<=255;
+}
 static const CettaDurableSnapshot *view(const CettaDurableObservation *o, size_t i) {
     return cetta_durable_observation_view(o,i);
 }
 static CettaDurableStatus begin(CettaDurableStore *store, const char *source,
-                               bool pending, CettaInboxWindow **out) {
+                               bool pending, int64_t now, CettaInboxWindow **out) {
     if (!out) return DURABLE_INVALID;
     *out=NULL;
     if (!store || !component(source)) return DURABLE_INVALID;
     CettaInboxWindow *w=calloc(1,sizeof(*w)); if (!w) return DURABLE_NOMEM;
-    w->store=store; w->pending_poll=pending; strcpy(w->source,source);
-    CettaDurableScope q[]={{DURABLE_KEY,"host.cursors",source},{DURABLE_KEY,"host.polls",source}};
-    CettaDurableStatus s=cetta_durable_observe(store,q,2,&w->cursor);
+    w->store=store; w->pending_poll=pending; w->clock_ms=-1; strcpy(w->source,source);
+    CettaDurableScope q[]={{DURABLE_KEY,"host.cursors",source},{DURABLE_KEY,"host.polls",source},
+        {DURABLE_KEY,"host.poll-control",source},{DURABLE_KEY,"host.poll-clock",source}};
+    CettaDurableStatus s=cetta_durable_observe(store,q,4,&w->cursor);
     if (s!=DURABLE_OK) goto fail;
     if ((view(w->cursor,1)->count!=0)!=pending) { s=DURABLE_PRECONDITION; goto fail; }
     const CettaDurableSnapshot *v=view(w->cursor,0);
@@ -60,16 +72,46 @@ static CettaDurableStatus begin(CettaDurableStore *store, const char *source,
         if (s==DURABLE_OK) w->offset=offset;
         arena_free(&a); if (s!=DURABLE_OK) goto fail;
     }
+    const CettaDurableSnapshot *control=view(w->cursor,2), *clock=view(w->cursor,3);
+    Arena a; arena_init(&a); Atom *p=NULL; int64_t schema, offset, poll_revision, at, due, decided_due;
+    if (control->count) {
+        s=cetta_durable_value_decode(&a,control->records[0].data,control->records[0].size,&p);
+        if (s==DURABLE_OK && (!form(p,"host:poll-control",11) || !number(p->expr.elems[1],&schema) || schema!=1 ||
+            !text_is(p->expr.elems[2],source) || !number(p->expr.elems[3],&offset) || offset!=w->offset ||
+            !number(p->expr.elems[4],&poll_revision) || poll_revision<0 ||
+            !number(p->expr.elems[5],&w->failures) || w->failures<=0 ||
+            !number(p->expr.elems[6],&at) || at<0 || !number(p->expr.elems[7],&due) || due < -1 ||
+            (due>=0 && due<=at) || !program_name(p->expr.elems[8]) ||
+            !recovery_decision(p->expr.elems[9],&decided_due) || decided_due!=due)) s=DURABLE_CORRUPT;
+        if (s==DURABLE_OK) {
+            w->recovery_recorded=pending && poll_revision==view(w->cursor,1)->records[0].revision;
+            if (!pending && (due<0 || now<due)) s=DURABLE_PRECONDITION;
+        }
+    }
+    if (s==DURABLE_OK && clock->count) {
+        s=cetta_durable_value_decode(&a,clock->records[0].data,clock->records[0].size,&p);
+        if (s==DURABLE_OK && (!pending || !form(p,"host:poll-clock",5) ||
+            !number(p->expr.elems[1],&schema) || schema!=1 || !text_is(p->expr.elems[2],source) ||
+            !number(p->expr.elems[3],&poll_revision) || poll_revision!=view(w->cursor,1)->records[0].revision ||
+            !number(p->expr.elems[4],&w->clock_ms) || w->clock_ms<0)) s=DURABLE_CORRUPT;
+    }
+    arena_free(&a); if (s!=DURABLE_OK) goto fail;
     *out=w; return DURABLE_OK;
 fail:
     cetta_inbox_window_free(w); return s;
 }
 CettaDurableStatus cetta_inbox_begin(CettaDurableStore *store, const char *source, CettaInboxWindow **out) {
-    return begin(store,source,false,out);
+    return begin(store,source,false,-1,out);
 }
 CettaDurableStatus cetta_inbox_recover_poll(CettaDurableStore *store, const char *source, CettaInboxWindow **out) {
-    return begin(store,source,true,out);
+    return begin(store,source,true,-1,out);
 }
+CettaDurableStatus cetta_inbox_begin_at(CettaDurableStore *store, const char *source,
+                                      int64_t now, CettaInboxWindow **out) {
+    if (now<0) { if (out) *out=NULL; return DURABLE_INVALID; }
+    return begin(store,source,false,now,out);
+}
+int64_t cetta_inbox_poll_failures(const CettaInboxWindow *w) { return w?w->failures:-1; }
 int64_t cetta_inbox_offset(const CettaInboxWindow *w) { return w?w->offset:-1; }
 const char *cetta_inbox_source(const CettaInboxWindow *w) { return w?w->source:NULL; }
 const CettaDurableRecord *cetta_inbox_poll_response(const CettaInboxWindow *w) {
@@ -110,8 +152,8 @@ CettaDurableStatus cetta_inbox_commit(CettaInboxWindow *w,
     Arena a; arena_init(&a);
     char ledger[INBOX_BATCH][96], input[INBOX_BATCH][168];
     int64_t ids[INBOX_BATCH];
-    CettaDurableOp candidates[2*INBOX_BATCH+1]={0}, ops[2*INBOX_BATCH+2];
-    CettaDurableScope scopes[2*INBOX_BATCH+2]={{DURABLE_KEY,"host.cursors",w->source}};
+    CettaDurableOp candidates[2*INBOX_BATCH+1]={0}, ops[2*INBOX_BATCH+4];
+    CettaDurableScope scopes[2*INBOX_BATCH+4]={{DURABLE_KEY,"host.cursors",w->source}};
     CettaDurableObservation *o=NULL;
     size_t unique=0, nops=0, inserted=0, bytes=0;
     int64_t offset=w->offset;
@@ -150,9 +192,13 @@ CettaDurableStatus cetta_inbox_commit(CettaInboxWindow *w,
         if (offset<=item->id) offset=item->id+1;
     }
     scopes[1+2*unique]=(CettaDurableScope){DURABLE_KEY,"host.polls",w->source};
-    s=cetta_durable_observe(w->store,scopes,2+2*unique,&o); if (s!=DURABLE_OK) goto done;
+    scopes[2+2*unique]=(CettaDurableScope){DURABLE_KEY,"host.poll-control",w->source};
+    scopes[3+2*unique]=(CettaDurableScope){DURABLE_KEY,"host.poll-clock",w->source};
+    s=cetta_durable_observe(w->store,scopes,4+2*unique,&o); if (s!=DURABLE_OK) goto done;
     if (!same_cursor(view(w->cursor,0),view(o,0)) ||
-        !same_cursor(view(w->cursor,1),view(o,1+2*unique))) { s=DURABLE_CONFLICT; goto done; }
+        !same_cursor(view(w->cursor,1),view(o,1+2*unique)) ||
+        !same_cursor(view(w->cursor,2),view(o,2+2*unique)) ||
+        !same_cursor(view(w->cursor,3),view(o,3+2*unique))) { s=DURABLE_CONFLICT; goto done; }
     Atom *cursor[]={atom_symbol(&a,"host:cursor"),atom_int(&a,1),atom_string(&a,w->source),atom_int(&a,offset)};
     candidates[0]=(CettaDurableOp){view(o,0)->count?DURABLE_REPLACE:DURABLE_INSERT,"host.cursors",w->source,NULL,0};
     s=encoded(&candidates[0],atom_expr(&a,cursor,4)); if (s!=DURABLE_OK) goto done;
@@ -168,6 +214,8 @@ CettaDurableStatus cetta_inbox_commit(CettaInboxWindow *w,
         }
     }
     if (w->pending_poll) ops[nops++]=(CettaDurableOp){DURABLE_REMOVE,"host.polls",w->source,NULL,0};
+    if (view(w->cursor,2)->count) ops[nops++]=(CettaDurableOp){DURABLE_REMOVE,"host.poll-control",w->source,NULL,0};
+    if (view(w->cursor,3)->count) ops[nops++]=(CettaDurableOp){DURABLE_REMOVE,"host.poll-clock",w->source,NULL,0};
     w->spent=true;
     s=cetta_durable_commit_observed(w->store,o,ops,nops,&out->revision);
     if (s==DURABLE_OK) { out->next_offset=offset; out->inserted=inserted; }
@@ -175,4 +223,59 @@ done:
     cetta_durable_observation_free(o);
     for (size_t i=0;i<1+2*unique;++i) free((void *)candidates[i].data);
     arena_free(&a); return s;
+}
+
+CettaDurableStatus cetta_inbox_poll_clock(CettaInboxWindow *w, int64_t sampled, int64_t *recorded) {
+    if (!recorded) return DURABLE_INVALID;
+    *recorded=-1;
+    if (!w || !w->pending_poll || sampled<0) return DURABLE_INVALID;
+    if (w->spent) return DURABLE_CONFLICT;
+    if (w->recovery_recorded) return DURABLE_PRECONDITION;
+    if (w->clock_ms>=0) { *recorded=w->clock_ms; return DURABLE_OK; }
+    Arena a; arena_init(&a);
+    Atom *fields[]={atom_symbol(&a,"host:poll-clock"),atom_int(&a,1),atom_string(&a,w->source),
+        atom_int(&a,view(w->cursor,1)->records[0].revision),atom_int(&a,sampled)};
+    CettaDurableOp op={DURABLE_INSERT,"host.poll-clock",w->source,NULL,0};
+    CettaDurableStatus s=encoded(&op,atom_expr(&a,fields,5)); int64_t rev;
+    if (s==DURABLE_OK) s=cetta_durable_commit_observed(w->store,w->cursor,&op,1,&rev);
+    free((void *)op.data); arena_free(&a);
+    if (s!=DURABLE_OK) return s;
+    CettaInboxWindow *fresh=NULL;
+    s=cetta_inbox_recover_poll(w->store,w->source,&fresh);
+    if (s!=DURABLE_OK) return s;
+    for (size_t i=0;i<3;++i) if (!same_cursor(view(w->cursor,i),view(fresh->cursor,i))) s=DURABLE_CONFLICT;
+    if (s==DURABLE_OK) {
+        cetta_durable_observation_free(w->cursor); w->cursor=fresh->cursor; fresh->cursor=NULL;
+        w->clock_ms=fresh->clock_ms; *recorded=w->clock_ms;
+    }
+    cetta_inbox_window_free(fresh); return s;
+}
+CettaDurableStatus cetta_inbox_resolve_poll(CettaInboxWindow *w, const char *version,
+                                          const Atom *decision, int64_t *revision) {
+    if (!revision) return DURABLE_INVALID;
+    *revision=-1;
+    if (!w || !w->pending_poll || !version || !*version || strnlen(version,256)>255 || !decision)
+        return DURABLE_INVALID;
+    if (w->spent) return DURABLE_CONFLICT;
+    if (w->clock_ms<0 || w->recovery_recorded) return DURABLE_PRECONDITION;
+    int64_t due;
+    if (!recovery_decision(decision,&due) || (due>=0 && due<=w->clock_ms)) return DURABLE_INVALID;
+    bool retry=due>=0;
+    if (w->failures==INT64_MAX) return DURABLE_LIMIT;
+    Arena a; arena_init(&a); Atom *poll=NULL;
+    const CettaDurableRecord *r=cetta_inbox_poll_response(w);
+    CettaDurableStatus s=cetta_durable_value_decode(&a,r->data,r->size,&poll);
+    CettaDurableOp ops[3]={{view(w->cursor,2)->count?DURABLE_REPLACE:DURABLE_INSERT,"host.poll-control",w->source,NULL,0},
+        {DURABLE_REMOVE,"host.poll-clock",w->source,NULL,0},{DURABLE_REMOVE,"host.polls",w->source,NULL,0}};
+    if (s==DURABLE_OK) {
+        Atom *fields[]={atom_symbol(&a,"host:poll-control"),atom_int(&a,1),atom_string(&a,w->source),
+            atom_int(&a,w->offset),atom_int(&a,r->revision),atom_int(&a,w->failures+1),atom_int(&a,w->clock_ms),
+            atom_int(&a,due),atom_string(&a,version),(Atom *)decision,poll};
+        s=encoded(&ops[0],atom_expr(&a,fields,11));
+    }
+    if (s==DURABLE_OK) {
+        w->spent=true;
+        s=cetta_durable_commit_observed(w->store,w->cursor,ops,retry?3:2,revision);
+    }
+    free((void *)ops[0].data); arena_free(&a); return s;
 }

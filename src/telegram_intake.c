@@ -10,7 +10,7 @@ struct CettaTelegramIntake {
     CettaInboxWindow *window;
     char *version;
     CettaHostEvaluation *evaluation;
-    bool spent;
+    bool spent, recovery;
 };
 static bool form(const Atom *a, const char *head, size_t n) {
     return a && a->kind==ATOM_EXPR && a->expr.len==n && atom_is_symbol(a->expr.elems[0],head);
@@ -60,14 +60,19 @@ CettaDurableStatus cetta_telegram_intake_begin(CettaDurableStore *store,
 const EvalOutcome *cetta_telegram_intake_outcome(const CettaTelegramIntake *t) {
     return t && t->evaluation?&t->evaluation->outcome:NULL;
 }
-CettaDurableStatus cetta_telegram_intake_evaluate(CettaTelegramIntake *t,
-    const CettaHostProgram *program, const Atom *config, int fuel) {
+static CettaDurableStatus evaluate(CettaTelegramIntake *t,
+    const CettaHostProgram *program, const Atom *config, int64_t now, bool recovery, int fuel) {
     if (!t) return DURABLE_INVALID;
     if (t->spent) return DURABLE_CONFLICT;
-    cetta_host_eval_free(t->evaluation); t->evaluation=NULL;
+    cetta_host_eval_free(t->evaluation); t->evaluation=NULL; t->recovery=false;
     if (!program || !program->version || !config_valid(config) || fuel<=0) return DURABLE_INVALID;
     if (strcmp(t->version,program->version)) return DURABLE_VERSION;
-    CettaDurableStatus s=cetta_host_eval_create(program,&t->evaluation);
+    CettaDurableStatus s;
+    if (recovery) {
+        s=cetta_inbox_poll_clock(t->window,now,&now);
+        if (s!=DURABLE_OK) return s;
+    }
+    s=cetta_host_eval_create(program,&t->evaluation);
     if (s!=DURABLE_OK) return s;
     Arena *a=&t->evaluation->persistent; Atom *poll=NULL;
     const CettaDurableRecord *record=cetta_inbox_poll_response(t->window);
@@ -79,11 +84,37 @@ CettaDurableStatus cetta_telegram_intake_evaluate(CettaTelegramIntake *t,
         s=DURABLE_CORRUPT; goto fail;
     }
     /* A fixed host entry, never caller-supplied source/expression/response. */
-    Atom *args[]={atom_symbol(a,"telegram:poll"),poll,(Atom *)config};
-    s=cetta_host_eval_run(t->evaluation,program,atom_expr(a,args,3),fuel);
+    Atom *args[]={atom_symbol(a,recovery?"telegram:recover-poll":"telegram:poll"),poll,(Atom *)config,
+        atom_int(a,cetta_inbox_poll_failures(t->window)),atom_int(a,now)};
+    s=cetta_host_eval_run(t->evaluation,program,atom_expr(a,args,recovery?5:3),fuel);
+    t->recovery=recovery;
     if (s==DURABLE_OK) return s;
 fail:
     cetta_host_eval_free(t->evaluation); t->evaluation=NULL; return s;
+}
+CettaDurableStatus cetta_telegram_intake_evaluate(CettaTelegramIntake *t,
+    const CettaHostProgram *program, const Atom *config, int fuel) {
+    return evaluate(t,program,config,-1,false,fuel);
+}
+CettaDurableStatus cetta_telegram_intake_evaluate_recovery(CettaTelegramIntake *t,
+    const CettaHostProgram *program, const Atom *config, int64_t now, int fuel) {
+    return evaluate(t,program,config,now,true,fuel);
+}
+static bool complete(const EvalOutcome *e) {
+    return e && e->completion==CETTA_EVAL_COMPLETE && !e->effect_denials &&
+        e->budget_limited && e->budget_initial && e->results.len==1;
+}
+CettaDurableStatus cetta_telegram_intake_commit_recovery(CettaTelegramIntake *t, int64_t *revision) {
+    if (!revision) return DURABLE_INVALID;
+    *revision=-1;
+    if (!t) return DURABLE_INVALID;
+    if (t->spent) return DURABLE_CONFLICT;
+    const EvalOutcome *e=cetta_telegram_intake_outcome(t);
+    if (!t->recovery || !complete(e)) return DURABLE_PRECONDITION;
+    const Atom *decision=e->results.items[0];
+    if (!form(decision,"telegram:retry-at",4) && !form(decision,"telegram:hold",3)) return DURABLE_PRECONDITION;
+    t->spent=true;
+    return cetta_inbox_resolve_poll(t->window,t->version,decision,revision);
 }
 static const Atom *provider_value(const Atom *a) {
     if (form(a,"telegram:input",8) && number_is(a->expr.elems[1],1)) return a->expr.elems[7];
@@ -102,8 +133,7 @@ CettaDurableStatus cetta_telegram_intake_commit(CettaTelegramIntake *t, CettaInb
     if (!t) return DURABLE_INVALID;
     if (t->spent) return DURABLE_CONFLICT;
     const EvalOutcome *e=cetta_telegram_intake_outcome(t);
-    if (!e || e->completion!=CETTA_EVAL_COMPLETE || e->effect_denials ||
-        !e->budget_limited || !e->budget_initial || e->results.len!=1) return DURABLE_PRECONDITION;
+    if (t->recovery || !complete(e)) return DURABLE_PRECONDITION;
     const Atom *batch=e->results.items[0];
     if (!form(batch,"telegram:batch",3) || !number_is(batch->expr.elems[1],1) ||
         batch->expr.elems[2]->kind!=ATOM_EXPR) return DURABLE_PRECONDITION;

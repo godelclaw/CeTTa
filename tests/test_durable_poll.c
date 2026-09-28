@@ -148,6 +148,32 @@ int main(int argc, char **argv) {
                 assert(classify(w,&out)==DURABLE_PRECONDITION && out.next_offset==-1);
                 cetta_inbox_window_free(w); /* Retained for policy/repair, not silently discarded. */
             }
+            /* A retry decision survives owner/store restart. Nothing reaches
+             * HTTP before its committed deadline; the old offset is reused. */
+            CettaTelegramIntake *retry=NULL; int64_t revision;
+            assert(cetta_telegram_intake_begin(store,"rate-limit",trusted.version,&retry)==DURABLE_OK);
+            assert(cetta_telegram_intake_evaluate_recovery(retry,&trusted,policy,1000,1000000)==DURABLE_OK);
+            assert(cetta_telegram_intake_commit_recovery(retry,&revision)==DURABLE_OK);
+            cetta_telegram_intake_free(retry);
+            assert(cetta_dispatch_free(d)==0); cetta_durable_close(store);
+            assert(cetta_durable_open(argv[2],&limits,&store)==DURABLE_OK);
+            assert(cetta_dispatch_new(store,&config,&d)==DURABLE_OK);
+            const char *updates[]={"message","callback_query"};
+            CettaTelegramPoll again={credential,"rate-limit",0,2,updates,2};
+            assert(cetta_dispatch_poll_at(d,&again,1999)==DURABLE_PRECONDITION);
+            assert(cetta_dispatch_poll_at(d,&again,2000)==DURABLE_OK);
+            w=wait_response(d,"rate-limit");
+            assert(classify(w,&out)==DURABLE_OK && out.next_offset==44); cetta_inbox_window_free(w);
+            /* A lost getUpdates response is repeat-safe at the durable offset.
+             * This policy must never be reused for sendMessage. */
+            assert(cetta_telegram_intake_begin(store,"lost",trusted.version,&retry)==DURABLE_OK);
+            assert(cetta_telegram_intake_evaluate_recovery(retry,&trusted,policy,1000,1000000)==DURABLE_OK);
+            assert(cetta_telegram_intake_commit_recovery(retry,&revision)==DURABLE_OK);
+            cetta_telegram_intake_free(retry); again.source="lost";
+            assert(cetta_dispatch_poll_at(d,&again,1999)==DURABLE_PRECONDITION);
+            assert(cetta_dispatch_poll_at(d,&again,2000)==DURABLE_OK);
+            w=wait_response(d,"lost");
+            assert(classify(w,&out)==DURABLE_OK && out.next_offset==44); cetta_inbox_window_free(w);
             /* An unrelated source can continue despite held failed polls. */
             assert(start(d,credential,"other-bot",2)==DURABLE_OK);
             w=wait_response(d,"other-bot");

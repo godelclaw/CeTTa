@@ -71,6 +71,13 @@ with tempfile.TemporaryDirectory(prefix="cetta-durable-poll-") as tmp:
                 checked([BIN, mode, str(db), *args], env)
                 calls = server.calls[before:]
                 assert calls[:2] == [(2, 0), (2, 44)], calls
+                if mode == "normal":
+                    # Host-only getUpdates is deliberately repeat-safe: curl
+                    # may resend its lost-response probe on a reused connection.
+                    assert 1 <= calls.count((4, 0)) <= 2, calls
+                    assert [c for c in calls if c != (4, 0)] == [
+                        (2, 0), (2, 44), (3, 0), (5, 0), (6, 0), (7, 0),
+                        (2, 0), (2, 0), (2, 0)], calls
                 for f in root.glob(f"{mode}-{i}.db*"):
                     assert TOKEN.split(":", 1)[1].encode() not in f.read_bytes(), "secret persisted"
             db = root / f"pending-{i}.db"
@@ -96,4 +103,4 @@ with tempfile.TemporaryDirectory(prefix="cetta-durable-poll-") as tmp:
             assert not server.errors, server.errors
             if tls:
                 assert server.negotiated and set(server.negotiated) == {protocol}, server.negotiated
-            print(f"{'HTTPS' if tls else 'HTTP'} {protocol}: poll/cursor binding, retained responses, privacy, capacity rollback and restart passed")
+            print(f"{'HTTPS' if tls else 'HTTP'} {protocol}: poll/cursor binding, retained responses, privacy, retry deadlines, capacity rollback and restart passed")

@@ -19,6 +19,24 @@ typedef struct { int64_t revision, next_offset; size_t inserted; } CettaInboxCom
  * Store outlives windows; serialize each window's calls. */
 CettaDurableStatus cetta_inbox_begin(CettaDurableStore *store, const char *source,
                                    CettaInboxWindow **out);
+/* Retry admission uses a host clock sample; the untimed begin refuses any
+ * scheduled retry. A backward wall jump delays admission; forward jumps make
+ * due work eligible. Neither entry advances the cursor. */
+CettaDurableStatus cetta_inbox_begin_at(CettaDurableStore *store, const char *source,
+                                      int64_t utc_ms, CettaInboxWindow **out);
+/* Persist a clock observation paired with this exact pending response before
+ * recovery policy sees it. Reopening reuses that sample, never moves the retry
+ * deadline by reevaluating at a later time. */
+CettaDurableStatus cetta_inbox_poll_clock(CettaInboxWindow *window, int64_t sampled_ms,
+                                       int64_t *recorded_ms);
+int64_t cetta_inbox_poll_failures(const CettaInboxWindow *window);
+/* Commit the trusted policy result (telegram:retry-at 1 due-ms reason) or
+ * (telegram:hold 1 reason). Record response, clock, version and decision in
+ * host.poll-control. A retry releases the response without advancing cursor;
+ * a hold keeps it. Repeated recovery of that same held response is refused.
+ * A successfully classified batch clears retry state and the clock atomically. */
+CettaDurableStatus cetta_inbox_resolve_poll(CettaInboxWindow *window,
+    const char *program_version, const Atom *decision, int64_t *revision);
 int64_t cetta_inbox_offset(const CettaInboxWindow *window);
 const char *cetta_inbox_source(const CettaInboxWindow *window);
 void cetta_inbox_window_free(CettaInboxWindow *window);

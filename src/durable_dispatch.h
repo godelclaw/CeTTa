@@ -60,6 +60,11 @@ CettaDurableStatus cetta_dispatch_submit(CettaDurableDispatch *dispatcher,
  * A receive-only dispatcher may have an empty effect-channel registry. */
 CettaDurableStatus cetta_dispatch_poll(CettaDurableDispatch *dispatcher,
                                      const CettaTelegramPoll *poll);
+/* Same admission with an explicit native host UTC sample, for service event
+ * loops and deterministic tests. Durable retry deadlines are enforced before
+ * HTTP admission. This is not a worker/proposal entry. */
+CettaDurableStatus cetta_dispatch_poll_at(CettaDurableDispatch *dispatcher,
+    const CettaTelegramPoll *poll, int64_t utc_ms);
 /* Unclaimed -> definitive not-started outcome and completion, atomically.
  * Claimed -> durable cancellation request, then best-effort transport signal.
  * Existing observations are retained. No promise to undo remote execution. */

@@ -562,8 +562,8 @@ lost replies, minimal recording, rate-limit and malformed-response retention,
 capacity rollback and process death on both sides of response recording.
 The dispatch fixture also overlaps receiving and sending on one owner.
 The poll fixture runs the trusted MeTTa intake policy below on actual recorded
-HTTP responses, including across process death/reopen. A retry scheduler
-remains service integration work.
+HTTP responses, including across process death/reopen and durable retry
+admission. The continuous event loop remains service integration work.
 
 ## Telegram intake policy
 
@@ -584,8 +584,8 @@ Only one `COMPLETE` batch result with zero denials can commit. A failed
 re-evaluation clears the previous outcome. Commit still validates the exact
 saved response and cursor; no external result can be substituted. A hold,
 retry hint, unsupported version or incomplete evaluation leaves the response
-pending. The service must durably schedule retries or record a repair before
-releasing a held response; this API does not retry or advance an offset itself.
+pending. Recovery uses the separate transition below. Classification never
+retries or advances an offset after a hold by itself.
 
 The MeTTa policy preserves complete canonical JSON updates, classifies known
 message types and callbacks, and retains unknown update types as unsupported.
@@ -628,8 +628,51 @@ speculative HE program and intake ticket: routing/roles, all-or-nothing
 classification, malformed/duplicate controls, exact IDs, Unicode,
 normalization, bounded input, symbol growth, fuel/denial refusal, policy
 changes during deduplication, competing tickets and retained polls on reopen.
-This is intake; media actions, conversational controls, outgoing formatting,
-backoff and the independent service/worker loop remain separate integration.
+This is intake; media actions, conversational controls, outgoing formatting
+and the independent service/worker loop remain separate integration.
+
+### Poll recovery
+
+`cetta_telegram_intake_evaluate_recovery` first records a host UTC clock sample
+in `host.poll-clock`, paired with the exact pending response. A restart or
+reevaluation reuses that observation. It then calls the fixed pure MeTTa
+`telegram:recover-poll` entry with the response, configuration, prior failure
+count and recorded clock. `commit_recovery` uses only that ticket's complete,
+unique, denial-free outcome; normal batch acceptance is a separate entry.
+
+The policy honors valid bounded `retry_after` delays. Transient connection,
+DNS, timeout, partial/lost response and HTTP/2 stream failures, and HTTP 5xx,
+use 1, 2, 4, 8, 16, 32, then 64 seconds. Continued failures keep the capped
+rate and carry `telegram:degraded` after eight failures. This is specifically
+repeat-safe **getUpdates at the committed offset**, not a send retry policy.
+Cancellation, privacy suppression, unrecordable responses, credential failures,
+conflicting pollers and malformed input remain held. Deadline overflow holds
+rather than wrapping. No unrecorded random jitter enters the decision.
+
+The transaction writes `host.poll-control`: source, offset, response revision,
+consecutive failure count, clock, deadline, program version, decision and the
+screened original response. A retry removes the pending response and clock in
+that same transaction, without changing the cursor. A hold keeps the pending
+response and records deadline -1; that response cannot be recovered repeatedly
+to inflate its failure count. A successfully classified batch clears control
+and clock together with the normal inbox/cursor update. The latest failure
+receipt is live state; older resolved decisions are subject to journal retention.
+
+`cetta_dispatch_poll` checks the durable deadline using a native clock sample;
+`cetta_dispatch_poll_at` accepts an explicit sample from the host event loop.
+The untimed inbox begin refuses scheduled retries. A backward wall-clock jump
+delays eligibility; a forward jump can make the retry immediately due. These
+checks do not acknowledge any new input. Other sources remain independent.
+The service can use the timer wait helper for monotonic waiting and resample
+wall time periodically.
+
+The policy/ticket tests cover clock persistence, competing observations,
+unchanged cursor, storage refusal, recovery after immediate process exit,
+backoff/degraded state across restarts, and hidden effect-denial refusal. The
+HTTP fixture checks due-time admission and exact offsets across owner restart
+on HTTP/1.1, HTTPS/1.1 and HTTPS/2. The service still must drive this transition,
+expose degraded/held state outside Telegram, and provide explicit repair for
+held responses. A generic dispatcher or worker proposal cannot clear a hold.
 
 ## Durable timers
 

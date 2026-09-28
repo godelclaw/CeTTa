@@ -234,3 +234,35 @@
           ($bad (telegram:hold 1 invalid-retry-delay)))))
       ((tg:some (JsonNumberV1 "409")) (telegram:hold 1 conflicting-poller))
       ($other (telegram:hold 1 api-error)))))
+
+
+; Recovery is only for getUpdates, whose offset comes from committed intake.
+; Repeating a send after a lost reply would require a different policy.
+; Clock and failure count come from the native ticket's recorded observations.
+(= (telegram:recover-poll $observation $policy $failures $now)
+   (case (telegram:poll $observation $policy)
+     (((telegram:batch 1 $items) (telegram:ready 1))
+      ((telegram:retry 1 $seconds $reason)
+       (telegram:retry-deadline $seconds $reason $failures $now))
+      ((telegram:hold 1 transport-outcome)
+       (case $observation
+         (((host:poll 1 $source $offset $kind ($started False $code $status $known $bytes False False False) $body)
+           (if (and (telegram:contains $kind (observed uncertain)) (or (telegram:contains $code (5 6 7 16 18 28 52 55 56 92))
+                   (and (== $code 0) (and (>= $status 500) (<= $status 599)))))
+             (telegram:retry-deadline (telegram:backoff $failures) transient-poll $failures $now)
+             (telegram:hold 1 transport-outcome)))
+          ($other (telegram:hold 1 transport-outcome)))))
+      ((telegram:hold 1 $reason) (telegram:hold 1 $reason))
+      ($other (telegram:hold 1 invalid-classification)))))
+
+; 1, 2, 4, ... 64 seconds. Continued repeat-safe failures stay eligible at
+; the capped rate and become visibly degraded after eight failures. Routine
+; outage recovery never needs cognition or an operator to restart the poller.
+; No random jitter is used: any future jitter must be a recorded observation.
+(= (telegram:backoff $failures)
+   (case $failures ((0 1) (1 2) (2 4) (3 8) (4 16) (5 32) ($rest 64))))
+(= (telegram:retry-deadline $seconds $reason $failures $now)
+   (let $delay (* $seconds 1000)
+     (if (> $now (- 9223372036854775807 $delay)) (telegram:hold 1 deadline-overflow)
+       (telegram:retry-at 1 (+ $now $delay)
+         (if (>= $failures 7) (telegram:degraded $reason) $reason)))))
