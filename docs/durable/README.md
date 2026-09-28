@@ -956,3 +956,60 @@ answers, default routing or delivery retry policy.
 JSON escaping, dispatch revalidation and the pure constructors under the
 speculative gate. The service matrix uses this adapter for actual mock send,
 edit and delete requests, including thread/reply routing and formatting.
+
+## Telegram application reactions
+
+`durable:telegram_agent` is the fixed `telegram-agent/1` service policy.
+`cetta_telegram_agent_decide` selects its receive, worker-reply or completion
+entry using a recorded input. It derives the actor and grants from recorded
+routing and origin records, checks these records against the decision's fresh
+snapshot, and evaluates through the speculative gate. The worker supplies JSON
+data, never a program, expression, actor, read set or channel capability.
+
+Receiving a routed input atomically accepts a worker request and saves a waiting
+continuation. The request contains the canonical update as a bounded JSON
+string. Non-routed input uses a separate audit actor. A reply must match the
+task revision, original intent and exact observation. Its draft is retired if
+the continuation has changed or new chat input is already present. A read-only
+chat-prefix grant also detects arrivals between evaluation and acceptance;
+unrelated chat traffic does not invalidate it.
+
+The initial worker-result format is a JSON array of up to 64 commands:
+
+```json
+[["send", "Hello", "plain"], ["edit", 9, "Updated", "HTML"], ["delete", 9]]
+```
+
+Targets come from the saved continuation. All actions and their positions are
+accepted together with the sending continuation and an application decision
+record. Invalid syntax selects a recorded rejection. Native action permissions
+are checked before acceptance; a disallowed batch selects a fixed rejection
+branch on the same ticket. This substitution requires a COMPLETE, denial-free
+first result; it never salvages an incomplete or effect-denied computation.
+Each of the at most two evaluations has an explicit fuel bound. Acceptance
+validates action permissions again. No prefix of a rejected batch is accepted.
+
+Accepted work survives newer input. Completions must match the original intent
+and the continuation's expected batch position. API success requires an
+appropriate result, including the chat and message ID for sends/edits. Malformed
+responses, cancelled/failed transport and ambiguous outcomes hold the lane;
+they do not allocate another effect. Delivery records preserve the result.
+Only a confirmed delivery advances the position. Missing or unknown-version
+continuations are distinguished: an unknown version cannot silently restart as
+an idle actor.
+
+Transitions pass through a rho COMM before returning to the host. A busy or
+held reaction may return literal `Empty`, which is not an acceptable transition;
+the host keeps the input pending. The native entry does not commit or dispatch.
+The application scheduler must admit only the current position's action and
+surface held lanes without repeatedly evaluating them. General supervisor
+controls, explicit hold repair, retries and ordering waivers remain integration
+work. This policy currently covers text send/edit/delete, not full Telegram
+parity or the cognitive worker's existing command vocabulary.
+
+`test-telegram-agent` covers recovery, task pairing, whole-batch acceptance,
+stale drafts before and after observation, unrelated traffic, retained accepted
+work, out-of-order completions, uncertainty, API response validation, command
+bounds, rejection, unknown versions and fuel/profile boundaries. Inputs and
+outcomes in this policy test are synthetic durable records; network and IPC
+process tests are provided by `test-durable-service` separately.
