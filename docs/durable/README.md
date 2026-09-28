@@ -1163,6 +1163,66 @@ cannot replace a newer continuation. Its original result remains recorded.
 
 Worker holds and uncertain Telegram sends are distinct states. Neither is
 permission for an automatic paid model repeat or an ambiguous send retry.
-An operator repair interface is still needed to release held chats. Deploy the
-worker with this matching policy: an older policy can store the diagnostic
+The optional local operator endpoint below releases a specific cognitive hold.
+Deploy the worker with this matching policy: an older policy can store the diagnostic
 but classify it as an invalid command batch instead of holding the chat.
+
+### Local operator control
+
+Build `telegram-control` for a small native client. The service enables its
+separate operator endpoint only with `--operator-fd FD`, a second inherited,
+private listening Unix seqpacket socket. The supervisor owns both sockets
+across restarts. Passing the worker socket again, including a duplicate
+file descriptor, is refused. The existing one-descriptor systemd example
+leaves operator control disabled; an explicit supervisor must supply the
+second descriptor to use it.
+
+The client supports:
+
+```text
+cetta-telegram-control SOCKET status CHAT.THREAD
+cetta-telegram-control SOCKET release REQUEST_ID CHAT.THREAD BATCH
+cetta-telegram-control SOCKET receipt REQUEST_ID
+```
+
+`CHAT.THREAD` uses canonical decimal IDs, with `0` for no thread. Chats must be
+in the service's configured action allowlist. Request and batch IDs are bounded
+ASCII components. Status returns only coordination metadata: idle, waiting,
+sending, send-held, worker-held with its exact batch and reason, or incompatible.
+It exposes no message text, model response or credentials. Unknown actor schema
+versions are incompatible, never treated as idle.
+
+A release queues one immutable operator input and request-ledger record in a
+single transaction. `recorded` means durable admission, not completed release.
+The fixed MeTTa/rho policy pairs the input with that record and can release only
+`worker-held` for the exact requested batch. Consumption, the actor transition
+and a `released` or `refused` receipt commit together under the ordinary read
+fence. There is no effect grant. Releasing a cognitive hold means retiring that
+blocked decision and allowing later queued chat input to proceed; it does not
+repeat the old model request or recreate its commands. The original hold and
+worker result remain recorded. Sending, waiting and delivery-uncertain states
+are refused without changing their meaning. This is not a send-retry control.
+
+After a lost acknowledgment, query the same request ID or retry with exactly
+the same request, lane and batch. Reusing an ID with different data conflicts;
+an exact retry cannot inject another input, even after service restart. Result
+receipts survive consumption. IDs must remain unique across any later retention
+scheme. An unknown actor version remains pending for explicit migration.
+
+The native pump admits eight peers, bounds packets and replies to 256 bytes,
+and expires idle or stalled peers after five seconds. Connections are one
+request/reply each. The endpoint and client verify same-UID credentials;
+filesystem sockets exclude group/other access. As with worker IPC, same-UID
+access is a deployment trust boundary, not protection against arbitrary code
+running under the service UID. The worker protocol and evaluator offer no
+operator operation; isolating a hostile worker additionally requires OS
+permissions/namespaces that keep this socket inaccessible.
+
+Transport and these controls run without a cognitive process. Storage errors
+stop the service for recovery; they never return successful admission after an
+ambiguous commit. `test-telegram-control` exercises the actual service/client
+over HTTP/1.1, HTTPS/1.1 and negotiated HTTP/2 with a synthetic Bot API. It covers
+private/separate listeners, malformed packets, protocol separation, stalled
+peers, stale and conflicting release requests, lost replies, service restart,
+and refusal to retry an uncertain send. Agent tests additionally change the
+actor between evaluation and commit and reject mismatched request ledgers.

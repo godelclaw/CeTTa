@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "telegram_scheduler.h"
+#include "telegram_control.h"
 #include "durable_value.h"
 #include "cetta_stdlib.h"
 #include "library.h"
@@ -21,7 +22,7 @@
 enum { USAGE=64, CONFIG=78, FAILURE=1 };
 typedef struct {
     const char *root, *directory, *worker, *credential, *origin, *ca;
-    int token_fd, listener;
+    int token_fd, listener, operator_fd;
     int64_t chats[128]; size_t count;
     bool run, check;
 } Config;
@@ -56,6 +57,7 @@ static void usage(void) {
     puts("Usage: cetta-telegram-service (--check | --run) --root DIR --state-dir DIR\n"
          "       --worker NAME --chat ID [--chat ID ...]\n"
          "       (--credential-file FILE | --credential-fd FD) [--listener-fd FD]\n"
+         "       [--operator-fd FD]\n"
          "       [--mock-origin http[s]://127.0.0.1:PORT [--ca-file FILE]]\n"
          "--check loads the fixed policy and validates configuration without opening\n"
          "the journal, consuming the listener or constructing any transport.\n"
@@ -63,9 +65,9 @@ static void usage(void) {
          "systemd activation fd. The supervisor owns the socket's lifetime.");
 }
 static bool arguments(int argc, char **argv, Config *c) {
-    *c=(Config){.token_fd=-1,.listener=-1}; unsigned seen=0;
+    *c=(Config){.token_fd=-1,.listener=-1,.operator_fd=-1}; unsigned seen=0;
     const char *names[]={"--root","--state-dir","--worker","--credential-file","--mock-origin","--ca-file",
-                         "--credential-fd","--listener-fd"};
+                         "--credential-fd","--listener-fd","--operator-fd"};
     const char **strings[]={&c->root,&c->directory,&c->worker,&c->credential,&c->origin,&c->ca};
     for (int i=1;i<argc;++i) {
         if (!strcmp(argv[i],"--run")) { if (c->run || c->check) return false; c->run=true; continue; }
@@ -77,19 +79,21 @@ static bool arguments(int argc, char **argv, Config *c) {
             for (size_t j=0;j<c->count;++j) if (c->chats[j]==n) return false;
             c->chats[c->count++]=n; continue;
         }
-        size_t j=0; while (j<8 && strcmp(option,names[j])) ++j;
-        if (j==8 || (seen&(1u<<j))) return false;
+        size_t j=0; while (j<9 && strcmp(option,names[j])) ++j;
+        if (j==9 || (seen&(1u<<j))) return false;
         seen|=1u<<j;
         if (j<6) *strings[j]=value;
         else {
             if (!number(value,3,INT32_MAX,&n)) return false;
-            if (j==6) c->token_fd=(int)n; else c->listener=(int)n;
+            if (j==6) c->token_fd=(int)n;
+            else if (j==7) c->listener=(int)n; else c->operator_fd=(int)n;
         }
     }
     if ((!c->run && !c->check) || !c->root || c->root[0]!='/' || !c->directory || c->directory[0]!='/' ||
         !component(c->worker) || !c->count || (!!c->credential==(c->token_fd>=0)) ||
         (c->credential && c->credential[0]!='/') || (c->ca && (c->ca[0]!='/' || !c->origin)) ||
-        (c->listener>=0 && c->token_fd==c->listener)) return false;
+        (c->listener>=0 && c->token_fd==c->listener) ||
+        (c->operator_fd>=0 && (c->operator_fd==c->listener || c->operator_fd==c->token_fd))) return false;
     /* Custom origins are exclusively numeric loopback fixtures, even for TLS.
      * The credential adapter validates scheme/port/trailing bytes afterwards. */
     if (c->origin) {
@@ -148,7 +152,13 @@ int main(int argc,char **argv) {
     umask(077);
     if (c.run) {
         if (c.listener<0) c.listener=activation_listener();
-        if (!listener_valid(c.listener) || c.token_fd==c.listener) return error("listener",CONFIG);
+        if (!listener_valid(c.listener) || c.token_fd==c.listener || c.operator_fd==c.listener ||
+            (c.operator_fd>=0 && !listener_valid(c.operator_fd))) return error("listener",CONFIG);
+        if (c.operator_fd>=0) {
+            struct stat a,b;
+            if (fstat(c.listener,&a) || fstat(c.operator_fd,&b) ||
+                (a.st_dev==b.st_dev && a.st_ino==b.st_ino)) return error("separate operator listener",CONFIG);
+        }
     }
     char root[PATH_MAX], database[PATH_MAX];
     if (!realpath(c.root,root) || chdir(root) ||
@@ -175,6 +185,7 @@ int main(int argc,char **argv) {
     cetta_eval_session_init_he_extended(&context.session); eval_set_library_context(&context); stdlib_load(&program,&persistent);
     int result=CONFIG; Atom *import_error=NULL; CettaDurableStore *store=NULL;
     CettaDurableService *service=NULL; CettaTelegramScheduler *scheduler=NULL;
+    CettaTelegramControl *control=NULL;
     if (!cetta_library_import_module(&context,"durable:telegram_agent",&program,false,&scratch,&persistent,&registry,1000000,&import_error)) {
         error("trusted policy",CONFIG); goto done;
     }
@@ -198,12 +209,17 @@ int main(int argc,char **argv) {
     if (s==DURABLE_OK && stopped) { result=0; goto done; }
     CettaTelegramSchedulerConfig ac={{&trusted,source_id,c.worker,&actions,2000000},256,256,8*1024*1024,NULL,app_fault};
     if (s==DURABLE_OK) s=cetta_telegram_scheduler_new(store,service,&ac,&scheduler);
+    if (s==DURABLE_OK && c.operator_fd>=0) {
+        s=cetta_telegram_control_new(store,&ac.agent,c.operator_fd,getuid(),&control);
+        if (s==DURABLE_OK) c.operator_fd=-1;
+    }
     if (s!=DURABLE_OK) { fault(NULL,"startup",s); result=FAILURE; goto done; }
     puts("cetta-telegram: ready"); fflush(stdout);
     uint64_t maintenance=0; CettaDurableLimits limits=cetta_durable_default_limits();
     while (!stopped) {
         s=cetta_service_step(service,25);
         if (stopped) break;
+        if (s==DURABLE_OK && control) s=cetta_telegram_control_step(control);
         if (s==DURABLE_OK) s=cetta_telegram_scheduler_step(scheduler,8);
         CettaClockSample now;
         if (s==DURABLE_OK && !cetta_clock_sample(&now)) s=DURABLE_IO;
@@ -216,9 +232,11 @@ int main(int argc,char **argv) {
     }
     result=s==DURABLE_OK?0:FAILURE;
  done:
+    cetta_telegram_control_free(control);
     cetta_telegram_scheduler_free(scheduler);
     if (cetta_service_free(service)) { error("unrecorded transport observations",FAILURE); result=FAILURE; }
     if (c.run && c.listener>=0) close(c.listener);
+    if (c.run && c.operator_fd>=0) close(c.operator_fd);
     cetta_durable_close(store); cetta_telegram_credential_free(credential);
     cetta_library_context_free(&context); eval_set_library_context(NULL); registry_free(&registry); space_free(&program);
     arena_free(&scratch); arena_free(&persistent); var_intern_free(&vars); symbol_table_free(&symbols); g_symbols=NULL; g_var_intern=NULL;

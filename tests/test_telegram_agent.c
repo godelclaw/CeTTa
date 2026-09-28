@@ -71,6 +71,14 @@ static void accept(CettaHostDecision *d,size_t effects,char key[64]) {
     if (s!=DURABLE_OK) { fprintf(stderr,"accept: %s\n",cetta_durable_status_name(s)); atom_print(cetta_host_outcome(d)->results.items[0],stderr); abort(); }
     assert(c.effects==effects); if (key) snprintf(key,64,"%s/0",c.commit_key); cetta_host_decision_free(d);
 }
+static void control_request(const char *id,const char *lane,const char *batch,char key[80]) {
+    Atom *args[]={atom_symbol(&persistent,"host:telegram-control"),atom_int(&persistent,1),
+        atom_string(&persistent,"bot"),atom_string(&persistent,id),atom_string(&persistent,lane),
+        atom_string(&persistent,"release-worker"),atom_string(&persistent,batch)};
+    Atom *request=atom_expr(&persistent,args,7);
+    snprintf(key,80,"control/%s",id);
+    put("telegram.controls",id,request); put("host.inbox",key,request);
+}
 static void result(const char *id,const char *body,char input[140]) {
     char task[130]; snprintf(task,sizeof(task),"brain/%s",id); snprintf(input,140,"worker/%s",task);
     CettaDurableScope q={DURABLE_KEY,"host.worker-tasks",task}; CettaDurableObservation *o=NULL;
@@ -274,6 +282,36 @@ int main(int argc,char **argv) {
     assert(record("host.inbox",other)); // Later chat input remains durable, without another paid request.
     erase("host.actors","telegram/bot/42.0"); incoming(9,42,input);
     accept(decide(input,1),1,request); state(84,expected); // Independent chat still progresses.
+    char control[80];
+    control_request("waiting","42.0","not-held",control);
+    accept(decide(control,1),0,NULL);
+    assert(atom_is_symbol(record("telegram.control-results","waiting")->expr.elems[2],"refused"));
+    control_request("stale","84.0","wrong-batch",control);
+    accept(decide(control,1),0,NULL); state(84,expected);
+    assert(atom_is_symbol(record("telegram.control-results","stale")->expr.elems[2],"refused"));
+    control_request("paired","84.0",other_batch,control);
+    Atom *request_copy=record("host.inbox",control);
+    put("telegram.controls","paired",parse("(host:telegram-control 1 \"bot\" \"paired\" \"84.0\" \"release-worker\" \"other\")"));
+    d=decide(control,0); cetta_host_decision_free(d); state(84,expected);
+    put("telegram.controls","paired",request_copy);
+    d=decide(control,1);
+    // The exact hold is validated again at commit, not just at proposal time.
+    put("host.actors","telegram/bot/84.0",parse("(host:actor 1 \"telegram-agent/1\" (tg-agent:worker-held \"newer\" \"provider-error\"))"));
+    assert(cetta_host_accept(d,0,&commit)==DURABLE_CONFLICT); cetta_host_decision_free(d);
+    Atom *held[]={atom_symbol(&persistent,"host:actor"),atom_int(&persistent,1),atom_string(&persistent,"telegram-agent/1"),parse(expected)};
+    put("host.actors","telegram/bot/84.0",atom_expr(&persistent,held,4));
+    before=count("host.outbox"); accept(decide(control,1),0,NULL); state(84,"(tg-agent:idle)");
+    assert(count("host.outbox")==before && !record("host.inbox",control));
+    assert(atom_is_symbol(record("telegram.control-results","paired")->expr.elems[2],"released"));
+    put("host.inbox",control,request_copy); d=decide(control,0); cetta_host_decision_free(d);
+    assert(atom_is_symbol(record("telegram.control-results","paired")->expr.elems[2],"released"));
+    put("host.actors","telegram/bot/84.0",parse("(host:actor 1 \"telegram-agent/1\" (tg-agent:held \"delivery\" 0 1 uncertain))"));
+    control_request("uncertain","84.0","delivery",control);
+    accept(decide(control,1),0,NULL); state(84,"(tg-agent:held \"delivery\" 0 1 uncertain)");
+    assert(atom_is_symbol(record("telegram.control-results","uncertain")->expr.elems[2],"refused"));
+    put("host.actors","telegram/bot/84.0",parse("(host:actor 2 \"telegram-agent/1\" (tg-agent:worker-held \"delivery\" \"provider-error\"))"));
+    control_request("version","84.0","delivery",control);
+    d=decide(control,0); cetta_host_decision_free(d); assert(!record("telegram.control-results","version"));
     printf("Telegram agent: %u pure policy checks; recorded input, rho reaction, task pairing, atomic batches, chat progress, stale drafts, held uncertainty and profile/fuel checks passed\n",policy_checks);
     cetta_durable_close(store); unlink(db); char path[300]; snprintf(path,sizeof(path),"%s-wal",db); unlink(path); snprintf(path,sizeof(path),"%s-shm",db); unlink(path); rmdir(dir);
     cetta_library_context_free(&context); eval_set_library_context(NULL); registry_free(&registry); space_free(&program);

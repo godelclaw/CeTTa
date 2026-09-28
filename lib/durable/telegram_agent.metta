@@ -135,6 +135,23 @@
      (host:transition (tg-agent:idle)
        ((host:put 4 $batch (tg-agent:decision 1 rejected action-not-permitted))) ())))
 
+; Native operator input, separately authorized from worker proposals. View 2
+; is the immutable request ledger, view 3 the result key (write grant 1).
+; Release only the named cognitive hold. Sending and uncertain delivery states
+; are preserved, and no effect authority is granted to this reaction.
+(= (tg-agent:control)
+   (match &self (host:record 0 $input (host:telegram-control 1 $source $id $lane "release-worker" $batch))
+     (match &self (host:record 2 $id (host:telegram-control 1 $source $id $lane "release-worker" $batch))
+       (let $state (tg-agent:state)
+         (if (or (== $state (tg-agent:held invalid-actor))
+                 (not (== (collapse (match &self (host:record 3 $id $prior) True)) ()))) Empty
+           (case $state
+             (((tg-agent:worker-held $batch $reason)
+               (host:transition (tg-agent:idle)
+                 ((host:put 1 $id (tg-agent:control-result 1 released $batch))) ()))
+              ($other (host:transition $state
+                 ((host:put 1 $id (tg-agent:control-result 1 refused $batch))) ())))))))))
+
 ; Transport outcome classification, never an excuse to replay an ambiguous
 ; send. Positive API success must contain a result appropriate to the action.
 (= (tg-agent:api-result $normalized $action)

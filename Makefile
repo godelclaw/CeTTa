@@ -388,7 +388,7 @@ ifneq ($(filter $(ENABLE_DURABLE),0 1),$(ENABLE_DURABLE))
 $(error ENABLE_DURABLE must be 0 or 1)
 endif
 ifeq ($(ENABLE_DURABLE),1)
-DURABLE_SRC += src/durable_store.c src/durable_value.c src/durable_host.c src/durable_dispatch.c src/durable_inbox.c src/durable_timer.c src/telegram_intake.c src/durable_worker.c src/durable_service.c src/telegram_action.c src/telegram_agent.c src/telegram_scheduler.c
+DURABLE_SRC += src/durable_store.c src/durable_value.c src/durable_host.c src/durable_dispatch.c src/durable_inbox.c src/durable_timer.c src/telegram_intake.c src/durable_worker.c src/durable_service.c src/telegram_action.c src/telegram_agent.c src/telegram_scheduler.c src/telegram_control.c
 ifeq ($(SQLITE_PROVIDER),vendored)
 DURABLE_CFLAGS += -Ivendor/sqlite -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DQS=0 -DSQLITE_OMIT_SHARED_CACHE -DSQLITE_DEFAULT_MEMSTATUS=0
 DURABLE_SRC += vendor/sqlite/sqlite3.c
@@ -38410,7 +38410,12 @@ test-telegram-scheduler:
 	@exit 1
 endif
 
-.PHONY: telegram-service test-telegram-service
+.PHONY: telegram-service telegram-control test-telegram-service test-telegram-control
+runtime/cetta-telegram-control: src/telegram_control_main.c
+	@mkdir -p $(dir $@)
+	$(CC) -O2 -Wall -Wextra -Werror -std=c11 -o $@ $<
+telegram-control: runtime/cetta-telegram-control
+	@echo "Built $<"
 ifeq ($(ENABLE_DURABLE)$(HTTP_PROVIDER_CURL)$(ENABLE_JSON_GSLT),111)
 TELEGRAM_SERVICE_BIN = runtime/cetta-telegram-service-$(BUILD_OBJ_TAG)
 TELEGRAM_SERVICE_OBJ = runtime/bootstrap/telegram-service.$(BUILD_OBJ_TAG).o
@@ -38424,8 +38429,10 @@ telegram-service: $(TELEGRAM_SERVICE_BIN)
 	@echo "Built $(TELEGRAM_SERVICE_BIN)"
 test-telegram-service: $(TELEGRAM_SERVICE_BIN)
 	python3 tests/test_telegram_service.py $(TELEGRAM_SERVICE_BIN)
+test-telegram-control: $(TELEGRAM_SERVICE_BIN) runtime/cetta-telegram-control
+	python3 tests/test_telegram_control.py $(TELEGRAM_SERVICE_BIN) runtime/cetta-telegram-control
 else
-telegram-service test-telegram-service:
+telegram-service test-telegram-service test-telegram-control:
 	@echo "telegram-service requires ENABLE_DURABLE=1, native HTTP and ENABLE_JSON_GSLT=1" >&2
 	@exit 1
 endif

@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "telegram_agent.h"
+#include "telegram_control.h"
 #include "durable_eval.h"
 #include "durable_inbox.h"
 #include "durable_worker_host.h"
@@ -97,6 +98,19 @@ CettaDurableStatus cetta_telegram_agent_decide(CettaDurableStore *store,
         channel=(CettaHostChannelGrant){"worker.request","1",cetta_worker_validate,(void *)c->worker}; channels=1;
         Atom *args[]={atom_symbol(&a,"tg-agent:receive"),atom_string(&a,c->worker),atom_string(&a,c->source),atom_string(&a,lane)};
         call=atom_expr(&a,args,4);
+    } else if (form(input,"host:telegram-control",7)) {
+        Atom **v=input->expr.elems;
+        const char *id=text(v[3]); lane=text(v[4]); batch=text(v[6]);
+        if (!text(v[2]) || strcmp(text(v[2]),c->source) || !component(id) || !component(batch) ||
+            !cetta_telegram_control_lane(c,lane) || !text(v[5]) || strcmp(text(v[5]),"release-worker")) {
+            s=DURABLE_PRECONDITION; goto done;
+        }
+        snprintf(expected,sizeof(expected),"control/%s",id);
+        if (strcmp(expected,input_key)) { s=DURABLE_CORRUPT; goto done; }
+        snprintf(actor,sizeof(actor),"telegram/%s/%s",c->source,lane);
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.controls",id},false};
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.control-results",id},true};
+        Atom *head=atom_symbol(&a,"tg-agent:control"); call=atom_expr(&a,&head,1);
     } else if (form(input,"host:worker-result",6)) {
         if (!text(input->expr.elems[2]) || strcmp(text(input->expr.elems[2]),c->worker)) { s=DURABLE_PRECONDITION; goto done; }
         batch=text(input->expr.elems[3]);
