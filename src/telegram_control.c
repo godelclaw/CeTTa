@@ -73,6 +73,11 @@ static CettaDurableStatus status(CettaTelegramControl *c, const char *lane, char
                 else if (form(state,"tg-agent:idle",1)) strcpy(out,"idle");
                 else if (form(state,"tg-agent:waiting",6)) strcpy(out,"waiting");
                 else if (form(state,"tg-agent:sending",4)) strcpy(out,"sending");
+                else if (form(state,"tg-agent:held",5) && component(string(state->expr.elems[1])) &&
+                         state->expr.elems[2]->kind==ATOM_GROUNDED && state->expr.elems[2]->ground.gkind==GV_INT)
+                    /* Name the batch, so the release request needs nothing else. */
+                    snprintf(out,REPLY,"send-held %.64s %lld",string(state->expr.elems[1]),
+                             (long long)state->expr.elems[2]->ground.ival);
                 else if (form(state,"tg-agent:held",5)) strcpy(out,"send-held");
                 else strcpy(out,"incompatible");
             }

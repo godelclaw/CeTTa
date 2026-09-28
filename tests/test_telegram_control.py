@@ -151,10 +151,10 @@ with tempfile.TemporaryDirectory(prefix='cetta-control-') as temp:
                 wait(proc,lambda:bool(rows(state,'host.worker-ready')),'next task')
                 code,task2,_=rpc(wp); assert code==65
                 assert rpc(wp,2,task2,'[["send","one ambiguous send","plain"]]')[0]==66
-                wait(proc,lambda:ctl(cp,'status 42.0')=='send-held','uncertain delivery')
+                wait(proc,lambda:ctl(cp,'status 42.0').startswith('send-held '),'uncertain delivery')
                 assert ctl(cp,'release refuse-send 42.0 '+task2)=='recorded'
                 wait(proc,lambda:ctl(cp,'receipt refuse-send')=='refused','cannot release uncertain send')
-                assert ctl(cp,'status 42.0')=='send-held'
+                assert ctl(cp,'status 42.0').startswith('send-held ')
                 assert bot.calls.count(('send','one ambiguous send'))==1
                 assert len(rows(state,'host.outbox'))==3 # two worker tasks and one accepted send
             finally:
