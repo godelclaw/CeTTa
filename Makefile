@@ -25950,6 +25950,7 @@ PETTA_SEMANTIC_EXACT_STREAM_STEMS = \
 	builtin_data_vocabulary car_cdr_total empty_is_data \
 	collapse_copies_answers open_lists library_metta_suffix \
 	sort_values dynamic_head_values specialize_data_values \
+	specialize_space_arguments \
 	foldall_reduce partial_values bound_head_values
 PETTA_SEMANTIC_OCCURRENCE_BAG_STEMS = semantic_counter_equations \
 	search_machine_specializer_negative_mutation \
