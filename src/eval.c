@@ -171,6 +171,16 @@ static __thread CettaLibraryContext *g_library_context = NULL;
 bool eval_speculative_active(void) {
     return g_library_context && g_library_context->session.speculative;
 }
+
+void eval_note_effect_denied(void) {
+    if (!eval_speculative_active()) return;
+    _Atomic uint64_t *count = &g_library_context->session.effect_denials;
+    uint64_t old = atomic_load_explicit(count, memory_order_relaxed);
+    /* Saturate rather than wrap to a falsely clean evaluation. */
+    while (old != UINT64_MAX &&
+           !atomic_compare_exchange_weak_explicit(count, &old, old + 1,
+               memory_order_relaxed, memory_order_relaxed)) {}
+}
 /* A worker-local transport of immutable equation-program metadata onto its
  * private root image.  This is optimization evidence only: an absent or
  * stale projection selects the ordinary live equation path. */
@@ -48211,6 +48221,7 @@ void eval_outcome_init(EvalOutcome *outcome) {
     outcome->budget_initial = 0;
     outcome->budget_remaining = 0;
     outcome->steps_spent = 0;
+    outcome->effect_denials = 0;
     outcome->petta_raise_known = false;
     outcome->petta_raised_error = false;
 }
@@ -48224,6 +48235,7 @@ void eval_outcome_free(EvalOutcome *outcome) {
     outcome->budget_initial = 0;
     outcome->budget_remaining = 0;
     outcome->steps_spent = 0;
+    outcome->effect_denials = 0;
 }
 
 CettaCount eval_outcome_value_count(const EvalOutcome *outcome) {
@@ -48295,6 +48307,8 @@ const char *eval_completion_reason(CettaEvalCompletion completion) {
         return "revision-invalidated";
     case CETTA_EVAL_INCOMPLETE_HOST_FAILURE:
         return "host-failure";
+    case CETTA_EVAL_INCOMPLETE_EFFECT_DENIED:
+        return "effect-denied";
     }
     return "incomplete";
 }
@@ -49093,18 +49107,30 @@ void eval_top_with_registry_outcome(
 
 void eval_top_speculative(CettaLibraryContext *context, Space *space,
     Arena *arena, Arena *persistent, Registry *registry, Atom *expression,
-    EvalOutcome *outcome) {
+    int fuel_limit, EvalOutcome *outcome) {
     if (!outcome) return;
-    if (!context || context->session.language_id!=CETTA_LANGUAGE_HE) {
-        result_set_add(&outcome->results,cetta_effect_denied(arena));
+    if (!context || context->session.language_id!=CETTA_LANGUAGE_HE || fuel_limit<=0) {
+        result_set_add(&outcome->results,atom_error(arena,
+            atom_symbol(arena,"speculative-evaluation"),
+            atom_symbol(arena,"InvalidEvaluationContextOrBudget")));
         outcome->completion=CETTA_EVAL_INCOMPLETE_HOST_FAILURE;
         return;
     }
     bool previous=context->session.speculative;
+    int previous_fuel=context->session.options.fuel_limit;
+    if (!previous)
+        atomic_store_explicit(&context->session.effect_denials,0,memory_order_relaxed);
+    uint64_t before=atomic_load_explicit(&context->session.effect_denials,memory_order_relaxed);
     context->session.speculative=true;
+    context->session.options.fuel_limit=fuel_limit;
     CettaLibraryContext *old=eval_swap_library_context(context);
     eval_top_with_registry_outcome(space,arena,persistent,registry,expression,outcome,NULL,NULL);
+    uint64_t after=atomic_load_explicit(&context->session.effect_denials,memory_order_relaxed);
+    outcome->effect_denials=after==UINT64_MAX ? UINT64_MAX : after-before;
+    if (outcome->effect_denials && outcome->completion==CETTA_EVAL_COMPLETE)
+        outcome->completion=CETTA_EVAL_INCOMPLETE_EFFECT_DENIED;
     eval_swap_library_context(old);
+    context->session.options.fuel_limit=previous_fuel;
     context->session.speculative=previous;
 }
 

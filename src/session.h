@@ -2,6 +2,7 @@
 #define CETTA_SESSION_H
 
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <limits.h>
 #include <stdio.h>
@@ -225,6 +226,9 @@ typedef struct {
     /* Native host authority, never a pragma/environment/MeTTa option. The
      * host supplies a fresh observation and accepts only closed proposals. */
     bool speculative;
+    /* Shared by nested evaluations and their workers; never rolled back with
+     * a rejected branch or hidden by an expression's error handling. */
+    _Atomic uint64_t effect_denials;
 } CettaEvalSession;
 
 typedef struct {

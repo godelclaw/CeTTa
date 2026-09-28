@@ -90,6 +90,8 @@ typedef enum {
     CETTA_EVAL_INCOMPLETE_INVALIDATED,
     /* A host service the machine depends on failed. */
     CETTA_EVAL_INCOMPLETE_HOST_FAILURE,
+    /* An effect was denied, even if the expression hid the Error value. */
+    CETTA_EVAL_INCOMPLETE_EFFECT_DENIED,
 } CettaEvalCompletion;
 
 typedef struct EvalOutcome {
@@ -102,6 +104,7 @@ typedef struct EvalOutcome {
     uint64_t budget_initial;
     uint64_t budget_remaining;
     uint64_t steps_spent;
+    uint64_t effect_denials;
     /* PeTTa: whether the evaluator knows which of the directive's Error
        answers were raised and not caught, and whether any was. */
     bool petta_raise_known;
@@ -148,11 +151,13 @@ void eval_top_with_registry_outcome(
  * before calling; registry/query spaces must be fresh in-memory projections of
  * the exact observation being validated. No live handles or cached state may
  * be supplied. Context must not be concurrently used by another caller.
- * Nested rho evaluation inherits the policy. The host validates closed output
- * and commits a selected proposal; this API performs no durable commitment. */
+ * Nested rho evaluation inherits the policy and budget. fuel_limit must be
+ * positive. The host must reject any incomplete outcome or effect_denials > 0,
+ * then validate closed output before committing a selected proposal. This API
+ * performs no durable commitment. Supply an initialized, empty outcome. */
 void eval_top_speculative(CettaLibraryContext *context, Space *space,
     Arena *arena, Arena *persistent, Registry *registry, Atom *expression,
-    EvalOutcome *outcome);
+    int fuel_limit, EvalOutcome *outcome);
 /* Re-entrant callback used only by the optional PeTTa/libpl adapter. */
 bool eval_petta_from_lib_prolog(Arena *a, Atom *expr, ResultSet *results);
 void eval_release_temporary_spaces(void);

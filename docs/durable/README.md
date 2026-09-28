@@ -184,7 +184,7 @@ The native host uses `eval_top_speculative` with an HE library context to comput
 proposals. This policy is native authority: no MeTTa option, pragma, CLI repair
 flag or environment variable enables effects within it. Nested choices and rho
 payloads inherit the same session policy. The previous policy and context are
-restored on return. Other language profiles remain available to an independent
+restored on return, including the previous fuel setting. Other language profiles remain available to an independent
 cognitive worker; this service evaluation entry currently accepts HE only.
 
 An explicit allowlist admits arithmetic, structural computation, control forms,
@@ -195,8 +195,14 @@ Filesystem access, ambient process observations, raw transport, foreign calls,
 module loading, mutable state/space operations and durable-store operations are
 unavailable. Rejection produces `(Error speculative-evaluation EffectNotAllowed)`
 without echoing arguments. Existing HE control forms retain their error
-semantics: for example, `collapse` may omit a rejected branch. Denial prevents
-the effect; it does not make an error survive every surrounding expression.
+semantics: for example, `collapse` may omit a rejected branch. Every attempted
+forbidden effect also increments a shared atomic counter, independent of the
+result bag. `EvalOutcome.effect_denials` reports this count. If evaluation would
+otherwise be complete, a denial changes completion to `effect-denied`; another
+incomplete reason (such as exhausted fuel) is preserved alongside the count.
+The host must reject the entire evaluation on any denial or incomplete outcome,
+without committing its remaining proposals. An ordinary Error value supplied as
+data is not itself a denied effect. Counts saturate instead of wrapping.
 State changes are returned as proposals. Prepared execution and
 the relational machine are deferred at this boundary pending separate
 qualification; ordinary evaluations retain their existing optimizations.
@@ -208,15 +214,19 @@ another snapshot. This is an evaluator effect boundary, not an OS sandbox for
 untrusted native code. The host must validate closed proposal values, pair them
 with the original observation and commit the selected transition. Returning a
 term named `telegram:send` does not confer channel authority or dispatch it.
-The host also supplies input/result limits and an evaluation budget; this
-entry does not implement service admission or scheduling policy.
+The entry requires an explicit positive fuel argument and refuses zero or
+unlimited budgets before evaluation. Nested evaluation debits the same bounded
+purse. The host also supplies input/result limits and wall-clock supervision;
+this entry does not implement service admission or scheduling policy.
 
 `make ENABLE_HTTP=1 ENABLE_DURABLE=1 test-speculative-eval` exercises the native
 entry against a private counted HTTP peer and a file sentinel. It checks pure
 proposals, quoted data, computed heads, nested choices and rho payloads, denied
 operations and policy restoration. Qualification uses HE's extended profile,
-including a two-thread configuration; unsafe branch syntax can select the
-existing cooperative fallback. Python-enabled builds also load a callable
+including a two-thread configuration; finite fuel selects the existing
+cooperative fallback. Threaded rho/cost-trace entries remain excluded. Before
+admitting them, workers must attach a context without `eval_set_library_context`
+(which initializes its fuel from thread-local defaults). Python-enabled builds also load a callable
 before evaluation and verify that neither a direct nor computed call executes
 it. Other language entries are refused before execution. The normal HE and
 PeTTa corpus paths run with the policy off.
