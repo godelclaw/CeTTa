@@ -367,6 +367,80 @@ Receipts support inspection; they do not constitute deterministic replay.
 `make BUILD=core ENABLE_DURABLE=1 test-durable-host` exercises actual speculative
 HE evaluation and rho COMM, authority rejection, hidden effect denial, selection
 of one alternative, absence conflicts, unrelated traffic, atomic rollback and
-process death before/after acceptance. This is the acceptance boundary, not yet
-a service: HTTP claim/outcome integration, timers, worker IPC, ordered lanes and
-Telegram policy remain separate host integration work.
+process death before/after acceptance.
+
+## Accepted intent to durable completion
+
+`durable_dispatch.h` connects immutable accepted outbox rows to the native
+Telegram transport. It owns one HTTP worker and binds channel names/versions
+to immutable native credentials and bounded request marshalling callbacks.
+Those callbacks enforce positive method and destination allowlists; they run
+on the host thread, before admission. Application routing and retry decisions
+belong in MeTTa/rho, not these callbacks.
+
+The store's lifetime file lock excludes other processes. A native runtime
+attachment also refuses a second dispatcher on the same store handle. Startup
+recovery completes before the worker starts. Administration, store closure and
+policy/credential replacement require stopping the owner first.
+
+The I/O owner checks the exact accepted row (epoch, revision, position and
+bytes, including channel name/version) against its authorized request and
+current immutable registry. It atomically inserts `host.attempts` before any
+network activity. A repeated submission never creates a second attempt.
+Transport handles are ephemeral; durable effect IDs use the acceptance
+`epoch/revision/position`, with a distinct `/1` first-attempt ID.
+
+Responses pass the credential screen before encoding or journaling. The owner
+uses the native CDV1 field encoder, which has no evaluator or symbol-table
+access. It commits `host.outcomes` and a `host.inbox` completion occurrence in
+one transaction. Outcomes retain the transport status and safe response bytes;
+HTTP 200 is not itself Telegram API success. The trusted application must
+validate the JSON response and classify its `ok`/result/error fields.
+
+Schema-1 outcome shape:
+
+```metta
+(host:outcome 1 "effect-id" "attempt-id-or-empty" kind
+  (started cancelled curl-code http-status request-size-known request-size
+   response-too-large response-budget-exceeded allocation-failed)
+  "response-body")
+(host:completion 1 "effect-id" "outbox-key")
+```
+
+Kinds are `observed`, `uncertain`, `not-started`, `privacy-suppressed` and
+`unrecordable`. Privacy-suppressed and unrecordable outcomes make no assertion
+of API success or failure. Embedded NUL cannot enter a CDV1 string, so such a
+body becomes an explicit unrecordable outcome. Response bodies are bounded to
+256 KiB; there are at most 64 registered jobs, in addition to the HTTP worker's
+queue/byte limits. Unbounded external IDs and response text remain strings.
+
+Full recording failures use the worker's bounded retries and minimal-fact
+fallback. If even the minimal transaction cannot commit, retained jobs park and
+the required health callback escalates outside the journal. No HTTP is repeated.
+Transient claim conflicts/busy results retry at most five times before
+escalation and recording of a not-started result. Failed/unknown commits never
+authorize network activity.
+
+Cancellation before a claim atomically records a definitive not-started outcome
+and completion. After a claim, it records a cancellation request and signals the
+worker; a racing completion remains a fact. An existing outcome is never
+overwritten or re-injected after its completion has been consumed.
+
+On startup, a claim without an outcome becomes `uncertain`; unavailable
+transport metadata is represented by `unknown`, not fabricated zero/false
+values. Recovery itself performs no HTTP. This first-attempt mechanism has no
+automatic retry: another dispatch of the same intent is refused. A later retry
+policy must explicitly authorize and record new work, with its relationship to
+the original intent, before sending again.
+
+`make BUILD=core ENABLE_HTTP=1 ENABLE_DURABLE=1 test-durable-dispatch` runs a real
+rho reaction through acceptance, HTTP, durable completion and a second rho
+continuation. A private mock exercises HTTP/1.1, HTTPS/1.1 and negotiated HTTP/2,
+lost responses, secret reflection, cancellation, oversized recording, storage
+exhaustion, duplicate admission, SIGKILL after remote receipt and recovery
+without resending or recreating consumed completions. The fixture uses only
+invented credentials.
+
+This is an embedded transport boundary. The independently supervised service,
+worker IPC, inbox cursor, timers, ordered chat lanes and full Telegram policy
+remain separate integration work.

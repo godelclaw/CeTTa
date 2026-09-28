@@ -27,6 +27,7 @@ struct CettaDurableStore {
     pthread_mutex_t mutex;
     CettaDurableLimits limits;
     bool poisoned;
+    const void *runtime_owner;
 };
 
 #ifdef CETTA_DURABLE_TEST
@@ -83,6 +84,21 @@ CettaDurableLimits cetta_durable_default_limits(void) {
         .live_bytes = 64*1024*1024, .history_bytes = 16*1024*1024,
         .records = 100000, .operations = 4096, .database_pages = 65536
     };
+}
+
+CettaDurableStatus cetta_durable_attach_runtime(CettaDurableStore *s, const void *owner) {
+    if (!s || !owner) return DURABLE_INVALID;
+    pthread_mutex_lock(&s->mutex);
+    CettaDurableStatus r=s->poisoned?DURABLE_POISONED:s->runtime_owner?DURABLE_BUSY:DURABLE_OK;
+    if (r==DURABLE_OK) s->runtime_owner=owner;
+    pthread_mutex_unlock(&s->mutex); return r;
+}
+CettaDurableStatus cetta_durable_detach_runtime(CettaDurableStore *s, const void *owner) {
+    if (!s || !owner) return DURABLE_INVALID;
+    pthread_mutex_lock(&s->mutex);
+    CettaDurableStatus r=s->runtime_owner==owner?DURABLE_OK:DURABLE_INVALID;
+    if (r==DURABLE_OK) s->runtime_owner=NULL;
+    pthread_mutex_unlock(&s->mutex); return r;
 }
 
 static bool valid_name(const char *s) {

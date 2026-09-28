@@ -88,6 +88,53 @@ CettaDurableStatus cetta_durable_value_encode(const Atom *a, unsigned char **byt
     *bytes=w.data; *n=w.length; return DURABLE_OK;
 }
 
+static CettaDurableStatus fields(Writer *w, const CettaDurableField *v, unsigned depth) {
+    if (!v) return DURABLE_INVALID;
+    if (depth>VALUE_DEPTH || ++w->nodes>VALUE_NODES) return DURABLE_LIMIT;
+    unsigned char tag;
+    switch (v->kind) {
+    case DURABLE_FIELD_SYMBOL: tag='S'; break;
+    case DURABLE_FIELD_TEXT: tag='T'; break;
+    case DURABLE_FIELD_INT: tag='I'; break;
+    case DURABLE_FIELD_BOOL: tag=v->boolean?'Y':'N'; break;
+    case DURABLE_FIELD_EXPR: tag='E'; break;
+    default: return DURABLE_INVALID;
+    }
+    CettaDurableStatus s=append(w,&tag,1);
+    if (s!=DURABLE_OK) return s;
+    if (tag=='I') return number(w,(uint64_t)v->integer,8);
+    if (tag=='S' || tag=='T') {
+        size_t n=v->text.size;
+        if (n>VALUE_BYTES) return DURABLE_LIMIT;
+        if ((!v->text.data && n) || (n && memchr(v->text.data,0,n))) return DURABLE_INVALID;
+        s=number(w,n,4);
+        return s==DURABLE_OK && n?append(w,v->text.data,n):s;
+    }
+    if (tag=='E') {
+        size_t n=v->expression.count;
+        if (n>VALUE_NODES) return DURABLE_LIMIT;
+        if (!v->expression.items && n) return DURABLE_INVALID;
+        /* Keep the same reserved-handle rule as the Atom encoder. */
+        if (n && v->expression.items[0].kind==DURABLE_FIELD_SYMBOL) {
+            const CettaDurableField *h=&v->expression.items[0];
+            if (h->text.size==12 && h->text.data && !memcmp(h->text.data,"NativeHandle",12)) return DURABLE_INVALID;
+        }
+        s=number(w,n,4);
+        for (size_t i=0;s==DURABLE_OK && i<n;++i) s=fields(w,&v->expression.items[i],depth+1);
+    }
+    return s;
+}
+CettaDurableStatus cetta_durable_fields_encode(const CettaDurableField *v,
+        unsigned char **bytes, size_t *n) {
+    if (!bytes || !n) return DURABLE_INVALID;
+    *bytes=NULL; *n=0;
+    Writer w={0};
+    CettaDurableStatus s=append(&w,"CDV1",4);
+    if (s==DURABLE_OK) s=fields(&w,v,0);
+    if (s!=DURABLE_OK) { free(w.data); return s; }
+    *bytes=w.data; *n=w.length; return DURABLE_OK;
+}
+
 typedef struct { const unsigned char *data; size_t size, pos, nodes; } Reader;
 
 static bool read_number(Reader *r, size_t n, uint64_t *out) {

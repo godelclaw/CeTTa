@@ -34,6 +34,32 @@ int main(void) {
     roundtrip(&a,atom_rational(&a,"-184467440737095516160/3"));
 #endif
     unsigned char *bytes=NULL; size_t size=0;
+    /* Native I/O envelopes have the exact same wire form without any symbol
+     * table access. Re-encode via Atoms to cross-check the independent path. */
+    CettaDurableField fields[]={
+        {.kind=DURABLE_FIELD_SYMBOL,.text={"host:fact",9}},
+        {.kind=DURABLE_FIELD_TEXT,.text={"external-id",11}},
+        {.kind=DURABLE_FIELD_INT,.integer=INT64_MIN},
+        {.kind=DURABLE_FIELD_BOOL,.boolean=true},
+        {.kind=DURABLE_FIELD_EXPR,.expression={NULL,0}}
+    };
+    CettaDurableField native={.kind=DURABLE_FIELD_EXPR,.expression={fields,5}};
+    g_symbols=NULL;
+    assert(cetta_durable_fields_encode(&native,&bytes,&size)==DURABLE_OK);
+    g_symbols=&symbols;
+    Atom *decoded=NULL; unsigned char *again=NULL; size_t n=0;
+    assert(cetta_durable_value_decode(&a,bytes,size,&decoded)==DURABLE_OK);
+    assert(cetta_durable_value_encode(decoded,&again,&n)==DURABLE_OK && n==size && !memcmp(bytes,again,n));
+    free(bytes); free(again); bytes=NULL;
+    fields[1].text.data="a\0b"; fields[1].text.size=3;
+    assert(cetta_durable_fields_encode(&native,&bytes,&size)==DURABLE_INVALID && !bytes);
+    fields[1].text.data=NULL;
+    assert(cetta_durable_fields_encode(&native,&bytes,&size)==DURABLE_INVALID && !bytes);
+    native.expression.items=&native; native.expression.count=1;
+    assert(cetta_durable_fields_encode(&native,&bytes,&size)==DURABLE_LIMIT && !bytes);
+    fields[0].text.data="NativeHandle"; fields[0].text.size=12;
+    native.expression.items=fields;
+    assert(cetta_durable_fields_encode(&native,&bytes,&size)==DURABLE_INVALID && !bytes);
     assert(cetta_durable_value_encode(atom_var(&a,"x"),&bytes,&size)==DURABLE_INVALID);
     SymbolId binary_name=symbol_intern_bytes(g_symbols,(const uint8_t *)"x\0y",3);
     assert(cetta_durable_value_encode(atom_symbol_id(&a,binary_name),&bytes,&size)==DURABLE_INVALID);

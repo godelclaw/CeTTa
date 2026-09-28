@@ -5,6 +5,7 @@ Requires openssl and Python h2. No real credentials or Telegram traffic.
 """
 import collections
 import contextlib
+import errno
 import http.server
 import json
 import os
@@ -127,6 +128,12 @@ class Handler(socketserver.BaseRequestHandler):
                     sock.sendall(pending)
         except (ConnectionResetError, BrokenPipeError):
             pass  # FRESH_CONNECT/FORBID_REUSE closes completed connections.
+        except OSError as exc:
+            # A deliberately killed client may already have disconnected when
+            # the mock drops its response and shuts down the TLS socket.
+            if exc.errno != errno.ENOTCONN:
+                with self.server.lock:
+                    self.server.errors.append((type(exc).__name__, exc.errno))
         except Exception as exc:
             with self.server.lock:
                 self.server.errors.append(type(exc).__name__)
@@ -135,13 +142,13 @@ class Handler(socketserver.BaseRequestHandler):
 
 
 @contextlib.contextmanager
-def peer(protocol, cert=None, key=None):
+def peer(protocol, cert=None, key=None, peer_type=Peer):
     tls = None
     if cert:
         tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         tls.load_cert_chain(cert, key)
         tls.set_alpn_protocols([protocol])
-    server = Peer(protocol, tls)
+    server = peer_type(protocol, tls)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -173,29 +180,34 @@ def run(*args):
     return result.stdout.strip()
 
 
-with tempfile.TemporaryDirectory(prefix="cetta-telegram-") as tmp:
-    directory = pathlib.Path(tmp)
-    token_file = directory / "token"
-    print(run(token_file))
-    cert, key = certificate(directory, "local", "127.0.0.1")
-    wrong, wrong_key = certificate(directory, "wrong-host", "127.0.0.2")
-    for label, protocol, tls in (("HTTP/1.1", "http/1.1", False),
-                                 ("HTTPS/1.1", "http/1.1", True),
-                                 ("HTTPS/2", "h2", True)):
-        with peer(protocol, cert if tls else None, key if tls else None) as (server, origin):
-            run(token_file, origin, cert if tls else "-")
-            assert not server.errors, server.errors
-            assert collections.Counter(x[0] for x in server.calls) == collections.Counter(range(1, 7)), server.calls
-            ids = {item: connection for item, connection, _, _ in server.calls}
-            assert len({ids[1], ids[2], ids[3], ids[4], ids[6]}) == 5, ids
-            assert ids[4] == ids[5], "trusted poll did not reuse its connection"
-            if tls:
-                assert server.negotiated and set(server.negotiated) == {protocol}
-            print(f"{label}: complete requests 1..6 once each; dropped reply stays ambiguous; distinct effect connections, poll reuse, no redirect")
-    with peer("h2", cert, key) as (server, origin):
-        run(token_file, origin, "-", "tls-failure")
-        assert not server.calls and not server.errors
-    with peer("h2", wrong, wrong_key) as (server, origin):
-        run(token_file, origin, wrong, "tls-failure")
-        assert not server.calls and not server.errors
-    print("Untrusted CA and wrong hostname: no HTTP request reached the peer")
+def main():
+    with tempfile.TemporaryDirectory(prefix="cetta-telegram-") as tmp:
+        directory = pathlib.Path(tmp)
+        token_file = directory / "token"
+        print(run(token_file))
+        cert, key = certificate(directory, "local", "127.0.0.1")
+        wrong, wrong_key = certificate(directory, "wrong-host", "127.0.0.2")
+        for label, protocol, tls in (("HTTP/1.1", "http/1.1", False),
+                                     ("HTTPS/1.1", "http/1.1", True),
+                                     ("HTTPS/2", "h2", True)):
+            with peer(protocol, cert if tls else None, key if tls else None) as (server, origin):
+                run(token_file, origin, cert if tls else "-")
+                assert not server.errors, server.errors
+                assert collections.Counter(x[0] for x in server.calls) == collections.Counter(range(1, 7)), server.calls
+                ids = {item: connection for item, connection, _, _ in server.calls}
+                assert len({ids[1], ids[2], ids[3], ids[4], ids[6]}) == 5, ids
+                assert ids[4] == ids[5], "trusted poll did not reuse its connection"
+                if tls:
+                    assert server.negotiated and set(server.negotiated) == {protocol}
+                print(f"{label}: complete requests 1..6 once each; dropped reply stays ambiguous; distinct effect connections, poll reuse, no redirect")
+        with peer("h2", cert, key) as (server, origin):
+            run(token_file, origin, "-", "tls-failure")
+            assert not server.calls and not server.errors
+        with peer("h2", wrong, wrong_key) as (server, origin):
+            run(token_file, origin, wrong, "tls-failure")
+            assert not server.calls and not server.errors
+        print("Untrusted CA and wrong hostname: no HTTP request reached the peer")
+
+
+if __name__ == "__main__":
+    main()

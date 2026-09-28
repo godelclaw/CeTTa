@@ -68,6 +68,13 @@ CettaDurableStatus cetta_durable_open(const char *path,
     const CettaDurableLimits *limits, CettaDurableStore **out);
 void cetta_durable_close(CettaDurableStore *store);
 
+/* The file lock excludes other processes; this guard also excludes a second
+ * operational runtime sharing this handle. Attach before recovery/startup;
+ * detach only after all owner threads have stopped, before closing the store.
+ * A native identity, never a serialized/evaluator capability. */
+CettaDurableStatus cetta_durable_attach_runtime(CettaDurableStore *store, const void *owner);
+CettaDurableStatus cetta_durable_detach_runtime(CettaDurableStore *store, const void *owner);
+
 /* Copies a consistent snapshot, releasing the connection before returning.
  * NULL space reads all named spaces. Even filtered reads carry the global
  * revision: committing with it validates absence and range reads too. */

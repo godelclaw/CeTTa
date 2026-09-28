@@ -388,7 +388,7 @@ ifneq ($(filter $(ENABLE_DURABLE),0 1),$(ENABLE_DURABLE))
 $(error ENABLE_DURABLE must be 0 or 1)
 endif
 ifeq ($(ENABLE_DURABLE),1)
-DURABLE_SRC += src/durable_store.c src/durable_value.c src/durable_host.c
+DURABLE_SRC += src/durable_store.c src/durable_value.c src/durable_host.c src/durable_dispatch.c
 ifeq ($(SQLITE_PROVIDER),vendored)
 DURABLE_CFLAGS += -Ivendor/sqlite -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DQS=0 -DSQLITE_OMIT_SHARED_CACHE -DSQLITE_DEFAULT_MEMSTATUS=0
 DURABLE_SRC += vendor/sqlite/sqlite3.c
@@ -38209,5 +38209,23 @@ test-durable-host: $(DURABLE_HOST_TEST_BIN)
 else
 test-durable-host:
 	@echo "test-durable-host requires ENABLE_DURABLE=1" >&2
+	@exit 1
+endif
+
+.PHONY: test-durable-dispatch
+ifeq ($(ENABLE_DURABLE)$(HTTP_PROVIDER_CURL),11)
+DURABLE_DISPATCH_TEST_BIN = runtime/test-durable-dispatch-$(BUILD_OBJ_TAG)
+DURABLE_DISPATCH_TEST_OBJ = runtime/bootstrap/test-durable-dispatch.$(BUILD_OBJ_TAG).o
+-include $(DURABLE_DISPATCH_TEST_OBJ:.o=.d)
+$(DURABLE_DISPATCH_TEST_OBJ): tests/test_durable_dispatch.c $(BUILD_CONFIG_HEADER)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -MF $(@:.o=.d) -c $< -o $@
+$(DURABLE_DISPATCH_TEST_BIN): $(DURABLE_DISPATCH_TEST_OBJ) $(FALLBACK_EVAL_TEST_LINK_OBJ) $(BRIDGE_DEPS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+test-durable-dispatch: $(DURABLE_DISPATCH_TEST_BIN)
+	python3 tests/test_durable_dispatch.py $(DURABLE_DISPATCH_TEST_BIN)
+else
+test-durable-dispatch:
+	@echo "test-durable-dispatch requires ENABLE_DURABLE=1 and native HTTP" >&2
 	@exit 1
 endif
