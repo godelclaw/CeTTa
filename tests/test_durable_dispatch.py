@@ -19,13 +19,22 @@ class DurablePeer(Peer):
     def __init__(self, *args):
         self.received_crash = threading.Event()
         self.release_crash = threading.Event()
+        self.polls = []
+        self.effect_during_poll = threading.Event()
         super().__init__(*args)
 
     def receipt(self, connection, method, path, body):
         parsed = json.loads(body)
+        if path == f"/bot{TOKEN}/getUpdates":
+            assert method == "POST" and parsed == {"offset": 0, "limit": 1, "timeout": 0, "allowed_updates": []}
+            self.polls.append(parsed)
+            assert self.effect_during_poll.wait(5), "long poll blocked outgoing effect"
+            return 200, [], b'{"ok":true,"result":[]}'
         assert parsed["chat_id"] == "approved-chat"
         assert method == "POST" and path == f"/bot{TOKEN}/sendMessage"
         item = parsed["request"]
+        if item == 1:
+            self.effect_during_poll.set()
         with self.lock:
             self.calls.append((item, connection))
         if item == 2:
@@ -64,6 +73,7 @@ with tempfile.TemporaryDirectory(prefix="cetta-durable-dispatch-") as tmp:
             db = root / f"normal-{i}.db"
             args = [str(token), origin, str(cert) if tls else "-"]
             checked(subprocess.run([BIN, "normal", str(db), *args], env=env, capture_output=True, text=True, timeout=40))
+            assert len(server.polls) == 1
             counts = collections.Counter(x[0] for x in server.calls)
             for item in (1, 2, 3, 8, 9):
                 assert counts[item] == 1, counts

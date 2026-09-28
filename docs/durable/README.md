@@ -497,9 +497,72 @@ closed-value codec's per-value bounds.
 
 `make BUILD=core ENABLE_DURABLE=1 test-durable-inbox` covers these rules,
 capacity-failure rollback and process death before/after the batch commit.
-This native API is not exposed to worker proposals. The HTTP poll owner must
-still bind requests to its window and validate/screen provider data before
-calling it; this module alone is not a receiving service.
+This native API is not exposed to worker proposals. The dispatcher binds HTTP
+polls to these windows as described below. Provider schema validation and
+classification still require the trusted application policy; this module
+alone is not a receiving service.
+
+### Polls on the shared HTTP owner
+
+`cetta_dispatch_poll` opens an inbox window and constructs `getUpdates` using
+its committed offset. The caller cannot supply an offset or raw request body.
+Native configuration supplies the credential, stable source, update types,
+limit and long-poll duration. Types are bounded identifiers and always sent
+explicitly; an empty list selects Telegram's documented default exclusions,
+not every update type. The HTTP timeout must exceed the long-poll duration by
+at least one second. These are host-only interfaces, unavailable to proposals.
+
+The dispatcher uses its existing I/O owner for sends and receives. It refuses
+a second active poll for a source, and a saved response blocks subsequent
+polls until classified. The host must map each actual bot to exactly one
+stable source across aliases and credential rotations. This local check does
+not fence an unrelated deployment polling the same bot.
+
+Before any provider response becomes visible to the evaluator, the owner
+screens it and commits a native CDV1 record under `host.polls/source`:
+
+```metta
+(host:poll 1 "source" requested-offset kind
+  (started cancelled curl-code http-status request-size-known request-size
+   response-too-large response-budget-exceeded allocation-failed)
+  "response-body")
+```
+
+Recording is guarded by the exact original cursor and absence of a saved
+response. It never advances the cursor. The hook uses native bytes, without
+interning symbols or constructing arena atoms on the I/O thread. The same
+bounded recording retries, minimal-fact fallback and degraded-health callback
+used for outgoing effects apply here. A suppressed or unrecordable response
+makes no assertion about Telegram's update list.
+
+`cetta_inbox_recover_poll` opens a window on both the committed cursor and saved
+response. Trusted policy validates the complete provider schema, verifies the
+source/offset envelope, and classifies every update before calling
+`cetta_inbox_commit`. That transaction validates the exact response revision,
+inserts occurrences and inbox references, advances the cursor, and removes the
+saved response together. An empty classified response is also consumed
+transactionally. Failed classification or commit leaves the response pending.
+The next poll can therefore acknowledge only durable occurrences.
+
+If the service dies before recording, it polls again from the committed
+cursor. If it dies after recording but before classification, it processes the
+saved response first. After a successful classification commit, recovery uses
+the advanced cursor. This follows Telegram's acknowledgment rule: a poll with
+an offset beyond an update confirms it. [Telegram getUpdates](https://core.telegram.org/bots/api#getupdates).
+
+Malformed responses, rate-limit results, unsupported updates and uncertain
+poll outcomes remain policy inputs. They are not automatically treated as an
+empty update list or permission to advance. Retry schedules and backoff must
+be recorded by the service policy, without requiring a cognitive turn.
+
+`make BUILD=core ENABLE_HTTP=1 ENABLE_DURABLE=1 test-durable-poll` exercises
+HTTP/1.1, HTTPS/1.1 and negotiated HTTP/2 with fake credentials. It checks
+cursor binding, held responses, exact-response validation, secret reflection,
+lost replies, minimal recording, rate-limit and malformed-response retention,
+capacity rollback and process death on both sides of response recording.
+The dispatch fixture also overlaps receiving and sending on one owner.
+The poll fixture classifies exact known mock bodies; it does not qualify a
+production Telegram parser, routing policy or retry scheduler.
 
 ## Durable timers
 

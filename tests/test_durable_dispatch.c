@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "durable_dispatch.h"
+#include "durable_inbox.h"
 #include "durable_host.h"
 #include "durable_value.h"
 #include "library.h"
@@ -150,6 +151,8 @@ int main(int argc, char **argv) {
         for (;;) pause(); /* Harness SIGKILLs after the mock fully received it. */
     } else {
         assert(!strcmp(argv[1],"normal"));
+        CettaTelegramPoll poll={credential,"bot",0,1,NULL,0};
+        assert(cetta_dispatch_poll(d,&poll)==DURABLE_OK);
         for (unsigned i=1;i<=3;++i) {
             char key[64]; accept(i,"1",key);
             assert(cetta_dispatch_submit(d,key)==DURABLE_OK);
@@ -162,6 +165,19 @@ int main(int argc, char **argv) {
             consume(key,a);
             assert(cetta_dispatch_submit(d,key)==DURABLE_PRECONDITION);
         }
+        CettaInboxWindow *window=NULL; uint64_t poll_generation=0;
+        for (unsigned i=0;!window && i<100;++i) {
+            CettaDurableStatus status=cetta_inbox_recover_poll(store,"bot",&window);
+            assert(status==DURABLE_OK || status==DURABLE_PRECONDITION);
+            if (!window) poll_generation=cetta_dispatch_wait(d,poll_generation,100);
+        }
+        assert(window && cetta_inbox_offset(window)==0);
+        const CettaDurableRecord *r=cetta_inbox_poll_response(window); Atom *response=NULL;
+        assert(cetta_durable_value_decode(&persistent,r->data,r->size,&response)==DURABLE_OK);
+        assert(!strcmp(string(response->expr.elems[6]),"{\"ok\":true,\"result\":[]}"));
+        CettaInboxCommit received;
+        assert(cetta_inbox_commit(window,NULL,0,&received)==DURABLE_OK && received.next_offset==0);
+        cetta_inbox_window_free(window);
         char key[64]; accept(4,"2",key);
         assert(cetta_dispatch_submit(d,key)==DURABLE_VERSION && !get("host.attempts",key));
         assert(cetta_dispatch_cancel(d,key)==DURABLE_OK);

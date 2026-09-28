@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "durable_dispatch.h"
+#include "durable_inbox.h"
 #include "durable_value.h"
 #include <pthread.h>
 #include <stdio.h>
@@ -20,6 +21,8 @@ typedef struct Job {
     unsigned prepare_failures;
     CettaDurableStatus last_error;
     const CettaDispatchChannel *route;
+    const CettaTelegramCredential *credential;
+    CettaInboxWindow *poll;
 } Job;
 struct CettaDurableDispatch {
     CettaDurableStore *store;
@@ -38,6 +41,12 @@ static CettaDurableField text(const char *s) {
 static CettaDurableField symbol(const char *s) { CettaDurableField f=text(s); f.kind=DURABLE_FIELD_SYMBOL; return f; }
 static CettaDurableField integer(int64_t x) { return (CettaDurableField){.kind=DURABLE_FIELD_INT,.integer=x}; }
 static CettaDurableField boolean(bool x) { return (CettaDurableField){.kind=DURABLE_FIELD_BOOL,.boolean=x}; }
+static void http_metadata(const CettaHttpResult *r, CettaDurableField fields[9]) {
+    CettaDurableField values[]={boolean(r->started),boolean(r->cancelled),integer(r->transport_code),
+        integer(r->status),boolean(r->request_size_known),integer(r->request_size),
+        boolean(r->response_too_large),boolean(r->response_budget_exceeded),boolean(r->allocation_failed)};
+    memcpy(fields,values,sizeof(values));
+}
 static CettaDurableStatus envelope(CettaDurableField *f, size_t n, CettaDurableOp *op) {
     CettaDurableField v={.kind=DURABLE_FIELD_EXPR,.expression={f,n}};
     unsigned char *data=NULL; size_t size=0;
@@ -48,7 +57,7 @@ static CettaDurableStatus envelope(CettaDurableField *f, size_t n, CettaDurableO
 static const char *string(const Atom *a) {
     return a && a->kind==ATOM_GROUNDED && a->ground.gkind==GV_STRING?a->ground.sval:NULL;
 }
-static void dispose(Job *j) { if (j) { free(j->intent); free(j); } }
+static void dispose(Job *j) { if (j) { cetta_inbox_window_free(j->poll); free(j->intent); free(j); } }
 /* Only the main/evaluator thread decodes atoms. Worker hooks compare the exact
  * validated envelope bytes/revision, which includes channel name and version. */
 static CettaDurableStatus load(const CettaDurableSnapshot *v, Job *j, Arena *a, Atom **intent) {
@@ -105,9 +114,7 @@ static CettaDurableStatus outcome(CettaDurableStore *store, const Job *j,
     CettaHttpResult empty={0}; if (!r) r=&empty;
     CettaDurableOp ops[2]={{DURABLE_INSERT,"host.outcomes",j->key,NULL,0},
         {DURABLE_INSERT,"host.inbox",j->completion,NULL,0}};
-    CettaDurableField metadata[]={boolean(r->started),boolean(r->cancelled),integer(r->transport_code),
-        integer(r->status),boolean(r->request_size_known),integer(r->request_size),
-        boolean(r->response_too_large),boolean(r->response_budget_exceeded),boolean(r->allocation_failed)};
+    CettaDurableField metadata[9]; http_metadata(r,metadata);
     if (unknown) for (size_t i=0;i<9;++i) metadata[i]=symbol("unknown");
     CettaDurableField f[]={symbol("host:outcome"),integer(1),text(j->effect),
         text(view(o,1)->count?j->attempt:""),symbol(kind),
@@ -140,6 +147,9 @@ static CettaHttpPrepare prepare(void *ctx, uint64_t id) {
     CettaDurableDispatch *d=ctx;
     pthread_mutex_lock(&d->mutex); Job *j=find(d,id); pthread_mutex_unlock(&d->mutex);
     if (!j) return HTTP_PREPARE_DROP;
+    /* A getUpdates offset only acknowledges already committed input. Its
+     * repeat safety is host-owned; no application proposal can choose it. */
+    if (j->poll) return HTTP_PREPARE_READY;
     CettaDurableObservation *o=NULL;
     CettaDurableStatus s=observe(d->store,j,&o);
     bool done=false;
@@ -170,13 +180,24 @@ static CettaHttpRecord record(void *ctx, const CettaHttpResult *r, CettaHttpReco
     if (r->started && (r->transport_code || r->response_too_large || r->response_budget_exceeded || r->allocation_failed)) kind="uncertain";
     if (mode==HTTP_RECORD_MINIMAL || (size && memchr(body,0,size))) {
         kind=r->started?"unrecordable":"not-started"; body=NULL; size=0;
-    } else if (!cetta_telegram_response_safe(j->route->credential,body,size)) {
+    } else if (!cetta_telegram_response_safe(j->credential,body,size)) {
         kind="privacy-suppressed"; body=NULL; size=0;
     }
-    CettaDurableObservation *o=NULL;
-    CettaDurableStatus s=observe(d->store,j,&o);
-    if (s==DURABLE_OK) s=outcome(d->store,j,o,kind,r,body,size);
-    cetta_durable_observation_free(o);
+    CettaDurableStatus s;
+    if (j->poll) {
+        CettaDurableField metadata[9]; http_metadata(r,metadata);
+        CettaDurableField f[]={symbol("host:poll"),integer(1),text(cetta_inbox_source(j->poll)),
+            integer(cetta_inbox_offset(j->poll)),symbol(kind),
+            {.kind=DURABLE_FIELD_EXPR,.expression={metadata,9}},
+            {.kind=DURABLE_FIELD_TEXT,.text={body,size}}};
+        CettaDurableOp op={0}; s=envelope(f,7,&op);
+        if (s==DURABLE_OK) s=cetta_inbox_record_poll(j->poll,op.data,op.size);
+        free((void *)op.data);
+    } else {
+        CettaDurableObservation *o=NULL; s=observe(d->store,j,&o);
+        if (s==DURABLE_OK) s=outcome(d->store,j,o,kind,r,body,size);
+        cetta_durable_observation_free(o);
+    }
     if (s==DURABLE_OK) { retire(d,j); return HTTP_RECORD_ACK; }
     j->last_error=s;
     return mode==HTTP_RECORD_FULL && (s==DURABLE_LIMIT || s==DURABLE_INVALID)?HTTP_RECORD_USE_MINIMAL:HTTP_RECORD_RETRY;
@@ -219,8 +240,8 @@ CettaDurableStatus cetta_dispatch_new(CettaDurableStore *store,
         const CettaDispatchConfig *c, CettaDurableDispatch **out) {
     if (!out) return DURABLE_INVALID;
     *out=NULL;
-    if (!store || !c || !c->degraded || !c->channel_count || c->channel_count>DISPATCH_CHANNELS ||
-        !c->channels || !c->timeout_ms || !c->max_response_bytes || c->max_response_bytes>DISPATCH_RESPONSE) return DURABLE_INVALID;
+    if (!store || !c || !c->degraded || c->channel_count>DISPATCH_CHANNELS ||
+        (c->channel_count && !c->channels) || !c->timeout_ms || !c->max_response_bytes || c->max_response_bytes>DISPATCH_RESPONSE) return DURABLE_INVALID;
     for (size_t i=0;i<c->channel_count;++i) {
         const CettaDispatchChannel *r=&c->channels[i];
         if (!name(r->name) || !name(r->version) || !r->credential || !r->plan) return DURABLE_INVALID;
@@ -233,7 +254,7 @@ CettaDurableStatus cetta_dispatch_new(CettaDurableStore *store,
     CettaDurableStatus s=cetta_durable_attach_runtime(store,d);
     if (s!=DURABLE_OK) goto fail;
     s=DURABLE_NOMEM;
-    if (!d->channels) goto fail;
+    if (c->channel_count && !d->channels) goto fail;
     for (size_t i=0;i<c->channel_count;++i) {
         d->channels[i]=c->channels[i];
         d->channels[i].name=strdup(c->channels[i].name);
@@ -262,6 +283,7 @@ CettaDurableStatus cetta_dispatch_submit(CettaDurableDispatch *d, const char *ke
     for (size_t i=0;i<d->config.channel_count;++i)
         if (!strcmp(j->channel,d->channels[i].name) && !strcmp(j->version,d->channels[i].version)) j->route=&d->channels[i];
     if (!j->route) { s=DURABLE_VERSION; goto done; }
+    j->credential=j->route->credential;
     CettaTelegramPlan plan={0};
     if (!j->route->plan(j->route->context,&a,p->expr.elems[4],p->expr.elems[5],&plan)) { s=DURABLE_INVALID; goto done; }
     pthread_mutex_lock(&d->mutex);
@@ -274,6 +296,38 @@ CettaDurableStatus cetta_dispatch_submit(CettaDurableDispatch *d, const char *ke
     else { retire(d,j); j=NULL; s=h==HTTP_WORKER_FULL?DURABLE_LIMIT:h==HTTP_WORKER_NOMEM?DURABLE_NOMEM:DURABLE_INVALID; }
 done:
     dispose(j); arena_free(&a); return s;
+}
+CettaDurableStatus cetta_dispatch_poll(CettaDurableDispatch *d, const CettaTelegramPoll *p) {
+    if (!d || !p || !p->credential || !p->limit || p->limit>100 || p->update_count>64 ||
+        (p->update_count && !p->allowed_updates) || d->config.timeout_ms<1000 ||
+        p->wait_seconds>(d->config.timeout_ms-1000)/1000) return DURABLE_INVALID;
+    Job *j=calloc(1,sizeof(*j)); if (!j) return DURABLE_NOMEM;
+    CettaDurableStatus s=cetta_inbox_begin(d->store,p->source,&j->poll);
+    if (s!=DURABLE_OK) { dispose(j); return s; }
+    snprintf(j->key,sizeof(j->key),"poll/%s",cetta_inbox_source(j->poll));
+    if (handle(d,j->key)) { dispose(j); return DURABLE_BUSY; }
+    char body[4608];
+    size_t used=(size_t)snprintf(body,sizeof(body),"{\"offset\":%lld,\"limit\":%u,\"timeout\":%u,\"allowed_updates\":[",
+        (long long)cetta_inbox_offset(j->poll),p->limit,p->wait_seconds);
+    for (size_t i=0;i<p->update_count;++i) {
+        const char *v=p->allowed_updates[i]; size_t n=v?strnlen(v,65):0;
+        if (!n || n>64) { dispose(j); return DURABLE_INVALID; }
+        for (size_t k=0;k<n;++k) if (!((v[k]>='a' && v[k]<='z') || v[k]=='_')) { dispose(j); return DURABLE_INVALID; }
+        if (used+n+4>=sizeof(body)) { dispose(j); return DURABLE_LIMIT; }
+        int added=snprintf(body+used,sizeof(body)-used,"%s\"%s\"",i?",":"",v);
+        used+=(size_t)added;
+    }
+    memcpy(body+used,"]}",2); used+=2;
+    j->credential=p->credential;
+    pthread_mutex_lock(&d->mutex);
+    if (d->count>=DISPATCH_JOBS || !d->next_id) { pthread_mutex_unlock(&d->mutex); dispose(j); return DURABLE_LIMIT; }
+    j->id=d->next_id++; j->next=d->jobs; d->jobs=j; ++d->count;
+    pthread_mutex_unlock(&d->mutex);
+    CettaHttpWorkerStatus h=cetta_telegram_submit_poll(j->credential,d->worker,j->id,body,used,
+        d->config.timeout_ms,d->config.max_response_bytes);
+    if (h==HTTP_WORKER_OK) return DURABLE_OK;
+    retire(d,j);
+    return h==HTTP_WORKER_FULL?DURABLE_LIMIT:h==HTTP_WORKER_NOMEM?DURABLE_NOMEM:DURABLE_INVALID;
 }
 CettaDurableStatus cetta_dispatch_cancel(CettaDurableDispatch *d, const char *key) {
     if (!d || !name(key)) return DURABLE_INVALID;

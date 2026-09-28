@@ -20,7 +20,22 @@ typedef struct { int64_t revision, next_offset; size_t inserted; } CettaInboxCom
 CettaDurableStatus cetta_inbox_begin(CettaDurableStore *store, const char *source,
                                    CettaInboxWindow **out);
 int64_t cetta_inbox_offset(const CettaInboxWindow *window);
+const char *cetta_inbox_source(const CettaInboxWindow *window);
 void cetta_inbox_window_free(CettaInboxWindow *window);
+/* Native I/O owner: persist a screened CDV1 poll response against the window's
+ * exact cursor and empty host.polls slot. Does not advance the remote cursor.
+ * No Atom access; caller serializes this window's lifetime. Success spends it.
+ * A pending response prevents beginning another poll for this source. */
+CettaDurableStatus cetta_inbox_record_poll(CettaInboxWindow *window,
+                                         const void *data, size_t size);
+/* Host thread: reopen a recorded poll for bounded trusted classification.
+ * The returned record belongs to the window. Commit validates this exact
+ * response and removes it atomically with occurrences and cursor advancement,
+ * including an empty classified batch. Failed commits preserve the response.
+ * Provider schema/offset validation and classification remain host policy. */
+CettaDurableStatus cetta_inbox_recover_poll(CettaDurableStore *store, const char *source,
+                                         CettaInboxWindow **out);
+const CettaDurableRecord *cetta_inbox_poll_response(const CettaInboxWindow *window);
 /* Up to 100 items, IDs nonnegative and below INT64_MAX, no contiguity/order
  * assumption. Ledger occurrence, routed inbox reference and cursor commit
  * together. The caller may acknowledge the returned next_offset remotely ONLY

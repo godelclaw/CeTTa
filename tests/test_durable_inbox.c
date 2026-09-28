@@ -122,6 +122,33 @@ int main(int argc, char **argv) {
     conflict[0].id=61; conflict[0].value=atom_var(&arena,"not-closed");
     assert(cetta_inbox_commit(w,conflict,1,&committed)==DURABLE_INVALID);
     cetta_inbox_window_free(w);
+    /* Poll bytes become durable before classification. Neither a stale direct
+     * window nor a second poll may bypass the pending-response slot. */
+    w=begin("poll-bot",0); stale=begin("poll-bot",0);
+    unsigned char *raw=NULL; size_t raw_size=0;
+    assert(cetta_durable_value_encode(atom_string(&arena,"screened response"),&raw,&raw_size)==DURABLE_OK);
+    assert(cetta_inbox_record_poll(w,raw,raw_size)==DURABLE_OK);
+    assert(cetta_inbox_record_poll(w,raw,raw_size)==DURABLE_CONFLICT);
+    assert(cetta_inbox_record_poll(stale,raw,raw_size)==DURABLE_CONFLICT);
+    assert(cetta_inbox_commit(stale,items,1,&committed)==DURABLE_CONFLICT);
+    cetta_inbox_window_free(w); cetta_inbox_window_free(stale);
+    assert(cetta_inbox_begin(store,"poll-bot",&bad)==DURABLE_PRECONDITION && !bad);
+    assert(cetta_inbox_recover_poll(store,"poll-bot",&w)==DURABLE_OK);
+    const CettaDurableRecord *response=cetta_inbox_poll_response(w);
+    assert(response && response->size==raw_size && !memcmp(response->data,raw,raw_size));
+    /* A replacement of the response alone invalidates classification even
+     * though its source cursor and the bytes happen to be unchanged. */
+    CettaDurableSnapshot snapshot;
+    assert(cetta_durable_snapshot(store,"host.polls",&snapshot)==DURABLE_OK);
+    CettaDurableOp replace={DURABLE_REPLACE,"host.polls","poll-bot",raw,raw_size}; int64_t rev;
+    assert(cetta_durable_commit(store,snapshot.epoch,snapshot.revision,&replace,1,&rev)==DURABLE_OK);
+    cetta_durable_snapshot_free(&snapshot); free(raw);
+    assert(cetta_inbox_commit(w,NULL,0,&committed)==DURABLE_CONFLICT && committed.next_offset<0);
+    cetta_inbox_window_free(w);
+    assert(cetta_inbox_recover_poll(store,"poll-bot",&w)==DURABLE_OK);
+    assert(cetta_inbox_commit(w,items,4,&committed)==DURABLE_OK && committed.next_offset==44);
+    cetta_inbox_window_free(w);
+    assert(!get("host.polls","poll-bot"));
     assert(cetta_durable_checkpoint(store)==DURABLE_OK); cetta_durable_close(store);
     assert(cetta_durable_open(path,NULL,&store)==DURABLE_OK);
     w=begin("bot",50); cetta_inbox_window_free(w);

@@ -31,6 +31,14 @@ typedef struct {
      * without a store/dispatcher lock. No evaluator calls or dispatcher free. */
     void (*degraded)(void *context, const char *outbox_key, CettaDurableStatus status);
 } CettaDispatchConfig;
+typedef struct {
+    const CettaTelegramCredential *credential; /* outlives dispatcher jobs */
+    const char *source; /* stable bot identity, not its token */
+    uint32_t wait_seconds;
+    unsigned limit; /* 1..100 */
+    const char *const *allowed_updates;
+    size_t update_count; /* 0 supplies [], never inherits ambient server policy */
+} CettaTelegramPoll;
 
 /* One dispatcher per store, owned by the service. Create after acquiring the
  * store's lifetime OS lock and BEFORE admitting any transport. Claims without
@@ -44,6 +52,14 @@ CettaDurableStatus cetta_dispatch_new(CettaDurableStore *store,
  * a separately accepted intent, not another call on the old key. */
 CettaDurableStatus cetta_dispatch_submit(CettaDurableDispatch *dispatcher,
                                        const char *outbox_key);
+/* Native host only: offset is read from the durable inbox cursor, never from
+ * a proposal. One outstanding or unclassified poll per source. Uses the same
+ * HTTP owner as effects. Screened responses go to host.polls before visibility;
+ * recover/classify with durable_inbox, then commit before polling again.
+ * wait_seconds must leave at least one second within the HTTP timeout.
+ * A receive-only dispatcher may have an empty effect-channel registry. */
+CettaDurableStatus cetta_dispatch_poll(CettaDurableDispatch *dispatcher,
+                                     const CettaTelegramPoll *poll);
 /* Unclaimed -> definitive not-started outcome and completion, atomically.
  * Claimed -> durable cancellation request, then best-effort transport signal.
  * Existing observations are retained. No promise to undo remote execution. */
