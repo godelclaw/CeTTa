@@ -91,6 +91,13 @@ static Job *find_job(CettaHttpWorker *w, uint64_t id) {
 }
 
 static void free_job(Job *j) {
+    /* URLs may hold bearer credentials. Volatile stores also work on libc
+     * targets without explicit_bzero; this covers our copy, not curl's. */
+    if (j->request.url) {
+        volatile char *url=(volatile char *)j->request.url;
+        size_t n=strlen(j->request.url);
+        while (n--) *url++=0;
+    }
     free((char *)j->request.method); free((char *)j->request.url);
     free((char *)j->request.proxy); free((char *)j->request.ca_file);
     for (size_t i=0;i<j->request.header_count;++i) free((char *)j->request.headers[i]);

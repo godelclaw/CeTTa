@@ -28,7 +28,8 @@ void cetta_telegram_credential_free(CettaTelegramCredential *credential);
 
 /* Trusted host entry points, not evaluator builtins. Application authorization
  * and method policy remain the host's responsibility. Effects never opt into
- * repeat safety. getUpdates is reserved to the separate host poll entry.
+ * repeat safety. getUpdates is reserved to the separate host poll entry;
+ * setWebhook/deleteWebhook/logOut/close are refused (case-insensitively).
  * Origin, redirects, proxy and TLS policy cannot come from a proposal. */
 CettaHttpWorkerStatus cetta_telegram_submit_effect(
     const CettaTelegramCredential *credential, CettaHttpWorker *worker,
@@ -40,7 +41,8 @@ CettaHttpWorkerStatus cetta_telegram_submit_poll(
     uint32_t timeout_ms, size_t max_response);
 
 /* Screen before journaling or constructing evaluator atoms. Recognizes the
- * literal token, percent-escaped bytes and JSON ASCII Unicode escapes, in a
+ * secret suffix after the colon (also present in the full token), including
+ * percent-escaped bytes and JSON ASCII Unicode escapes, in a
  * linear bounded scan. False means suppress the body and record a minimal
  * privacy outcome, not a fabricated API success/failure. This is not a general
  * information-flow guarantee against a malicious server encoding its secrets.

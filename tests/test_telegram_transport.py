@@ -47,7 +47,7 @@ class Peer(socketserver.ThreadingTCPServer):
         if item == 2:
             return None  # The effect happened; no response survives.
         if item == 3:
-            return 200, [], json.dumps({"ok": False, "description": TOKEN}).encode()
+            return 200, [], json.dumps({"ok": False, "description": TOKEN.split(":", 1)[1]}).encode()
         if item == 6:
             return 307, [("location", f"http://127.0.0.1:{self.server_address[1]}/redirected")], b""
         return 200, [], b'{"ok":true,"result":[]}'
@@ -168,7 +168,7 @@ def run(*args):
         env[key] = "http://127.0.0.1:1"
     env["NO_PROXY"] = env["no_proxy"] = ""
     result = subprocess.run([BIN, *map(str, args)], capture_output=True, text=True, timeout=30, env=env)
-    assert TOKEN not in result.stdout + result.stderr, "credential leaked into diagnostics"
+    assert TOKEN.split(":", 1)[1] not in result.stdout + result.stderr, "credential leaked into diagnostics"
     assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
     return result.stdout.strip()
 

@@ -13,7 +13,7 @@
 
 struct CettaTelegramCredential {
     char token[TOKEN_MAX+1];
-    size_t token_size;
+    size_t token_size, secret_offset;
     uint16_t prefix[TOKEN_MAX];
     char *origin, *ca_file;
 };
@@ -96,13 +96,15 @@ CettaTelegramCredentialStatus cetta_telegram_credential_read(
     CettaTelegramCredential *c=calloc(1,sizeof(*c));
     if (!c) { status=TELEGRAM_CREDENTIAL_NOMEM; goto done; }
     memcpy(c->token,bytes,used); c->token_size=used;
+    c->secret_offset=(size_t)(strchr(c->token,':')-c->token)+1;
     c->origin=strdup(origin); c->ca_file=ca?strdup(ca):NULL;
     if (!c->origin || (ca && !c->ca_file)) {
         cetta_telegram_credential_free(c); status=TELEGRAM_CREDENTIAL_NOMEM; goto done;
     }
-    for (size_t i=1,k=0;i<used;++i) {
-        while (k && c->token[i]!=c->token[k]) k=c->prefix[k-1];
-        if (c->token[i]==c->token[k]) ++k;
+    const char *secret=c->token+c->secret_offset;
+    for (size_t i=1,k=0;i<used-c->secret_offset;++i) {
+        while (k && secret[i]!=secret[k]) k=c->prefix[k-1];
+        if (secret[i]==secret[k]) ++k;
         c->prefix[i]=(uint16_t)k;
     }
     *out=c; status=TELEGRAM_CREDENTIAL_OK;
@@ -126,7 +128,11 @@ static CettaHttpWorkerStatus submit(const CettaTelegramCredential *c,
         if (!letter(*p)) return HTTP_WORKER_INVALID;
     for (const unsigned char *p=(const unsigned char *)content_type;*p;++p)
         if (*p<32 || *p>=127) return HTTP_WORKER_INVALID;
-    if (!poll && !strcasecmp(method,"getUpdates")) return HTTP_WORKER_INVALID;
+    /* These change intake/ownership or bot availability. Even an authorized
+     * send capability must not be able to redirect or discard future input. */
+    const char *admin[]={"getUpdates","setWebhook","deleteWebhook","logOut","close"};
+    if (!poll) for (size_t i=0;i<sizeof(admin)/sizeof(*admin);++i)
+        if (!strcasecmp(method,admin[i])) return HTTP_WORKER_INVALID;
     char url[ORIGIN_MAX+TOKEN_MAX+80];
     size_t n=strlen(c->origin), m=strlen(method);
     memcpy(url,c->origin,n); memcpy(url+n,"/bot",4); n+=4;
@@ -161,6 +167,8 @@ static int hex(unsigned char c) {
 }
 bool cetta_telegram_response_safe(const CettaTelegramCredential *c, const void *body, size_t n) {
     if (!c || (n && !body) || n>RESPONSE_MAX) return false;
+    const char *secret=c->token+c->secret_offset;
+    size_t secret_size=c->token_size-c->secret_offset;
     const unsigned char *s=body; size_t matched=0;
     for (size_t i=0;i<n;) {
         unsigned char b=s[i++]; int hi,lo;
@@ -170,8 +178,8 @@ bool cetta_telegram_response_safe(const CettaTelegramCredential *c, const void *
                    (hi=hex(s[i+3]))>=0 && (lo=hex(s[i+4]))>=0) {
             b=(unsigned char)(hi*16+lo); i+=5;
         }
-        while (matched && b!=(unsigned char)c->token[matched]) matched=c->prefix[matched-1];
-        if (b==(unsigned char)c->token[matched] && ++matched==c->token_size) return false;
+        while (matched && b!=(unsigned char)secret[matched]) matched=c->prefix[matched-1];
+        if (b==(unsigned char)secret[matched] && ++matched==secret_size) return false;
     }
     return true;
 }

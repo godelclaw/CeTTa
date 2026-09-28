@@ -255,17 +255,21 @@ proxy/CA settings, with their copied bytes charged to its admission budget.
 
 Effects use the default fresh, non-reusable transport. The separate host poll
 entry alone opts into reuse for `getUpdates`; an effect cannot select that
-method. Application permissions, supported methods, routing and retry decisions
-remain the host and MeTTa/rho protocol library's responsibility.
+method, `setWebhook`, `deleteWebhook`, `logOut` or `close`, regardless of case.
+These control update delivery or bot availability and require operator action.
+The host still enforces positive method and chat-routing allowlists. Application
+permissions and retry decisions remain the host and MeTTa/rho library's responsibility.
 
 Before journaling a response or constructing any evaluator atoms, the host must
 call `cetta_telegram_response_safe`. It performs a bounded linear scan for the
-literal token and percent/JSON ASCII-Unicode escaped spellings. On reflection,
+secret suffix after the colon, including percent/JSON ASCII-Unicode escaped
+spellings. This also catches the full token. On reflection,
 suppress the body and record a minimal privacy outcome: the remote operation's
 success remains unknown. This is defense against accidental reflection, not
 information-flow security against an adversarial server's arbitrary encoding.
 Provider schema validation is still required. Private URL buffers owned by the
-adapter are erased; this does not promise erasure of every copy inside curl/TLS.
+adapter and worker are erased; this does not promise erasure of every copy
+inside curl/TLS. The service must disable core dumps (`LimitCORE=0` under systemd).
 
 `make BUILD=core ENABLE_HTTP=1 test-telegram-transport` uses only fake credentials
 and loopback peers. Its Python fixture requires `h2` and `openssl`. It qualifies

@@ -39,6 +39,8 @@ static void unit(const char *path) {
     assert(lseek(fd,0,SEEK_CUR)==3);
     assert(cetta_telegram_response_safe(c,"{\"ok\":true}",11));
     assert(!cetta_telegram_response_safe(c,token,sizeof(token)-1));
+    const char *secret=strchr(token,':')+1;
+    assert(!cetta_telegram_response_safe(c,secret,strlen(secret)));
     char encoded[6*sizeof(token)+1]; size_t used=0;
     for (size_t i=0;i<sizeof(token)-1;++i)
         used+=(size_t)sprintf(encoded+used,"\\u%04x",(unsigned char)token[i]);
@@ -54,6 +56,17 @@ static void unit(const char *path) {
     for (size_t i=0;i<sizeof(token)-1;++i)
         used+=(size_t)sprintf(encoded+used,"%%%02x",(unsigned char)token[i]);
     assert(!cetta_telegram_response_safe(c,encoded,used));
+    used=0;
+    for (size_t i=0;secret[i];++i)
+        used+=(size_t)sprintf(encoded+used,"\\u%04x",(unsigned char)secret[i]);
+    assert(!cetta_telegram_response_safe(c,encoded,used));
+    used=0;
+    for (size_t i=0;secret[i];++i)
+        used+=(size_t)sprintf(encoded+used,"%%%02x",(unsigned char)secret[i]);
+    assert(!cetta_telegram_response_safe(c,encoded,used));
+    assert(cetta_telegram_response_safe(c,secret,strlen(secret)-1));
+    snprintf(encoded,sizeof(encoded),"%.12s-%s",secret,secret);
+    assert(!cetta_telegram_response_safe(c,encoded,strlen(encoded)));
     assert(!cetta_telegram_response_safe(c,NULL,1));
     assert(!cetta_telegram_response_safe(c,"x",8u*1024u*1024u+1));
     cetta_telegram_credential_free(c);
@@ -93,6 +106,10 @@ int main(int argc, char **argv) {
     assert(cetta_telegram_submit_effect(c,w,1,"../sendMessage","application/json","{}",2,2000,4096)==HTTP_WORKER_INVALID);
     assert(cetta_telegram_submit_effect(c,w,1,"getUpdates","application/json","{}",2,2000,4096)==HTTP_WORKER_INVALID);
     assert(cetta_telegram_submit_effect(c,w,1,"GETUPDATES","application/json","{}",2,2000,4096)==HTTP_WORKER_INVALID);
+    const char *admin[]={"setWebhook","deleteWebhook","logOut","close",
+        "SETWEBHOOK","DELETEWEBHOOK","LOGOUT","CLOSE","sEtWeBhOoK"};
+    for (size_t i=0;i<sizeof(admin)/sizeof(*admin);++i)
+        assert(cetta_telegram_submit_effect(c,w,1,admin[i],"application/json","{}",2,2000,4096)==HTTP_WORKER_INVALID);
     assert(cetta_telegram_submit_effect(c,w,1,"sendMessage","application/json\r\nX: bad","{}",2,2000,4096)==HTTP_WORKER_INVALID);
     if (argc==5) {
         assert(!strcmp(argv[4],"tls-failure"));
