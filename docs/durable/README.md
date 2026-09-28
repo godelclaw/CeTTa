@@ -1071,3 +1071,76 @@ These are the integrated scheduler and process tests, not a production launcher
 or the existing cognitive loop adapter. Supervisor units, operator controls,
 explicit hold repair and the remaining Telegram interface are still required
 for a live application.
+
+## Standalone Telegram service
+
+`make BUILD=core ENABLE_HTTP=1 ENABLE_DURABLE=1 telegram-service` builds
+`runtime/cetta-telegram-service-<build-tag>`. This executable links the native
+service and scheduler; Python is not required. It loads only the fixed
+`durable:telegram_agent` program from an explicit trusted installation root,
+with the HE extended profile. It accepts no program file, expression, profile
+selection, durable admin capability or worker-selected policy.
+
+Use `--help` for configuration. `--check` validates the private state directory,
+credential and installed policy without opening the journal, taking ownership
+of the listener, or constructing transport. `--run` explicitly starts the owner.
+The root must contain the matching `lib/` tree and remain immutable and
+unwritable by cognitive workers. Paths are absolute; the caller's working
+directory does not participate in module lookup. Environment variables do not
+supply credentials, chats, policy paths or bot identities.
+
+Supply a credential by private regular file (`--credential-file`) or inherited
+regular descriptor (`--credential-fd`). Tokens never appear in command-line
+arguments. The process disables core dumps and dumpability before loading the
+credential. Diagnostic lines contain only fixed component names and status
+codes, never response bodies or command-line values. Production transport uses
+Telegram's HTTPS origin with system trust; `--mock-origin` accepts only numeric
+IPv4 loopback with an explicit port. A test CA may accompany a mock origin;
+TLS verification remains enabled. Proxy environment settings remain disabled
+by the native credential adapter.
+
+The bot's public numeric token prefix determines its stable source identity;
+secret rotation preserves that identity. The journal binds that source, the
+worker name and the service schema on first run. An incompatible restart is
+refused before recovering or dispatching work. Renaming the worker or changing
+bots requires a deliberate migration/new state directory, never an automatic
+reassignment of pending work. Chat permissions remain an explicit positive
+list, rechecked at acceptance and dispatch. This entry currently enables text
+sends only: its edit/delete permission is withheld until message-ownership
+policy is integrated.
+
+The service adopts an already listening, private filesystem Unix seqpacket
+socket. Pass `--listener-fd`, or provide exactly one systemd activation descriptor
+with the current `LISTEN_PID`. The socket mode must exclude group/other access;
+peer credentials must match the service UID. The parent supervisor owns the
+socket across process restarts. Same-UID IPC admission is not a sandbox against
+a malicious process running under that UID; deployment permissions remain part
+of the trust boundary. One service/journal/source must own a bot. A second
+journal does not fence another process using the same external credential.
+
+`deploy/systemd/cetta-telegram.{socket,service}` are **uninstalled user-unit
+examples**. Replace the deliberately invalid chat `0`, choose the installation
+root and provide the credential file before use. The socket is private and
+survives service restarts. Start the service explicitly, not just its socket:
+Telegram polling must begin even while cognition is absent. `LoadCredential`
+passes the secret via a private file; `LimitCORE=0` accompanies the process's own
+restriction. Restart backoff and rate limits belong to systemd. A configuration
+failure (78) or usage error (64) is not automatically retried. SIGTERM stops the
+loop and joins the transport owner before closing the journal. A forced kill
+leaves durable attempts for uncertainty recovery.
+
+The launcher checks journal usage once per second and checkpoints deltas at
+half the configured default history limit. Checkpointing preserves all current
+records, including unresolved work; it is not semantic retention or deletion.
+The existing defaults bound live data, journal pages, batches and pending
+queues. Exhaustion stops the process visibly. Retention and a persistent
+pending-work index still need long-running qualification.
+
+`test-telegram-service` runs this executable, not a fixture replacement. It
+checks inert validation, malformed/duplicate options, credential/directory/
+socket permissions, inherited credentials, the systemd descriptor protocol,
+source/worker mismatch refusal, and worker/service recovery over HTTP/1.1,
+HTTPS/1.1 and negotiated HTTP/2. No units are installed by tests. The full
+cognitive adapter, operator controls, hold repair and remaining Telegram
+interface are subsequent integration work; this entry is not yet a complete
+replacement for an existing agent.

@@ -18,6 +18,14 @@ struct CettaTelegramCredential {
     char *origin, *ca_file;
 };
 
+bool cetta_telegram_credential_source(const CettaTelegramCredential *c, char out[65]) {
+    if (!c || !out) return false;
+    memcpy(out,"telegram-",9);
+    size_t n=c->secret_offset-1;
+    memcpy(out+9,c->token,n); out[9+n]=0;
+    return true;
+}
+
 static void erase(void *bytes, size_t n) {
     volatile unsigned char *p=bytes;
     while (n--) *p++=0;

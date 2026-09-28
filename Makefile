@@ -38409,3 +38409,23 @@ test-telegram-scheduler:
 	@echo "test-telegram-scheduler requires ENABLE_DURABLE=1, native HTTP and ENABLE_JSON_GSLT=1" >&2
 	@exit 1
 endif
+
+.PHONY: telegram-service test-telegram-service
+ifeq ($(ENABLE_DURABLE)$(HTTP_PROVIDER_CURL)$(ENABLE_JSON_GSLT),111)
+TELEGRAM_SERVICE_BIN = runtime/cetta-telegram-service-$(BUILD_OBJ_TAG)
+TELEGRAM_SERVICE_OBJ = runtime/bootstrap/telegram-service.$(BUILD_OBJ_TAG).o
+-include $(TELEGRAM_SERVICE_OBJ:.o=.d)
+$(TELEGRAM_SERVICE_OBJ): src/telegram_service_main.c $(BUILD_CONFIG_HEADER)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -MF $(@:.o=.d) -c $< -o $@
+$(TELEGRAM_SERVICE_BIN): $(TELEGRAM_SERVICE_OBJ) $(FALLBACK_EVAL_TEST_LINK_OBJ) $(BRIDGE_DEPS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+telegram-service: $(TELEGRAM_SERVICE_BIN)
+	@echo "Built $(TELEGRAM_SERVICE_BIN)"
+test-telegram-service: $(TELEGRAM_SERVICE_BIN)
+	python3 tests/test_telegram_service.py $(TELEGRAM_SERVICE_BIN)
+else
+telegram-service test-telegram-service:
+	@echo "telegram-service requires ENABLE_DURABLE=1, native HTTP and ENABLE_JSON_GSLT=1" >&2
+	@exit 1
+endif

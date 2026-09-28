@@ -25,6 +25,10 @@ CettaTelegramCredentialStatus cetta_telegram_credential_read(
     int fd, const CettaTelegramCredentialConfig *config,
     CettaTelegramCredential **out);
 void cetta_telegram_credential_free(CettaTelegramCredential *credential);
+/* Stable native routing identity, derived from the public numeric bot id.
+ * Token rotation preserves it. Never includes the secret token suffix. */
+bool cetta_telegram_credential_source(const CettaTelegramCredential *credential,
+                                      char source[65]);
 
 /* Trusted host entry points, not evaluator builtins. Application authorization
  * and method policy remain the host's responsibility. Effects never opt into

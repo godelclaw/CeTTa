@@ -1,0 +1,226 @@
+#define _GNU_SOURCE
+#include "telegram_scheduler.h"
+#include "durable_value.h"
+#include "cetta_stdlib.h"
+#include "library.h"
+#include "symbol.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/prctl.h>
+#include <sys/resource.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#include <unistd.h>
+
+enum { USAGE=64, CONFIG=78, FAILURE=1 };
+typedef struct {
+    const char *root, *directory, *worker, *credential, *origin, *ca;
+    int token_fd, listener;
+    int64_t chats[128]; size_t count;
+    bool run, check;
+} Config;
+static volatile sig_atomic_t stopped;
+static void stop(int sig) { (void)sig; stopped=1; }
+static void fault(void *unused, const char *component, CettaDurableStatus s) {
+    (void)unused; fprintf(stderr,"cetta-telegram: %s: %s\n",component,cetta_durable_status_name(s));
+}
+static void app_fault(void *unused, const char *component, const char *key, CettaDurableStatus s) {
+    (void)key; fault(unused,component,s);
+}
+static void http_fault(void *unused, const char *key, CettaDurableStatus s) {
+    (void)key; fault(unused,"transport-record",s);
+}
+static int error(const char *stage, int status) {
+    fprintf(stderr,"cetta-telegram: %s failed\n",stage); return status;
+}
+static bool number(const char *s, int64_t lo, int64_t hi, int64_t *out) {
+    if (!s || !*s || *s=='+' || (*s=='-' && !s[1])) return false;
+    for (const char *p=s+(*s=='-');*p;++p) if (*p<'0' || *p>'9') return false;
+    errno=0; char *end; long long n=strtoll(s,&end,10);
+    if (errno || *end || n<lo || n>hi) return false;
+    *out=n; return true;
+}
+static bool component(const char *s) {
+    if (!s || !*s || strnlen(s,65)>64) return false;
+    for (;*s;++s) if (!((*s>='a' && *s<='z') || (*s>='A' && *s<='Z') ||
+        (*s>='0' && *s<='9') || *s=='_' || *s=='-' || *s=='.')) return false;
+    return true;
+}
+static void usage(void) {
+    puts("Usage: cetta-telegram-service (--check | --run) --root DIR --state-dir DIR\n"
+         "       --worker NAME --chat ID [--chat ID ...]\n"
+         "       (--credential-file FILE | --credential-fd FD) [--listener-fd FD]\n"
+         "       [--mock-origin http[s]://127.0.0.1:PORT [--ca-file FILE]]\n"
+         "--check loads the fixed policy and validates configuration without opening\n"
+         "the journal, consuming the listener or constructing any transport.\n"
+         "--run requires a private Unix seqpacket listener: explicit fd or one\n"
+         "systemd activation fd. The supervisor owns the socket's lifetime.");
+}
+static bool arguments(int argc, char **argv, Config *c) {
+    *c=(Config){.token_fd=-1,.listener=-1}; unsigned seen=0;
+    const char *names[]={"--root","--state-dir","--worker","--credential-file","--mock-origin","--ca-file",
+                         "--credential-fd","--listener-fd"};
+    const char **strings[]={&c->root,&c->directory,&c->worker,&c->credential,&c->origin,&c->ca};
+    for (int i=1;i<argc;++i) {
+        if (!strcmp(argv[i],"--run")) { if (c->run || c->check) return false; c->run=true; continue; }
+        if (!strcmp(argv[i],"--check")) { if (c->run || c->check) return false; c->check=true; continue; }
+        if (++i==argc) return false;
+        const char *option=argv[i-1], *value=argv[i]; int64_t n;
+        if (!strcmp(option,"--chat")) {
+            if (c->count==128 || !number(value,INT64_MIN,INT64_MAX,&n) || !n) return false;
+            for (size_t j=0;j<c->count;++j) if (c->chats[j]==n) return false;
+            c->chats[c->count++]=n; continue;
+        }
+        size_t j=0; while (j<8 && strcmp(option,names[j])) ++j;
+        if (j==8 || (seen&(1u<<j))) return false;
+        seen|=1u<<j;
+        if (j<6) *strings[j]=value;
+        else {
+            if (!number(value,3,INT32_MAX,&n)) return false;
+            if (j==6) c->token_fd=(int)n; else c->listener=(int)n;
+        }
+    }
+    if ((!c->run && !c->check) || !c->root || c->root[0]!='/' || !c->directory || c->directory[0]!='/' ||
+        !component(c->worker) || !c->count || (!!c->credential==(c->token_fd>=0)) ||
+        (c->credential && c->credential[0]!='/') || (c->ca && (c->ca[0]!='/' || !c->origin)) ||
+        (c->listener>=0 && c->token_fd==c->listener)) return false;
+    /* Custom origins are exclusively numeric loopback fixtures, even for TLS.
+     * The credential adapter validates scheme/port/trailing bytes afterwards. */
+    if (c->origin) {
+        const char *host=!strncmp(c->origin,"https://",8)?c->origin+8:
+                         !strncmp(c->origin,"http://",7)?c->origin+7:NULL;
+        if (!host || strncmp(host,"127.0.0.1:",10)) return false;
+    }
+    return true;
+}
+static bool private_directory(const char *path) {
+    int fd=open(path,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC); struct stat st;
+    bool ok=fd>=0 && !fstat(fd,&st) && st.st_uid==geteuid() && !(st.st_mode&077);
+    if (fd>=0) close(fd);
+    return ok;
+}
+static bool listener_valid(int fd) {
+    struct sockaddr_un addr={0}; socklen_t n=sizeof(addr), len=sizeof(int); struct stat st;
+    int type=0, accepting=0;
+    if (fd<3 || getsockname(fd,(struct sockaddr *)&addr,&n) || addr.sun_family!=AF_UNIX ||
+        n<=offsetof(struct sockaddr_un,sun_path) || n>sizeof(addr) || !memchr(addr.sun_path,0,sizeof(addr.sun_path)) ||
+        addr.sun_path[0]!='/' || getsockopt(fd,SOL_SOCKET,SO_TYPE,&type,&len) || type!=SOCK_SEQPACKET ||
+        getsockopt(fd,SOL_SOCKET,SO_ACCEPTCONN,&accepting,&len) || !accepting ||
+        lstat(addr.sun_path,&st) || !S_ISSOCK(st.st_mode) || st.st_uid!=geteuid() || (st.st_mode&077)) return false;
+    return true;
+}
+static int activation_listener(void) {
+    int64_t pid, count;
+    bool ok=number(getenv("LISTEN_PID"),1,INT32_MAX,&pid) && pid==getpid() &&
+        number(getenv("LISTEN_FDS"),1,1,&count);
+    unsetenv("LISTEN_PID"); unsetenv("LISTEN_FDS"); unsetenv("LISTEN_FDNAMES");
+    return ok?3:-1;
+}
+static CettaDurableStatus bind_identity(CettaDurableStore *store, const char *source, const char *worker) {
+    char identity[180]; int n=snprintf(identity,sizeof(identity),"telegram-service/1|%s|%s",source,worker);
+    CettaDurableField f={.kind=DURABLE_FIELD_TEXT,.text={identity,(size_t)n}};
+    unsigned char *data=NULL; size_t size=0;
+    CettaDurableStatus s=cetta_durable_fields_encode(&f,&data,&size);
+    CettaDurableScope q={DURABLE_KEY,"host.service","telegram"}; CettaDurableObservation *o=NULL;
+    if (s==DURABLE_OK) s=cetta_durable_observe(store,&q,1,&o);
+    if (s==DURABLE_OK) {
+        const CettaDurableSnapshot *v=cetta_durable_observation_view(o,0);
+        if (v->count) s=v->records[0].size==size && !memcmp(v->records[0].data,data,size)?DURABLE_OK:DURABLE_VERSION;
+        else {
+            CettaDurableOp op={DURABLE_INSERT,q.space,q.key,data,size}; int64_t revision;
+            s=cetta_durable_commit_observed(store,o,&op,1,&revision);
+        }
+    }
+    free(data); cetta_durable_observation_free(o); return s;
+}
+int main(int argc,char **argv) {
+    if (argc==2 && !strcmp(argv[1],"--help")) { usage(); return 0; }
+    Config c; if (!arguments(argc,argv,&c)) { usage(); return USAGE; }
+    struct rlimit core={0,0};
+    if (setrlimit(RLIMIT_CORE,&core) || prctl(PR_SET_DUMPABLE,0) || !private_directory(c.directory))
+        return error("process/state isolation",CONFIG);
+    umask(077);
+    if (c.run) {
+        if (c.listener<0) c.listener=activation_listener();
+        if (!listener_valid(c.listener) || c.token_fd==c.listener) return error("listener",CONFIG);
+    }
+    char root[PATH_MAX], database[PATH_MAX];
+    if (!realpath(c.root,root) || chdir(root) ||
+        snprintf(database,sizeof(database),"%s/journal.db",c.directory)>=(int)sizeof(database)) return error("paths",CONFIG);
+    int fd=c.credential?open(c.credential,O_RDONLY|O_NOFOLLOW|O_CLOEXEC):c.token_fd;
+    CettaTelegramCredentialConfig cc={c.origin,c.ca,c.origin!=NULL}; CettaTelegramCredential *credential=NULL;
+    CettaTelegramCredentialStatus cs=cetta_telegram_credential_read(fd,&cc,&credential);
+    if (fd>=0) close(fd);
+    if (cs!=TELEGRAM_CREDENTIAL_OK) return error("credential",CONFIG);
+    char source_id[65]; cetta_telegram_credential_source(credential,source_id);
+    struct sigaction sa={0}; sa.sa_handler=stop; sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGTERM,&sa,NULL) || sigaction(SIGINT,&sa,NULL)) {
+        cetta_telegram_credential_free(credential); return error("signals",FAILURE);
+    }
+    /* Module paths are rooted in the administrator-selected installation, never
+     * the caller's cwd, a worker file or a provider payload. */
+    SymbolTable symbols; symbol_table_init(&symbols); symbol_table_init_builtins(&symbols,&g_builtin_syms); g_symbols=&symbols;
+    VarInternTable vars; var_intern_init(&vars); g_var_intern=&vars;
+    Arena persistent,scratch; arena_init(&persistent); arena_init(&scratch);
+    Space program; space_init(&program); Registry registry; registry_init(&registry);
+    registry_bind(&registry,"&self",atom_space(&persistent,&program));
+    CettaLibraryContext context; cetta_library_context_init(&context);
+    snprintf(context.root_dir,sizeof(context.root_dir),"%s",root);
+    cetta_eval_session_init_he_extended(&context.session); eval_set_library_context(&context); stdlib_load(&program,&persistent);
+    int result=CONFIG; Atom *import_error=NULL; CettaDurableStore *store=NULL;
+    CettaDurableService *service=NULL; CettaTelegramScheduler *scheduler=NULL;
+    if (!cetta_library_import_module(&context,"durable:telegram_agent",&program,false,&scratch,&persistent,&registry,1000000,&import_error)) {
+        error("trusted policy",CONFIG); goto done;
+    }
+    CettaHostProgram trusted={"telegram-agent/1",&program,&context};
+    Atom *ids[128]; for (size_t i=0;i<c.count;++i) ids[i]=atom_int(&persistent,c.chats[i]);
+    Atom *args[]={atom_symbol(&persistent,"telegram:policy"),atom_int(&persistent,1),atom_expr(&persistent,ids,c.count),
+        atom_bool(&persistent,false),atom_expr(&persistent,NULL,0),atom_expr(&persistent,NULL,0)};
+    Atom *policy=atom_expr(&persistent,args,6);
+    CettaTelegramActionPolicy actions={c.chats,c.count,TELEGRAM_SEND_TEXT};
+    if (c.check) { puts("cetta-telegram: configuration and trusted policy valid; dispatch disabled"); result=0; goto done; }
+    if (stopped) { result=0; goto done; }
+    CettaDurableStatus s=cetta_durable_open(database,NULL,&store);
+    if (s==DURABLE_OK) s=bind_identity(store,source_id,c.worker);
+    if (s!=DURABLE_OK) { fault(NULL,"journal identity/open",s); result=s==DURABLE_VERSION?CONFIG:FAILURE; goto done; }
+    const char *updates[]={"message","edited_message","callback_query"};
+    CettaServiceSource source={{credential,source_id,20,100,updates,3},&trusted,policy,2000000};
+    CettaDispatchChannel channel={"telegram.action","1",credential,&actions,cetta_telegram_action_plan};
+    CettaServiceConfig config={{&channel,1,30000,65536,NULL,http_fault},&source,1,c.listener,getuid(),c.worker,NULL,fault};
+    s=cetta_service_new(store,&config,&service);
+    if (s==DURABLE_OK) c.listener=-1;
+    if (s==DURABLE_OK && stopped) { result=0; goto done; }
+    CettaTelegramSchedulerConfig ac={{&trusted,source_id,c.worker,&actions,2000000},256,256,8*1024*1024,NULL,app_fault};
+    if (s==DURABLE_OK) s=cetta_telegram_scheduler_new(store,service,&ac,&scheduler);
+    if (s!=DURABLE_OK) { fault(NULL,"startup",s); result=FAILURE; goto done; }
+    puts("cetta-telegram: ready"); fflush(stdout);
+    uint64_t maintenance=0; CettaDurableLimits limits=cetta_durable_default_limits();
+    while (!stopped) {
+        s=cetta_service_step(service,25);
+        if (stopped) break;
+        if (s==DURABLE_OK) s=cetta_telegram_scheduler_step(scheduler,8);
+        CettaClockSample now;
+        if (s==DURABLE_OK && !cetta_clock_sample(&now)) s=DURABLE_IO;
+        if (s==DURABLE_OK && now.monotonic_ms>=maintenance) {
+            maintenance=now.monotonic_ms+1000; CettaDurableUsage u;
+            s=cetta_durable_usage(store,&u);
+            if (s==DURABLE_OK && u.history_bytes>=(int64_t)(limits.history_bytes/2)) s=cetta_durable_checkpoint(store);
+        }
+        if (s!=DURABLE_OK) { fault(NULL,"runtime",s); break; }
+    }
+    result=s==DURABLE_OK?0:FAILURE;
+ done:
+    cetta_telegram_scheduler_free(scheduler);
+    if (cetta_service_free(service)) { error("unrecorded transport observations",FAILURE); result=FAILURE; }
+    if (c.run && c.listener>=0) close(c.listener);
+    cetta_durable_close(store); cetta_telegram_credential_free(credential);
+    cetta_library_context_free(&context); eval_set_library_context(NULL); registry_free(&registry); space_free(&program);
+    arena_free(&scratch); arena_free(&persistent); var_intern_free(&vars); symbol_table_free(&symbols); g_symbols=NULL; g_var_intern=NULL;
+    return result;
+}
