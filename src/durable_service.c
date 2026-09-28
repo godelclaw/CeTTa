@@ -155,6 +155,21 @@ CettaDurableStatus cetta_service_step(CettaDurableService *s, unsigned max_wait)
 void cetta_service_stats(const CettaDurableService *s, CettaServiceStats *out) {
     if (out) *out=s?s->stats:(CettaServiceStats){0};
 }
+bool cetta_service_binding(const CettaDurableService *s, const char *source,
+        const char *worker, const CettaDispatchChannel *expected) {
+    if (!s || !source || !worker || strcmp(worker,s->config.worker) || !expected ||
+        !expected->name || !expected->version || !expected->plan) return false;
+    const CettaTelegramCredential *credential=NULL;
+    for (size_t i=0;i<s->config.source_count;++i)
+        if (!strcmp(source,s->sources[i].config.poll.source)) credential=s->sources[i].config.poll.credential;
+    if (!credential || (expected->credential && expected->credential!=credential)) return false;
+    for (size_t i=0;i<s->config.dispatch.channel_count;++i) {
+        const CettaDispatchChannel *c=&s->config.dispatch.channels[i];
+        if (!strcmp(c->name,expected->name) && !strcmp(c->version,expected->version) &&
+            c->credential==credential && c->context==expected->context && c->plan==expected->plan) return true;
+    }
+    return false;
+}
 void cetta_service_changed(CettaDurableService *s) { if (s) s->next_timer=0; }
 CettaDurableStatus cetta_service_submit(CettaDurableService *s, const char *key) {
     return !s?DURABLE_INVALID:s->failed!=DURABLE_OK?s->failed:cetta_dispatch_submit(s->dispatch,key);

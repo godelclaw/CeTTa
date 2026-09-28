@@ -356,6 +356,13 @@ static void dependencies(const char *path) {
     CettaDurableObservation *o=observe(s,reads,3);
     assert(cetta_durable_observation_view(o,0)->count==1);
     assert(cetta_durable_observation_view(o,1)->count==0);
+    CettaDurableWatch *watch=NULL;
+    check(cetta_durable_watch_new(o,1,&watch),DURABLE_LIMIT); assert(!watch);
+    check(cetta_durable_watch_new(o,4096,&watch),DURABLE_OK);
+    size_t watch_bytes=cetta_durable_watch_bytes(watch); assert(watch_bytes>0 && watch_bytes<=4096);
+    CettaDurableWatch *exact=NULL;
+    check(cetta_durable_watch_new(o,watch_bytes-1,&exact),DURABLE_LIMIT);
+    check(cetta_durable_watch_new(o,watch_bytes,&exact),DURABLE_OK); cetta_durable_watch_free(exact);
     /* Model a long decision while unrelated input and outcomes keep arriving. */
     for (int i=0;i<200;++i) {
         char key[32]; snprintf(key,sizeof(key),"B:%d",i);
@@ -364,10 +371,14 @@ static void dependencies(const char *path) {
     CettaDurableOp changes[]={put(DURABLE_REPLACE,"state","chat:A","accepted"),
         put(DURABLE_INSERT,"outbox","send:A","reply")};
     int64_t next;
+    check(cetta_durable_watch_current(s,watch),DURABLE_OK);
     check(cetta_durable_commit_observed(s,o,changes,2,&next),DURABLE_OK); assert(next==202);
+    check(cetta_durable_watch_current(s,watch),DURABLE_CONFLICT); cetta_durable_watch_free(watch);
     check(cetta_durable_commit_observed(s,o,changes,2,&next),DURABLE_CONFLICT);
     cetta_durable_observation_free(o); o=observe(s,reads,3);
+    check(cetta_durable_watch_new(o,4096,&watch),DURABLE_OK);
     op=put(DURABLE_INSERT,"inbox","A:1","new human input"); commit(s,&op,1);
+    check(cetta_durable_watch_current(s,watch),DURABLE_CONFLICT); cetta_durable_watch_free(watch);
     check(cetta_durable_commit_observed(s,o,changes,1,&next),DURABLE_CONFLICT);
     cetta_durable_observation_free(o); o=observe(s,reads,3);
     op=put(DURABLE_REMOVE,"state","chat:A",NULL); commit(s,&op,1);
@@ -384,7 +395,12 @@ static void dependencies(const char *path) {
     assert(cetta_durable_observation_view(o,0)->count==56); /* 1,11..19,101..199 odd */
     cetta_durable_observation_free(o);
     prefix.key=""; o=observe(s,&prefix,1); assert(cetta_durable_observation_view(o,0)->count==100);
+    check(cetta_durable_watch_new(o,16384,&watch),DURABLE_OK);
     cetta_durable_observation_free(o); replay_equal(s); cetta_durable_close(s);
+    s=open_store(path,NULL); check(cetta_durable_watch_current(s,watch),DURABLE_OK); cetta_durable_close(s);
+    char other[512]; snprintf(other,sizeof(other),"%s.other",path);
+    s=open_store(other,NULL); check(cetta_durable_watch_current(s,watch),DURABLE_CONFLICT);
+    cetta_durable_close(s); unlink(other); cetta_durable_watch_free(watch);
 }
 
 static void coherent_read_mode(const char *path, bool recover) {

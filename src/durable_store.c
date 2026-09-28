@@ -481,6 +481,67 @@ static CettaDurableStatus validate_observation(CettaDurableStore *s, const Cetta
     return DURABLE_OK;
 }
 
+struct CettaDurableWatch { CettaDurableObservation *observation; size_t bytes; };
+void cetta_durable_watch_free(CettaDurableWatch *w) {
+    if (w) { cetta_durable_observation_free(w->observation); free(w); }
+}
+size_t cetta_durable_watch_bytes(const CettaDurableWatch *w) { return w?w->bytes:0; }
+CettaDurableStatus cetta_durable_watch_new(const CettaDurableObservation *o,
+        size_t limit, CettaDurableWatch **out) {
+    if (!out) return DURABLE_INVALID;
+    *out=NULL;
+    if (!o || !o->count) return DURABLE_INVALID;
+    size_t used=sizeof(CettaDurableWatch)+sizeof(*o);
+    if (used>limit || o->count>(limit-used)/(sizeof(*o->scopes)+sizeof(*o->views))) return DURABLE_LIMIT;
+    used+=o->count*(sizeof(*o->scopes)+sizeof(*o->views));
+    for (size_t i=0;i<o->count;++i) {
+        size_t n=strlen(o->scopes[i].space)+strlen(o->scopes[i].key)+2;
+        if (n>limit-used) return DURABLE_LIMIT;
+        used+=n;
+        if (o->views[i].count>(limit-used)/sizeof(CettaDurableRecord)) return DURABLE_LIMIT;
+        used+=o->views[i].count*sizeof(CettaDurableRecord);
+        for (size_t j=0;j<o->views[i].count;++j) {
+            n=strlen(o->views[i].records[j].key)+1;
+            if (n>limit-used) return DURABLE_LIMIT;
+            used+=n;
+        }
+    }
+    CettaDurableWatch *w=calloc(1,sizeof(*w));
+    if (!w) return DURABLE_NOMEM;
+    w->observation=calloc(1,sizeof(*o)); w->bytes=used;
+    if (!w->observation) { cetta_durable_watch_free(w); return DURABLE_NOMEM; }
+    CettaDurableObservation *copy=w->observation;
+    copy->count=o->count; copy->scopes=calloc(o->count,sizeof(*copy->scopes)); copy->views=calloc(o->count,sizeof(*copy->views));
+    if (!copy->scopes || !copy->views) goto nomem;
+    for (size_t i=0;i<o->count;++i) {
+        copy->scopes[i]=(CettaDurableScope){o->scopes[i].kind,strdup(o->scopes[i].space),strdup(o->scopes[i].key)};
+        if (!copy->scopes[i].space || !copy->scopes[i].key) goto nomem;
+        CettaDurableSnapshot *v=&copy->views[i]; const CettaDurableSnapshot *src=&o->views[i];
+        memcpy(v->epoch,src->epoch,sizeof(v->epoch)); v->revision=src->revision;
+        v->records=src->count?calloc(src->count,sizeof(*v->records)):NULL;
+        if (src->count && !v->records) goto nomem;
+        for (size_t j=0;j<src->count;++j) {
+            v->records[j].key=strdup(src->records[j].key); v->records[j].revision=src->records[j].revision;
+            ++v->count;
+            if (!v->records[j].key) goto nomem;
+        }
+    }
+    *out=w; return DURABLE_OK;
+nomem:
+    cetta_durable_watch_free(w); return DURABLE_NOMEM;
+}
+CettaDurableStatus cetta_durable_watch_current(CettaDurableStore *s, const CettaDurableWatch *w) {
+    if (!s || !w) return DURABLE_INVALID;
+    pthread_mutex_lock(&s->mutex);
+    CettaDurableStatus result=s->poisoned?DURABLE_POISONED:store_status(s,exec(s,"BEGIN"),false);
+    char epoch[33]; int64_t rev,bytes,records,history;
+    if (result==DURABLE_OK) result=store_status(s,meta(s,epoch,&rev,&bytes,&records,&history),false);
+    if (result==DURABLE_OK && strcmp(epoch,w->observation->views[0].epoch)) result=DURABLE_CONFLICT;
+    if (result==DURABLE_OK) result=validate_observation(s,w->observation);
+    if (result==DURABLE_OK) result=store_status(s,exec(s,"COMMIT"),false);
+    rollback(s); pthread_mutex_unlock(&s->mutex); return result;
+}
+
 static int checkpoint_locked(CettaDurableStore *s) {
     return exec(s, "DELETE FROM checkpoint; INSERT INTO checkpoint SELECT * FROM records;"
         "DELETE FROM deltas; UPDATE meta SET checkpoint_revision=revision,history_bytes=0 WHERE id=1;");

@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "telegram_agent.h"
+#include "durable_eval.h"
 #include "durable_inbox.h"
 #include "durable_worker_host.h"
 #include "durable_value.h"
@@ -57,15 +58,19 @@ static bool forbidden_batch(const CettaHostDecision *d, const CettaTelegramActio
     }
     return forbidden;
 }
+bool cetta_telegram_agent_valid(const CettaTelegramAgent *c) {
+    return c && c->program && c->program->version && !strcmp(c->program->version,"telegram-agent/1") &&
+        c->program->context && c->program->space && component(c->source) && component(c->worker) &&
+        c->actions && c->actions->chats && c->actions->chat_count && c->actions->chat_count<=128 &&
+        !(c->actions->methods&~7u) && c->fuel>0 && c->fuel<=2000000 &&
+        c->program->context->session.language_id==CETTA_LANGUAGE_HE && c->program->context->session.profile &&
+        c->program->context->session.profile->id==CETTA_PROFILE_HE_EXTENDED;
+}
 CettaDurableStatus cetta_telegram_agent_decide(CettaDurableStore *store,
         const CettaTelegramAgent *c, const char *input_key, CettaHostDecision **out) {
     if (!out) return DURABLE_INVALID;
     *out=NULL;
-    if (!store || !c || !c->program || !c->program->version || strcmp(c->program->version,"telegram-agent/1") ||
-        !c->program->context || !c->program->space || !component(c->source) || !component(c->worker) ||
-        !c->actions || c->fuel<=0 || c->fuel>2000000 ||
-        c->program->context->session.language_id!=CETTA_LANGUAGE_HE || !c->program->context->session.profile ||
-        c->program->context->session.profile->id!=CETTA_PROFILE_HE_EXTENDED) return DURABLE_INVALID;
+    if (!store || !cetta_telegram_agent_valid(c)) return DURABLE_INVALID;
     Arena a; arena_init(&a);
     CettaDurableObservation *initial=NULL, *origin=NULL, *intent=NULL;
     Atom *input=NULL, *prior=NULL, *request=NULL, *call=NULL;
@@ -152,5 +157,65 @@ CettaDurableStatus cetta_telegram_agent_decide(CettaDurableStore *store,
 done:
     cetta_host_decision_free(decision);
     cetta_durable_observation_free(initial); cetta_durable_observation_free(origin); cetta_durable_observation_free(intent);
+    arena_free(&a); return s;
+}
+
+CettaDurableStatus cetta_telegram_agent_admit(CettaDurableStore *store,
+        const CettaTelegramAgent *c, const char *key, size_t budget,
+        CettaTelegramAdmission *admission, CettaDurableWatch **watch) {
+    if (!admission || !watch) return DURABLE_INVALID;
+    *admission=TELEGRAM_WAIT; *watch=NULL;
+    if (!store || !cetta_telegram_agent_valid(c)) return DURABLE_INVALID;
+    Arena a; arena_init(&a); Atom *intent=NULL;
+    CettaDurableObservation *initial=NULL, *o=NULL; CettaHostEvaluation *e=NULL;
+    CettaDurableStatus s=read(store,"host.outbox",key,&a,&initial,&intent);
+    if (s!=DURABLE_OK) goto done;
+    if (!form(intent,"host:intent",6) || !text(intent->expr.elems[2]) || !text(intent->expr.elems[3])) {
+        s=DURABLE_CORRUPT; goto done;
+    }
+    const char *channel=text(intent->expr.elems[2]), *version=text(intent->expr.elems[3]);
+    Atom *payload=intent->expr.elems[4], *reply=intent->expr.elems[5];
+    if (!strcmp(channel,"worker.request")) {
+        if (!form(reply,"tg-agent:return",7) || !text(reply->expr.elems[2]) || strcmp(text(reply->expr.elems[2]),c->source)) {
+            *admission=TELEGRAM_FOREIGN; goto done;
+        }
+        if (strcmp(version,"1")) { s=DURABLE_VERSION; goto done; }
+        if (!cetta_worker_validate((void *)c->worker,payload,reply)) { s=DURABLE_INVALID; goto done; }
+        *admission=TELEGRAM_WORKER; goto done;
+    }
+    if (strcmp(channel,"telegram.action")) { *admission=TELEGRAM_FOREIGN; goto done; }
+    if (strcmp(version,"1") || !form(reply,"tg-agent:sent",7) || !text(reply->expr.elems[2]) ||
+        strcmp(text(reply->expr.elems[2]),c->source) || !component(text(reply->expr.elems[3]))) {
+        s=DURABLE_VERSION; goto done;
+    }
+    char actor[160]; snprintf(actor,sizeof(actor),"telegram/%s/%s",c->source,text(reply->expr.elems[3]));
+    CettaDurableScope q[]={{DURABLE_KEY,"host.outbox",key},{DURABLE_KEY,"host.actors",actor},
+        {DURABLE_KEY,"host.attempts",key},{DURABLE_KEY,"host.outcomes",key}};
+    s=cetta_durable_observe(store,q,4,&o); if (s!=DURABLE_OK) goto done;
+    if (!same(cetta_durable_observation_view(initial,0),cetta_durable_observation_view(o,0))) { s=DURABLE_CONFLICT; goto done; }
+    if (cetta_durable_observation_view(o,3)->count) { *admission=TELEGRAM_DONE; goto done; }
+    s=cetta_durable_watch_new(o,budget,watch); if (s!=DURABLE_OK) goto done;
+    if (cetta_durable_observation_view(o,2)->count) goto done;
+    if (!cetta_telegram_action_validate((void *)c->actions,payload,reply)) { s=DURABLE_INVALID; goto done; }
+    s=cetta_host_eval_create(c->program,&e); if (s!=DURABLE_OK) goto done;
+    for (size_t i=0;i<2;++i) {
+        const CettaDurableSnapshot *v=cetta_durable_observation_view(o,i);
+        if (!v->count) continue;
+        Atom *value=NULL; s=cetta_durable_value_decode(&e->persistent,v->records[0].data,v->records[0].size,&value);
+        if (s!=DURABLE_OK) goto done;
+        Atom *fact[]={atom_symbol(&e->persistent,"host:record"),atom_int(&e->persistent,(int64_t)i),
+            atom_string(&e->persistent,v->records[0].key),value};
+        space_add(&e->space,atom_expr(&e->persistent,fact,4));
+    }
+    Atom *head=atom_symbol(&a,"tg-agent:dispatchable");
+    s=cetta_host_eval_run(e,c->program,atom_expr(&a,&head,1),c->fuel); if (s!=DURABLE_OK) goto done;
+    const EvalOutcome *out=&e->outcome;
+    if (out->completion!=CETTA_EVAL_COMPLETE || out->effect_denials || out->results.len!=1 ||
+        out->results.items[0]->kind!=ATOM_GROUNDED || out->results.items[0]->ground.gkind!=GV_BOOL) {
+        s=DURABLE_PRECONDITION; goto done;
+    }
+    if (out->results.items[0]->ground.bval) *admission=TELEGRAM_SEND;
+done:
+    cetta_host_eval_free(e); cetta_durable_observation_free(o); cetta_durable_observation_free(initial);
     arena_free(&a); return s;
 }

@@ -57,6 +57,7 @@ typedef struct {
     const char *space, *key; /* prefix may be empty; space scope ignores key */
 } CettaDurableScope;
 typedef struct CettaDurableObservation CettaDurableObservation;
+typedef struct CettaDurableWatch CettaDurableWatch;
 
 CettaDurableLimits cetta_durable_default_limits(void);
 const char *cetta_durable_status_name(CettaDurableStatus status);
@@ -95,6 +96,16 @@ CettaDurableStatus cetta_durable_observe(CettaDurableStore *store,
 const CettaDurableSnapshot *cetta_durable_observation_view(
     const CettaDurableObservation *observation, size_t index);
 void cetta_durable_observation_free(CettaDurableObservation *observation);
+/* Metadata-only dependency watch: owns scope/key/revision copies, no values.
+ * Not a commit capability. OK means unchanged, CONFLICT means re-observe.
+ * Checking is a short read transaction; unrelated writes do not wake it.
+ * max_bytes bounds retained allocation, including repeated/overlapping scopes. */
+CettaDurableStatus cetta_durable_watch_new(const CettaDurableObservation *observation,
+    size_t max_bytes, CettaDurableWatch **out);
+CettaDurableStatus cetta_durable_watch_current(CettaDurableStore *store,
+    const CettaDurableWatch *watch);
+size_t cetta_durable_watch_bytes(const CettaDurableWatch *watch);
+void cetta_durable_watch_free(CettaDurableWatch *watch);
 CettaDurableStatus cetta_durable_commit_observed(CettaDurableStore *store,
     const CettaDurableObservation *observation, const CettaDurableOp *ops,
     size_t count, int64_t *published_revision);

@@ -16,6 +16,15 @@
       (((host:actor 1 "telegram-agent/1" $state)) $state)
       ($other (tg-agent:held invalid-actor)))))
 
+; Dispatch query: view 0 = accepted intent, 1 = current actor. Only the
+; expected position is eligible; native admission also checks attempts/outcomes.
+(= (tg-agent:dispatchable)
+   (match &self (host:record 0 $key (host:intent 1 "telegram.action" "1" $action
+     (tg-agent:sent 1 $source $lane $batch $position $count)))
+     (case (tg-agent:state)
+       (((tg-agent:sending $batch $position $count) True)
+        ($other False)))))
+
 ; A selected reaction passes its proposal through a real rho COMM before the
 ; host sees it. External dispatch still occurs only after durable acceptance.
 (= (tg-agent:reaction $proposal)

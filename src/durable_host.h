@@ -67,6 +67,10 @@ CettaDurableStatus cetta_host_evaluate(CettaHostDecision *decision,
     const CettaHostProgram *program, Atom *expression, int fuel);
 /* Borrowed inspection only; invalidated by re-evaluation or decision free. */
 const EvalOutcome *cetta_host_outcome(const CettaHostDecision *decision);
+/* Wake a blocked decision only after its dependencies change. Copies metadata
+ * only, so the decision and evaluation can be freed immediately afterward. */
+CettaDurableStatus cetta_host_watch(const CettaHostDecision *decision,
+    size_t max_bytes, CettaDurableWatch **out);
 
 /* Accept only this ticket's stored evaluation. Incomplete/denied evaluation
  * is rejected. The host selects one alternative and records its index.

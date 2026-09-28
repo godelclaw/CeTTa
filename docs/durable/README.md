@@ -1001,8 +1001,8 @@ an idle actor.
 Transitions pass through a rho COMM before returning to the host. A busy or
 held reaction may return literal `Empty`, which is not an acceptable transition;
 the host keeps the input pending. The native entry does not commit or dispatch.
-The application scheduler must admit only the current position's action and
-surface held lanes without repeatedly evaluating them. General supervisor
+The application scheduler below admits only the current position's action and
+retains held lanes without repeatedly evaluating them. General supervisor
 controls, explicit hold repair, retries and ordering waivers remain integration
 work. This policy currently covers text send/edit/delete, not full Telegram
 parity or the cognitive worker's existing command vocabulary.
@@ -1013,3 +1013,61 @@ work, out-of-order completions, uncertainty, API response validation, command
 bounds, rejection, unknown versions and fuel/profile boundaries. Inputs and
 outcomes in this policy test are synthetic durable records; network and IPC
 process tests are provided by `test-durable-service` separately.
+
+## Telegram scheduling across process restarts
+
+`telegram_scheduler.h` connects those application reactions to the independently
+running service. On its single evaluator thread it alternates bounded input and
+output visits, accepts only a unique COMPLETE transition, publishes accepted
+worker requests and admits eligible Telegram actions. The fixed MeTTa
+`tg-agent:dispatchable` policy compares the intent with the current batch
+position. Attempts and outcomes are observed alongside it; claimed or completed
+actions are never resubmitted. The dispatcher independently rechecks the exact
+intent, channel version, cancellation and attempt/outcome when claiming.
+Construction checks that the configured bot source, worker, credential route
+and action-policy object agree with the service's native registry.
+
+This ordering contract requires one application-state owner: service callbacks
+record outcomes but never change actors, and administrative actor repair runs
+only with the service stopped. Application reactions and transport admission
+are serialized on the evaluator thread. A newer input cannot replace a sending
+continuation; only its expected completion advances it. These obligations are
+what make the eligibility query valid until the dispatcher claims the action.
+Arbitrary concurrent actor writers would require an additional claim fence.
+
+Blocked decisions retain metadata-only watches of their exact read scopes.
+The evaluation, payload copies and temporary spaces are released. Watches
+compare keys and revisions in a read transaction, including absence/prefix
+dependencies and the journal epoch. They grant no commit authority. Unrelated
+traffic does not cause reevaluation. A changed dependency triggers a fresh
+ticket and policy execution. Malformed or incomplete results are diagnosed and
+parked; they are never converted into successful commitments.
+
+Pending inputs, pending effects and retained watch bytes have explicit limits.
+Resource/storage failures latch and report once; subsequent steps preserve the
+failure. The caller must stop the service and recover after correction, rather
+than continue admitting work. If capacity is exhausted after a batch commits,
+the whole batch remains in the journal; no partial batch acknowledgment or
+rollback is invented. Restart rebuilds pending output from immutable intents.
+Transport queue saturation instead leaves that accepted effect pending for a
+later admission attempt.
+
+The current recovery scan is linear in retained outbox history. Inbox refresh
+copies its bounded current contents when its metadata watch changes and merges
+them with the pending queue. It does not repeatedly copy an unchanged inbox or
+evaluate a blocked policy. Incremental persistent indexes and retention remain
+operational work before long-running production qualification.
+
+`test-telegram-scheduler` runs separate native service and synthetic worker
+processes against HTTP, HTTPS and negotiated HTTP/2. It kills/restarts the
+worker, kills the service after acceptance but before dispatch, and kills it
+after the mock accepts a later send. Accepted-unsent work resumes; ambiguous
+work holds without resending or admitting the next position. Another chat
+continues during a delayed send and after recovery. A capacity fault preserves
+the complete batch and it resumes under adequate limits. A parked-policy
+evaluation bound detects repeated work during an idle interval.
+
+These are the integrated scheduler and process tests, not a production launcher
+or the existing cognitive loop adapter. Supervisor units, operator controls,
+explicit hold repair and the remaining Telegram interface are still required
+for a live application.

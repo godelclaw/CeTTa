@@ -48,6 +48,11 @@ CettaDurableStatus cetta_service_new(CettaDurableStore *store,
 CettaDurableStatus cetta_service_step(CettaDurableService *service,
                                      unsigned max_wait_ms);
 void cetta_service_stats(const CettaDurableService *service, CettaServiceStats *out);
+/* Verify application wiring against this owner's immutable registry: source's
+ * credential, worker identity, handler name/version, context and planner.
+ * expected.credential may be NULL (use that source's credential). */
+bool cetta_service_binding(const CettaDurableService *service, const char *source,
+                          const char *worker, const CettaDispatchChannel *expected);
 /* Application reactions must use host decision tickets. After a successful
  * commit, notify to refresh timer scheduling. These native admission entries
  * preserve the dispatcher's contract: the trusted application chooses ordering,

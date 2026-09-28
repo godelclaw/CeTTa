@@ -92,6 +92,13 @@ static void state(int chat,const char *expected) {
     assert(v && v->kind==ATOM_EXPR && v->expr.len==4);
     if (!atom_eq(v->expr.elems[3],parse(expected))) { fprintf(stderr,"state: "); atom_print(v,stderr); fprintf(stderr,"\nexpected: %s\n",expected); abort(); }
 }
+static void admission(const char *key,CettaTelegramAdmission expected) {
+    CettaTelegramAdmission value; CettaDurableWatch *w=NULL;
+    assert(cetta_telegram_agent_admit(store,&agent,key,1024*1024,&value,&w)==DURABLE_OK);
+    assert(value==expected);
+    if (w) assert(cetta_durable_watch_current(store,w)==DURABLE_OK);
+    cetta_durable_watch_free(w);
+}
 static void pure(Atom *expression,const char *expected) {
     EvalOutcome o; eval_outcome_init(&o);
     eval_top_speculative(&context,&program,&scratch,&persistent,&registry,expression,2000000,&o);
@@ -165,6 +172,7 @@ int main(int argc,char **argv) {
     char db[256]; snprintf(db,sizeof(db),"%s/state.db",dir); assert(cetta_durable_open(db,NULL,&store)==DURABLE_OK);
     char input[168],other[168],request[64],other_request[64],batch[65],other_batch[65],worker_input[140],effect[140],sendkey[64];
     incoming(1,42,input); accept(decide(input,1),1,request);
+    admission(request,TELEGRAM_WORKER);
     state(42,"(tg-agent:waiting \"bot\" \"42.0\" 1 42 0)");
     assert(cetta_worker_register(store,request,"brain",batch)==DURABLE_OK);
     cetta_durable_close(store); assert(cetta_durable_open(db,NULL,&store)==DURABLE_OK);
@@ -181,17 +189,31 @@ int main(int argc,char **argv) {
     accept(d,3,sendkey);
     char expected[180]; snprintf(expected,sizeof(expected),"(tg-agent:sending \"%s\" 0 3)",batch); state(42,expected);
     assert(record("telegram.decisions",batch));
+    admission(sendkey,TELEGRAM_SEND);
+    char nextkey[64]; strcpy(nextkey,sendkey); nextkey[strlen(nextkey)-1]='1';
+    admission(nextkey,TELEGRAM_WAIT);
     incoming(4,42,input); d=decide(input,0); cetta_host_decision_free(d); // Accepted work survives newer input.
+    d=decide(input,0); CettaDurableWatch *watch=NULL;
+    assert(cetta_host_watch(d,1,&watch)==DURABLE_LIMIT && !watch);
+    assert(cetta_host_watch(d,1024*1024,&watch)==DURABLE_OK);
+    cetta_host_decision_free(d);
+    assert(cetta_durable_watch_bytes(watch)>0 && cetta_durable_watch_bytes(watch)<1024*1024);
+    put("unrelated","key",parse("value")); assert(cetta_durable_watch_current(store,watch)==DURABLE_OK);
     char third[64]; strcpy(third,sendkey); third[strlen(third)-1]='2';
     completed(third,"observed","{\"ok\":true,\"result\":true}",effect);
     d=decide(effect,0); cetta_host_decision_free(d); // A later completion cannot jump the lane.
     assert(record("host.inbox",effect) && !record("telegram.deliveries",third));
     completed(sendkey,"observed","{\"ok\":true,\"result\":{\"message_id\":9,\"chat\":{\"id\":42}}}",effect);
     accept(decide(effect,1),0,NULL);
+    assert(cetta_durable_watch_current(store,watch)==DURABLE_CONFLICT); cetta_durable_watch_free(watch);
+    admission(sendkey,TELEGRAM_DONE); admission(nextkey,TELEGRAM_SEND);
+    CettaTelegramAdmission done;
+    assert(cetta_telegram_agent_admit(store,&agent,sendkey,0,&done,&watch)==DURABLE_OK && done==TELEGRAM_DONE && !watch);
     snprintf(expected,sizeof(expected),"(tg-agent:sending \"%s\" 1 3)",batch); state(42,expected);
     char second[64]; strcpy(second,sendkey); second[strlen(second)-1]='1';
     completed(second,"uncertain","",effect); accept(decide(effect,1),0,NULL);
     snprintf(expected,sizeof(expected),"(tg-agent:held \"%s\" 1 3 (tg-agent:uncertain transport))",batch); state(42,expected);
+    admission(nextkey,TELEGRAM_DONE);
     d=decide(input,0); cetta_host_decision_free(d);
     result(other_batch,"[[\"send\",\"old draft\",\"plain\"]]",worker_input);
     size_t before=count("host.outbox"); accept(decide(worker_input,1),0,NULL);

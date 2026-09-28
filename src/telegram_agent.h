@@ -9,6 +9,7 @@ typedef struct {
     const CettaTelegramActionPolicy *actions;
     int fuel;
 } CettaTelegramAgent;
+bool cetta_telegram_agent_valid(const CettaTelegramAgent *agent);
 
 /* Native service entry. Selects only fixed receive/reply/completion functions.
  * Derives exact key/prefix grants from recorded input/origin/intent, then checks
@@ -26,4 +27,17 @@ typedef struct {
  */
 CettaDurableStatus cetta_telegram_agent_decide(CettaDurableStore *store,
     const CettaTelegramAgent *agent, const char *input_key, CettaHostDecision **out);
+
+typedef enum { TELEGRAM_WAIT, TELEGRAM_SEND, TELEGRAM_WORKER, TELEGRAM_DONE, TELEGRAM_FOREIGN }
+    CettaTelegramAdmission;
+/* Fixed pure policy query, not a commit or dispatch. Observes the accepted
+ * intent, actor, attempt and outcome together. An optional metadata watch
+ * lets the scheduler wait without repeating evaluation. The native host must
+ * serialize application transitions and admission on its one evaluator thread;
+ * actor repair requires a stopped service. HTTP callbacks never change actors.
+ * Dispatch still rechecks the immutable intent and attempt/outcome at claim.
+ */
+CettaDurableStatus cetta_telegram_agent_admit(CettaDurableStore *store,
+    const CettaTelegramAgent *agent, const char *outbox_key, size_t watch_budget,
+    CettaTelegramAdmission *admission, CettaDurableWatch **watch);
 #endif

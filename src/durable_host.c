@@ -158,6 +158,9 @@ static CettaDurableStatus encoded(CettaDurableOp *op, const Atom *value) {
 const EvalOutcome *cetta_host_outcome(const CettaHostDecision *d) {
     return d && d->evaluation ? &d->evaluation->outcome : NULL;
 }
+CettaDurableStatus cetta_host_watch(const CettaHostDecision *d, size_t limit, CettaDurableWatch **out) {
+    return cetta_durable_watch_new(d?d->observation:NULL,limit,out);
+}
 CettaDurableStatus cetta_host_eval_create(const CettaHostProgram *program,
                                          CettaHostEvaluation **out) {
     if (!out) return DURABLE_INVALID;
