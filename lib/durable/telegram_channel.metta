@@ -12,6 +12,7 @@
 ;   ["input-too-large", lane, kind, role]
 ;   ["delivery", key, position, count, result]
 ;   ["rejected", key, reason]
+;   ["released", lane, key, position]
 ; with result ["delivered", message-id] | ["failed", code] |
 ; ["not-sent"] | ["uncertain", reason].
 
@@ -129,3 +130,23 @@
                ((durable:worker:request 0 $worker $receipt
                   (tg-channel:notified 1 $source $outkey))))))))
         ($other Empty)))))))
+
+; An operator releases a lane held by uncertain delivery. Views 2 = the
+; immutable request, 3 = its result key (grant 1). Channel 0 = the client,
+; for the notice only. The uncertain action stays uncertain; the rest of its
+; batch is abandoned and the lane takes the next submission. The client is
+; told which action it was, so it can say so rather than assume either way.
+(= (tg-channel:control $worker)
+   (match &self (host:record 0 $input (host:telegram-control 1 $source $id $lane "release-worker" $batch))
+     (match &self (host:record 2 $id (host:telegram-control 1 $source $id $lane "release-worker" $batch))
+       (let $state (tg-channel:state)
+         (if (or (== $state (tg-agent:held invalid-actor))
+                 (not (== (collapse (match &self (host:record 3 $id $prior) True)) ()))) Empty
+           (case $state
+             (((tg-agent:held $batch $position $count $result)
+               (let $notice (format-args "[\"released\",\"{}\",\"{}\",{}]" ($lane $batch $position))
+                 (host:transition (tg-agent:idle)
+                   ((host:put 1 $id (tg-agent:control-result 1 released $batch)))
+                   ((durable:worker:request 0 $worker $notice (tg-channel:notified 1 $source $id))))))
+              ($other (host:transition $state
+                 ((host:put 1 $id (tg-agent:control-result 1 refused $batch))) ())))))))))

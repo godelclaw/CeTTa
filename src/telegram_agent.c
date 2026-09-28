@@ -170,6 +170,22 @@ static CettaDurableStatus channel_decide(CettaDurableStore *store,
                 atom_string(&a,key),atom_symbol(&a,"malformed-key")};
             call=atom_expr(&a,args,5);
         }
+    } else if (form(input,"host:telegram-control",7)) {
+        /* An operator decision about a lane whose last delivery is uncertain.
+         * Separately authorized; the reaction may only notify the client. */
+        Atom **v=input->expr.elems;
+        const char *id=text(v[3]), *control_lane=text(v[4]), *batch=text(v[6]);
+        if (!text(v[2]) || strcmp(text(v[2]),c->source) || !component(id) || !component(batch) ||
+            !cetta_telegram_control_lane(c,control_lane) || !text(v[5]) || strcmp(text(v[5]),"release-worker")) {
+            s=DURABLE_PRECONDITION; goto done;
+        }
+        snprintf(expected,sizeof(expected),"control/%s",id);
+        if (strcmp(expected,input_key)) { s=DURABLE_CORRUPT; goto done; }
+        snprintf(actor,sizeof(actor),"telegram/%s/%s",c->source,control_lane);
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.controls",id},false};
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.control-results",id},true};
+        channels[channel_count++]=worker;
+        call=atom_expr2(&a,atom_symbol(&a,"tg-channel:control"),atom_string(&a,c->worker));
     } else if (form(input,"host:completion",4)) {
         const char *outkey=text(input->expr.elems[3]);
         s=read(store,"host.outbox",outkey,&a,&intent,&request); if (s!=DURABLE_OK) goto done;

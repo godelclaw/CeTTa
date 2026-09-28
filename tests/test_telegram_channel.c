@@ -135,6 +135,14 @@ static void decided(const char *key,const char *expected) {
     Atom *v=record("telegram.decisions",key);
     if (!v || !atom_eq(v,parse(expected))) { fprintf(stderr,"decision %s: ",key); if (v) atom_print(v,stderr); fprintf(stderr,"\nexpected %s\n",expected); abort(); }
 }
+static void control_request(const char *id,const char *lane,const char *batch,char key[80]) {
+    Atom *args[]={atom_symbol(&persistent,"host:telegram-control"),atom_int(&persistent,1),
+        atom_string(&persistent,"bot"),atom_string(&persistent,id),atom_string(&persistent,lane),
+        atom_string(&persistent,"release-worker"),atom_string(&persistent,batch)};
+    Atom *request=atom_expr(&persistent,args,7);
+    snprintf(key,80,"control/%s",id);
+    put("telegram.controls",id,request); put("host.inbox",key,request);
+}
 static const char *ok_message="{\"ok\":true,\"result\":{\"message_id\":9,\"chat\":{\"id\":42}}}";
 
 int main(int argc,char **argv) {
@@ -206,6 +214,20 @@ int main(int argc,char **argv) {
     snprintf(receipt_request,sizeof(receipt_request),"%s/0",commit);
     published(receipt_request,"[\"delivery\",\"42.0.00000000000000000002\",0,1,[\"uncertain\",\"malformed-api-result\"]]",receipt);
     blocked(sub3);
+    /* The operator releases the lane: the uncertain action stays uncertain,
+     * the client is told which one, and the next submission proceeds. */
+    char control[80];
+    control_request("wrong-batch","42.0","42.0.00000000000000000099",control);
+    accept_batch(decide(control,1),0,commit);
+    assert(atom_is_symbol(record("telegram.control-results","wrong-batch")->expr.elems[2],"refused"));
+    lane("42.0","(tg-agent:held \"42.0.00000000000000000002\" 0 1 (tg-agent:uncertain malformed-api-result))");
+    control_request("release-1","42.0","42.0.00000000000000000002",control);
+    accept_batch(decide(control,1),1,commit); lane("42.0","(tg-agent:idle)");
+    assert(atom_is_symbol(record("telegram.control-results","release-1")->expr.elems[2],"released"));
+    snprintf(receipt_request,sizeof(receipt_request),"%s/0",commit);
+    published(receipt_request,"[\"released\",\"42.0\",\"42.0.00000000000000000002\",0]",receipt);
+    control_request("release-1","42.0","42.0.00000000000000000002",control); blocked(control);
+    accept_batch(decide(sub3,1),1,commit); lane("42.0","(tg-agent:sending \"42.0.00000000000000000003\" 0 1)");
 
     /* A chat outside the native policy is rejected with a receipt. */
     submitted("99.0.00000000000000000001","[[\"send\",\"x\",\"plain\"]]",sub);
@@ -227,9 +249,8 @@ int main(int argc,char **argv) {
     submitted("84.0.00000000000000000003","[[\"send\",\"x\",\"plain\"]]",sub); blocked(sub);
     /* Committed work survives a reopen. */
     cetta_durable_close(store); assert(cetta_durable_open(db,NULL,&store)==DURABLE_OK);
-    lane("42.0","(tg-agent:held \"42.0.00000000000000000002\" 0 1 (tg-agent:uncertain malformed-api-result))");
-    blocked(sub3);
-    printf("Telegram channel: %u pure policy checks; deliveries without waiting, acknowledgment-only answers, keyed submissions, lane order, receipts, definitive failure progress, held uncertainty and rejections passed\n",policy_checks);
+    lane("42.0","(tg-agent:sending \"42.0.00000000000000000003\" 0 1)");
+    printf("Telegram channel: %u pure policy checks; deliveries without waiting, acknowledgment-only answers, keyed submissions, lane order, receipts, definitive failure progress, held uncertainty, operator release and rejections passed\n",policy_checks);
     cetta_durable_close(store); unlink(db); char path[300]; snprintf(path,sizeof(path),"%s-wal",db); unlink(path); snprintf(path,sizeof(path),"%s-shm",db); unlink(path); rmdir(dir);
     cetta_library_context_free(&context); eval_set_library_context(NULL); registry_free(&registry); space_free(&program);
     arena_free(&scratch); arena_free(&persistent); var_intern_free(&vars); symbol_table_free(&symbols); g_symbols=NULL; g_var_intern=NULL;
