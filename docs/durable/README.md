@@ -231,8 +231,9 @@ before evaluation and verify that neither a direct nor computed call executes
 it. Other language entries are refused before execution. The normal HE and
 PeTTa corpus paths run with the policy off.
 
-The storage and evaluation layers do not yet supply registered channel
-capabilities or the production Telegram dispatcher.
+The native host below pairs this evaluation boundary with scoped channel
+grants and durable acceptance. The independently supervised Telegram service
+remains integration work.
 
 
 ## Native Telegram credential boundary
@@ -499,3 +500,74 @@ capacity-failure rollback and process death before/after the batch commit.
 This native API is not exposed to worker proposals. The HTTP poll owner must
 still bind requests to its window and validate/screen provider data before
 calling it; this module alone is not a receiving service.
+
+## Durable timers
+
+`durable_timer.h` implements the native `timer.after` channel, version `1`.
+The accepted outbox intent is the timer registration; there is no second
+registration write. `durable:timer:after` and `durable:timer:every` in
+`lib/durable/timer.metta` construct requests from a supplied, recorded clock
+observation. They never read an ambient clock. The native channel validator
+accepts closed payloads and replies of at most 64 KiB each:
+
+```metta
+(timer:at 1 utc-deadline-ms period-ms policy grace-ms value)
+```
+
+Deadlines, periods and grace intervals are nonnegative signed 64-bit
+milliseconds. Period zero means one-shot. The policy is explicit:
+
+- `FireOnce` emits one firing representing all due occurrences and advances
+  beyond the sampled time.
+- `SkipMissed` records a summary of deadlines older than the grace interval.
+  A deadline exactly at the grace boundary still fires. Skipped work is
+  observable, not silently lost.
+- `CatchUpAll` emits individual overdue occurrences, at most eight per timer
+  per tick. A tick admits at most 64 events, with a caller-selected smaller
+  budget and a round-robin cursor so one backlog cannot monopolize admission.
+
+For each timer, one transaction inserts its `host.inbox` observations and
+advances `host.timer-state`, or writes a terminal `host.outcomes` record and
+removes the cursor. Event keys are `timer/effect-id/sequence`, where effect
+identity comes from the accepted intent's epoch, revision and position.
+
+```metta
+(host:timer-event 1 "effect-id" sequence kind scheduled-ms observed-ms
+  represented-count value reply)
+(host:timer-state 1 "effect-id" next-deadline-ms next-sequence observed-ms)
+(host:timer-outcome 1 "effect-id" kind next-sequence observed-ms)
+```
+
+Event kinds are `fired`, `skipped` and `cancelled`. A cancellation records its
+own event with represented count zero and prevents later firings; any earlier
+committed firing remains a fact. Cancelling an already terminal timer is a
+no-op. Concurrent firing and cancellation conflict on their observed state;
+neither overwrites the other. A deadline beyond the integer range ends the
+periodic timer with an `exhausted` outcome instead of wrapping.
+
+Recovery uses the committed cursor/outcome. Consuming a wake-up does not make
+it eligible for delivery again. A failed event transaction cannot advance its
+timer. An unknown commit acknowledgment requires recovery, not an assumed
+failure. Invalid or unsupported timer records are retained and reported by a
+required native fault callback; other timers may continue. Storage failures
+stop admission and report the failure. The host must escalate or back off,
+rather than spin on an unrecordable wake-up.
+
+A forward wall-clock jump makes timers overdue; a backward jump postpones
+firing until the stored UTC deadline is reached. Used time samples are stored
+with the event and cursor. `cetta_timer_wait_ms` derives a monotonic wait from
+a UTC/monotonic sample and caps it at one second, so the service can resample
+wall time and notice new work. It does not perform the wait. Tick/validation
+run on the host's evaluator thread, not the HTTP owner thread.
+
+This initial implementation scans the bounded accepted outbox when ticked;
+the event budget does not bound scan cost. A service may schedule the next
+tick using the returned deadline and admission wake-ups. An incremental timer
+index and retention of completed intents are separate optimizations, and must
+preserve the journal as the authority. The independent service loop is still
+integration work.
+
+`make BUILD=core ENABLE_DURABLE=1 test-durable-timer` covers the accepted
+MeTTa requests, clock jumps, overdue policies and inclusive grace boundary,
+bounded catch-up and fairness, cancellation, integer exhaustion, capacity
+rollback, and process exit/recovery before and after delivery.
