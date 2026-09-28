@@ -151,6 +151,10 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-channel-') as temp:
                 assert proc.returncode == (-signal.SIGKILL if kill else 0), (proc.returncode, out, err)
 
             try:
+                # Hand over from another poller that handled updates up to 40:
+                # the journal's first cursor starts at 41, so 40 is never read.
+                server.add(40, 42, 5)
+                args += ['--initial-offset', '41']
                 proc = start()
                 # Deliveries carry lane, kind and role; the operator is recognized.
                 server.add(41, 42, 7)
@@ -179,6 +183,8 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-channel-') as temp:
                 assert receipt[:4] == ['delivery', '84.0.00000000000000000001', 0, 1] and receipt[4][0] == 'delivered'
                 ack(path, task)
                 assert server.sent == [(42, 'hello'), (84, 'unprompted')], server.sent
+                # A seeded cursor is only a starting point: a later start never moves it.
+                args[args.index('--initial-offset')+1] = '0'
                 # SIGKILL right after a submission; the resubmission after restart
                 # is the same input, so the message goes out exactly once.
                 body = [['send', 'survives', 'plain']]
@@ -209,6 +215,8 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-channel-') as temp:
                 time.sleep(.3)
                 assert (42, 'must wait') not in server.sent and server.sent.count((42, 'lost reply')) == 1
                 assert all(chat in (42, 84) for chat, _ in server.sent)
+                deliveries = [t for t in rows(db, 'host.worker-tasks').values() if b'"input"' in t]
+                assert not any(b'"update_id":40' in t for t in deliveries) and len(deliveries) == 3, deliveries
                 stop(proc)
                 # The journal belongs to this program: the agent cannot adopt it.
                 other = [a if a != 'channel' else 'agent' for a in args]

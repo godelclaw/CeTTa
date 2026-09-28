@@ -25,7 +25,8 @@ typedef struct {
     int token_fd, listener, operator_fd;
     int64_t chats[128]; size_t count;
     int64_t operators[16]; size_t operator_count;
-    bool run, check, channel, program_seen;
+    int64_t initial_offset;
+    bool run, check, channel, program_seen, offset_seen;
 } Config;
 static volatile sig_atomic_t stopped;
 static void stop(int sig) { (void)sig; stopped=1; }
@@ -57,7 +58,7 @@ static bool component(const char *s) {
 static void usage(void) {
     puts("Usage: cetta-telegram-service (--check | --run) --root DIR --state-dir DIR\n"
          "       --worker NAME --chat ID [--chat ID ...] [--operator ID ...]\n"
-         "       [--program agent|channel]\n"
+         "       [--program agent|channel] [--initial-offset N]\n"
          "       (--credential-file FILE | --credential-fd FD) [--listener-fd FD]\n"
          "       [--operator-fd FD]\n"
          "       [--mock-origin http[s]://127.0.0.1:PORT [--ca-file FILE]]\n"
@@ -85,6 +86,10 @@ static bool arguments(int argc, char **argv, Config *c) {
             if (c->operator_count==16 || !number(value,1,INT64_MAX,&n)) return false;
             for (size_t j=0;j<c->operator_count;++j) if (c->operators[j]==n) return false;
             c->operators[c->operator_count++]=n; continue;
+        }
+        if (!strcmp(option,"--initial-offset")) {
+            if (c->offset_seen || !number(value,0,INT64_MAX-1,&n)) return false;
+            c->offset_seen=true; c->initial_offset=n; continue;
         }
         if (!strcmp(option,"--program")) {
             if (c->program_seen || (strcmp(value,"agent") && strcmp(value,"channel"))) return false;
@@ -158,6 +163,26 @@ static CettaDurableStatus bind_identity(CettaDurableStore *store, const char *so
     }
     free(data); cetta_durable_observation_free(o); return s;
 }
+/* Hand over from another poller: start a fresh journal's cursor at the next
+ * update that poller had not yet handled. An existing cursor is authoritative
+ * and is never moved; the host.cursors record is the inbox's own format. */
+static CettaDurableStatus seed_cursor(CettaDurableStore *store, const char *source, int64_t offset) {
+    CettaDurableField f[]={
+        {.kind=DURABLE_FIELD_SYMBOL,.text={"host:cursor",11}},
+        {.kind=DURABLE_FIELD_INT,.integer=1},
+        {.kind=DURABLE_FIELD_TEXT,.text={source,strlen(source)}},
+        {.kind=DURABLE_FIELD_INT,.integer=offset}};
+    CettaDurableField value={.kind=DURABLE_FIELD_EXPR,.expression={f,4}};
+    unsigned char *data=NULL; size_t size=0;
+    CettaDurableStatus s=cetta_durable_fields_encode(&value,&data,&size);
+    CettaDurableScope q={DURABLE_KEY,"host.cursors",source}; CettaDurableObservation *o=NULL;
+    if (s==DURABLE_OK) s=cetta_durable_observe(store,&q,1,&o);
+    if (s==DURABLE_OK && !cetta_durable_observation_view(o,0)->count) {
+        CettaDurableOp op={DURABLE_INSERT,q.space,q.key,data,size}; int64_t revision;
+        s=cetta_durable_commit_observed(store,o,&op,1,&revision);
+    }
+    free(data); cetta_durable_observation_free(o); return s;
+}
 int main(int argc,char **argv) {
     if (argc==2 && !strcmp(argv[1],"--help")) { usage(); return 0; }
     Config c; if (!arguments(argc,argv,&c)) { usage(); return USAGE; }
@@ -224,6 +249,7 @@ int main(int argc,char **argv) {
     if (stopped) { result=0; goto done; }
     CettaDurableStatus s=cetta_durable_open(database,NULL,&store);
     if (s==DURABLE_OK) s=bind_identity(store,source_id,c.worker,c.channel?trusted.version:NULL);
+    if (s==DURABLE_OK && c.offset_seen) s=seed_cursor(store,source_id,c.initial_offset);
     if (s!=DURABLE_OK) { fault(NULL,"journal identity/open",s); result=s==DURABLE_VERSION?CONFIG:FAILURE; goto done; }
     const char *updates[]={"message","edited_message","callback_query"};
     CettaServiceSource source={{credential,source_id,20,100,updates,3},&trusted,policy,2000000};
