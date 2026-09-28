@@ -388,7 +388,7 @@ ifneq ($(filter $(ENABLE_DURABLE),0 1),$(ENABLE_DURABLE))
 $(error ENABLE_DURABLE must be 0 or 1)
 endif
 ifeq ($(ENABLE_DURABLE),1)
-DURABLE_SRC += src/durable_store.c src/durable_value.c src/durable_host.c src/durable_dispatch.c src/durable_inbox.c src/durable_timer.c src/telegram_intake.c src/durable_worker.c src/durable_service.c
+DURABLE_SRC += src/durable_store.c src/durable_value.c src/durable_host.c src/durable_dispatch.c src/durable_inbox.c src/durable_timer.c src/telegram_intake.c src/durable_worker.c src/durable_service.c src/telegram_action.c
 ifeq ($(SQLITE_PROVIDER),vendored)
 DURABLE_CFLAGS += -Ivendor/sqlite -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DQS=0 -DSQLITE_OMIT_SHARED_CACHE -DSQLITE_DEFAULT_MEMSTATUS=0
 DURABLE_SRC += vendor/sqlite/sqlite3.c
@@ -38353,5 +38353,23 @@ test-durable-service: $(DURABLE_SERVICE_TEST_BIN)
 else
 test-durable-service:
 	@echo "test-durable-service requires ENABLE_DURABLE=1, native HTTP and ENABLE_JSON_GSLT=1" >&2
+	@exit 1
+endif
+
+.PHONY: test-telegram-actions
+ifeq ($(ENABLE_DURABLE),1)
+TELEGRAM_ACTIONS_TEST_BIN = runtime/test-telegram-actions-$(BUILD_OBJ_TAG)
+TELEGRAM_ACTIONS_TEST_OBJ = runtime/bootstrap/test-telegram-actions.$(BUILD_OBJ_TAG).o
+-include $(TELEGRAM_ACTIONS_TEST_OBJ:.o=.d)
+$(TELEGRAM_ACTIONS_TEST_OBJ): tests/test_telegram_actions.c $(BUILD_CONFIG_HEADER)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -MF $(@:.o=.d) -c $< -o $@
+$(TELEGRAM_ACTIONS_TEST_BIN): $(TELEGRAM_ACTIONS_TEST_OBJ) $(FALLBACK_EVAL_TEST_LINK_OBJ) $(BRIDGE_DEPS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+test-telegram-actions: $(TELEGRAM_ACTIONS_TEST_BIN)
+	./$(TELEGRAM_ACTIONS_TEST_BIN)
+else
+test-telegram-actions:
+	@echo "test-telegram-actions requires ENABLE_DURABLE=1" >&2
 	@exit 1
 endif

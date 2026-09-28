@@ -2,6 +2,7 @@
 #include "durable_service.h"
 #include "durable_worker_host.h"
 #include "durable_value.h"
+#include "telegram_action.h"
 #include "cetta_stdlib.h"
 #include "library.h"
 #include "parser.h"
@@ -32,19 +33,8 @@ static void http_fault(void *unused, const char *key, CettaDurableStatus status)
     (void)unused; (void)key; assert(status!=DURABLE_OK); atomic_fetch_add(&http_faults,1);
 }
 static Atom *parse(const char *text) { size_t pos=0; Atom *a=parse_sexpr(&persistent,text,&pos); assert(a && pos==strlen(text)); return a; }
-static bool send_allowed(void *unused, const Atom *p, const Atom *reply) {
-    (void)unused; (void)reply;
-    return p && p->kind==ATOM_EXPR && p->expr.len==3 && atom_is_symbol(p->expr.elems[0],"fixture:send") &&
-        p->expr.elems[1]->kind==ATOM_GROUNDED && p->expr.elems[1]->ground.gkind==GV_INT && p->expr.elems[1]->ground.ival==42 &&
-        p->expr.elems[2]->kind==ATOM_GROUNDED && p->expr.elems[2]->ground.gkind==GV_INT &&
-        p->expr.elems[2]->ground.ival>=1 && p->expr.elems[2]->ground.ival<=3;
-}
-static bool plan(void *unused, Arena *arena, const Atom *p, const Atom *reply, CettaTelegramPlan *out) {
-    if (!send_allowed(unused,p,reply)) return false;
-    char text[128]; snprintf(text,sizeof(text),"{\"chat_id\":42,\"text\":\"fixture\",\"request\":%lld}",(long long)p->expr.elems[2]->ground.ival);
-    Atom *body=atom_string(arena,text);
-    *out=(CettaTelegramPlan){"sendMessage","application/json",body->ground.sval,strlen(text)}; return true;
-}
+static const int64_t chats[]={42};
+static CettaTelegramActionPolicy action_policy={chats,1,7};
 static void seed(bool crash_send) {
     CettaDurableSnapshot snapshot; assert(cetta_durable_snapshot(store,"host.outbox",&snapshot)==DURABLE_OK);
     bool seeded=snapshot.count!=0; cetta_durable_snapshot_free(&snapshot);
@@ -58,14 +48,14 @@ static void seed(bool crash_send) {
     assert(cetta_durable_commit(store,snapshot.epoch,snapshot.revision,&op,1,&revision)==DURABLE_OK);
     cetta_durable_snapshot_free(&snapshot); free(bytes);
     CettaHostChannelGrant channels[]={{"worker.request","1",cetta_worker_validate,"brain"},
-        {"timer.after","1",cetta_timer_validate,NULL},{"telegram.send","1",send_allowed,NULL}};
+        {"timer.after","1",cetta_timer_validate,NULL},{"telegram.action","1",cetta_telegram_action_validate,&action_policy}};
     CettaHostDecisionSpec spec={input,"actor",trusted.version,NULL,0,channels,3};
     CettaHostDecision *d=NULL; assert(cetta_host_begin(store,&spec,&d)==DURABLE_OK);
-    const char *expr=crash_send?"(host:transition waiting () ((host:send 2 (fixture:send 42 3) crash-reply)))":
+    const char *expr=crash_send?"(host:transition waiting () ((host:send 2 (telegram:delete-message 1 42 9) crash-reply)))":
         "(match &self (host:record 0 \"boot\" (clock $now)) "
         "(host:transition waiting () ((host:send 0 (worker:request 1 \"brain\" \"service observation\") reply) "
         "(host:send 1 (timer:at 1 (+ $now 300) 0 FireOnce 0 wake) timer-reply) "
-        "(host:send 2 (fixture:send 42 1) reply) (host:send 2 (fixture:send 42 2) reply))))";
+        "(host:send 2 (telegram:send-text 1 42 17 3 \"fixture-one\" \"plain\") reply) (host:send 2 (telegram:edit-text 1 42 9 \"fixture-two\" \"HTML\") reply))))";
     assert(cetta_host_evaluate(d,&trusted,parse(expr),10000)==DURABLE_OK);
     CettaHostCommit commit; assert(cetta_host_accept(d,0,&commit)==DURABLE_OK); cetta_host_decision_free(d);
 }
@@ -97,7 +87,7 @@ int main(int argc, char **argv) {
     const char *updates[]={"message","callback_query"};
     CettaServiceSource source={{credential,"bot",1,100,updates,2},&trusted,parse("(telegram:policy 1 (42) False () ())"),1000000};
     if (!strcmp(argv[1],"fuel")) source.fuel=1;
-    CettaDispatchChannel channel={"telegram.send","1",credential,NULL,plan};
+    CettaDispatchChannel channel={"telegram.action","1",credential,&action_policy,cetta_telegram_action_plan};
     CettaServiceConfig config={{&channel,1,3000,65536,NULL,http_fault},&source,1,atoi(argv[6]),getuid(),"brain",NULL,host_fault};
     CettaDurableService *service=NULL;
     CettaServiceSource duplicate[]={source,source}; CettaServiceConfig invalid=config;
@@ -125,7 +115,7 @@ int main(int argc, char **argv) {
         Atom *intent=NULL; assert(cetta_durable_value_decode(&persistent,outbox.records[i].data,outbox.records[i].size,&intent)==DURABLE_OK);
         const char *name=intent->expr.elems[2]->ground.sval;
         if (!strcmp(name,"worker.request")) { char id[65]; assert(cetta_worker_register(store,outbox.records[i].key,"brain",id)==DURABLE_OK); }
-        if (!strcmp(name,"telegram.send")) {
+        if (!strcmp(name,"telegram.action")) {
             CettaDurableStatus status=cetta_service_submit(service,outbox.records[i].key);
             assert(status==DURABLE_OK || status==DURABLE_PRECONDITION);
         }

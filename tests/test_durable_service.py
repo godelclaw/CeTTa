@@ -33,9 +33,13 @@ class ServicePeer(Peer):
     def receipt(self, connection, method, path, body):
         assert method == "POST"
         data = json.loads(body)
-        if path == f"/bot{TOKEN}/sendMessage":
-            item = data["request"]
-            assert data["chat_id"] == 42
+        methods = {f"/bot{TOKEN}/sendMessage": (1, {"chat_id": 42, "message_thread_id": 17,
+            "reply_parameters": {"message_id": 3}, "text": "fixture-one"}),
+            f"/bot{TOKEN}/editMessageText": (2, {"chat_id": 42, "message_id": 9, "text": "fixture-two", "parse_mode": "HTML"}),
+            f"/bot{TOKEN}/deleteMessage": (3, {"chat_id": 42, "message_id": 9})}
+        if path in methods:
+            item, expected = methods[path]
+            assert data == expected
             with self.lock:
                 self.calls.append(("send", item))
             if item == 3:

@@ -916,3 +916,43 @@ receipts and poll cursors. A send accepted remotely before a crash becomes
 uncertain without being sent again. Other cases cover held polls, exhausted
 policy fuel and a latched storage quota failure. These are synthetic process
 integration tests, not a deployed agent or a complete Telegram application.
+
+## Typed Telegram text actions
+
+`telegram_action.h` supplies the acceptance validator and dispatch planner for
+`telegram.action`, handler version `1`. Its immutable native policy contains an
+explicit numeric chat list and a permission mask for send, edit and delete.
+Dispatch rechecks the payload and permissions independently of acceptance.
+There is no arbitrary HTTP method or JSON-body capability at this boundary.
+
+The pure constructors in `durable:telegram_actions` propose these payloads:
+
+```metta
+(telegram:send-text 1 chat thread reply-message "text" "plain")
+(telegram:edit-text 1 chat message "text" "HTML")
+(telegram:delete-message 1 chat message)
+```
+
+Text formats are `plain`, `HTML` or `MarkdownV2`. Zero thread/reply-message
+omits that optional send field. Edit and delete require a positive message ID;
+their permission is chat-wide, so a policy limiting them to owned messages must
+also check its recorded message receipts. IDs remain exact integers. Targets
+must already be resolved before acceptance; neither defaults nor aliases are
+looked up during dispatch.
+
+The adapter accepts valid UTF-8 text containing 1–4096 Unicode scalars. For
+formatted messages this counts the source markup too, a conservative bound;
+the provider still validates entity syntax. It marshals fixed fields and an
+escaped string, with no evaluator, filesystem or network calls. Quotes,
+backslashes and control bytes cannot introduce extra JSON fields.
+
+The application must choose chunk boundaries and record the resulting actions
+before accepting them. Current `str:length` and `str:slice` use byte offsets;
+using them directly as character counts would be incorrect. This adapter does
+not yet provide Unicode chunking, media uploads, inline editing, callback
+answers, default routing or delivery retry policy.
+
+`test-telegram-actions` checks permissions, exact IDs, Unicode and text bounds,
+JSON escaping, dispatch revalidation and the pure constructors under the
+speculative gate. The service matrix uses this adapter for actual mock send,
+edit and delete requests, including thread/reply routing and formatting.
