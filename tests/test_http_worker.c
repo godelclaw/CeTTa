@@ -48,6 +48,16 @@ static void ephemeral(const char *base) {
     CettaHttpWorker *w=worker(&limits,NULL);
     char one[512],two[512]; url(one,base,"/one"); url(two,base,"/two");
     CettaHttpRequest a=request(1,one), b=request(2,two), extra=request(3,one);
+    a.proxy="http://proxy\r\ninvalid";
+    assert(cetta_http_worker_submit(w,&a)==HTTP_WORKER_INVALID);
+    a.proxy=NULL; a.ca_file="ca\ninvalid";
+    assert(cetta_http_worker_submit(w,&a)==HTTP_WORKER_INVALID);
+    char too_long[4098]; memset(too_long,'a',sizeof(too_long)-1); too_long[4097]=0;
+    a.ca_file=too_long;
+    assert(cetta_http_worker_submit(w,&a)==HTTP_WORKER_INVALID);
+    a.ca_file=NULL; a.proxy=too_long;
+    assert(cetta_http_worker_submit(w,&a)==HTTP_WORKER_INVALID);
+    a.proxy=NULL;
     assert(cetta_http_worker_submit(w,&a)==HTTP_WORKER_OK);
     assert(cetta_http_worker_submit(w,&a)==HTTP_WORKER_DUPLICATE);
     assert(cetta_http_worker_submit(w,&b)==HTTP_WORKER_OK);

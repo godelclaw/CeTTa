@@ -34,6 +34,10 @@ typedef struct {
      * False (default) uses a fresh connection and closes it after the transfer
      * to prevent curl's implicit resend on a dead pooled connection. */
     bool idempotent;
+    /* Native host configuration; NULL keeps curl defaults. Empty proxy disables
+     * environment proxy discovery. ca_file selects a CA trust bundle;
+     * certificate and hostname verification remain enabled. */
+    const char *proxy, *ca_file;
 } CettaHttpRequest;
 
 typedef struct {

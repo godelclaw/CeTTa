@@ -92,6 +92,7 @@ static Job *find_job(CettaHttpWorker *w, uint64_t id) {
 
 static void free_job(Job *j) {
     free((char *)j->request.method); free((char *)j->request.url);
+    free((char *)j->request.proxy); free((char *)j->request.ca_file);
     for (size_t i=0;i<j->request.header_count;++i) free((char *)j->request.headers[i]);
     free((char **)j->request.headers); free((void *)j->request.body);
     cetta_http_result_free(&j->result); free(j);
@@ -160,6 +161,8 @@ static CURLcode configure(Job *j) {
      * Opt into pooling only when repeating the operation is explicitly safe. */
     SET(CURLOPT_FRESH_CONNECT,j->request.idempotent?0L:1L);
     SET(CURLOPT_FORBID_REUSE,j->request.idempotent?0L:1L);
+    if (j->request.proxy) SET(CURLOPT_PROXY,j->request.proxy);
+    if (j->request.ca_file) SET(CURLOPT_CAINFO,j->request.ca_file);
     SET(CURLOPT_PROTOCOLS_STR,"http,https"); SET(CURLOPT_REDIR_PROTOCOLS_STR,"http,https");
     SET(CURLOPT_ACCEPT_ENCODING,"");
     if (j->request.timeout_ms) {
@@ -391,6 +394,12 @@ static CettaHttpWorkerStatus measure_request(const CettaHttpRequest *r, size_t *
         if (c<=32 || c>=127 || strchr("()<>@,;:\\\"/[]?={}",c)) return HTTP_WORKER_INVALID;
     }
     size_t total=sizeof(Job)+(r->header_count+1)*sizeof(char *)+method_size+url_size+r->body_size+3;
+    const char *options[]={r->proxy,r->ca_file};
+    for (size_t i=0;i<2;++i) if (options[i]) {
+        size_t n=strnlen(options[i],4097);
+        if (n>4096 || strpbrk(options[i],"\r\n")) return HTTP_WORKER_INVALID;
+        total+=n+1;
+    }
     for (size_t i=0;i<r->header_count;++i) {
         const char *h=r->headers[i];
         if (!h || strnlen(h,8193)>8192 || !strchr(h,':') || strpbrk(h,"\r\n")) return HTTP_WORKER_INVALID;
@@ -404,10 +413,15 @@ static CettaHttpWorkerStatus clone_request(const CettaHttpRequest *r, size_t byt
     Job *j=calloc(1,sizeof(*j));
     if (!j) return HTTP_WORKER_NOMEM;
     j->request=*r; j->request.method=strdup(r->method); j->request.url=strdup(r->url);
+    j->request.proxy=r->proxy?strdup(r->proxy):NULL;
+    j->request.ca_file=r->ca_file?strdup(r->ca_file):NULL;
     char **headers=calloc(r->header_count+1,sizeof(*headers)); j->request.headers=(const char *const *)headers;
     j->request.header_count=0;
     unsigned char *body=malloc(r->body_size+1); j->request.body=body;
-    if (!j->request.method || !j->request.url || !headers || !body) { free_job(j); return HTTP_WORKER_NOMEM; }
+    if (!j->request.method || !j->request.url || !headers || !body ||
+        (r->proxy && !j->request.proxy) || (r->ca_file && !j->request.ca_file)) {
+        free_job(j); return HTTP_WORKER_NOMEM;
+    }
     if (r->body_size) memcpy(body,r->body,r->body_size);
     body[r->body_size]=0;
     for (size_t i=0;i<r->header_count;++i) {

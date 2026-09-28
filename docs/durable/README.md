@@ -232,4 +232,50 @@ it. Other language entries are refused before execution. The normal HE and
 PeTTa corpus paths run with the policy off.
 
 The storage and evaluation layers do not yet supply registered channel
-capabilities, credential references or the production Telegram dispatcher.
+capabilities or the production Telegram dispatcher.
+
+
+## Native Telegram credential boundary
+
+`telegram_transport.h` supplies an immutable host-only credential reference.
+The host opens a private regular descriptor without following symlinks; reading
+is bounded, accepts a final newline, leaves the descriptor position unchanged,
+and returns enum errors only. The reference has no token getter and never
+enters a MeTTa value, durable record or serialized proposal. Rotation constructs
+a replacement after outstanding users have finished.
+
+The native adapter constructs the token-bearing Bot API URL immediately before
+request admission. Production defaults to `https://api.telegram.org`. A trusted
+host configuration can select another HTTPS origin and CA bundle; HTTP requires
+an explicit loopback-only mock option. Proposals cannot select the origin,
+redirect policy, proxy, TLS configuration or idempotence. Ambient proxies are
+disabled for this adapter, redirects are refused, and certificate/hostname
+verification stays enabled. The generic HTTP worker still supports native
+proxy/CA settings, with their copied bytes charged to its admission budget.
+
+Effects use the default fresh, non-reusable transport. The separate host poll
+entry alone opts into reuse for `getUpdates`; an effect cannot select that
+method. Application permissions, supported methods, routing and retry decisions
+remain the host and MeTTa/rho protocol library's responsibility.
+
+Before journaling a response or constructing any evaluator atoms, the host must
+call `cetta_telegram_response_safe`. It performs a bounded linear scan for the
+literal token and percent/JSON ASCII-Unicode escaped spellings. On reflection,
+suppress the body and record a minimal privacy outcome: the remote operation's
+success remains unknown. This is defense against accidental reflection, not
+information-flow security against an adversarial server's arbitrary encoding.
+Provider schema validation is still required. Private URL buffers owned by the
+adapter are erased; this does not promise erasure of every copy inside curl/TLS.
+
+`make BUILD=core ENABLE_HTTP=1 test-telegram-transport` uses only fake credentials
+and loopback peers. Its Python fixture requires `h2` and `openssl`. It qualifies
+HTTP/1.1, HTTPS/1.1 and negotiated HTTP/2 against drop-after-complete-request-read,
+with independent receipt counts and connection identity checks. It also checks
+poll reuse, redirect refusal, poisoned ambient proxy settings, reflected-token
+screening, untrusted CA and wrong-hostname failures. These tests qualify those
+faults on the linked libcurl; they do not establish remote exactly-once delivery
+or a universal absence of every protocol-level retry.
+
+This native adapter is not an evaluator builtin. The production durable host
+must still connect credential lookup and response screening to its registered
+channel and observation-recording boundaries.

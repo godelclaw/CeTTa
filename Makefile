@@ -655,7 +655,7 @@ SRC = src/symbol.c src/atom.c src/binding/frame_identity.c src/name_key.c src/at
 SRC += src/shared_transition.c
 SRC += src/gslt_language_manifest_v1.c
 SRC += src/gslt_support_profile_v1.c
-SRC += src/library_io.c src/http_worker.c src/library_durable.c $(DURABLE_SRC)
+SRC += src/library_io.c src/http_worker.c src/telegram_transport.c src/library_durable.c $(DURABLE_SRC)
 SRC += $(JSON_GSLT_RUNTIME_SRC)
 SRC += $(PETTA_TYPECHECK_CENSUS_SRC)
 SRC += \
@@ -38180,3 +38180,16 @@ $(SPECULATIVE_EVAL_TEST_BIN): $(SPECULATIVE_EVAL_TEST_OBJ) $(FALLBACK_EVAL_TEST_
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 test-speculative-eval: $(SPECULATIVE_EVAL_TEST_BIN) $(IO_HTTP_FIXTURE_BIN)
 	python3 tests/test_speculative_eval.py $(IO_HTTP_FIXTURE_BIN) $(SPECULATIVE_EVAL_TEST_BIN)
+
+.PHONY: test-telegram-transport
+ifeq ($(HTTP_PROVIDER_CURL),1)
+TELEGRAM_TRANSPORT_TEST_BIN = runtime/test-telegram-transport-$(BUILD_OBJ_TAG)
+$(TELEGRAM_TRANSPORT_TEST_BIN): tests/test_telegram_transport.c src/telegram_transport.c src/telegram_transport.h src/http_worker.c src/http_worker.h
+	$(CC) -O2 -Wall -Wextra -Werror -std=c11 -pthread -Isrc $(HTTP_CFLAGS) -DCETTA_BUILD_HTTP_PROVIDER_CURL=$(HTTP_PROVIDER_CURL) tests/test_telegram_transport.c src/telegram_transport.c src/http_worker.c $(HTTP_LDFLAGS) -o $@
+test-telegram-transport: $(TELEGRAM_TRANSPORT_TEST_BIN)
+	python3 tests/test_telegram_transport.py $(TELEGRAM_TRANSPORT_TEST_BIN)
+else
+test-telegram-transport:
+	@echo "test-telegram-transport requires the native HTTP provider" >&2
+	@exit 1
+endif
