@@ -8,6 +8,14 @@
  * Grant indexes in data select this authority; they cannot manufacture it. */
 typedef struct CettaHostDecision CettaHostDecision;
 typedef struct {
+    const char *version;
+    /* Trusted, immutable program only; never append observation/worker data.
+     * The context contains its loaded pure libraries, not a previous decision's
+     * registry or spaces. No concurrent use. Both outlive pending decisions. */
+    const Space *space;
+    CettaLibraryContext *context;
+} CettaHostProgram;
+typedef struct {
     CettaDurableScope scope;
     bool writable;
 } CettaHostSpaceGrant;
@@ -45,9 +53,18 @@ const char *cetta_host_decision_key(const CettaHostDecision *decision);
  * state. LLM/time/random observations must first have been recorded as input. */
 const CettaDurableSnapshot *cetta_host_view(const CettaHostDecision *decision, size_t index);
 
-/* Pass the actual outcome evaluated against this ticket's views, never an
- * outcome/status deserialized from a worker. Incomplete/denied evaluation is
- * rejected. The host selects one alternative and records its index.
+/* Build fresh spaces and a private registry from this ticket's exact views,
+ * run the speculative gate, and retain the outcome on this ticket. Previous
+ * results are discarded even if this call fails. Expression is host-owned
+ * trusted code; worker proposals must enter through recorded input data.
+ * DURABLE_OK means evaluation ran, not that it completed or can be accepted. */
+CettaDurableStatus cetta_host_evaluate(CettaHostDecision *decision,
+    const CettaHostProgram *program, Atom *expression, int fuel);
+/* Borrowed inspection only; invalidated by re-evaluation or decision free. */
+const EvalOutcome *cetta_host_outcome(const CettaHostDecision *decision);
+
+/* Accept only this ticket's stored evaluation. Incomplete/denied evaluation
+ * is rejected. The host selects one alternative and records its index.
  * Shape: (host:transition continuation (writes...) (effects...))
  *   (host:put space-grant "key" value) | (host:remove space-grant "key")
  *   (host:send channel-grant payload reply-continuation)
@@ -57,5 +74,5 @@ const CettaDurableSnapshot *cetta_host_view(const CettaHostDecision *decision, s
  * UNKNOWN; recover from the journal instead of guessing or repeating effects.
  * No evaluation, policy callback or HTTP runs inside the storage transaction. */
 CettaDurableStatus cetta_host_accept(CettaHostDecision *decision,
-    const EvalOutcome *outcome, size_t selected, CettaHostCommit *commit);
+    size_t selected, CettaHostCommit *commit);
 #endif

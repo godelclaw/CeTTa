@@ -294,14 +294,24 @@ one snapshot. Input and actor dependencies are always included; other scopes
 include negative key/prefix/space observations. Unrelated inbox arrivals or
 HTTP outcomes do not invalidate the decision.
 
-The embedding host must evaluate against **only** these views, projected into
-fresh in-memory query spaces alongside its trusted, versioned program. Do not
-reuse observations cached from a previous ticket. The actual `EvalOutcome` stays
-native; a worker cannot supply its own `COMPLETE` flag or read scopes. LLM,
-clock and random observations enter through the recorded inbox. Parse and JSON
+`cetta_host_evaluate` builds fresh in-memory spaces and a private registry from
+the ticket's views and the trusted program. It owns the copied syntax, projected
+values and evaluation outcome. The program version must match the ticket.
+`cetta_host_accept` accepts only that stored outcome; no caller-supplied status
+or foreign ticket's result can replace it. A failed re-evaluation clears the old
+result. Program templates are immutable code/static facts, never cached decision
+data; native handles and preinserted `host:record` facts are refused. The program's
+library context must not contain a previous decision's registry or spaces.
+Worker proposals, LLM output, clock and randomness enter through recorded inbox
+data, never as a trusted expression to execute. Parse and JSON
 inputs must be bounded before symbol interning; use strings for unbounded IDs
 and external text. Pending ticket count and aggregate observation memory also
 require bounded admission in the service.
+
+For draft supersession, key inbound occurrences by chat/update and include a
+read-only prefix scope for that chat's inbox lane. New input in the same lane
+invalidates the unaccepted decision; another chat's input does not. This does
+not cancel an already accepted intent.
 
 One selected result has this closed-data shape:
 
@@ -314,7 +324,8 @@ One selected result has this closed-data shape:
 
 A write uses a space-grant index and a string key inside its declared scope.
 `host:put` inserts or replaces according to that exact observation;
-`host:remove` requires presence. A send uses a channel-grant index, payload and
+`host:remove` requires presence. Duplicate write keys are rejected before a
+commit attempt, including aliases through different grants. A send uses a channel-grant index, payload and
 reply continuation. These indices select authority bound to the native ticket;
 writing a channel name or another number grants no additional permission.
 Native channel validators are pure and bounded, and enforce payload/method/chat
