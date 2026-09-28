@@ -744,3 +744,70 @@ integration work.
 MeTTa requests, clock jumps, overdue policies and inclusive grace boundary,
 bounded catch-up and fairness, cancellation, integer exhaustion, capacity
 rollback, and process exit/recovery before and after delivery.
+
+## Local cognitive worker boundary
+
+`durable_worker.h` provides a bounded Linux Unix-domain `SOCK_SEQPACKET`
+endpoint. The native host adopts an already listening descriptor, such as a
+supervisor-owned socket. It does not bind paths, supervise processes, or expose
+a network listener. The configured worker identity is fixed by the host;
+`SO_PEERCRED` must match its configured UID. This authenticates the operating
+system account, not individual programs sharing that account. Socket directory
+and service permissions must enforce the intended local access boundary.
+
+The native host publishes an immutable observation under a stable worker/task
+ID. UTF-8 observation and result bodies are nonempty, contain no NUL, and are
+bounded at 64 KiB. They remain string data: the endpoint never parses them as
+MeTTa source or interns external identifiers. A service must derive publication
+from a committed task intent or continuation, and preserve the exact snapshot,
+read dependencies and trusted program version that produced that observation.
+Publication by itself does not consume an input or accept an effect.
+
+The wire format is `CWP1`, one command byte, one ID-length byte, ID bytes, then
+body bytes; each packet is one seqpacket message. IDs contain 1–64 ASCII
+letters, digits, dots, hyphens or underscores. The public header defines the
+command and response codes:
+
+- `NEXT` (no ID or body) fetches the oldest pending observation or returns
+  `IDLE`. Fetching is non-destructive. A restarted worker can fetch it again.
+- `RESULT` (ID and body) atomically records the immutable result receipt,
+  inserts its inbox occurrence, and removes the ready index entry. `STORED`
+  means the service has recorded input, not accepted the suggested action.
+- `RECEIPT` (ID only) returns `STORED`, `PENDING` or `UNKNOWN`. After a lost
+  acknowledgment, resending the same result is idempotent; different bytes
+  for that task are refused. Consuming the inbox does not erase this receipt
+  or make a repeated result create another occurrence.
+
+`host.worker-tasks` stores observation text. `host.worker-ready` holds small
+markers, so enumerating work does not copy every pending observation.
+`host.worker-results` and the corresponding `host.inbox` occurrence contain:
+
+```metta
+(host:worker-result 1 "worker" "task-id" task-revision "result-text")
+```
+
+The service's trusted, gated program selects actions from those inputs. Workers
+cannot select read scopes, the trusted program, credentials, channel grants or
+an acceptance outcome through this protocol. Multiple authorized clients may
+fetch the same task; the first committed result wins. This endpoint does not
+promise exclusive assignment or prevent duplicate cognitive computation.
+
+There are at most 128 unanswered tasks per worker and 16 connected peers per
+endpoint. Each pump handles at most one request per peer, with bounded packets
+and one queued reply per peer. Writes are nonblocking; stalled peers expire
+after 30 seconds of monotonic time. Storage errors go to the host health policy;
+an unknown commit outcome never produces a success acknowledgment. The host
+must escalate/back off on storage failure. Disconnecting is not cancellation.
+
+Completed history does not consume pending-task slots. Store quotas still
+bound retained data. Retention must preserve receipts for their required
+deduplication lifetime, and task IDs must never be reused after pruning.
+Program/snapshot pairing, retention policy and the production service loop
+remain integration responsibilities. The endpoint does not establish the
+service/worker restart demonstration by itself.
+
+`make BUILD=core ENABLE_DURABLE=1 test-durable-worker` checks malformed input,
+UTF-8 and packet limits, immutable task/result pairing, peer identity and
+capacity, a stalled reader, quota rollback, and service exit after commitment
+but before the client reads its acknowledgment. The test keeps the listener
+open across service restart, then verifies receipt recovery without reinjection.
