@@ -62,6 +62,33 @@ static void consume(const char *id) {
     assert(cetta_durable_commit_observed(store,o,&op,1,&revision)==DURABLE_OK);
     cetta_durable_observation_free(o);
 }
+static void expect_submission(const char *key, const char *body) {
+    char name[160], input[180]; snprintf(name,sizeof(name),"brain/%s",key);
+    snprintf(input,sizeof(input),"submission/brain/%s",key);
+    CettaDurableScope q[]={{DURABLE_KEY,"host.worker-submissions",name},{DURABLE_KEY,"host.inbox",input}};
+    CettaDurableObservation *o=NULL; assert(cetta_durable_observe(store,q,2,&o)==DURABLE_OK);
+    const CettaDurableSnapshot *ledger=cetta_durable_observation_view(o,0), *inbox=cetta_durable_observation_view(o,1);
+    CettaDurableField fields[]={
+        {.kind=DURABLE_FIELD_SYMBOL,.text={"host:worker-submission",22}},
+        {.kind=DURABLE_FIELD_INT,.integer=1},
+        {.kind=DURABLE_FIELD_TEXT,.text={"brain",5}},
+        {.kind=DURABLE_FIELD_TEXT,.text={key,strlen(key)}},
+        {.kind=DURABLE_FIELD_TEXT,.text={body,strlen(body)}}};
+    CettaDurableField value={.kind=DURABLE_FIELD_EXPR,.expression={fields,5}};
+    unsigned char *data=NULL; size_t size=0; assert(cetta_durable_fields_encode(&value,&data,&size)==DURABLE_OK);
+    assert(ledger->count==1 && ledger->records[0].size==size && !memcmp(ledger->records[0].data,data,size));
+    assert(inbox->count==1 && inbox->records[0].size==size && !memcmp(inbox->records[0].data,data,size));
+    assert(ledger->records[0].revision==inbox->records[0].revision);
+    free(data); cetta_durable_observation_free(o);
+}
+static void consume_submission(const char *key) {
+    char input[180]; snprintf(input,sizeof(input),"submission/brain/%s",key);
+    CettaDurableScope q={DURABLE_KEY,"host.inbox",input}; CettaDurableObservation *o=NULL;
+    assert(cetta_durable_observe(store,&q,1,&o)==DURABLE_OK);
+    CettaDurableOp op={DURABLE_REMOVE,"host.inbox",input,NULL,0}; int64_t revision;
+    assert(cetta_durable_commit_observed(store,o,&op,1,&revision)==DURABLE_OK);
+    cetta_durable_observation_free(o);
+}
 static void stop(void) {
     cetta_worker_endpoint_free(endpoint); endpoint=NULL; cetta_durable_close(store); store=NULL;
     assert(!unlink(socket_path));
@@ -203,12 +230,53 @@ int main(void) {
     fd=client(); rpc(fd,WORKER_NEXT,"","",WORKER_TASK,"limited","{}");
     rpc(fd,WORKER_RESULT,"limited","{}",WORKER_STORED,"limited","");
     close(fd); stop();
-    const char *files[]={"journal.db","quota.db"};
-    for (size_t i=0;i<2;++i) {
+    /* Batched reading: NEXT after a pending ID, without answering anything. */
+    snprintf(db,sizeof(db),"%s/channel.db",directory);
+    assert(cetta_durable_open(db,NULL,&store)==DURABLE_OK);
+    assert(cetta_worker_endpoint_new(store,listener(),getuid(),"brain",&endpoint)==DURABLE_OK);
+    assert(cetta_worker_publish(store,"brain","m1","one",3)==DURABLE_OK);
+    assert(cetta_worker_publish(store,"brain","m2","two",3)==DURABLE_OK);
+    assert(cetta_worker_publish(store,"brain","m3","three",5)==DURABLE_OK);
+    fd=client();
+    rpc(fd,WORKER_NEXT,"","",WORKER_TASK,"m1","one");
+    rpc(fd,WORKER_NEXT,"m1","",WORKER_TASK,"m2","two");
+    rpc(fd,WORKER_NEXT,"m2","",WORKER_TASK,"m3","three");
+    rpc(fd,WORKER_NEXT,"m3","",WORKER_IDLE,"","");
+    rpc(fd,WORKER_RESULT,"m2","[]",WORKER_STORED,"m2","");
+    rpc(fd,WORKER_NEXT,"m1","",WORKER_TASK,"m3","three");
+    rpc(fd,WORKER_NEXT,"m2","",WORKER_UNKNOWN,"m2","");
+    rpc(fd,WORKER_NEXT,"never","",WORKER_UNKNOWN,"never","");
+    send_request(fd,WORKER_NEXT,"m1","x",1); expect(fd,WORKER_INVALID,"","");
+    /* Unsolicited submissions: immutable per key, recorded with their input. */
+    const char *batch="{\"chat\":7,\"actions\":[]}";
+    rpc(fd,WORKER_SUBMIT,"7.0.00000000000000000001",batch,WORKER_STORED,"7.0.00000000000000000001","");
+    expect_submission("7.0.00000000000000000001",batch);
+    size_t inputs=count("host.inbox");
+    rpc(fd,WORKER_SUBMIT,"7.0.00000000000000000001",batch,WORKER_STORED,"7.0.00000000000000000001","");
+    rpc(fd,WORKER_SUBMIT,"7.0.00000000000000000001","{}",WORKER_CONFLICT,"7.0.00000000000000000001","");
+    assert(count("host.inbox")==inputs && count("host.worker-submissions")==1);
+    consume_submission("7.0.00000000000000000001");
+    /* A lost acknowledgment is recovered by resending: no second occurrence. */
+    rpc(fd,WORKER_SUBMIT,"7.0.00000000000000000001",batch,WORKER_STORED,"7.0.00000000000000000001","");
+    assert(count("host.inbox")==inputs-1 && count("host.worker-submissions")==1);
+    send_request(fd,WORKER_SUBMIT,"bad-utf8","\xc0\xaf",2); expect(fd,WORKER_INVALID,"","");
+    send_request(fd,WORKER_SUBMIT,"empty","",0); expect(fd,WORKER_INVALID,"","");
+    send_request(fd,WORKER_SUBMIT,"bad/key","{}",2); expect(fd,WORKER_INVALID,"","");
+    assert(count("host.worker-submissions")==1);
+    for (unsigned i=0;i<128;++i) {
+        char id[32]; snprintf(id,sizeof(id),"pending-%u",i);
+        rpc(fd,WORKER_SUBMIT,id,"{}",WORKER_STORED,id,"");
+    }
+    rpc(fd,WORKER_SUBMIT,"overflow","{}",WORKER_LIMIT,"overflow","");
+    consume_submission("pending-0");
+    rpc(fd,WORKER_SUBMIT,"overflow","{}",WORKER_STORED,"overflow","");
+    close(fd); stop();
+    const char *files[]={"journal.db","quota.db","channel.db"};
+    for (size_t i=0;i<3;++i) {
         char file[300]; snprintf(file,sizeof(file),"%s/%s",directory,files[i]); unlink(file);
         snprintf(file,sizeof(file),"%s/%s-wal",directory,files[i]); unlink(file);
         snprintf(file,sizeof(file),"%s/%s-shm",directory,files[i]); unlink(file);
     }
     assert(!rmdir(directory));
-    puts("durable worker: local peer identity, bounded data, immutable tasks, atomic replies, lost acknowledgments, process restart and quota rollback passed");
+    puts("durable worker: local peer identity, bounded data, immutable tasks, atomic replies, lost acknowledgments, process restart, quota rollback, batched reads and unsolicited submissions passed");
 }

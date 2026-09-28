@@ -181,15 +181,23 @@ static CettaDurableStatus reply(Peer *p, CettaWorkerCode code, const char *id,
     memcpy(b+6,id,n); if (size) memcpy(b+6+n,body,size);
     free(p->reply); p->reply=b; p->size=6+n+size; return DURABLE_OK;
 }
-static CettaDurableStatus next_task(CettaWorkerEndpoint *e, Peer *p) {
+static CettaDurableStatus next_task(CettaWorkerEndpoint *e, Peer *p, const char *after) {
     CettaDurableScope q={DURABLE_PREFIX,"host.worker-ready",e->prefix};
     CettaDurableObservation *o=NULL; CettaDurableStatus s=cetta_durable_observe(e->store,&q,1,&o);
     const CettaDurableRecord *next=NULL;
     if (s==DURABLE_OK) {
         const CettaDurableSnapshot *tasks=view(o,0);
+        const CettaDurableRecord *cut=NULL;
+        if (after) {
+            char name[130]; key(name,e->worker,after); cut=find(tasks,name);
+            /* Answered meanwhile: the batch it began is stale. */
+            if (!cut) { cetta_durable_observation_free(o); return reply(p,WORKER_UNKNOWN,after,NULL,0); }
+        }
         if (tasks->count>TASKS) s=DURABLE_LIMIT;
         else for (size_t i=0;i<tasks->count;++i) {
             const CettaDurableRecord *r=&tasks->records[i];
+            if (cut && (r->revision<cut->revision ||
+                (r->revision==cut->revision && r->position<=cut->position))) continue;
             if (!next || r->revision<next->revision ||
                 (r->revision==next->revision && r->position<next->position)) next=r;
         }
@@ -264,13 +272,52 @@ static CettaDurableStatus result(CettaWorkerEndpoint *e, Peer *p, const char *id
     free(data); cetta_durable_observation_free(o);
     return s==DURABLE_OK || s==DURABLE_CONFLICT || s==DURABLE_LIMIT?sent:s;
 }
+static CettaDurableStatus submit(CettaWorkerEndpoint *e, Peer *p, const char *id,
+                                const unsigned char *body, size_t size) {
+    char name[130], input[142], prefix[80]; key(name,e->worker,id);
+    memcpy(input,"submission/",11); strcpy(input+11,name);
+    snprintf(prefix,sizeof(prefix),"submission/%s/",e->worker);
+    CettaDurableScope q[]={{DURABLE_KEY,"host.worker-submissions",name},
+        {DURABLE_KEY,"host.inbox",input},{DURABLE_PREFIX,"host.inbox",prefix}};
+    CettaDurableObservation *o=NULL; CettaDurableStatus s=cetta_durable_observe(e->store,q,3,&o);
+    CettaWorkerCode code=WORKER_UNAVAILABLE; unsigned char *data=NULL; size_t n=0;
+    if (s==DURABLE_OK) {
+        const CettaDurableSnapshot *old=view(o,0), *inbox=view(o,1), *pending=view(o,2);
+        CettaDurableField f[]={
+            {.kind=DURABLE_FIELD_SYMBOL,.text={"host:worker-submission",22}},
+            {.kind=DURABLE_FIELD_INT,.integer=1},
+            {.kind=DURABLE_FIELD_TEXT,.text={e->worker,strlen(e->worker)}},
+            {.kind=DURABLE_FIELD_TEXT,.text={id,strlen(id)}},
+            {.kind=DURABLE_FIELD_TEXT,.text={(const char *)body,size}}};
+        CettaDurableField value={.kind=DURABLE_FIELD_EXPR,.expression={f,5}};
+        s=cetta_durable_fields_encode(&value,&data,&n);
+        if (s==DURABLE_OK && old->count) {
+            const CettaDurableRecord *r=&old->records[0];
+            s=r->size==n && !memcmp(r->data,data,n)?DURABLE_OK:DURABLE_CONFLICT;
+        } else if (s==DURABLE_OK) {
+            if (inbox->count) s=DURABLE_CORRUPT;
+            else if (pending->count>=TASKS) s=DURABLE_LIMIT;
+            else {
+                CettaDurableOp ops[]={{DURABLE_INSERT,"host.worker-submissions",name,data,n},
+                    {DURABLE_INSERT,"host.inbox",input,data,n}}; int64_t rev;
+                s=cetta_durable_commit_observed(e->store,o,ops,2,&rev);
+            }
+        }
+        code=status_code(s);
+    }
+    CettaDurableStatus sent=reply(p,code,id,NULL,0);
+    free(data); cetta_durable_observation_free(o);
+    return s==DURABLE_OK || s==DURABLE_CONFLICT || s==DURABLE_LIMIT?sent:s;
+}
 static CettaDurableStatus request(CettaWorkerEndpoint *e, Peer *p, const unsigned char *packet, size_t size) {
     if (size<6 || size>CETTA_WORKER_PACKET_MAX || memcmp(packet,"CWP1",4) || packet[5]>64 || 6u+packet[5]>size)
         return reply(p,WORKER_INVALID,"",NULL,0);
     char id[65]; size_t n=packet[5]; memcpy(id,packet+6,n); id[n]=0;
     const unsigned char *body=packet+6+n; size_t len=size-6-n;
-    if (packet[4]==WORKER_NEXT && !n && !len) return next_task(e,p);
+    if (packet[4]==WORKER_NEXT && !n && !len) return next_task(e,p,NULL);
     if (!n || memchr(id,0,n) || !component(id)) return reply(p,WORKER_INVALID,"",NULL,0);
+    if (packet[4]==WORKER_NEXT && !len) return next_task(e,p,id);
+    if (packet[4]==WORKER_SUBMIT && text_valid(body,len)) return submit(e,p,id,body,len);
     if (packet[4]==WORKER_RECEIPT && !len) return result(e,p,id,NULL,0,true);
     if (packet[4]==WORKER_RESULT && text_valid(body,len)) return result(e,p,id,body,len,false);
     return reply(p,WORKER_INVALID,"",NULL,0);

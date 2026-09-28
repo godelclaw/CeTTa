@@ -8,7 +8,7 @@
 #define CETTA_WORKER_ID_MAX 64u
 #define CETTA_WORKER_PACKET_MAX (6u+CETTA_WORKER_ID_MAX+CETTA_WORKER_BODY_MAX)
 typedef enum {
-    WORKER_NEXT=1, WORKER_RESULT=2, WORKER_RECEIPT=3,
+    WORKER_NEXT=1, WORKER_RESULT=2, WORKER_RECEIPT=3, WORKER_SUBMIT=4,
     WORKER_IDLE=64, WORKER_TASK, WORKER_STORED, WORKER_PENDING, WORKER_UNKNOWN,
     WORKER_CONFLICT, WORKER_INVALID, WORKER_UNAVAILABLE, WORKER_LIMIT
 } CettaWorkerCode;
@@ -50,5 +50,15 @@ CettaDurableStatus cetta_worker_endpoint_step(CettaWorkerEndpoint *endpoint,
  * Retry RESULT with the same ID+bytes or query RECEIPT after a lost reply.
  * Fetching does not consume a task: an unanswered task is returned after restart.
  * The result ledger survives inbox consumption and binds the task revision.
+ *
+ * NEXT with an ID returns the oldest pending task after that pending task, so
+ * a client can read a batch before answering any of it. UNKNOWN means the ID
+ * is not pending (answered meanwhile); start again from NEXT without an ID.
+ * SUBMIT records an unsolicited observation under a client-chosen key: an
+ * immutable host.worker-submissions record and its host.inbox occurrence
+ * commit together. Resending identical bytes returns STORED again, even after
+ * the service consumed it; different bytes under one key are a CONFLICT.
+ * At most 128 submissions per worker await consumption. Like RESULT, STORED
+ * means recorded input, not accepted actions. Keys must never be reused.
  */
 #endif
