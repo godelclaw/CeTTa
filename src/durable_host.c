@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "durable_host.h"
+#include "durable_eval.h"
 #include "durable_value.h"
 #include "library.h"
 #include <errno.h>
@@ -13,13 +14,6 @@
 #define HOST_ACTIONS 128
 #define HOST_VALUE_BYTES (1024u*1024u)
 
-typedef struct {
-    Arena persistent, scratch;
-    Space space;
-    Registry registry;
-    EvalOutcome outcome;
-} HostEvaluation;
-
 struct CettaHostDecision {
     CettaDurableStore *store;
     CettaDurableObservation *observation;
@@ -29,16 +23,18 @@ struct CettaHostDecision {
     CettaHostChannelGrant *channels;
     size_t space_count, channel_count;
     bool spent;
-    HostEvaluation *evaluation;
+    CettaHostEvaluation *evaluation;
 };
 
-static void clear_evaluation(CettaHostDecision *d) {
-    HostEvaluation *e=d->evaluation;
+void cetta_host_eval_free(CettaHostEvaluation *e) {
     if (!e) return;
     eval_outcome_free(&e->outcome);
     registry_free(&e->registry); space_free(&e->space);
     arena_free(&e->scratch); arena_free(&e->persistent);
-    free(e); d->evaluation=NULL;
+    free(e);
+}
+static void clear_evaluation(CettaHostDecision *d) {
+    cetta_host_eval_free(d->evaluation); d->evaluation=NULL;
 }
 
 static bool name(const char *s) { return s && *s && strnlen(s,256)<=255; }
@@ -162,18 +158,14 @@ static CettaDurableStatus encoded(CettaDurableOp *op, const Atom *value) {
 const EvalOutcome *cetta_host_outcome(const CettaHostDecision *d) {
     return d && d->evaluation ? &d->evaluation->outcome : NULL;
 }
-CettaDurableStatus cetta_host_evaluate(CettaHostDecision *d,
-    const CettaHostProgram *program, Atom *expression, int fuel) {
-    if (!d) return DURABLE_INVALID;
-    if (d->spent) return DURABLE_CONFLICT;
-    clear_evaluation(d);
-    if (!program || !program->space || !program->context || !name(program->version) ||
-        !expression || fuel<=0 || (expression->flags&ATOM_FLAG_HAS_IDENTITY_GROUNDED))
+CettaDurableStatus cetta_host_eval_create(const CettaHostProgram *program,
+                                         CettaHostEvaluation **out) {
+    if (!out) return DURABLE_INVALID;
+    *out=NULL;
+    if (!program || !program->space || !program->context || !name(program->version))
         return DURABLE_INVALID;
-    if (strcmp(d->program,program->version)) return DURABLE_VERSION;
-    HostEvaluation *e=calloc(1,sizeof(*e));
+    CettaHostEvaluation *e=calloc(1,sizeof(*e));
     if (!e) return DURABLE_NOMEM;
-    d->evaluation=e;
     arena_init(&e->persistent); arena_init(&e->scratch); space_init(&e->space);
     registry_init(&e->registry); eval_outcome_init(&e->outcome);
     CettaDurableStatus status=DURABLE_INVALID;
@@ -185,6 +177,34 @@ CettaDurableStatus cetta_host_evaluate(CettaHostDecision *d,
         if (!copy) { status=DURABLE_NOMEM; goto fail; }
         space_add(&e->space,copy);
     }
+    registry_bind(&e->registry,"&self",atom_space(&e->persistent,&e->space));
+    *out=e; return DURABLE_OK;
+fail:
+    cetta_host_eval_free(e); return status;
+}
+CettaDurableStatus cetta_host_eval_run(CettaHostEvaluation *e,
+    const CettaHostProgram *program, Atom *expression, int fuel) {
+    if (!e) return DURABLE_INVALID;
+    eval_outcome_free(&e->outcome); eval_outcome_init(&e->outcome);
+    if (!program || !program->context || !expression || fuel<=0 ||
+        (expression->flags&ATOM_FLAG_HAS_IDENTITY_GROUNDED)) return DURABLE_INVALID;
+    Atom *copy=atom_deep_copy(&e->persistent,expression);
+    if (!copy) return DURABLE_NOMEM;
+    eval_top_speculative(program->context,&e->space,&e->scratch,&e->persistent,&e->registry,
+        copy,fuel,&e->outcome);
+    return DURABLE_OK;
+}
+CettaDurableStatus cetta_host_evaluate(CettaHostDecision *d,
+    const CettaHostProgram *program, Atom *expression, int fuel) {
+    if (!d) return DURABLE_INVALID;
+    if (d->spent) return DURABLE_CONFLICT;
+    clear_evaluation(d);
+    if (!program || !program->space || !program->context || !name(program->version) ||
+        !expression || fuel<=0 || (expression->flags&ATOM_FLAG_HAS_IDENTITY_GROUNDED)) return DURABLE_INVALID;
+    if (strcmp(d->program,program->version)) return DURABLE_VERSION;
+    CettaDurableStatus status=cetta_host_eval_create(program,&d->evaluation);
+    if (status!=DURABLE_OK) return status;
+    CettaHostEvaluation *e=d->evaluation;
     const CettaDurableSnapshot *v;
     for (size_t i=0;(v=cetta_host_view(d,i));++i) {
         for (size_t j=0;j<v->count;++j) {
@@ -196,12 +216,8 @@ CettaDurableStatus cetta_host_evaluate(CettaHostDecision *d,
             space_add(&e->space,atom_expr(&e->persistent,fact,4));
         }
     }
-    registry_bind(&e->registry,"&self",atom_space(&e->persistent,&e->space));
-    Atom *copy=atom_deep_copy(&e->persistent,expression);
-    if (!copy) { status=DURABLE_NOMEM; goto fail; }
-    eval_top_speculative(program->context,&e->space,&e->scratch,&e->persistent,&e->registry,
-        copy,fuel,&e->outcome);
-    return DURABLE_OK;
+    status=cetta_host_eval_run(e,program,expression,fuel);
+    if (status==DURABLE_OK) return status;
 fail:
     clear_evaluation(d); return status;
 }

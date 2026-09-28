@@ -2,6 +2,10 @@
 #include "durable_dispatch.h"
 #include "durable_inbox.h"
 #include "durable_value.h"
+#include "telegram_intake.h"
+#include "cetta_stdlib.h"
+#include "library.h"
+#include "parser.h"
 #include "symbol.h"
 #include <assert.h>
 #include <fcntl.h>
@@ -12,6 +16,12 @@
 
 static CettaDurableStore *store;
 static Arena arena;
+static Arena scratch;
+static Space program;
+static Registry registry;
+static CettaLibraryContext context;
+static CettaHostProgram trusted={"telegram/intake/1",&program,&context};
+static Atom *policy;
 static atomic_uint health;
 static void degraded(void *context, const char *key, CettaDurableStatus status) {
     (void)context; (void)key; assert(status!=DURABLE_OK); atomic_fetch_add(&health,1);
@@ -43,25 +53,31 @@ static CettaDurableStatus start(CettaDurableDispatch *d, const CettaTelegramCred
     const char *updates[]={"message","callback_query"};
     CettaTelegramPoll p={c,source,0,limit,updates,2}; return cetta_dispatch_poll(d,&p);
 }
+static CettaDurableStatus classify(CettaInboxWindow *w, CettaInboxCommit *out) {
+    CettaTelegramIntake *t=NULL;
+    assert(cetta_telegram_intake_begin(store,cetta_inbox_source(w),trusted.version,&t)==DURABLE_OK);
+    assert(cetta_telegram_intake_evaluate(t,&trusted,policy,1000000)==DURABLE_OK);
+    CettaDurableStatus s=cetta_telegram_intake_commit(t,out);
+    cetta_telegram_intake_free(t); return s;
+}
 static void empty(CettaInboxWindow *w) {
     CettaInboxCommit out; int64_t offset=cetta_inbox_offset(w);
-    assert(cetta_inbox_commit(w,NULL,0,&out)==DURABLE_OK && out.next_offset==offset);
+    assert(classify(w,&out)==DURABLE_OK && out.next_offset==offset && !out.inserted);
     cetta_inbox_window_free(w);
-}
-/* This fixture classifies an exact known mock response. Production schema,
- * authorization and routing policy belong to the trusted MeTTa program. */
-static CettaDurableStatus classify(CettaInboxWindow *w, CettaInboxCommit *out) {
-    Atom *a=response(w,"observed");
-    assert(!strcmp(text(a->expr.elems[6]),"{\"ok\":true,\"result\":[{\"update_id\":7},{\"update_id\":43}]}"));
-    CettaInboxItem items[]={{7,"chat-1",INBOX_ROUTED,atom_string(&arena,"first")},
-        {43,"unsupported",INBOX_UNSUPPORTED,atom_string(&arena,"retained")}};
-    return cetta_inbox_commit(w,items,2,out);
 }
 int main(int argc, char **argv) {
     assert(argc==6);
     SymbolTable symbols; symbol_table_init(&symbols); symbol_table_init_builtins(&symbols,&g_builtin_syms); g_symbols=&symbols;
-    arena_init(&arena);
-    CettaDurableLimits limits=cetta_durable_default_limits(); limits.record_bytes=1024;
+    VarInternTable vars; var_intern_init(&vars); g_var_intern=&vars;
+    arena_init(&arena); arena_init(&scratch); space_init(&program); registry_init(&registry);
+    registry_bind(&registry,"&self",atom_space(&arena,&program));
+    cetta_library_context_init(&context); cetta_library_context_set_exec_path(&context,argv[0]);
+    cetta_eval_session_init_he_extended(&context.session); eval_set_library_context(&context);
+    stdlib_load(&program,&arena);
+    Atom *error=NULL;
+    assert(cetta_library_import_module(&context,"durable:telegram",&program,false,&scratch,&arena,&registry,1000000,&error));
+    size_t pos=0; policy=parse_sexpr(&arena,"(telegram:policy 1 (42) False () ())",&pos); assert(policy);
+    CettaDurableLimits limits=cetta_durable_default_limits(); limits.record_bytes=4096;
     bool pressure=!strcmp(argv[1],"pressure"); if (pressure) limits.records=1;
     assert(cetta_durable_open(argv[2],&limits,&store)==DURABLE_OK);
     int fd=open(argv[3],O_RDONLY); assert(fd>=0);
@@ -129,6 +145,7 @@ int main(int argc, char **argv) {
                 if (i==3) assert(a->expr.elems[5]->expr.elems[3]->ground.ival==429);
                 if (i==4) assert(!strcmp(text(a->expr.elems[6]),"{"));
                 assert(start(d,credential,sources[i],2)==DURABLE_PRECONDITION);
+                assert(classify(w,&out)==DURABLE_PRECONDITION && out.next_offset==-1);
                 cetta_inbox_window_free(w); /* Retained for policy/repair, not silently discarded. */
             }
             /* An unrelated source can continue despite held failed polls. */
@@ -140,6 +157,8 @@ int main(int argc, char **argv) {
     assert(!atomic_load(&health));
     assert(cetta_dispatch_free(d)==0);
     cetta_durable_close(store); cetta_telegram_credential_free(credential);
-    arena_free(&arena); g_symbols=NULL; symbol_table_free(&symbols);
+    eval_set_library_context(NULL); cetta_library_context_free(&context);
+    registry_free(&registry); space_free(&program); arena_free(&scratch);
+    arena_free(&arena); g_var_intern=NULL; var_intern_free(&vars); g_symbols=NULL; symbol_table_free(&symbols);
     puts("durable poll: committed offsets, retained screened responses, atomic classification, recovery and isolated faults passed");
 }

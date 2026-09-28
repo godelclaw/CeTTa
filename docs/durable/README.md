@@ -561,8 +561,75 @@ cursor binding, held responses, exact-response validation, secret reflection,
 lost replies, minimal recording, rate-limit and malformed-response retention,
 capacity rollback and process death on both sides of response recording.
 The dispatch fixture also overlaps receiving and sending on one owner.
-The poll fixture classifies exact known mock bodies; it does not qualify a
-production Telegram parser, routing policy or retry scheduler.
+The poll fixture runs the trusted MeTTa intake policy below on actual recorded
+HTTP responses, including across process death/reopen. A retry scheduler
+remains service integration work.
+
+## Telegram intake policy
+
+`telegram_intake.h` binds one saved poll to its speculative classification and
+commit. It uses the same fresh-program projection as decision tickets. The
+native caller pins a trusted HE program version containing the standard
+library and `durable:telegram`; workers cannot supply the program, response,
+entry expression or routing configuration. The fixed `telegram:poll` entry
+receives that ticket's screened `host:poll` observation and host-owned config:
+
+```metta
+(telegram:policy 1 (allowed-chat-ids...) allow-private
+  (operator-user-ids...) (wake-peer-user-ids...))
+```
+
+The policy returns a complete batch, a bounded retry hint, or a hold reason.
+Only one `COMPLETE` batch result with zero denials can commit. A failed
+re-evaluation clears the previous outcome. Commit still validates the exact
+saved response and cursor; no external result can be substituted. A hold,
+retry hint, unsupported version or incomplete evaluation leaves the response
+pending. The service must durably schedule retries or record a repair before
+releasing a held response; this API does not retry or advance an offset itself.
+
+The MeTTa policy preserves complete canonical JSON updates, classifies known
+message types and callbacks, and retains unknown update types as unsupported.
+Chat authorization and sender role are separate: an operator ID never bypasses
+the chat allowlist. Inline callbacks without a chat remain unsupported. A
+routed message's value is:
+
+```metta
+(telegram:input 1 "update-kind" chat-id thread-id sender-id role normalized-update)
+```
+
+The role is `operator`, `wake-peer` or `ordinary`; it is classification data,
+not permission to dispatch. Consumers must check the recorded disposition
+before exposing an input and recheck current authority before executing an
+operator control; a historical role is not a permanent grant. Chat/thread lanes
+use decimal IDs separated by a dot. IDs are parsed without float conversion
+or interning provider text as MeTTa source. Unknown event names, text and keys
+remain JSON strings. Unicode, including escaped NUL, stays in scalar form.
+
+Normalization rejects duplicate JSON keys, sorts object keys, renumbers
+members and removes parser source positions. Arrays retain their order and
+numbers retain their exact lexemes. Consequently reordering object fields or
+moving an update within a response does not defeat deduplication. A duplicate
+reuses its first durable classification even after a routing configuration
+change; changed normalized provider data for the same ID is corruption and
+remains pending. Policy output is not assumed to be a complete validation of
+every nested Bot API object: later media/control handlers validate their own
+fields before use.
+
+Current admission bounds are 256 KiB of response text, 100 updates, nesting
+depth 64, 256 object members and 4096 array elements. Parser work limits,
+evaluation fuel, closed-value limits and store quotas also apply; these are
+independent bounds, not a promise that every document below the byte limit
+will fit. A parser resource limit is a distinct hold reason. Native parser
+elaboration iterates character and sibling sequences without charging them
+as nesting; actual nested values and total work remain limited.
+
+`make BUILD=core ENABLE_DURABLE=1 test-telegram-policy` exercises the real
+speculative HE program and intake ticket: routing/roles, all-or-nothing
+classification, malformed/duplicate controls, exact IDs, Unicode,
+normalization, bounded input, symbol growth, fuel/denial refusal, policy
+changes during deduplication, competing tickets and retained polls on reopen.
+This is intake; media actions, conversational controls, outgoing formatting,
+backoff and the independent service/worker loop remain separate integration.
 
 ## Durable timers
 

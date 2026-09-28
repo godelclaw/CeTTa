@@ -44,7 +44,7 @@ class PollPeer(Peer):
             return 200, [], b'{'
         assert limit == 2
         if p["offset"] == 0:
-            return 200, [], b'{"ok":true,"result":[{"update_id":7},{"update_id":43}]}'
+            return 200, [], b'{"ok":true,"result":[{"update_id":7,"message":{"chat":{"id":42,"type":"private"},"text":"hello"}},{"update_id":43}]}'
         return 200, [], b'{"ok":true,"result":[]}'
 
 

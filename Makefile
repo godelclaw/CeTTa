@@ -388,7 +388,7 @@ ifneq ($(filter $(ENABLE_DURABLE),0 1),$(ENABLE_DURABLE))
 $(error ENABLE_DURABLE must be 0 or 1)
 endif
 ifeq ($(ENABLE_DURABLE),1)
-DURABLE_SRC += src/durable_store.c src/durable_value.c src/durable_host.c src/durable_dispatch.c src/durable_inbox.c src/durable_timer.c
+DURABLE_SRC += src/durable_store.c src/durable_value.c src/durable_host.c src/durable_dispatch.c src/durable_inbox.c src/durable_timer.c src/telegram_intake.c
 ifeq ($(SQLITE_PROVIDER),vendored)
 DURABLE_CFLAGS += -Ivendor/sqlite -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DQS=0 -DSQLITE_OMIT_SHARED_CACHE -DSQLITE_DEFAULT_MEMSTATUS=0
 DURABLE_SRC += vendor/sqlite/sqlite3.c
@@ -38266,8 +38266,26 @@ test-durable-timer:
 	@exit 1
 endif
 
+.PHONY: test-telegram-policy
+ifeq ($(ENABLE_DURABLE)$(ENABLE_JSON_GSLT),11)
+TELEGRAM_POLICY_TEST_BIN = runtime/test-telegram-policy-$(BUILD_OBJ_TAG)
+TELEGRAM_POLICY_TEST_OBJ = runtime/bootstrap/test-telegram-policy.$(BUILD_OBJ_TAG).o
+-include $(TELEGRAM_POLICY_TEST_OBJ:.o=.d)
+$(TELEGRAM_POLICY_TEST_OBJ): tests/test_telegram_policy.c $(BUILD_CONFIG_HEADER)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -MF $(@:.o=.d) -c $< -o $@
+$(TELEGRAM_POLICY_TEST_BIN): $(TELEGRAM_POLICY_TEST_OBJ) $(FALLBACK_EVAL_TEST_LINK_OBJ) $(BRIDGE_DEPS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+test-telegram-policy: $(TELEGRAM_POLICY_TEST_BIN)
+	./$(TELEGRAM_POLICY_TEST_BIN)
+else
+test-telegram-policy:
+	@echo "test-telegram-policy requires ENABLE_DURABLE=1 and ENABLE_JSON_GSLT=1" >&2
+	@exit 1
+endif
+
 .PHONY: test-durable-poll
-ifeq ($(ENABLE_DURABLE)$(HTTP_PROVIDER_CURL),11)
+ifeq ($(ENABLE_DURABLE)$(HTTP_PROVIDER_CURL)$(ENABLE_JSON_GSLT),111)
 DURABLE_POLL_TEST_BIN = runtime/test-durable-poll-$(BUILD_OBJ_TAG)
 DURABLE_POLL_TEST_OBJ = runtime/bootstrap/test-durable-poll.$(BUILD_OBJ_TAG).o
 -include $(DURABLE_POLL_TEST_OBJ:.o=.d)
@@ -38280,6 +38298,6 @@ test-durable-poll: $(DURABLE_POLL_TEST_BIN)
 	python3 tests/test_durable_poll.py $(DURABLE_POLL_TEST_BIN)
 else
 test-durable-poll:
-	@echo "test-durable-poll requires ENABLE_DURABLE=1 and native HTTP" >&2
+	@echo "test-durable-poll requires ENABLE_DURABLE=1, native HTTP and ENABLE_JSON_GSLT=1" >&2
 	@exit 1
 endif
