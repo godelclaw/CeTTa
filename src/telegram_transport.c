@@ -85,7 +85,7 @@ CettaTelegramCredentialStatus cetta_telegram_credential_read(
         return TELEGRAM_CREDENTIAL_INVALID;
     struct stat st;
     if (fstat(fd,&st)) return TELEGRAM_CREDENTIAL_IO;
-    if (!S_ISREG(st.st_mode) || (st.st_mode&077) ||
+    if (!S_ISREG(st.st_mode) || (st.st_mode&007) ||
         (st.st_uid!=geteuid() && st.st_uid!=0) || st.st_size<1 || st.st_size>TOKEN_MAX+2)
         return TELEGRAM_CREDENTIAL_INVALID;
     char bytes[TOKEN_MAX+3]={0}; size_t used=0;

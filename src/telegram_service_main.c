@@ -185,9 +185,11 @@ static bool arguments(int argc, char **argv, Config *c) {
     }
     return true;
 }
+/* The state directory is the owner's, with no access for others; whether
+ * the owner's group may read it is the administrator's choice. */
 static bool private_directory(const char *path) {
     int fd=open(path,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC); struct stat st;
-    bool ok=fd>=0 && !fstat(fd,&st) && st.st_uid==geteuid() && !(st.st_mode&077);
+    bool ok=fd>=0 && !fstat(fd,&st) && st.st_uid==geteuid() && !(st.st_mode&007);
     if (fd>=0) close(fd);
     return ok;
 }
@@ -255,7 +257,7 @@ int main(int argc,char **argv) {
     struct rlimit core={0,0};
     if (setrlimit(RLIMIT_CORE,&core) || prctl(PR_SET_DUMPABLE,0) || !private_directory(c.directory))
         return error("process/state isolation",CONFIG);
-    umask(077);
+    umask(007);
     if (c.run) {
         if (c.listener<0) c.listener=activation_listener();
         if (!listener_valid(c.listener) || c.token_fd==c.listener || c.operator_fd==c.listener ||

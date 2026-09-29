@@ -107,7 +107,10 @@ with tempfile.TemporaryDirectory(prefix='cetta-service-entry-') as temp:
     token.chmod(0o600)
     state.chmod(0o755)
     check(['--check', *base], 78)
-    state.chmod(0o700)
+    # The owner's group may be given access; others never.
+    token.chmod(0o640); state.chmod(0o770)
+    check(['--check', *base], 0)
+    token.chmod(0o600); state.chmod(0o700)
     linked = root / 'token-link'; linked.symlink_to(token)
     check(['--check', *base[:-1], str(linked)], 78)
     with token.open('rb') as f:

@@ -17,8 +17,9 @@ typedef struct {
     bool allow_loopback_http;       /* native configuration for a local mock */
 } CettaTelegramCredentialConfig;
 
-/* Read a bounded private regular descriptor at offset zero, without closing
- * it or changing its position. The caller opens it without following links.
+/* Read a bounded regular descriptor at offset zero, without closing it or
+ * changing its position. It must be the service user's (or root's) and give
+ * others no access; the owner's group may read it. The caller opens it without following links.
  * Accept an optional final LF/CRLF. All errors are enums, never secret text.
  * Rotation creates a new object after outstanding users have finished. */
 CettaTelegramCredentialStatus cetta_telegram_credential_read(
