@@ -155,14 +155,15 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-scheduler-') as temp:
                 assert b'tg-agent:held' in records(db,'host.actors')['telegram/bot/42.0']
                 assert 'bot/42.0/43' in records(db,'host.inbox')
                 w.kill(); w.communicate(timeout=5)
-                # A queue of one effect is backpressure, not a fault: the batch
-                # is committed whole, and its sends go out in order, once each,
-                # through the one place.
+                # Queues of one input and one effect are backpressure, not a
+                # fault: two updates arriving together are both read, and the
+                # batch is committed whole and its sends go out in order, once
+                # each, through the one place.
                 db=root/f'quota-{i}.db'
                 with server.lock: server.updates=[]
-                server.add(100,84)
+                server.add(100,84); server.add(101,42)
                 service=start('quota')
-                wait(service,lambda:len(records(db,'host.worker-tasks'))==1,'quota worker task')
+                wait(service,lambda:len(records(db,'host.worker-tasks'))==2,'quota worker tasks')
                 w=worker(); task3=rpc(w,1); assert task3['code']==65
                 assert rpc(w,2,task3['id'],json.dumps([['send',v,'plain'] for v in ('quota-0','quota-1','quota-2')]))['code']==66
                 wait(service,lambda:('send','quota-2') in server.calls,'sends through a queue of one')

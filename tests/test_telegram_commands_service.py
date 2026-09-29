@@ -249,12 +249,14 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-commands-') as temp:
             # late answer edits that command's own notice.
             # It reads its receipts; the questions that waited behind them
             # follow.
-            questions = {}
+            questions, receipts = {}, set()
             def arrive():
                 for task, value in tasks(path):
                     if value[0] in ('command', 'callback'):
                         questions[task] = value
                     else:
+                        if value[0] == 'delivery':
+                            receipts.add(value[1])
                         rpc(path, RESULT, task, '[]')
                 return sum(v[0] == 'command' for v in questions.values()) == 3 and \
                     any(v[0] == 'callback' for v in questions.values())
@@ -277,13 +279,19 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-commands-') as temp:
             assert {(c[2]['message_id'], c[2]['text']) for c in done} >= {(fallback_2, 'engine for 2: cetta'),
                                                                           (fallback_4, 'engine for 4: cetta')}, done
 
-            # The agent catches up on everything that waited for it.
+            # The agent catches up on everything that waited for it: a
+            # receipt for every send of the flood, none lost while its task
+            # queue was full.
             def caught_up():
                 pending = tasks(path)
                 for task, value in pending:
+                    if value[0] == 'delivery':
+                        receipts.add(value[1])
                     rpc(path, RESULT, task, '[]')
                 return not pending and not tasks(path)
             wait(proc, caught_up, 'agent caught up', 60)
+            flood_receipts = {key for key in receipts if key.startswith('%d.0.' % OTHER)}
+            assert len(flood_receipts) == flood_sent(), (len(flood_receipts), flood_sent())
 
             # A present agent answers before the deadline: its answer is the
             # reply, and no notice is sent.

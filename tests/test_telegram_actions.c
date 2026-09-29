@@ -107,6 +107,16 @@ int main(int argc, char **argv) {
             strcpy(p,"\")");
             if (n==200) accepted(parse(k),"answerCallbackQuery"); else rejected(parse(k));
         }
+        for (int extra=4;extra<=5;++extra) {
+            p=k+sprintf(k,"(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (");
+            for (int r=0;r<13;++r) {
+                *p++='(';
+                for (int b=0;b<(r==12?extra:8);++b) p+=sprintf(p,"(telegram:button \"a\" \"d\")");
+                *p++=')';
+            }
+            strcpy(p,")))");
+            if (extra==4) accepted(parse(k),"sendMessage"); else rejected(parse(k));
+        }
         /* A full keyboard of the longest labels and data, all escaped, fits
          * the planned body. */
         p=k+sprintf(k,"(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (");

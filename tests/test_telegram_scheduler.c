@@ -49,7 +49,7 @@ int main(int argc,char **argv) {
     CettaServiceConfig config={{&channel,1,3000,65536,NULL,http_fault},&source,1,atoi(argv[5]),getuid(),"brain",NULL,service_fault};
     CettaDurableService *service=NULL; assert(cetta_service_new(store,&config,&service)==DURABLE_OK);
     CettaTelegramSchedulerConfig ac={{&trusted,"bot","brain",&actions,2000000},256,256,8*1024*1024,NULL,app_fault};
-    if (quota) ac.pending_effects=1;
+    if (quota) ac.pending_effects=ac.pending_inputs=1;
     CettaTelegramScheduler *scheduler=NULL;
     CettaTelegramSchedulerConfig wrong=ac; wrong.agent.source="other-bot";
     assert(cetta_telegram_scheduler_new(store,service,&wrong,&scheduler)==DURABLE_INVALID && !scheduler);
