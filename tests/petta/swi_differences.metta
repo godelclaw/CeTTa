@@ -2,8 +2,9 @@
 ; SWI-PeTTa.  Each entry states SWI-PeTTa's answer, the reason CeTTa differs,
 ; and who decided it when.  CeTTa's answers are pinned in the .expected file,
 ; so an entry that drifts is noticed; a difference missing from this file is
-; found only by running both engines.  SWI-PeTTa's answers are those of its
-; revision ae66fa8e.  An entry leaves this file only when the two engines agree.
+; found only by running both engines.  SWI-PeTTa's answers are those of the
+; pinned in-house snapshot 9b016a39, re-verified 2026-09-29.  An entry
+; leaves this file only when the two engines agree.
 
 (= (twice $x) (* 2 $x))
 (= (boom) (/ 1 0))
@@ -54,3 +55,97 @@
 !(msort (collapse (app1 safe 1)))
 !(import! &self swi_differences_import)
 !(msort (collapse (app1 safe 1)))
+
+; 5. Data spelled with `cons` and `nil` meets an authored list pattern as the
+;    list it spells: `(cons $h $t)` in a head or a `case` takes
+;    `(cons a (cons b nil))` apart as a and (cons b nil).  SWI-PeTTa reads the
+;    value as the three-element list (cons a (cons b nil)): its head is `cons`
+;    and `nil` is no empty list, so the walks below answer nothing there, and
+;    the case answers cons.  The parser pack's forests are built this way and
+;    rely on CeTTa's reading.
+;    Recorded: Oruži, 2026-09-27 (the reading predates a09d40ae; the tier
+;    follows the machine).  The contract is Zar's to set (goal.md §5).
+(spelled-item (cons a (cons b nil)))
+(= (spelled) (match &self (spelled-item $l) $l))
+(= (walk nil) done)
+(= (walk (cons $h $t)) (walk $t))
+(= (heads nil) ())
+(= (heads (cons $h $t)) (cons-atom $h (heads $t)))
+; SWI-PeTTa: no answer.
+!(walk (spelled))
+; SWI-PeTTa: no answer.
+!(heads (spelled))
+; SWI-PeTTa: cons
+!(case (spelled) (((cons $h $t) $h) ($other none)))
+
+; 6. Retired 2026-09-29: the pinned reference compares numbers by exact
+;    value too, so (== 3 3.0) is true and (!= 3 3.0) false in both engines.
+;    Recorded 2026-09-27 against revision ae66fa8e; retired by Oruži on
+;    re-verifying every entry against the pinned snapshot.
+
+; 7. `new-space` makes a fresh space.  SWI-PeTTa has no `new-space`, so
+;    (new-space) stays data there and is an Expression.  The extra form costs
+;    SWI-PeTTa programs nothing: a named space such as &work serves wherever
+;    a fresh one would, and a use of `new-space` translates to one.
+;    Decided: Zar, 2026-09-27 ("extras are ok").
+; SWI-PeTTa: Expression
+!(let $s (new-space) (get-metatype $s))
+
+; 8. An `if` whose branch has goals and a variable for its value keeps that
+;    variable to the branch.  SWI-PeTTa's translator unifies the `if`'s output
+;    with the variable itself, so the other branch's value must equal it too:
+;    `(pick 20)` below must return 1 there, and the query has no answer.
+;    A branch with no goals keeps them apart in both engines.
+;    Decided: Zar, 2026-09-27, as a bug of SWI-PeTTa's translator.
+(= (seven) 7)
+(= (pick $h) (if (> $h 10) (let $c (seven) $h) (pick 20)))
+; SWI-PeTTa: ()
+!(collapse (pick 1))
+
+; 9. Retired 2026-09-29: variable spelling is not observable, in answers or
+;    inside strings (Zar), so CeTTa's $V0 and SWI-PeTTa's $_0 name the same
+;    answer. Recorded 2026-09-28; retired by Oruži on that decision.
+
+; 10. A forward declaration does not provide an equation to execute before
+;     that equation is installed. Preserve the unknown expression, then use
+;     the equation once it is present. SWI-PeTTa 9b016a39 predeclares the
+;     function but aborts the first query with Unknown procedure, exit 2.
+;     Decided: Zar, 2026-09-28, as a reference bug under the rule that unknown
+;     expressions remain uninterpreted. Normal forward references after the
+;     definitions are installed agree in both engines.
+(= (before-install) (installed-later 5))
+!(before-install)
+(= (installed-later $n) (+ $n 1))
+!(before-install)
+
+; 11. A binding that would make a term cyclic has no answer: unification
+;     checks, as it binds a variable, that the variable does not occur in
+;     its value.  SWI-PeTTa runs with occurs_check=false and builds the
+;     rational tree, so both queries below answer there.  CeTTa reads a
+;     cyclic term that arrives from Prolog as the term it is, but its own
+;     bindings keep terms finite.
+;     Recorded: Oruži, 2026-09-29 (the check at the bind dates from
+;     2026-09-22).  The contract is Zar's to set.
+; SWI-PeTTa: done
+!(let $x (f $x) done)
+; SWI-PeTTa: ok
+!(let* (($_ (translatePredicate (= $c (f $x $c)))) ($x (g $c))) ok)
+
+; 12. A `let` pattern headed by a variable meets its value as a pattern.
+;     SWI-PeTTa's translator runs such a pattern as a run-time dispatch,
+;     whose data answer may not be cyclic, and runs it before the let's
+;     value when that value is computed but after it when the value is a
+;     variable: the query below has no answer there, while the same pattern
+;     over (index-atom $c 2), the same term, has one.  CeTTa answers both.
+;     Recorded: Oruži, 2026-09-29.  The contract is Zar's to set.
+; SWI-PeTTa: no answer.
+!(let $_ (translatePredicate (= $c (a b $c))) (let ($x $y $z) $c (== $z $c)))
+
+; 13. Writing a term that is not a finite tree raises
+;     representation_error(cyclic_term).  SWI-PeTTa's writer never ends on
+;     such a term and runs out of stack, so what its catch gives is a
+;     resource_error whose context describes the host's stack.  Uncaught,
+;     both stop the run with status 2 (tests/petta/rational_terms_text).
+;     Recorded: Oruži, 2026-09-29.  The contract is Zar's to set.
+; SWI-PeTTa: (Error (resource_error stack) (dict stack_overflow ...))
+!(let $_ (translatePredicate (= $c (f $c))) (catch (repr $c)))

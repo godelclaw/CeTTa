@@ -2,6 +2,7 @@
 
 #include "space.h"
 #include "symbol.h"
+#include "term_graph.h"
 #include "term_universe.h"
 
 #include <math.h>
@@ -9,6 +10,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* The rational-term module (term_graph.c).  A link unit without it builds
+ * no graph, so no node reaches the code that calls these. */
+#pragma weak term_graph_assume
+#pragma weak term_graph_assumption_key
+#pragma weak term_graph_assumptions_free
 
 #define PETTA_FORM_DENSE_CAP 4096u
 #define PETTA_FORM_OVERFLOW_CAP 128u
@@ -738,6 +745,186 @@ Atom *petta_semantics_closed_list(Arena *arena, Atom *list) {
     return atom_expr(arena, items, length);
 }
 
+static Atom *petta_error_term(Arena *arena, Atom *formal, Atom *context) {
+    return formal && context ? atom_error(arena, formal, context) : NULL;
+}
+
+static Atom *petta_error_unbound_context(Arena *arena) {
+    return atom_var_with_id(arena, "_", fresh_var_id());
+}
+
+/* context(Indicator, _), the indicator Name/Arity or Module:Name/Arity. */
+static Atom *petta_error_predicate_context(
+    Arena *arena, const char *module, const char *name, int64_t arity) {
+    Atom *slash = atom_symbol(arena, "/");
+    Atom *indicator = slash
+        ? atom_expr3(arena, slash, atom_symbol(arena, name),
+                     atom_int(arena, arity))
+        : NULL;
+    if (indicator && module) {
+        Atom *colon = atom_symbol(arena, ":");
+        indicator = colon
+            ? atom_expr3(arena, colon, atom_symbol(arena, module), indicator)
+            : NULL;
+    }
+    Atom *context = atom_symbol(arena, "context");
+    Atom *unbound = petta_error_unbound_context(arena);
+    return indicator && context && unbound
+        ? atom_expr3(arena, context, indicator, unbound) : NULL;
+}
+
+Atom *petta_semantics_list_error(Arena *arena, SymbolId operation,
+                                 Atom *culprit) {
+    if (!arena || !culprit)
+        return NULL;
+    PeTTaForm form = petta_semantics_form(operation);
+    Atom *context = NULL;
+    if (form == PETTA_FORM_LENGTH || operation == g_builtin_syms.size_atom)
+        context = petta_error_predicate_context(arena, NULL, "length", 2);
+    else if (form == PETTA_FORM_MSORT)
+        context = petta_error_predicate_context(arena, "system", "msort", 2);
+    else if (form == PETTA_FORM_LIST_TO_SET)
+        context = petta_error_unbound_context(arena);
+    else
+        return NULL;
+    Atom *tail = culprit;
+    while (petta_semantics_is_cons_constraint(tail))
+        tail = tail->expr.elems[2];
+    Atom *formal = NULL;
+    if (tail->kind == ATOM_VAR) {
+        formal = atom_symbol(arena, "instantiation_error");
+    } else {
+        Atom *type_error = atom_symbol(arena, "type_error");
+        Atom *list = atom_symbol(arena, "list");
+        formal = type_error && list
+            ? atom_expr3(arena, type_error, list, culprit) : NULL;
+    }
+    return petta_error_term(arena, formal, context);
+}
+
+Atom *petta_semantics_instantiation_error(
+    Arena *arena, const char *module, const char *name, int64_t arity) {
+    if (!arena || !name)
+        return NULL;
+    return petta_error_term(
+        arena, atom_symbol(arena, "instantiation_error"),
+        petta_error_predicate_context(arena, module, name, arity));
+}
+
+PeTTaPredicateTerm petta_semantics_predicate_term(
+    Arena *arena, Atom *value, Atom **term) {
+    if (term)
+        *term = NULL;
+    if (!arena || !value || !term)
+        return PETTA_PREDICATE_TERM_CAPACITY;
+    if (petta_semantics_value_contains_observable_open_cons(value)) {
+        value = petta_semantics_materialize_value(arena, value);
+        if (!value)
+            return PETTA_PREDICATE_TERM_CAPACITY;
+    }
+    Atom *formal = NULL;
+    Atom *tail = value;
+    while (petta_semantics_is_cons_constraint(tail))
+        tail = tail->expr.elems[2];
+    if (tail != value) {
+        /* [F|Args] with Args a partial or an improper list */
+        if (tail->kind == ATOM_VAR) {
+            formal = atom_symbol(arena, "instantiation_error");
+        } else {
+            Atom *type_error = atom_symbol(arena, "type_error");
+            Atom *list = atom_symbol(arena, "list");
+            formal = type_error && list
+                ? atom_expr3(arena, type_error, list, value) : NULL;
+        }
+    } else if (value->kind != ATOM_EXPR || value->expr.len == 0u) {
+        /* An unbound value is [F|Args] with F unbound. */
+        if (value->kind != ATOM_VAR)
+            return PETTA_PREDICATE_TERM_NONE;
+        formal = atom_symbol(arena, "instantiation_error");
+    } else {
+        Atom *first = value->expr.elems[0];
+        if (first->kind == ATOM_VAR) {
+            formal = atom_symbol(arena, "instantiation_error");
+        } else if (value->expr.len == 1u) {
+            *term = first;
+            return PETTA_PREDICATE_TERM_VALUE;
+        } else if (first->kind == ATOM_SYMBOL) {
+            *term = atom_petta_prolog_compound(arena, value);
+            return *term ? PETTA_PREDICATE_TERM_VALUE
+                         : PETTA_PREDICATE_TERM_CAPACITY;
+        } else {
+            Atom *type_error = atom_symbol(arena, "type_error");
+            Atom *atom = atom_symbol(arena, "atom");
+            formal = type_error && atom
+                ? atom_expr3(arena, type_error, atom, first) : NULL;
+        }
+    }
+    Atom *context = petta_error_predicate_context(arena, "system", "=..", 2);
+    *term = petta_error_term(arena, formal, context);
+    return *term ? PETTA_PREDICATE_TERM_ERROR
+                 : PETTA_PREDICATE_TERM_CAPACITY;
+}
+
+bool petta_semantics_parameter_declared_atom(
+    Space *space, Arena *arena, Atom *head, CettaExprLen arity,
+    CettaExprIndex index) {
+    if (!space || !arena || !head || head->kind != ATOM_SYMBOL ||
+        index >= arity ||
+        !space_head_has_arrow_signature(space, head->sym_id, arity))
+        return false;
+    Atom **types = NULL;
+    uint32_t count = space_get_declared_types(space, arena, head, &types);
+    bool declared = false;
+    for (uint32_t t = 0u; t < count && !declared; t++) {
+        Atom *type = types[t];
+        if (!type || type->kind != ATOM_EXPR ||
+            type->expr.len != arity + 2u ||
+            !atom_is_symbol_id(type->expr.elems[0], g_builtin_syms.arrow))
+            continue;
+        Atom *domain = type->expr.elems[index + 1u];
+        if (domain->kind == ATOM_EXPR && domain->expr.len == 3u &&
+            atom_is_symbol_id(domain->expr.elems[0], g_builtin_syms.colon) &&
+            domain->expr.elems[1]->kind == ATOM_VAR)
+            domain = domain->expr.elems[2];
+        declared = atom_is_symbol_id(domain, g_builtin_syms.atom);
+    }
+    free(types);
+    return declared;
+}
+
+Atom *petta_semantics_cyclic_term_error(
+    Arena *arena, const char *module, const char *name, int64_t arity) {
+    if (!arena)
+        return NULL;
+    Atom *representation_error = atom_symbol(arena, "representation_error");
+    Atom *cyclic_term = atom_symbol(arena, "cyclic_term");
+    Atom *formal = representation_error && cyclic_term
+        ? atom_expr2(arena, representation_error, cyclic_term) : NULL;
+    Atom *context = name
+        ? petta_error_predicate_context(arena, module, name, arity)
+        : petta_error_unbound_context(arena);
+    return formal && context ? petta_error_term(arena, formal, context) : NULL;
+}
+
+Atom *petta_semantics_syntax_error(Arena *arena, const char *text) {
+    if (!arena || !text)
+        return NULL;
+    static const char prefix[] = "Parse error in form: ";
+    size_t length = strlen(text);
+    if (length > SIZE_MAX - sizeof(prefix))
+        return NULL;
+    char *message = arena_alloc(arena, sizeof(prefix) + length);
+    if (!message)
+        return NULL;
+    memcpy(message, prefix, sizeof(prefix) - 1u);
+    memcpy(message + sizeof(prefix) - 1u, text, length + 1u);
+    Atom *syntax_error = atom_symbol(arena, "syntax_error");
+    Atom *formal = syntax_error
+        ? atom_expr2(arena, syntax_error, atom_symbol(arena, message))
+        : NULL;
+    return petta_error_term(arena, formal, atom_symbol(arena, "none"));
+}
+
 Atom *petta_semantics_sort_value(Arena *arena, Atom *value, bool total,
                                  bool *type_error) {
     *type_error = false;
@@ -795,6 +982,25 @@ Atom *petta_semantics_materialize_closed_logical_list(
     Atom *result = atom_expr(arena, items, length);
     free(items);
     return result;
+}
+
+Atom *petta_semantics_match_index_pattern(
+    Arena *arena, Atom *pattern, bool *exact) {
+    if (exact)
+        *exact = false;
+    if (!arena || !pattern)
+        return NULL;
+    Atom *query = pattern;
+    if (petta_semantics_is_open_cons_value(query))
+        query = petta_semantics_materialize_closed_logical_list(arena, query);
+    if (query && !atom_structural_may_have_list_carrier(query)) {
+        if (exact)
+            *exact = true;
+        return query;
+    }
+    /* Partial tails and nested carriers retain their original bindings.
+     * Only the index sees this wildcard (MatchIndexProjection). */
+    return atom_var_with_literal(arena, "__match_index", fresh_var_id());
 }
 
 Atom *petta_semantics_materialize_logical_list(
@@ -987,6 +1193,12 @@ Atom *petta_semantics_construct_value(
             arena, elements[1], elements[2]);
     }
     return atom_expr(arena, elements, length);
+}
+
+bool petta_semantics_construct_value_is_expression(
+    const Atom *head, CettaExprLen length) {
+    return !(length == 3u && head && head->kind == ATOM_SYMBOL &&
+             petta_semantics_form(head->sym_id) == PETTA_FORM_CONS);
 }
 
 typedef struct {
@@ -1258,6 +1470,7 @@ static bool petta_semantics_match_cons_constraint_mode(
     PeTTaConsMatchPair *pairs = NULL;
     size_t length = 0u;
     size_t capacity = 0u;
+    CettaTermGraphAssumptions assumed = {0};
     if (!petta_cons_match_pair_push(
             &pairs, &length, &capacity,
             source_epoch ? binding_value_from_context(constraint, source_epoch)
@@ -1297,6 +1510,40 @@ static bool petta_semantics_match_cons_constraint_mode(
             if (!match_binding_values_builder(left_value, right_value, builder)) {
                 goto fail;
             }
+            continue;
+        }
+        /*
+         * A rational term's node meets the other side as its term one level
+         * open.  Two nodes met again are a pair being unified already, which
+         * holds by the assumption made when it was first met, as in
+         * unification of rational trees: a failure anywhere fails the whole
+         * unification, assumption and all.
+         */
+        if (atom_is_rational_value(left) || atom_is_rational_value(right)) {
+            if (atom_is_rational_value(left) &&
+                atom_is_rational_value(right)) {
+                bool fresh = false;
+                const void *left_key = term_graph_assumption_key(
+                    &assumed, left,
+                    ((uint64_t)left_value.kind << 32) | left_value.epoch);
+                const void *right_key = term_graph_assumption_key(
+                    &assumed, right,
+                    ((uint64_t)right_value.kind << 32) | right_value.epoch);
+                if (!left_key || !right_key ||
+                    !term_graph_assume(&assumed, left_key, right_key,
+                                       &fresh))
+                    goto fail;
+                if (!fresh)
+                    continue;
+            }
+            BindingValue open_left = left_value;
+            BindingValue open_right = right_value;
+            open_left.skeleton = atom_rational_open(arena, left);
+            open_right.skeleton = atom_rational_open(arena, right);
+            if (!open_left.skeleton || !open_right.skeleton ||
+                !petta_cons_match_pair_push(
+                    &pairs, &length, &capacity, open_left, open_right))
+                goto fail;
             continue;
         }
         if (!left_cons && !right_cons &&
@@ -1385,10 +1632,14 @@ static bool petta_semantics_match_cons_constraint_mode(
     }
 
     free(pairs);
+    if (assumed.slots || assumed.carriers)
+        term_graph_assumptions_free(&assumed);
     return true;
 
 fail:
     free(pairs);
+    if (assumed.slots || assumed.carriers)
+        term_graph_assumptions_free(&assumed);
     bindings_builder_rollback(builder, entry_mark);
     return false;
 }
@@ -1690,6 +1941,265 @@ bool petta_semantics_intrinsic_partial_arity(
     return false;
 }
 
+/* The functions SWI-PeTTa's prelude registers (fun/1, register_fun/1 in
+ * metta.pl), each with the input arities its registration records
+ * (arity/2): those of the predicates of that name when the prelude loads,
+ * less the result argument, in the configuration its run script uses, with
+ * the MORK bridge loaded (which gives mm2-exec its arity).  A name
+ * registered with none recorded, such as sqrt, is partial at every
+ * application (RegisteredArity.reference). */
+#define PETTA_ARITY(n) ((uint16_t)(1u << (n)))
+static const struct {
+    const char *name;
+    uint16_t arities;
+} petta_registered_builtins[] = {
+    {"superpose", PETTA_ARITY(1)},
+    {"empty", PETTA_ARITY(0)},
+    {"let", 0u},
+    {"let*", 0u},
+    {"+", PETTA_ARITY(2)},
+    {"-", PETTA_ARITY(2)},
+    {"*", PETTA_ARITY(2)},
+    {"/", PETTA_ARITY(2) | PETTA_ARITY(3) | PETTA_ARITY(4) | PETTA_ARITY(5) | PETTA_ARITY(6) | PETTA_ARITY(7) | PETTA_ARITY(8)},
+    {"%", PETTA_ARITY(2)},
+    {"min", PETTA_ARITY(2)},
+    {"max", PETTA_ARITY(2)},
+    {"change-state!", PETTA_ARITY(2)},
+    {"get-state", PETTA_ARITY(1)},
+    {"bind!", PETTA_ARITY(2)},
+    {"<", PETTA_ARITY(2)},
+    {">", PETTA_ARITY(2)},
+    {"==", PETTA_ARITY(2)},
+    {"!=", PETTA_ARITY(2)},
+    {"=", PETTA_ARITY(2)},
+    {"=?", PETTA_ARITY(2)},
+    {"<=", PETTA_ARITY(2)},
+    {">=", PETTA_ARITY(2)},
+    {"and", PETTA_ARITY(2)},
+    {"or", PETTA_ARITY(2)},
+    {"xor", PETTA_ARITY(2)},
+    {"implies", PETTA_ARITY(2)},
+    {"not", PETTA_ARITY(0) | PETTA_ARITY(1)},
+    {"sqrt", 0u},
+    {"exp", PETTA_ARITY(1)},
+    {"log", 0u},
+    {"cos", 0u},
+    {"sin", 0u},
+    {"first-from-pair", PETTA_ARITY(1)},
+    {"second-from-pair", PETTA_ARITY(1)},
+    {"car-atom", PETTA_ARITY(1)},
+    {"cdr-atom", PETTA_ARITY(1)},
+    {"unique-atom", PETTA_ARITY(1)},
+    {"alpha-unique-atom", PETTA_ARITY(1)},
+    {"repr", PETTA_ARITY(1)},
+    {"repra", PETTA_ARITY(1)},
+    {"parse", PETTA_ARITY(1)},
+    {"println!", PETTA_ARITY(1)},
+    {"readln!", PETTA_ARITY(0)},
+    {"test", PETTA_ARITY(2)},
+    {"assert", PETTA_ARITY(0) | PETTA_ARITY(1)},
+    {"mm2-exec", PETTA_ARITY(2)},
+    {"atom_concat", PETTA_ARITY(2)},
+    {"atom_chars", PETTA_ARITY(1)},
+    {"copy_term", PETTA_ARITY(1) | PETTA_ARITY(2) | PETTA_ARITY(3)},
+    {"term_hash", PETTA_ARITY(1) | PETTA_ARITY(3)},
+    {"foldl", PETTA_ARITY(3) | PETTA_ARITY(4) | PETTA_ARITY(5) | PETTA_ARITY(6)},
+    {"first", PETTA_ARITY(1)},
+    {"last", PETTA_ARITY(1)},
+    {"append", PETTA_ARITY(0) | PETTA_ARITY(1) | PETTA_ARITY(2)},
+    {"length", PETTA_ARITY(1)},
+    {"size-atom", PETTA_ARITY(1)},
+    {"sort", PETTA_ARITY(1) | PETTA_ARITY(3)},
+    {"msort", PETTA_ARITY(1)},
+    {"member", PETTA_ARITY(1) | PETTA_ARITY(2)},
+    {"is-member", PETTA_ARITY(2)},
+    {"is-alpha-member", PETTA_ARITY(2)},
+    {"exclude-item", PETTA_ARITY(2)},
+    {"list_to_set", PETTA_ARITY(1)},
+    {"maplist", PETTA_ARITY(1) | PETTA_ARITY(2) | PETTA_ARITY(3) | PETTA_ARITY(4)},
+    {"eval", PETTA_ARITY(1) | PETTA_ARITY(2)},
+    {"reduce", PETTA_ARITY(1)},
+    {"import!", PETTA_ARITY(2)},
+    {"add-atom", PETTA_ARITY(2)},
+    {"remove-atom", PETTA_ARITY(2)},
+    {"get-atoms", PETTA_ARITY(1)},
+    {"match", PETTA_ARITY(3)},
+    {"is-var", PETTA_ARITY(1)},
+    {"is-ground", PETTA_ARITY(1)},
+    {"is-expr", PETTA_ARITY(1)},
+    {"is-space", PETTA_ARITY(1)},
+    {"get-mettatype", 0u},
+    {"decons", PETTA_ARITY(1)},
+    {"decons-atom", PETTA_ARITY(1)},
+    {"py-call", PETTA_ARITY(1) | PETTA_ARITY(2)},
+    {"get-type", PETTA_ARITY(1)},
+    {"get-metatype", PETTA_ARITY(1)},
+    {"=alpha", PETTA_ARITY(2)},
+    {"concat", 0u},
+    {"sread", PETTA_ARITY(1)},
+    {"cons", PETTA_ARITY(2)},
+    {"reverse", PETTA_ARITY(1)},
+    {"#+", PETTA_ARITY(2)},
+    {"#-", PETTA_ARITY(2)},
+    {"#*", PETTA_ARITY(2)},
+    {"#div", PETTA_ARITY(2)},
+    {"#//", PETTA_ARITY(2)},
+    {"#mod", PETTA_ARITY(2)},
+    {"#min", PETTA_ARITY(2)},
+    {"#max", PETTA_ARITY(2)},
+    {"#<", PETTA_ARITY(2)},
+    {"#>", PETTA_ARITY(2)},
+    {"#=", PETTA_ARITY(2)},
+    {"#\\=", PETTA_ARITY(2)},
+    {"set_hook", 0u},
+    {"union-atom", PETTA_ARITY(2)},
+    {"cons-atom", PETTA_ARITY(2)},
+    {"intersection-atom", PETTA_ARITY(2)},
+    {"subtraction-atom", PETTA_ARITY(2)},
+    {"index-atom", PETTA_ARITY(2)},
+    {"id", PETTA_ARITY(1)},
+    {"pow-math", PETTA_ARITY(2)},
+    {"sqrt-math", PETTA_ARITY(1)},
+    {"sort-atom", PETTA_ARITY(1)},
+    {"abs-math", PETTA_ARITY(1)},
+    {"log-math", PETTA_ARITY(2)},
+    {"trunc-math", PETTA_ARITY(1)},
+    {"ceil-math", PETTA_ARITY(1)},
+    {"floor-math", PETTA_ARITY(1)},
+    {"round-math", PETTA_ARITY(1)},
+    {"sin-math", PETTA_ARITY(1)},
+    {"cos-math", PETTA_ARITY(1)},
+    {"tan-math", PETTA_ARITY(1)},
+    {"asin-math", PETTA_ARITY(1)},
+    {"random-int", PETTA_ARITY(2) | PETTA_ARITY(3)},
+    {"random-float", PETTA_ARITY(2) | PETTA_ARITY(3)},
+    {"acos-math", PETTA_ARITY(1)},
+    {"atan-math", PETTA_ARITY(1)},
+    {"isnan-math", PETTA_ARITY(1)},
+    {"isinf-math", PETTA_ARITY(1)},
+    {"min-atom", PETTA_ARITY(1)},
+    {"max-atom", PETTA_ARITY(1)},
+    {"foldl-atom", PETTA_ARITY(3)},
+    {"map-atom", PETTA_ARITY(2)},
+    {"filter-atom", PETTA_ARITY(2)},
+    {"current-time", PETTA_ARITY(0)},
+    {"format-time", PETTA_ARITY(1)},
+    {"library", PETTA_ARITY(1) | PETTA_ARITY(2)},
+    {"exists_file", PETTA_ARITY(0)},
+    {"import_prolog_function", PETTA_ARITY(1)},
+    {"Predicate", PETTA_ARITY(1)},
+    {"callPredicate", PETTA_ARITY(1)},
+    {"assertaPredicate", PETTA_ARITY(1)},
+    {"assertzPredicate", PETTA_ARITY(1)},
+    {"retractPredicate", PETTA_ARITY(1)},
+    {"add-translator-rule!", PETTA_ARITY(1)},
+    {"remove-translator-rule!", PETTA_ARITY(1)},
+    {"argv", PETTA_ARITY(1)},
+};
+#undef PETTA_ARITY
+
+enum {
+    PETTA_REGISTERED_BUILTIN_COUNT =
+        sizeof(petta_registered_builtins) /
+        sizeof(petta_registered_builtins[0]),
+};
+
+typedef struct {
+    SymbolId id;
+    uint16_t arities;
+} PeTTaRegisteredBuiltin;
+
+typedef struct {
+    const SymbolTable *table;
+    uint64_t table_instance_id;
+    size_t len;
+    PeTTaRegisteredBuiltin entries[PETTA_REGISTERED_BUILTIN_COUNT];
+} PeTTaRegisteredBuiltins;
+
+static _Thread_local PeTTaRegisteredBuiltins g_petta_registered_builtins;
+
+static int petta_registered_builtin_compare(const void *left,
+                                            const void *right) {
+    SymbolId a = ((const PeTTaRegisteredBuiltin *)left)->id;
+    SymbolId b = ((const PeTTaRegisteredBuiltin *)right)->id;
+    return (a > b) - (a < b);
+}
+
+bool petta_semantics_registered_builtin_arities(SymbolId symbol,
+                                                uint16_t *arities) {
+    PeTTaRegisteredBuiltins *set = &g_petta_registered_builtins;
+    uint64_t table_instance_id = symbol_table_instance_id(g_symbols);
+    if (set->table != g_symbols ||
+        set->table_instance_id != table_instance_id) {
+        if (!g_symbols || symbol == SYMBOL_ID_NONE)
+            return false;
+        size_t len = 0u;
+        for (size_t index = 0u; index < PETTA_REGISTERED_BUILTIN_COUNT;
+             index++) {
+            SymbolId id = symbol_intern_cstr(
+                g_symbols, petta_registered_builtins[index].name);
+            if (id != SYMBOL_ID_NONE)
+                set->entries[len++] = (PeTTaRegisteredBuiltin){
+                    .id = id,
+                    .arities = petta_registered_builtins[index].arities,
+                };
+        }
+        qsort(set->entries, len, sizeof(set->entries[0]),
+              petta_registered_builtin_compare);
+        set->len = len;
+        set->table = g_symbols;
+        set->table_instance_id = table_instance_id;
+    }
+    size_t low = 0u;
+    size_t high = set->len;
+    while (low < high) {
+        size_t middle = low + (high - low) / 2u;
+        if (set->entries[middle].id < symbol)
+            low = middle + 1u;
+        else
+            high = middle;
+    }
+    if (low >= set->len || set->entries[low].id != symbol)
+        return false;
+    if (arities)
+        *arities = set->entries[low].arities;
+    return true;
+}
+
+/* A registered name's answer about `supplied` arguments, read from the bits
+ * of its recorded arities (RegisteredArity.answer_mask). */
+PeTTaNamedArity petta_semantics_registered_named_arity(
+    uint16_t arities, CettaExprLen supplied) {
+    enum { WIDTH = 16u };
+    PeTTaNamedArity info = {.known = true};
+    if (supplied >= WIDTH) {
+        info.smaller = arities != 0u;
+        return info;
+    }
+    unsigned count = (unsigned)supplied;
+    info.exact = ((arities >> count) & 1u) != 0u;
+    info.larger = (arities >> (count + 1u)) != 0u;
+    info.smaller = (arities & ((1u << count) - 1u)) != 0u;
+    return info;
+}
+
+bool petta_semantics_registered_builtin(SymbolId symbol) {
+    return petta_semantics_registered_builtin_arities(symbol, NULL);
+}
+
+/* SWI-PeTTa's get-metatype/2: a truth value is Grounded, and so is an atom
+ * that names a registered function (fun/1); any other atom is a Symbol. */
+Atom *petta_semantics_symbol_metatype(Arena *arena, SymbolId symbol,
+                                      bool registered) {
+    const PeTTaSymbolIds *ids = petta_symbol_ids();
+    bool grounded = registered ||
+        symbol == ids->true_text || symbol == ids->false_text ||
+        symbol == g_builtin_syms.true_text ||
+        symbol == g_builtin_syms.false_text ||
+        petta_semantics_registered_builtin(symbol);
+    return grounded ? atom_grounded_type(arena) : atom_symbol_type(arena);
+}
+
 bool petta_semantics_truth_value(const Atom *atom, bool *value) {
     const PeTTaSymbolIds *ids = petta_symbol_ids();
     if (!atom || !value)
@@ -1805,18 +2315,11 @@ bool petta_semantics_library_path_effect(
         return false;
     }
 
-    const Atom *wrapper = atom->expr.elems[1];
-    if (!wrapper || wrapper->kind != ATOM_EXPR ||
-        wrapper->expr.len != 2u || !wrapper->expr.elems[0] ||
-        wrapper->expr.elems[0]->kind != ATOM_SYMBOL ||
-        petta_semantics_form(wrapper->expr.elems[0]->sym_id) !=
-            PETTA_FORM_PREDICATE) {
-        effect->kind = PETTA_LIBRARY_PATH_EFFECT_NONE;
-        return false;
-    }
-
-    const Atom *body = wrapper->expr.elems[1];
-    if (!body || body->kind != ATOM_EXPR || body->expr.len != 2u ||
+    /* The argument is a value, the compound library_path(Path) its
+     * Predicate named. */
+    Atom *body = NULL;
+    if (!atom_petta_prolog_compound_body(atom->expr.elems[1], &body) ||
+        !body || body->kind != ATOM_EXPR || body->expr.len != 2u ||
         !body->expr.elems[0] || body->expr.elems[0]->kind != ATOM_SYMBOL ||
         !symbol_eq_cstr(
             g_symbols, body->expr.elems[0]->sym_id, "library_path")) {
@@ -2309,19 +2812,10 @@ typedef enum {
     PETTA_TERM_COMPOUND = 4,
 } PeTTaTermClass;
 
-static bool petta_grounded_is_number(const Atom *atom) {
-    if (!atom || atom->kind != ATOM_GROUNDED)
-        return false;
-    return atom->ground.gkind == GV_INT ||
-           atom->ground.gkind == GV_FLOAT ||
-           atom->ground.gkind == GV_BIGINT ||
-           atom->ground.gkind == GV_RATIONAL;
-}
-
 static PeTTaTermClass petta_term_class(const Atom *atom) {
     if (atom->kind == ATOM_VAR)
         return PETTA_TERM_VARIABLE;
-    if (petta_grounded_is_number(atom))
+    if (atom_is_number(atom))
         return PETTA_TERM_NUMBER;
     if (atom->kind == ATOM_GROUNDED &&
         atom->ground.gkind == GV_STRING) {
@@ -2414,6 +2908,28 @@ static int petta_compare_float_values(double left, double right) {
     return 0;
 }
 
+/* A machine integer against a finite double, exactly: an integer of at most
+ * 53 bits converts to a double without rounding; a larger one is compared
+ * with the double's whole part, which is exact below 2^63, and then with its
+ * fraction. */
+static int petta_compare_int_with_double(int64_t value, double floating) {
+    const int64_t exact_limit = INT64_C(1) << 53;
+    if (value >= -exact_limit && value <= exact_limit) {
+        double exact = (double)value;
+        return exact < floating ? -1 : exact > floating ? 1 : 0;
+    }
+    if (floating >= 9223372036854775808.0)
+        return -1;
+    if (floating < -9223372036854775808.0)
+        return 1;
+    double whole = trunc(floating);
+    int64_t whole_value = (int64_t)whole;
+    if (value != whole_value)
+        return value < whole_value ? -1 : 1;
+    double fraction = floating - whole;
+    return fraction > 0.0 ? -1 : fraction < 0.0 ? 1 : 0;
+}
+
 static bool petta_compare_numbers(
     const Atom *left, const Atom *right, int *ordering) {
     bool left_float = left->ground.gkind == GV_FLOAT;
@@ -2422,6 +2938,30 @@ static bool petta_compare_numbers(
         *ordering = petta_compare_float_values(
             left->ground.fval, right->ground.fval);
         return true;
+    }
+    /* Two machine integers, and a machine integer against a finite float,
+     * compare without GMP; a float before an exact number of equal value,
+     * as SWI orders them. */
+    if (left->ground.gkind == GV_INT && right->ground.gkind == GV_INT) {
+        *ordering = left->ground.ival < right->ground.ival ? -1
+            : left->ground.ival > right->ground.ival ? 1 : 0;
+        return true;
+    }
+    if ((left_float && right->ground.gkind == GV_INT) ||
+        (right_float && left->ground.gkind == GV_INT)) {
+        double floating =
+            left_float ? left->ground.fval : right->ground.fval;
+        if (!isnan(floating) && !isinf(floating)) {
+            int64_t exact =
+                left_float ? right->ground.ival : left->ground.ival;
+            int exact_against_float =
+                petta_compare_int_with_double(exact, floating);
+            *ordering = exact_against_float == 0
+                ? (left_float ? -1 : 1)
+                : (left_float ? -exact_against_float
+                              : exact_against_float);
+            return true;
+        }
     }
 
 #if CETTA_BUILD_WITH_GMP
@@ -2515,6 +3055,7 @@ static int petta_compare_grounded_atoms(
     case GV_CAPTURE:
     case GV_BINDINGS:
     case GV_FOREIGN:
+    case GV_TERM_GRAPH:
         return petta_compare_u64(
             (uint64_t)(uintptr_t)left->ground.ptr,
             (uint64_t)(uintptr_t)right->ground.ptr);

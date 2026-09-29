@@ -8,3 +8,12 @@
 (1)
 true
 (1 (extra 1))
+done
+(a b)
+a
+Grounded
+(20)
+(installed-later 5)
+6
+true
+(Error (representation_error cyclic_term) $V0)
