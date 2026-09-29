@@ -218,7 +218,7 @@ int main(int argc,char **argv) {
     pure(parse("(tg-cmd:answer-text \"[\\\"answer\\\",\\\"engine: cetta\\\"]\")"),"(tg:some \"engine: cetta\")");
     pure(parse("(tg-cmd:answer-text \"[\\\"answer\\\",\\\"\\\"]\")"),"(tg:some \"(empty answer)\")");
     pure(parse("(tg-cmd:answer-text \"[]\")"),"tg:none");
-    pure(parse("(tg-cmd:observation \"11\" \"/engine\" \"cetta\")"),"\"[\\\"command\\\",\\\"11\\\",\\\"/engine\\\",\\\"cetta\\\"]\"");
+    pure(parse("(tg-cmd:observation \"11\" \"/engine\" \"cetta\" \"42.0\")"),"\"[\\\"command\\\",\\\"11\\\",\\\"/engine\\\",\\\"cetta\\\",\\\"42.0\\\"]\"");
     pure(parse("(tg-cmd:stopped-text)"),"\"Stopped. Nothing Ada submits is sent until /start.\"");
     pure(parse("(tg-channel:result-json (tg-agent:delivered 9))"),"\"[\\\"delivered\\\",9]\"");
     pure(parse("(tg-channel:result-json (tg-agent:failed 400))"),"\"[\\\"failed\\\",400]\"");
@@ -339,7 +339,7 @@ int main(int argc,char **argv) {
     /* A delegated command asks the agent and starts the deadline. */
     incoming_text(11,42,"operator","/engine cetta",cmd); accept_batch(decide(cmd,1),2,commit);
     command_is("11","tg-cmd:waiting");
-    snprintf(request,sizeof(request),"%s/0",commit); published(request,"[\"command\",\"11\",\"/engine\",\"cetta\"]",task);
+    snprintf(request,sizeof(request),"%s/0",commit); published(request,"[\"command\",\"11\",\"/engine\",\"cetta\",\"42.0\"]",task);
     snprintf(key,sizeof(key),"%s/1",commit); admission(key,TELEGRAM_FOREIGN);
     /* Answered before the deadline: the answer is the reply; the deadline
      * then finds nothing to do. */
@@ -352,7 +352,7 @@ int main(int argc,char **argv) {
     /* The deadline first: the service's notice is the reply, and the answer
      * that arrives later edits it. */
     incoming_text(12,42,"operator","/engine",cmd); accept_batch(decide(cmd,1),2,commit);
-    snprintf(request,sizeof(request),"%s/0",commit); published(request,"[\"command\",\"12\",\"/engine\",\"\"]",task);
+    snprintf(request,sizeof(request),"%s/0",commit); published(request,"[\"command\",\"12\",\"/engine\",\"\",\"42.0\"]",task);
     deadline("12",timer_input); accept_batch(decide(timer_input,1),1,commit);
     command_is("12","tg-cmd:fell-back");
     snprintf(reply_key,sizeof(reply_key),"%s/0",commit);
@@ -367,7 +367,7 @@ int main(int argc,char **argv) {
     /* The answer arrives while the notice is still being sent: it is kept,
      * and the notice's delivery edits it in. */
     incoming_text(13,42,"operator","/engine",cmd); accept_batch(decide(cmd,1),2,commit);
-    snprintf(request,sizeof(request),"%s/0",commit); published(request,"[\"command\",\"13\",\"/engine\",\"\"]",task);
+    snprintf(request,sizeof(request),"%s/0",commit); published(request,"[\"command\",\"13\",\"/engine\",\"\",\"42.0\"]",task);
     deadline("13",timer_input); accept_batch(decide(timer_input,1),1,commit);
     char notice[64]; snprintf(notice,sizeof(notice),"%s/0",commit);
     result(task,"[\"answer\",\"late\"]",worker_input); accept_batch(decide(worker_input,1),0,commit);
@@ -385,7 +385,7 @@ int main(int argc,char **argv) {
     intent_is(reply_key,"(telegram:send-text 1 42 0 114 \"Stopped. Nothing Ada submits is sent until /start.\" \"plain\")",
         "(tg-channel:command-sent 1 \"bot\" \"14\" reply)");
     admission(reply_key,TELEGRAM_SEND); admission(lane_action,TELEGRAM_WAIT);
-    snprintf(request,sizeof(request),"%s/1",commit); published(request,"[\"command\",\"14\",\"/stop\",\"\"]",task);
+    snprintf(request,sizeof(request),"%s/1",commit); published(request,"[\"command\",\"14\",\"/stop\",\"\",\"42.0\"]",task);
     submitted("84.1.00000000000000000001","[[\"send\",\"x\",\"plain\"]]",sub); accept_batch(decide(sub,1),1,commit);
     decided("84.1.00000000000000000001","(tg-channel:decision 1 rejected stopped)");
     /* The agent's reply to a /stop only acknowledges it. */

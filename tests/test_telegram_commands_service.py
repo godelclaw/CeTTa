@@ -199,8 +199,9 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-commands-') as temp:
             # The agent arrives and answers the commands it was asked: each
             # late answer edits that command's own notice.
             asked = wait(proc, lambda: [t for t in tasks(path) if t[1][0] == 'command'], 'command tasks')
-            assert [t[1][1:] for t in asked] == [['2', '/engine', ''], ['4', '/engine', 'cetta'], ['6', '/engine', '']], asked
-            for task, (_, key, name, args) in asked:
+            assert [t[1][1:] for t in asked] == [['2', '/engine', '', '42.0'], ['4', '/engine', 'cetta', '42.0'],
+                                                 ['6', '/engine', '', '42.0']], asked
+            for task, (_, key, name, args, lane) in asked:
                 assert rpc(path, RESULT, task, json.dumps(['answer', 'engine for %s: cetta' % key]))[0] == STORED
             def edits():
                 with api.lock:

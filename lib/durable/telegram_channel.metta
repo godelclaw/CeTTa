@@ -15,7 +15,7 @@
 ;   ["delivery", key, position, count, result]
 ;   ["rejected", key, reason]
 ;   ["released", lane, key, position]
-;   ["command", key, name, arguments]
+;   ["command", key, name, arguments, lane]
 ; with result ["delivered", message-id] | ["failed", code] |
 ; ["not-sent"] | ["uncertain", reason].
 
@@ -82,7 +82,8 @@
                      (((tg:some $m) (case (telegram:optional-id $m "message_id" 0)
                                       (((tg:integer $n) $n) ($bad 0))))
                       ($none 0)))
-       (let $ask (durable:worker:request 0 $worker (tg-cmd:observation $key $name $args)
+       (let $ask (durable:worker:request 0 $worker
+                   (tg-cmd:observation $key $name $args (format-args "{}.{}" ($chat $thread)))
                    (tg-channel:asked 1 $source $key))
          (case $kind
            ((help

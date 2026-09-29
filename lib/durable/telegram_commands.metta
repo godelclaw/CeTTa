@@ -106,10 +106,11 @@
            (if (> $length 3800) (tg:some (str:slice $text 0 3800)) (tg:some $text)))))
       ($other tg:none))))
 
-; The agent's task for a command: ["command", key, name, arguments]. Names
-; are declared; arguments contain no quote, backslash or control character.
-(= (tg-cmd:observation $key $name $args)
-   (format-args "[\"command\",\"{}\",\"{}\",\"{}\"]" ($key $name $args)))
+; The agent's task for a command: ["command", key, name, arguments, lane].
+; Names are declared; arguments contain no quote, backslash or control
+; character; the lane is CHAT.THREAD of the operator's message.
+(= (tg-cmd:observation $key $name $args $lane)
+   (format-args "[\"command\",\"{}\",\"{}\",\"{}\",\"{}\"]" ($key $name $args $lane)))
 
 ; The lifecycle latch, read from the given view.
 (= (tg-cmd:stopped $view)
