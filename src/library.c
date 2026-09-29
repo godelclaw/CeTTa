@@ -4518,6 +4518,63 @@ static Atom *fs_read_lines(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
     return result;
 }
 
+/* The complete lines within bytes [start, end) of a file; end < 0 or past
+ * the file means its end. A range that starts inside the file begins at the
+ * next line: the line cut by start is not returned. */
+static Atom *fs_read_lines_between(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *path;
+    int64_t from, to;
+    if (nargs != 3 || !(path = library_text_arg(args[0])) ||
+        args[1]->kind != ATOM_GROUNDED || args[1]->ground.gkind != GV_INT ||
+        args[2]->kind != ATOM_GROUNDED || args[2]->ground.gkind != GV_INT) {
+        return library_signature_error(a, head, args, nargs, "expected filename, start and end");
+    }
+    from = args[1]->ground.ival; to = args[2]->ground.ival;
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        return atom_error(a, library_call_expr(a, head, args, nargs),
+                          atom_string(a, strerror(errno)));
+    }
+    if (fseeko(f, 0, SEEK_END) != 0) { fclose(f); return atom_expr(a, NULL, 0); }
+    int64_t size = (int64_t)ftello(f);
+    if (to < 0 || to > size) to = size;
+    if (from < 0) from = 0;
+    if (from > to) from = to;
+    size_t len = (size_t)(to - from);
+    char *buf = cetta_malloc(len + 1);
+    if (fseeko(f, (off_t)from, SEEK_SET) != 0 || fread(buf, 1, len, f) != len) {
+        fclose(f); free(buf);
+        return atom_error(a, library_call_expr(a, head, args, nargs), atom_string(a, "read failed"));
+    }
+    fclose(f);
+    buf[len] = '\0';
+    size_t start = 0;
+    if (from > 0) {
+        char *newline = memchr(buf, '\n', len);
+        start = newline ? (size_t)(newline - buf) + 1 : len;
+    }
+    char **items = NULL; uint32_t nitems = 0, cap = 0;
+    for (size_t i = start; i < len; ) {
+        char *newline = memchr(buf + i, '\n', len - i);
+        size_t stop = newline ? (size_t)(newline - buf) : len;
+        size_t end_of_line = stop;
+        if (end_of_line > i && buf[end_of_line - 1] == '\r') end_of_line--;
+        if (nitems >= cap) {
+            cap = cap ? cap * 2 : 64;
+            items = cetta_realloc(items, sizeof(char *) * cap);
+        }
+        char *line = cetta_malloc(end_of_line - i + 1);
+        memcpy(line, buf + i, end_of_line - i);
+        line[end_of_line - i] = '\0';
+        items[nitems++] = line;
+        i = stop + 1;
+    }
+    Atom *result = library_string_list(a, items, nitems);
+    for (uint32_t i = 0; i < nitems; i++) free(items[i]);
+    free(items); free(buf);
+    return result;
+}
+
 static Atom *cetta_library_dispatch_fs(Arena *a, Atom *head,
                                        Atom **args, uint32_t nargs) {
     if (head->kind != ATOM_SYMBOL) return NULL;
@@ -4548,6 +4605,9 @@ static Atom *cetta_library_dispatch_fs(Arena *a, Atom *head,
     }
     if (head_id == g_builtin_syms.lib_fs_read_lines) {
         return fs_read_lines(a, head, args, nargs);
+    }
+    if (head_id == g_builtin_syms.lib_fs_read_lines_between) {
+        return fs_read_lines_between(a, head, args, nargs);
     }
     return NULL;
 }
@@ -4794,6 +4854,48 @@ static Atom *cetta_library_dispatch_str(Arena *a, Atom *head,
     }
     if (head_id == g_builtin_syms.lib_str_trim) {
         return str_trim(a, head, args, nargs);
+    }
+    /* Unicode scalars, not bytes: a UTF-8 sequence is never split. Text
+     * that is not valid UTF-8 counts each stray byte as one scalar. */
+    if (head_id == g_builtin_syms.lib_str_char_length ||
+        head_id == g_builtin_syms.lib_str_char_slice) {
+        const char *text;
+        bool slice = head_id == g_builtin_syms.lib_str_char_slice;
+        if (nargs != (slice ? 3u : 1u) || !(text = library_text_arg(args[0])) ||
+            (slice && (args[1]->kind != ATOM_GROUNDED || args[1]->ground.gkind != GV_INT ||
+                       args[2]->kind != ATOM_GROUNDED || args[2]->ground.gkind != GV_INT)))
+            return library_signature_error(a, head, args, nargs,
+                slice ? "expected text, start and end" : "expected text argument");
+        size_t n = strlen(text), count = 0, from_byte = n, to_byte = n;
+        int64_t from = slice ? args[1]->ground.ival : 0, to = slice ? args[2]->ground.ival : 0;
+        if (from < 0) from = 0;
+        if (to < from) to = from;
+        for (size_t i = 0; i <= n; ) {
+            if (slice && (int64_t)count == from && from_byte == n) from_byte = i;
+            if (slice && (int64_t)count == to) { to_byte = i; break; }
+            if (i == n) break;
+            unsigned char c = (unsigned char)text[i];
+            size_t width = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : (c >> 3) == 30 ? 4 : 1;
+            for (size_t k = 1; k < width; k++)
+                if (i + k >= n || (((unsigned char)text[i + k]) & 0xc0) != 0x80) { width = 1; break; }
+            i += width; count++;
+        }
+        if (!slice) return atom_int(a, (int64_t)count);
+        if (from_byte > to_byte) from_byte = to_byte;
+        char *out = arena_alloc(a, to_byte - from_byte + 1);
+        memcpy(out, text + from_byte, to_byte - from_byte);
+        out[to_byte - from_byte] = '\0';
+        return atom_string(a, out);
+    }
+    if (head_id == g_builtin_syms.lib_str_lower) {
+        const char *text;
+        if (nargs != 1 || !(text = library_text_arg(args[0])))
+            return library_signature_error(a, head, args, nargs, "expected text argument");
+        size_t n = strlen(text);
+        char *lower = arena_alloc(a, n + 1);
+        for (size_t i = 0; i <= n; i++)
+            lower[i] = (text[i] >= 'A' && text[i] <= 'Z') ? (char)(text[i] + 32) : text[i];
+        return atom_string(a, lower);
     }
     return NULL;
 }

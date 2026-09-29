@@ -25964,6 +25964,17 @@ test-petta-search-machine: test-petta-relational-head-phases
 test-petta-search-machine: test-petta-answer-producer-handoff
 test-petta-search-machine: test-petta-prepared-head-matching
 
+.PHONY: test-petta-str-chars-and-lines
+# Unicode-scalar length and slices beside the byte-based ones, ASCII lower
+# case, and the complete lines of a byte range of a file.
+test-petta-str-chars-and-lines: $(BIN)
+	@set -e; \
+	actual=$$(./$(BIN) --lang petta tests/petta/str_chars_and_lines.metta); \
+	rm -f /tmp/cetta-str-lines-test.txt; \
+	expected=$$(cat tests/petta/str_chars_and_lines.expected); \
+	test "$$actual" = "$$expected"; \
+	echo "PASS: scalar string slices, lower case and line ranges"
+
 .PHONY: test-petta-json-booleans
 # PeTTa spells the booleans true and false; JSON values built or parsed in
 # PeTTa must still stringify.

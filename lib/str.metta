@@ -47,3 +47,20 @@
    (function
      (case (__cetta_lib_str_trim $text)
        (($result (return $result))))))
+
+; ASCII letters in lower case; every other byte unchanged.
+(= (str:lower $text)
+   (function
+     (case (__cetta_lib_str_lower $text)
+       (($result (return $result))))))
+
+; Length and slices in Unicode scalars; str:length and str:slice count bytes.
+(= (str:char-length $text)
+   (function
+     (case (__cetta_lib_str_char_length $text)
+       (($result (return $result))))))
+
+(= (str:char-slice $text $start $end)
+   (function
+     (case (__cetta_lib_str_char_slice $text $start $end)
+       (($result (return $result))))))

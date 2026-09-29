@@ -301,6 +301,7 @@ static inline uint64_t symbol_table_instance_id(const SymbolTable *st) {
     X(lib_fs_write, "__cetta_lib_fs_write") \
     X(lib_fs_append_text, "__cetta_lib_fs_append_text") \
     X(lib_fs_read_lines, "__cetta_lib_fs_read_lines") \
+    X(lib_fs_read_lines_between, "__cetta_lib_fs_read_lines_between") \
     X(lib_io_capabilities, "__cetta_lib_io_capabilities") \
     X(lib_durable_open, "__cetta_lib_durable_open") \
     X(lib_durable_read, "__cetta_lib_durable_read") \
@@ -332,6 +333,9 @@ static inline uint64_t symbol_table_instance_id(const SymbolTable *st) {
     X(lib_str_starts_with, "__cetta_lib_str_starts_with") \
     X(lib_str_ends_with, "__cetta_lib_str_ends_with") \
     X(lib_str_trim, "__cetta_lib_str_trim") \
+    X(lib_str_lower, "__cetta_lib_str_lower") \
+    X(lib_str_char_length, "__cetta_lib_str_char_length") \
+    X(lib_str_char_slice, "__cetta_lib_str_char_slice") \
     X(lib_lts_he_transitions, "__cetta_lib_lts_he_transitions") \
     X(lib_lts_he_step_rules, "__cetta_lib_lts_he_step_rules") \
     X(lib_lts_rho_transitions, "__cetta_lib_lts_rho_transitions") \
@@ -752,6 +756,9 @@ static inline uint64_t symbol_table_instance_id(const SymbolTable *st) {
     X(lib_str_starts_with) \
     X(lib_str_ends_with) \
     X(lib_str_trim) \
+    X(lib_str_lower) \
+    X(lib_str_char_length) \
+    X(lib_str_char_slice) \
     X(lib_lts_rho_transitions) \
     X(lib_rhometta_run) \
     X(lib_rhometta_run_canonical) \
