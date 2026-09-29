@@ -61,10 +61,6 @@ int main(int argc,char **argv) {
     while (!stopped) {
         assert(cetta_service_step(service,25)==DURABLE_OK);
         CettaDurableStatus status=cetta_telegram_scheduler_step(scheduler,pause?1:8);
-        if (quota && status==DURABLE_LIMIT) {
-            assert(faults==1 && cetta_telegram_scheduler_step(scheduler,8)==DURABLE_LIMIT && faults==1);
-            stopped=1; break;
-        }
         assert(status==DURABLE_OK);
         if (pause) {
             CettaTelegramSchedulerStats now; cetta_telegram_scheduler_stats(scheduler,&now);

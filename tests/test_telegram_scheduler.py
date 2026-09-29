@@ -155,8 +155,9 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-scheduler-') as temp:
                 assert b'tg-agent:held' in records(db,'host.actors')['telegram/bot/42.0']
                 assert 'bot/42.0/43' in records(db,'host.inbox')
                 w.kill(); w.communicate(timeout=5)
-                # Capacity exhaustion cannot acknowledge only part of a batch.
-                # Its complete durable commitment resumes under adequate limits.
+                # A queue of one effect is backpressure, not a fault: the batch
+                # is committed whole, and its sends go out in order, once each,
+                # through the one place.
                 db=root/f'quota-{i}.db'
                 with server.lock: server.updates=[]
                 server.add(100,84)
@@ -164,17 +165,14 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-scheduler-') as temp:
                 wait(service,lambda:len(records(db,'host.worker-tasks'))==1,'quota worker task')
                 w=worker(); task3=rpc(w,1); assert task3['code']==65
                 assert rpc(w,2,task3['id'],json.dumps([['send',v,'plain'] for v in ('quota-0','quota-1','quota-2')]))['code']==66
-                out,err=service.communicate(timeout=8)
-                assert service.returncode==0 and 'faults=1 ' in out,(out,err)
+                wait(service,lambda:('send','quota-2') in server.calls,'sends through a queue of one')
                 assert sum(b'telegram.action' in v for v in records(db,'host.outbox').values())==3
-                assert not any(k=='send' and v.startswith('quota-') for k,v in server.calls)
+                time.sleep(.1); out,err=stop(service)
+                assert 'faults=0 ' in out,(out,err)
+                sends=[v for k,v in server.calls if k=='send' and v.startswith('quota-')]
+                assert sends==['quota-0','quota-1','quota-2'],sends
                 w.kill(); w.communicate(timeout=5)
-                service=start()
-                wait(service,lambda:('send','quota-2') in server.calls,'capacity recovery')
-                time.sleep(.1); stop(service)
-                counts=collections.Counter(v for k,v in server.calls if k=='send' and v.startswith('quota-'))
-                assert counts=={'quota-0':1,'quota-1':1,'quota-2':1},counts
-                print(('HTTPS' if tls else 'HTTP')+'/'+protocol+': worker restart, accepted-unsent recovery, independent chat, order, killed send, parked policy and capacity recovery passed',flush=True)
+                print(('HTTPS' if tls else 'HTTP')+'/'+protocol+': worker restart, accepted-unsent recovery, independent chat, order, killed send, parked policy and backpressure at capacity passed',flush=True)
             finally:
                 server.release_first.set(); server.release_second.set()
                 for p in workers+services:
