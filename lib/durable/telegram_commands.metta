@@ -97,13 +97,14 @@
      (format-args "No answer from {} yet. This message will be updated when it arrives." ($agent))))
 
 ; The agent's answer: ["answer", text]. Longer text is cut to fit one
-; message; an empty answer is said so. Anything else is no answer.
+; message, in Unicode scalars so no character is split; an empty answer is
+; said so. Anything else is no answer.
 (= (tg-cmd:answer-text $body)
    (case (json-parse $body)
      (((JsonArray ((JsonString "answer") (JsonString $text)))
-       (let $length (str:length $text)
+       (let $length (str:char-length $text)
          (if (== $length 0) (tg:some "(empty answer)")
-           (if (> $length 3800) (tg:some (str:slice $text 0 3800)) (tg:some $text)))))
+           (if (> $length 3800) (tg:some (str:char-slice $text 0 3800)) (tg:some $text)))))
       ($other tg:none))))
 
 ; The agent's task for a command: ["command", key, name, arguments, lane].

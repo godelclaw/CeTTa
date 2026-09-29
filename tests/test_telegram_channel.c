@@ -218,6 +218,13 @@ int main(int argc,char **argv) {
     pure(parse("(tg-cmd:answer-text \"[\\\"answer\\\",\\\"engine: cetta\\\"]\")"),"(tg:some \"engine: cetta\")");
     pure(parse("(tg-cmd:answer-text \"[\\\"answer\\\",\\\"\\\"]\")"),"(tg:some \"(empty answer)\")");
     pure(parse("(tg-cmd:answer-text \"[]\")"),"tg:none");
+    {   /* A long non-ASCII answer is cut in Unicode scalars, never inside one. */
+        char *answer=malloc(3801*2+256), *p=answer;
+        p+=sprintf(p,"(str:char-length (let (tg:some $t) (tg-cmd:answer-text \"[\\\"answer\\\",\\\"");
+        for (int i=0;i<3801;++i) { *p++=(char)0xc4; *p++=(char)0x8d; }
+        strcpy(p,"\\\"]\") $t))");
+        pure(parse(answer),"3800"); free(answer);
+    }
     pure(parse("(tg-cmd:observation \"11\" \"/engine\" \"cetta\" \"42.0\")"),"\"[\\\"command\\\",\\\"11\\\",\\\"/engine\\\",\\\"cetta\\\",\\\"42.0\\\"]\"");
     pure(parse("(tg-cmd:stopped-text)"),"\"Stopped. Nothing Ada submits is sent until /start.\"");
     pure(parse("(tg-channel:result-json (tg-agent:delivered 9))"),"\"[\\\"delivered\\\",9]\"");
