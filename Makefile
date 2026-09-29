@@ -26986,6 +26986,39 @@ else
 	@echo "SKIP: test-petta-error-outcomes Python calls (requires a Python-enabled build)"
 endif
 
+.PHONY: test-petta-py-call-data
+test-petta-semantics: test-petta-py-call-data
+# A library or Python operation takes the ready values of its arguments: a
+# value shaped like a call is data in and out of a Python call, a parsed
+# command reaching Python as the list it spells and a list Python returns
+# whose head names a function never run (SWI-PeTTa's answers), and an
+# operation that gives no answer fails.
+test-petta-py-call-data: $(BIN)
+	@set -eu; \
+	actual=$$($(CETTA_BIN_INVOKE) --lang petta \
+		tests/petta/ready_native_no_result.metta 2>&1); \
+	if [ "$$actual" != "$$(cat tests/petta/ready_native_no_result.expected)" ]; then \
+		echo "FAIL: a library operation without an answer"; \
+		diff <(cat tests/petta/ready_native_no_result.expected) \
+			<(printf '%s\n' "$$actual") | head -20; \
+		exit 1; \
+	fi; \
+	echo "PASS: a library operation without an answer fails"
+ifeq ($(ENABLE_PYTHON),1)
+	@set -eu; \
+	actual=$$($(CETTA_BIN_INVOKE) --lang petta \
+		tests/petta/py_call_data.metta 2>&1); \
+	if [ "$$actual" != "$$(cat tests/petta/py_call_data.expected)" ]; then \
+		echo "FAIL: a call-shaped value around a Python call"; \
+		diff <(cat tests/petta/py_call_data.expected) \
+			<(printf '%s\n' "$$actual") | head -20; \
+		exit 1; \
+	fi; \
+	echo "PASS: a call-shaped value stays data around a Python call"
+else
+	@echo "SKIP: test-petta-py-call-data (requires a Python-enabled build)"
+endif
+
 .PHONY: test-petta-match-cell-rows
 test-petta-semantics: test-petta-match-cell-rows
 # A stored row with variables meets a query holding a list built at run time

@@ -310,6 +310,18 @@ typedef struct {
         const PettaPlanNode *plan,
         const Bindings *environment, OutcomeSet *outcomes,
         CettaCallOutcome *end, const CettaDelayView *delay);
+    /* Apply a host-owned operation that the shared grounded table does not
+     * implement, such as a library operation or a Python call, to arguments
+     * the machine has already made ready.  The arguments are taken as the
+     * values they are and the answer is not evaluated further, as the
+     * reference translator calls a predicate: a call-shaped value stays
+     * data on both sides of the call.  Returns false, having run nothing,
+     * when the host owns no such operation; the goal then goes to
+     * `evaluate`.  Otherwise `outcome` says how the call ended. */
+    bool (*ready_native_call)(
+        void *context, Space *space, Arena *arena, Atom *head,
+        Atom **arguments, uint32_t argument_count,
+        CettaCallOutcome *outcome);
     /* Create a new translation event at an explicit forcing boundary such as
      * PeTTa `eval`.  A returned plan fixes callability for that occurrence;
      * NULL declines because the host could not establish the event. */

@@ -30631,11 +30631,25 @@ static bool petta_machine_dispatch_goal(
          * operation through equations even when the global registry calls
          * it pure (for example a PeTTa definition of `//`). */
         CettaCallOutcome outcome;
-        if (direct &&
+        bool called = direct &&
             petta_machine_grounded_call(
                 machine, head,
                 first->expr.elems + 1u,
-                (uint32_t)(first->expr.len - 1u), &outcome)) {
+                (uint32_t)(first->expr.len - 1u), &outcome);
+        /* An operation of the host's own, a library operation or a Python
+         * call, takes the same ready values.  Handing it the whole goal
+         * instead would evaluate them again, running any value shaped like
+         * a call. */
+        if (!called && direct &&
+            goal.kind == PETTA_GOAL_HOST_STRICT_READY &&
+            machine->host.ready_native_call &&
+            petta_machine_builtin_allowed(machine, head)) {
+            called = machine->host.ready_native_call(
+                machine->host.context, machine->space, &machine->heap,
+                head, first->expr.elems + 1u,
+                (uint32_t)(first->expr.len - 1u), &outcome);
+        }
+        if (called) {
             if (outcome.kind == CETTA_CALL_RAISED)
                 return petta_machine_raise_error(machine, outcome.term);
             if (outcome.kind != CETTA_CALL_VALUE)

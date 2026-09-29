@@ -38730,6 +38730,48 @@ static bool petta_eval_machine_evaluate_planned_host(
         environment, outcomes, end, delay);
 }
 
+/* PettaMachineHost.ready_native_call: the active libraries' operations,
+ * Python's among them, applied to ready values under the guards
+ * dispatch_native_op keeps for them.  The shared grounded table has
+ * already declined the operation. */
+static bool petta_eval_machine_ready_native_call(
+    void *context, Space *space, Arena *arena, Atom *head,
+    Atom **arguments, uint32_t argument_count,
+    CettaCallOutcome *outcome) {
+    (void)context;
+    if (!g_library_context || !head || head->kind != ATOM_SYMBOL ||
+        !outcome ||
+        eval_current_language_id() != CETTA_LANGUAGE_PETTA)
+        return false;
+    if (eval_speculative_active() &&
+        !cetta_speculative_op_allowed(head->sym_id)) {
+        *outcome = cetta_call_value(cetta_effect_denied(arena));
+        return true;
+    }
+    __attribute__((cleanup(cetta_shared_transition_guard_leave)))
+    CettaSharedTransitionGuard shared_operation_transition = {0};
+    if (g_hyperpose_thread_unsafe_requested &&
+        hyperpose_thread_barrier_head(head->sym_id, head))
+        cetta_shared_transition_guard_enter(&shared_operation_transition);
+    __attribute__((cleanup(cetta_shared_transition_guard_leave)))
+    CettaSharedTransitionGuard shared_resource_transition = {0};
+    for (uint32_t index = 0u; index < argument_count; index++) {
+        if (arguments[index] && arguments[index]->kind == ATOM_GROUNDED &&
+            arguments[index]->ground.gkind == GV_SPACE) {
+            cetta_shared_transition_guard_enter(
+                &shared_resource_transition);
+            break;
+        }
+    }
+    if (!cetta_library_call_native(g_library_context, space, arena, head,
+                                   arguments, argument_count, outcome))
+        return false;
+    if (outcome->kind == CETTA_CALL_VALUE &&
+        (!outcome->term || atom_is_legacy_empty_sentinel(outcome->term)))
+        *outcome = cetta_call_failure();
+    return true;
+}
+
 static bool petta_eval_machine_get_type(
     void *opaque, Space *space, Arena *arena, Atom *value,
     Atom ***types, uint32_t *count) {
@@ -39767,6 +39809,9 @@ static PettaMachineHost petta_eval_machine_host(
         .evaluate = petta_eval_machine_evaluate_host,
         .evaluate_planned =
             petta_eval_machine_evaluate_planned_host,
+        .ready_native_call =
+            eval_current_language_id() == CETTA_LANGUAGE_PETTA
+                ? petta_eval_machine_ready_native_call : NULL,
         .translate_source = !prime_machine && !portable_machine
             ? petta_eval_machine_translate_source : NULL,
         .get_type = petta_eval_machine_get_type,
