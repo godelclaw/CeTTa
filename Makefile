@@ -1770,8 +1770,21 @@ PRIME_NIK_MEGALODON_TACTICS_POSITIVE_V1 = tests/support/megalodon/positive_tacti
 PRIME_NIK_PROOF_DAG_COMPILER_V1 = tools/nik_proof_dag_v1.py
 PRIME_NIK_PROOF_DAG_TEST_V1 = tools/test_nik_proof_dag_v1.py
 MEGALODON_AUTO_BIN ?= $(abspath ../../Mettapedia/megalodon/bin/megalodon)
+# Lean is opt-in.  `make test` takes the committed Lean-derived artifacts
+# and witnesses as they are and consults no Lean project.  `make test-lean`
+# (CETTA_LEAN=1) also consults the sibling Mettapedia Lean project: it
+# regenerates those artifacts, checks the committed ones are current, and
+# runs the Lean cross-checks.  METTAPEDIA_LEAN_ROOT or METTAPEDIA_ROOT, when
+# given, names a Lean project either way.
+CETTA_LEAN ?= 0
 METTAPEDIA_LEAN_ROOT ?=
+ifeq ($(CETTA_LEAN),1)
 METTAPEDIA_LEAN_AUTO_ROOT ?= $(abspath ../../Mettapedia/lean/mettapedia)
+METTAPEDIA_SIBLING_LEAN_ROOT = ../../Mettapedia/lean/mettapedia
+else
+METTAPEDIA_LEAN_AUTO_ROOT ?=
+METTAPEDIA_SIBLING_LEAN_ROOT =
+endif
 GSLT_IL_LANGDEF_V1 = langdef/gslt-il/langdef.metta
 GSLT_IL_FINITE_COMMAND_V1 = langdef/gslt-il/semantics/finite_indexed_command_v1.metta
 GSLT_IL_GENERATED_LANGUAGE_V1_H = src/generated/gslt_il_language_v1.generated.h
@@ -17723,6 +17736,11 @@ test: test-bnf-native-entry-v1
 test: test-plain-bnf-semantic-generator-no-python-build-dependency-v1
 test: test-plain-bnf-typed-admission-v1
 test: test-plain-bnf-semantic-generated-artifact-current-v1
+
+# The whole suite with the Lean project consulted (see CETTA_LEAN).
+.PHONY: test-lean
+test-lean:
+	@$(MAKE) --no-print-directory CETTA_LEAN=1 test
 test: test-plain-bnf-reader-v1
 test: test-plain-bnf-denotation-v1
 
@@ -18061,7 +18079,7 @@ test-tsan-mork:
 	@$(MAKE) -s BUILD=mork ENABLE_SANITIZERS=1 SANITIZERS=thread test-rhocalc
 
 test-rhocalc-cost-differential: $(BIN)
-	@mettapedia_root="$${METTAPEDIA_ROOT:-../../Mettapedia/lean/mettapedia}"; \
+	@mettapedia_root="$${METTAPEDIA_ROOT:-$(METTAPEDIA_SIBLING_LEAN_ROOT)}"; \
 	if [ -d "$$mettapedia_root" ]; then \
 		METTAPEDIA_ROOT="$$mettapedia_root" $(CETTA_SCRIPT_RUN_ENV) \
 			python3 scripts/rhocalc_cost_differential.py "$(CETTA_SCRIPT_BIN)"; \
@@ -18562,7 +18580,7 @@ test-rhocalc: $(BIN) test-rhocalc-rhometta-profile test-gslt-rhometta-rhocalc-pr
 			fail=$$((fail + 1)); \
 		fi; \
 	done < tests/rhocalc_tiny_oracle.tsv; \
-	mettapedia_root="$${METTAPEDIA_ROOT:-../../Mettapedia/lean/mettapedia}"; \
+	mettapedia_root="$${METTAPEDIA_ROOT:-$(METTAPEDIA_SIBLING_LEAN_ROOT)}"; \
 	rhocalc_lean_skip=85; \
 	if [ -d "$$mettapedia_root" ]; then \
 			while IFS=$$(printf '\t') read -r name fixture expected_count mode expected_file lean_file anchor; do \
@@ -28223,7 +28241,11 @@ refresh-he-native-contracts: refresh-he-compat-catalog
 		--out $(HE_NATIVE_CONTRACTS)
 
 test-he-compat-catalog-guards:
-	@python3 scripts/test_he_compat_catalog_guards.py
+	@if [ "$(CETTA_LEAN)" != 1 ] && [ -z "$${METTAPEDIA_ROOT:-}" ]; then \
+		echo "SKIP: HE-compat catalog guards read the Mettapedia sources (make test-lean, or set METTAPEDIA_ROOT)"; \
+	else \
+		python3 scripts/test_he_compat_catalog_guards.py; \
+	fi
 
 .PHONY: test-he-type-langdef-source-binding-v1
 test-he-type-langdef-source-binding-v1:
@@ -37872,6 +37894,8 @@ test-plain-bnf-name-index-v1:
 		ENABLE_PRIME_NEED_CLOSURE_CAPTURE=0 \
 		ENABLE_PRIME_EVAL_STACK=0 test-plain-bnf-name-index-v1-body
 
+# Without CETTA_LEAN=1 the committed public program is taken as it is.
+ifeq ($(CETTA_LEAN),1)
 $(PLAIN_BNF_SEMANTIC_ADMISSION_PETTA_PROGRAM_V1): \
 		$(GSLT_GROUND_RELATIONS_V1) \
 		$(CETTA_PETTA_GROUND_RELATIONS_V1) \
@@ -37887,6 +37911,7 @@ $(PLAIN_BNF_SEMANTIC_ADMISSION_PETTA_PROGRAM_V1): \
 	@mkdir -p $(dir $@) $(dir $(PLAIN_BNF_NATIVE_TYPES_V1))
 	bash $(PLAIN_BNF_TYPED_GENERATOR_V1) $(LANGDEF_COMPILER_V1_BIN) \
 		"$(PLAIN_BNF_LEAN_ROOT_V1)" $(PLAIN_BNF_NATIVE_TYPES_V1) $@
+endif
 
 .PHONY: test-plain-bnf-semantic-generator-no-python-build-dependency-v1
 test-plain-bnf-semantic-generator-no-python-build-dependency-v1:
@@ -37927,6 +37952,9 @@ test-plain-bnf-semantic-generated-artifact-current-v1-body: \
 
 .PHONY: test-plain-bnf-semantic-generated-artifact-current-v1
 test-plain-bnf-semantic-generated-artifact-current-v1:
+ifeq ($(CETTA_LEAN)$(strip $(METTAPEDIA_LEAN_ROOT)),0)
+	@echo "SKIP: the committed plain BNF program against the Lean authority (make test-lean, or set METTAPEDIA_LEAN_ROOT)"
+else
 	@$(MAKE) --no-print-directory \
 		BUILD=core ENABLE_GMP=0 ENABLE_LIB_PROLOG=0 ENABLE_HTTP=0 \
 		ENABLE_SANITIZERS=0 ENABLE_PIC=0 CETTA_TEST_ISOLATED=1 \
@@ -37936,6 +37964,7 @@ test-plain-bnf-semantic-generated-artifact-current-v1:
 		ENABLE_PRIME_NEED_CLOSURE_CAPTURE=0 \
 		ENABLE_PRIME_EVAL_STACK=0 \
 		test-plain-bnf-semantic-generated-artifact-current-v1-body
+endif
 
 .PHONY: test-plain-bnf-typed-admission-v1-body
 test-plain-bnf-typed-admission-v1-body: $(BIN) $(LANGDEF_COMPILER_V1_BIN) \
@@ -37951,6 +37980,9 @@ test-plain-bnf-typed-admission-v1-body: $(BIN) $(LANGDEF_COMPILER_V1_BIN) \
 
 .PHONY: test-plain-bnf-typed-admission-v1
 test-plain-bnf-typed-admission-v1:
+ifeq ($(CETTA_LEAN)$(strip $(METTAPEDIA_LEAN_ROOT)),0)
+	@echo "SKIP: plain BNF typed admission exports its native types with Lean (make test-lean, or set METTAPEDIA_LEAN_ROOT)"
+else
 	@$(MAKE) --no-print-directory \
 		BUILD=core ENABLE_GMP=0 ENABLE_LIB_PROLOG=0 ENABLE_HTTP=0 \
 		ENABLE_SANITIZERS=0 ENABLE_PIC=0 CETTA_TEST_ISOLATED=1 JSON_BACKEND=gslt \
@@ -37959,6 +37991,7 @@ test-plain-bnf-typed-admission-v1:
 		ENABLE_PRIME_NEED_HEAP_INDEX=0 \
 		ENABLE_PRIME_NEED_CLOSURE_CAPTURE=0 \
 		ENABLE_PRIME_EVAL_STACK=0 test-plain-bnf-typed-admission-v1-body
+endif
 
 .PHONY: test-plain-bnf-denotation-v1-body
 test-plain-bnf-denotation-v1-body: \
