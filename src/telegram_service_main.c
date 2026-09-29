@@ -86,12 +86,12 @@ static bool load_commands(const char *path, Arena *arena, Space *program) {
     Atom **atoms=NULL; int n=parse_metta_file(path,arena,&atoms);
     const char *names[64]; size_t count=0; unsigned singles=0; bool ok=n>=0 && n<=66;
     for (int i=0;ok && i<n;++i) {
-        const Atom *d=atoms[i];
+        Atom *d=atoms[i];
         if (d->kind!=ATOM_EXPR || !d->expr.len) { ok=false; break; }
-        const Atom *head=d->expr.elems[0];
+        Atom *head=d->expr.elems[0];
         if (d->expr.len==4 && atom_is_symbol(head,"tg-cmd:command")) {
             const char *name=declared(d->expr.elems[1],33), *help=declared(d->expr.elems[3],200);
-            const Atom *k=d->expr.elems[2];
+            Atom *k=d->expr.elems[2];
             unsigned single=atom_is_symbol(k,"help")?1:atom_is_symbol(k,"stop")?2:atom_is_symbol(k,"start")?4:0;
             if (!name || !command_name(name) || !help || count==64 || (singles&single) ||
                 (!single && !atom_is_symbol(k,"delegated"))) { ok=false; break; }
