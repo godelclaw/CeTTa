@@ -82,6 +82,9 @@ class BotAPI(Peer):
             self.calls.append((time.monotonic(), name, data, message))
         if name == 'answerCallbackQuery':
             return 200, [], json.dumps({'ok': True, 'result': True}).encode()
+        if name == 'getMe':
+            return 200, [], json.dumps({'ok': True, 'result': {'id': int(TOKEN.split(':')[0]), 'is_bot': True,
+                                                                'username': 'AdaTestBot'}}).encode()
         if data.get('text') == 'lost reply':
             return None
         if data.get('text') == 'slow':
@@ -357,10 +360,21 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-commands-') as temp:
             wait(proc, lambda: 'after start' in texts(), 'send after start')
             assert 'while stopped' not in texts()
 
-            # Someone who is not an operator: the same text is ordinary input.
-            api.command(14, CHAT, '/help', sender=5)
+            # The service learned its own username: a command addressed to it
+            # is a command, one addressed to another bot is ordinary input.
+            wait(proc, lambda: any(c[1] == 'getMe' for c in api.calls), 'getMe asked')
+            time.sleep(.3)
+            sent = api.command(15, CHAT, '/help@AdaTestBot')
+            call, latencies['help addressed to this bot'] = replied(proc, api, 15, sent, SERVICE_BOUND, 'addressed help')
+            assert call[2]['text'].startswith('/help — list these commands'), call
+            api.command(16, CHAT, '/help@OtherBot')
             time.sleep(.5)
-            assert not api.replies_to(14)
+            assert not api.replies_to(16)
+            # Someone who is not an operator: the same text is ordinary input.
+            api.command(17, CHAT, '/help', sender=5)
+            time.sleep(.5)
+            assert not api.replies_to(17)
+
             responder_stop.set(); responder.join(timeout=10)
         finally:
             proc.send_signal(signal.SIGTERM)
@@ -370,4 +384,5 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-commands-') as temp:
     print('commands: ' + ', '.join('%s %.0f ms' % (k, v * 1000) for k, v in latencies.items()))
     print('operator commands: answered by the service within the deadline with the agent absent, behind a held '
           'lane and during a flood; late answers edit the notice; taps are answered in time and redraw their menus; '
-          'a full task queue of an absent agent stops nothing; stop and start at dispatch passed')
+          'a full task queue of an absent agent stops nothing; stop and start at dispatch; commands addressed to this bot by '
+          'the username it looked up passed')

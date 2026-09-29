@@ -229,3 +229,22 @@
 (= (tg-cmd:tap-fallback-text)
    (let $agent (tg-cmd:agent-name)
      (format-args "No answer from {} yet." ($agent))))
+
+; The bot's own username, from its getMe answer, so that /command@username
+; is this bot's command. Only an answer about this bot counts: ok, and its
+; ID the credential's own (ID, digits as text). The host checks the name's
+; characters before declaring it; anything else is no username.
+(= (tg-cmd:identity $body $id)
+   (case (telegram:normalize (json:parse $body) 0)
+     (((tg:ok $answer)
+       (case ((telegram:field $answer "ok") (telegram:field $answer "result"))
+         ((((tg:some (JsonBoolV1 True)) (tg:some $me))
+           (case ((telegram:field $me "id") (telegram:field $me "username"))
+             ((((tg:some $number) (tg:some (JsonStringV1 $scalars)))
+               (case ((telegram:integer $number) (tg-cmd:plain (JsonStringV1 $scalars)))
+                 ((((tg:integer $n) (tg:some $name))
+                   (if (== (format-args "{}" ($n)) $id) (tg:some $name) tg:none))
+                  ($other tg:none))))
+              ($other tg:none))))
+          ($other tg:none))))
+      ($other tg:none))))

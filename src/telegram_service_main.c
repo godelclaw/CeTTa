@@ -1,6 +1,9 @@
 #define _GNU_SOURCE
 #include "telegram_scheduler.h"
 #include "telegram_control.h"
+#include "telegram_transport.h"
+#include "http_worker.h"
+#include "eval.h"
 #include "durable_value.h"
 #include "cetta_stdlib.h"
 #include "library.h"
@@ -82,6 +85,7 @@ static bool bot_name(const char *s) {
         (s[i]>='0' && s[i]<='9') || s[i]=='_')) return false;
     return true;
 }
+static bool commands_name_bot;
 static bool load_commands(const char *path, Arena *arena, Space *program) {
     Atom **atoms=NULL; int n=parse_metta_file(path,arena,&atoms);
     const char *names[64]; size_t count=0; unsigned singles=0; bool ok=n>=0 && n<=66;
@@ -103,13 +107,62 @@ static bool load_commands(const char *path, Arena *arena, Space *program) {
         } else if (d->expr.len==2 && atom_is_symbol(head,"tg-cmd:bot")) {
             const char *bot=declared(d->expr.elems[1],32);
             if ((singles&16) || !bot || !bot_name(bot)) ok=false;
-            singles|=16;
+            singles|=16; commands_name_bot=true;
         } else ok=false;
     }
     /* A stop without a start could never be undone from the chat. */
     if (ok && (singles&6) && (singles&6)!=6) ok=false;
     for (int i=0;ok && i<n;++i) space_add(program,atoms[i]);
     free(atoms); return ok;
+}
+/* The bot's own username, learned from getMe, declares (tg-cmd:bot NAME), so
+ * that /command@NAME is this bot's command. It is asked in the background, on
+ * a worker of its own, and never delays startup or a command. Until an answer
+ * about this bot arrives, an addressed command stays ordinary input; a failed
+ * lookup is asked again a minute later. */
+typedef struct {
+    CettaHttpWorker *worker;
+    uint64_t job, retry_ms;
+    bool pending, known, reported;
+} Identity;
+static void identity_ask(Identity *d, const CettaTelegramCredential *credential, uint64_t now_ms) {
+    CettaHttpWorkerLimits limits=cetta_http_worker_default_limits();
+    if (!d->worker && cetta_http_worker_new(&limits,NULL,&d->worker)!=HTTP_WORKER_OK) d->worker=NULL;
+    d->pending=d->worker && cetta_telegram_submit_effect(credential,d->worker,++d->job,"getMe",
+        "application/json","{}",2,10000,65536)==HTTP_WORKER_OK;
+    if (!d->pending) d->retry_ms=now_ms+60000;
+}
+static void identity_step(Identity *d, const CettaTelegramCredential *credential, const char *source_id,
+        CettaLibraryContext *context, Space *program, Arena *scratch, Arena *persistent,
+        Registry *registry, uint64_t now_ms) {
+    if (d->known) return;
+    if (!d->pending) { if (now_ms>=d->retry_ms) identity_ask(d,credential,now_ms); return; }
+    CettaHttpResult r;
+    if (!cetta_http_worker_take(d->worker,&r)) return;
+    d->pending=false; d->retry_ms=now_ms+60000;
+    /* The answer is screened for the token before anything reads it, and
+     * decided by the program; the host checks the name it declares. */
+    char *text=r.status==200 && r.body && !r.response_too_large &&
+        cetta_telegram_response_safe(credential,r.body,r.body_size)?malloc(r.body_size+1):NULL;
+    if (text) {
+        memcpy(text,r.body,r.body_size); text[r.body_size]=0;
+        Atom *args[]={atom_symbol(scratch,"tg-cmd:identity"),atom_string(scratch,text),
+            atom_string(scratch,source_id+9)}; /* "telegram-" and the public bot ID */
+        EvalOutcome o; eval_outcome_init(&o);
+        eval_top_speculative(context,program,scratch,persistent,registry,atom_expr(scratch,args,3),200000,&o);
+        const Atom *v=o.completion==CETTA_EVAL_COMPLETE && !o.effect_denials && o.results.len==1?o.results.items[0]:NULL;
+        const char *name=v && v->kind==ATOM_EXPR && v->expr.len==2 && atom_is_symbol(v->expr.elems[0],"tg:some") &&
+            v->expr.elems[1]->kind==ATOM_GROUNDED && v->expr.elems[1]->ground.gkind==GV_STRING?
+            v->expr.elems[1]->ground.sval:NULL;
+        if (name && bot_name(name)) {
+            Atom *declaration[]={atom_symbol(persistent,"tg-cmd:bot"),atom_string(persistent,name)};
+            space_add(program,atom_expr(persistent,declaration,2)); d->known=true;
+            printf("cetta-telegram: commands addressed to @%s are this bot's\n",name); fflush(stdout);
+        }
+        eval_outcome_free(&o); free(text);
+    }
+    cetta_http_result_free(&r);
+    if (!d->known && !d->reported) { fputs("cetta-telegram: bot username not yet known\n",stderr); d->reported=true; }
 }
 static void usage(void) {
     puts("Usage: cetta-telegram-service (--check | --run) --root DIR --state-dir DIR\n"
@@ -293,7 +346,7 @@ int main(int argc,char **argv) {
     cetta_eval_session_init_he_extended(&context.session); eval_set_library_context(&context); stdlib_load(&program,&persistent);
     int result=CONFIG; Atom *import_error=NULL; CettaDurableStore *store=NULL;
     CettaDurableService *service=NULL; CettaTelegramScheduler *scheduler=NULL;
-    CettaTelegramControl *control=NULL;
+    CettaTelegramControl *control=NULL; Identity identity={0};
     /* agent: cognition per message (telegram-agent/1). channel: the agent's own
      * loop reads deliveries and submits keyed actions (telegram-channel/1). */
     const char *module=c.channel?"durable:telegram_channel":"durable:telegram_agent";
@@ -336,6 +389,7 @@ int main(int argc,char **argv) {
     }
     if (s!=DURABLE_OK) { fault(NULL,"startup",s); result=FAILURE; goto done; }
     puts("cetta-telegram: ready"); fflush(stdout);
+    identity.known=!c.channel || !c.commands || commands_name_bot;
     uint64_t maintenance=0; CettaDurableLimits limits=cetta_durable_default_limits();
     while (!stopped) {
         s=cetta_service_step(service,25);
@@ -344,6 +398,8 @@ int main(int argc,char **argv) {
         if (s==DURABLE_OK) s=cetta_telegram_scheduler_step(scheduler,8);
         CettaClockSample now;
         if (s==DURABLE_OK && !cetta_clock_sample(&now)) s=DURABLE_IO;
+        if (s==DURABLE_OK) identity_step(&identity,credential,source_id,&context,&program,&scratch,&persistent,
+            &registry,now.monotonic_ms);
         if (s==DURABLE_OK && now.monotonic_ms>=maintenance) {
             maintenance=now.monotonic_ms+1000; CettaDurableUsage u;
             s=cetta_durable_usage(store,&u);
@@ -353,6 +409,7 @@ int main(int argc,char **argv) {
     }
     result=s==DURABLE_OK?0:FAILURE;
  done:
+    if (identity.worker) cetta_http_worker_free(identity.worker);
     cetta_telegram_control_free(control);
     cetta_telegram_scheduler_free(scheduler);
     if (cetta_service_free(service)) { error("unrecorded transport observations",FAILURE); result=FAILURE; }

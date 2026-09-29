@@ -269,6 +269,12 @@ int main(int argc,char **argv) {
         free(menu);
         pure(parse("(tg-cmd:reply \"[\\\"menu\\\",\\\"\\\",\\\"t\\\",[[[\\\"a\\\",\\\"1\\\"],[\\\"a\\\",\\\"2\\\"],[\\\"a\\\",\\\"3\\\"],[\\\"a\\\",\\\"4\\\"],[\\\"a\\\",\\\"5\\\"],[\\\"a\\\",\\\"6\\\"],[\\\"a\\\",\\\"7\\\"],[\\\"a\\\",\\\"8\\\"],[\\\"a\\\",\\\"9\\\"]]]]\")"),"tg:none");
     }
+    /* The bot's own username, from an answer about this bot only. */
+    pure(parse("(tg-cmd:identity \"{\\\"ok\\\":true,\\\"result\\\":{\\\"id\\\":123456789,\\\"is_bot\\\":true,\\\"username\\\":\\\"AdaTestBot\\\"}}\" \"123456789\")"),"(tg:some \"AdaTestBot\")");
+    pure(parse("(tg-cmd:identity \"{\\\"ok\\\":true,\\\"result\\\":{\\\"id\\\":987654321,\\\"is_bot\\\":true,\\\"username\\\":\\\"AdaTestBot\\\"}}\" \"123456789\")"),"tg:none");
+    pure(parse("(tg-cmd:identity \"{\\\"ok\\\":false,\\\"result\\\":{\\\"id\\\":123456789,\\\"username\\\":\\\"AdaTestBot\\\"}}\" \"123456789\")"),"tg:none");
+    pure(parse("(tg-cmd:identity \"{\\\"ok\\\":true,\\\"result\\\":{\\\"id\\\":123456789}}\" \"123456789\")"),"tg:none");
+    pure(parse("(tg-cmd:identity \"not json\" \"123456789\")"),"tg:none");
     pure(parse("(tg-cmd:observation \"11\" \"/engine\" \"cetta\" \"42.0\")"),"\"[\\\"command\\\",\\\"11\\\",\\\"/engine\\\",\\\"cetta\\\",\\\"42.0\\\"]\"");
     pure(parse("(tg-cmd:stopped-text)"),"\"Stopped. Nothing Ada submits is sent until /start.\"");
     pure(parse("(tg-channel:result-json (tg-agent:delivered 9))"),"\"[\\\"delivered\\\",9]\"");
