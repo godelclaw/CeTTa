@@ -310,7 +310,7 @@ int main(int argc,char **argv) {
     /* The channel client edits and deletes its own messages; ownership is
      * recorded in its receipts. The per-message agent only replies. */
     CettaTelegramActionPolicy actions={c.chats,c.count,
-        c.channel?TELEGRAM_SEND_TEXT|TELEGRAM_EDIT_TEXT|TELEGRAM_DELETE_MESSAGE:TELEGRAM_SEND_TEXT};
+        c.channel?TELEGRAM_SEND_TEXT|TELEGRAM_EDIT_TEXT|TELEGRAM_DELETE_MESSAGE|TELEGRAM_ANSWER_CALLBACK:TELEGRAM_SEND_TEXT};
     if (c.check) {
         printf("cetta-telegram: configuration and trusted %s policy valid; dispatch disabled\n",trusted.version);
         result=0; goto done;

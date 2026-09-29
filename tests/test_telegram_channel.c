@@ -20,7 +20,7 @@ static CettaLibraryContext context;
 static CettaDurableStore *store;
 static CettaHostProgram trusted={"telegram-channel/1",&program,&context};
 static const int64_t chats[]={42,84};
-static CettaTelegramActionPolicy actions={chats,2,7};
+static CettaTelegramActionPolicy actions={chats,2,15};
 static CettaTelegramAgent agent={&trusted,"bot","brain",&actions,2000000};
 static unsigned policy_checks;
 static Atom *parse(const char *s) { size_t p=0; Atom *a=parse_sexpr(&persistent,s,&p); assert(a && p==strlen(s)); return a; }
@@ -144,10 +144,9 @@ static void control_request(const char *id,const char *lane,const char *batch,ch
     put("telegram.controls",id,request); put("host.inbox",key,request);
 }
 static const char *ok_message="{\"ok\":true,\"result\":{\"message_id\":9,\"chat\":{\"id\":42}}}";
-/* A normalized update carrying one text message, as the intake stores it. */
-static Atom *text_update(int message,int chat,const char *text) {
-    char json[512],escaped[1100],expr[1200],*o=escaped;
-    snprintf(json,sizeof(json),"{\"message\":{\"message_id\":%d,\"chat\":{\"id\":%d,\"type\":\"private\"},\"text\":\"%s\"}}",message,chat,text);
+/* A normalized update, as the intake stores it. */
+static Atom *json_update(const char *json) {
+    char escaped[1100],expr[1200],*o=escaped;
     for (const char *p=json;*p;++p) { if (*p=='"' || *p=='\\') *o++='\\'; *o++=*p; } *o=0;
     snprintf(expr,sizeof(expr),"(telegram:normalize (json:parse \"%s\") 0)",escaped);
     EvalOutcome r; eval_outcome_init(&r);
@@ -157,15 +156,32 @@ static Atom *text_update(int message,int chat,const char *text) {
     assert(ok->kind==ATOM_EXPR && ok->expr.len==2 && atom_is_symbol(ok->expr.elems[0],"tg:ok"));
     Atom *v=atom_deep_copy(&persistent,ok->expr.elems[1]); eval_outcome_free(&r); return v;
 }
-static void incoming_text(int id,int chat,const char *role,const char *text,char key[168]) {
+static Atom *text_update(int message,int chat,const char *text) {
+    char json[512];
+    snprintf(json,sizeof(json),"{\"message\":{\"message_id\":%d,\"chat\":{\"id\":%d,\"type\":\"private\"},\"text\":\"%s\"}}",message,chat,text);
+    return json_update(json);
+}
+/* A tap on a button of message MESSAGE; a NULL data leaves the data out. */
+static Atom *tap_update(int id,int message,int chat,const char *data) {
+    char json[512],field[160]="";
+    if (data) snprintf(field,sizeof(field),",\"data\":\"%s\"",data);
+    snprintf(json,sizeof(json),"{\"callback_query\":{\"id\":\"q%d\",\"from\":{\"id\":7},\"message\":{\"message_id\":%d,\"chat\":{\"id\":%d,\"type\":\"private\"}}%s}}",id,message,chat,field);
+    return json_update(json);
+}
+static void incoming_update(int id,int chat,const char *kind,const char *role,Atom *update,char key[168]) {
     CettaInboxWindow *w=NULL; assert(cetta_inbox_begin(store,"bot",&w)==DURABLE_OK);
     char lane[32],ledger[96]; snprintf(lane,sizeof(lane),"%d.0",chat);
-    Atom *parts[]={atom_symbol(&persistent,"telegram:input"),atom_int(&persistent,1),atom_string(&persistent,"message"),
-        atom_int(&persistent,chat),atom_int(&persistent,0),atom_int(&persistent,7),atom_symbol(&persistent,role),
-        text_update(id+100,chat,text)};
+    Atom *parts[]={atom_symbol(&persistent,"telegram:input"),atom_int(&persistent,1),atom_string(&persistent,kind),
+        atom_int(&persistent,chat),atom_int(&persistent,0),atom_int(&persistent,7),atom_symbol(&persistent,role),update};
     CettaInboxItem item={id,lane,INBOX_ROUTED,atom_expr(&persistent,parts,8)}; CettaInboxCommit c;
     assert(cetta_inbox_commit(w,&item,1,&c)==DURABLE_OK && c.inserted==1); cetta_inbox_window_free(w);
     assert(cetta_inbox_keys("bot",lane,id,ledger,key)==DURABLE_OK);
+}
+static void incoming_text(int id,int chat,const char *role,const char *text,char key[168]) {
+    incoming_update(id,chat,"message",role,text_update(id+100,chat,text),key);
+}
+static void incoming_tap(int id,int chat,const char *role,const char *data,char key[168]) {
+    incoming_update(id,chat,"callback_query",role,tap_update(id,55,chat,data),key);
 }
 static void command_is(const char *id,const char *head) {
     Atom *v=record("telegram.commands",id);
@@ -206,6 +222,8 @@ int main(int argc,char **argv) {
         "(tg-cmd:command \"/engine\" delegated \"show or switch the engine\")",
         "(tg-cmd:agent \"Ada\")","(tg-cmd:bot \"AdaTestBot\")"};
     for (size_t i=0;i<sizeof(declarations)/sizeof(*declarations);++i) space_add(&program,parse(declarations[i]));
+    space_add(&program,parse("(= (test:count $rows) (if (== $rows ()) 0 (let ($h $t) (decons-atom $rows) (+ (size-atom $h) (test:count $t)))))"));
+    space_add(&program,parse("(= (test:buttons $r) (case $r (((tg:some (tg-cmd:reply $a $b (telegram:keyboard $rows))) (test:count $rows)) ($other none))))"));
     /* Commands: a declared name, optionally addressed to this bot, with its
      * arguments. Anything else is ordinary input. */
     pure(parse("(tg-cmd:parse \"/engine cetta\")"),"(tg-cmd:call \"/engine\" delegated \"cetta\")");
@@ -224,6 +242,32 @@ int main(int argc,char **argv) {
         for (int i=0;i<3801;++i) { *p++=(char)0xc4; *p++=(char)0x8d; }
         strcpy(p,"\\\"]\") $t))");
         pure(parse(answer),"3800"); free(answer);
+    }
+    /* Menus: labels and data needing no escape, 1..8 buttons a row, at most
+     * 100 buttons; empty rows mean no buttons; anything else is no answer. */
+    pure(parse("(tg-cmd:reply \"[\\\"menu\\\",\\\"set\\\",\\\"modes\\\",[[[\\\"● iter\\\",\\\"mode:iter\\\"],[\\\"agent\\\",\\\"mode:agent\\\"]]]]\")"),
+        "(tg:some (tg-cmd:reply \"set\" \"modes\" (telegram:keyboard (((telegram:button \"● iter\" \"mode:iter\") (telegram:button \"agent\" \"mode:agent\"))))))");
+    pure(parse("(tg-cmd:reply \"[\\\"menu\\\",\\\"\\\",\\\"t\\\",[]]\")"),"(tg:some (tg-cmd:reply \"\" \"t\" ()))");
+    pure(parse("(tg-cmd:reply \"[\\\"answer\\\",\\\"t\\\"]\")"),"(tg:some (tg-cmd:reply \"\" \"t\" ()))");
+    pure(parse("(tg-cmd:reply \"[\\\"menu\\\",\\\"\\\",\\\"t\\\",[[[\\\"a\\\\\\\"b\\\",\\\"x\\\"]]]]\")"),"tg:none");
+    pure(parse("(tg-cmd:reply \"[\\\"menu\\\",\\\"\\\",\\\"t\\\",[[]]]\")"),"tg:none");
+    pure(parse("(tg-cmd:reply \"[\\\"menu\\\",\\\"\\\",\\\"t\\\",[[[\\\"\\\",\\\"x\\\"]]]]\")"),"tg:none");
+    pure(parse("(tg-cmd:reply \"[\\\"menu\\\",\\\"\\\",\\\"t\\\",[[[\\\"a\\\",\\\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\\"]]]]\")"),"tg:none");
+    {   /* 8 to a row and 100 in all are the limits. */
+        char *menu=malloc(8192), *p;
+        for (int rows=12;rows<=13;++rows) for (int extra=4;extra<=5;++extra) {
+            p=menu+sprintf(menu,"(test:buttons (tg-cmd:reply \"[\\\"menu\\\",\\\"\\\",\\\"t\\\",[");
+            for (int r=0;r<rows;++r) {
+                p+=sprintf(p,"%s[",r?",":"");
+                for (int b=0;b<(r==rows-1?extra:8);++b) p+=sprintf(p,"%s[\\\"b\\\",\\\"d\\\"]",b?",":"");
+                *p++=']';
+            }
+            strcpy(p,"]]\"))");
+            const char *expect=rows==12?(extra==4?"92":"93"):(extra==4?"100":"none");
+            pure(parse(menu),expect);
+        }
+        free(menu);
+        pure(parse("(tg-cmd:reply \"[\\\"menu\\\",\\\"\\\",\\\"t\\\",[[[\\\"a\\\",\\\"1\\\"],[\\\"a\\\",\\\"2\\\"],[\\\"a\\\",\\\"3\\\"],[\\\"a\\\",\\\"4\\\"],[\\\"a\\\",\\\"5\\\"],[\\\"a\\\",\\\"6\\\"],[\\\"a\\\",\\\"7\\\"],[\\\"a\\\",\\\"8\\\"],[\\\"a\\\",\\\"9\\\"]]]]\")"),"tg:none");
     }
     pure(parse("(tg-cmd:observation \"11\" \"/engine\" \"cetta\" \"42.0\")"),"\"[\\\"command\\\",\\\"11\\\",\\\"/engine\\\",\\\"cetta\\\",\\\"42.0\\\"]\"");
     pure(parse("(tg-cmd:stopped-text)"),"\"Stopped. Nothing Ada submits is sent until /start.\"");
@@ -404,10 +448,59 @@ int main(int argc,char **argv) {
     incoming_text(16,42,"ordinary","/help",cmd); accept_batch(decide(cmd,1),1,commit);
     assert(!record("telegram.commands","16"));
     snprintf(request,sizeof(request),"%s/0",commit); admission(request,TELEGRAM_WORKER);
+    /* Taps. An operator's tap asks the agent and starts the deadline; the
+     * answer answers the tap and redraws its menu. */
+    const char *menu="[\"menu\",\"mode: iter\",\"modes\",[[[\"● iter\",\"mode:iter\"],[\"agent\",\"mode:agent\"]]]]";
+    const char *drawn="(telegram:keyboard (((telegram:button \"● iter\" \"mode:iter\") (telegram:button \"agent\" \"mode:agent\"))))";
+    char expected[512];
+    incoming_tap(17,42,"operator","mode:iter",cmd); accept_batch(decide(cmd,1),2,commit);
+    command_is("17","tg-cmd:tapped");
+    snprintf(request,sizeof(request),"%s/0",commit); published(request,"[\"callback\",\"17\",\"mode:iter\",\"42.0\",55]",task);
+    result(task,menu,worker_input); accept_batch(decide(worker_input,1),2,commit);
+    command_is("17","tg-cmd:answered");
+    snprintf(reply_key,sizeof(reply_key),"%s/0",commit);
+    intent_is(reply_key,"(telegram:answer-callback 1 42 \"q17\" \"mode: iter\")","(tg-channel:command-sent 1 \"bot\" \"17\" acknowledge)");
+    admission(reply_key,TELEGRAM_SEND);
+    snprintf(reply_key,sizeof(reply_key),"%s/1",commit);
+    snprintf(expected,sizeof(expected),"(telegram:edit-text 1 42 55 \"modes\" \"plain\" %s)",drawn);
+    intent_is(reply_key,expected,"(tg-channel:command-sent 1 \"bot\" \"17\" redraw)");
+    admission(reply_key,TELEGRAM_SEND);
+    deadline("17",timer_input); accept_batch(decide(timer_input,1),0,commit); command_is("17","tg-cmd:answered");
+    /* The deadline first: the service answers the tap, and the late answer
+     * only redraws the menu. */
+    incoming_tap(18,42,"operator","mode:agent",cmd); accept_batch(decide(cmd,1),2,commit);
+    snprintf(request,sizeof(request),"%s/0",commit); published(request,"[\"callback\",\"18\",\"mode:agent\",\"42.0\",55]",task);
+    deadline("18",timer_input); accept_batch(decide(timer_input,1),1,commit);
+    command_is("18","tg-cmd:tap-late");
+    snprintf(reply_key,sizeof(reply_key),"%s/0",commit);
+    intent_is(reply_key,"(telegram:answer-callback 1 42 \"q18\" \"No answer from Ada yet.\")","(tg-channel:command-sent 1 \"bot\" \"18\" late)");
+    admission(reply_key,TELEGRAM_SEND);
+    result(task,menu,worker_input); accept_batch(decide(worker_input,1),1,commit);
+    command_is("18","tg-cmd:edited");
+    snprintf(reply_key,sizeof(reply_key),"%s/0",commit);
+    intent_is(reply_key,expected,"(tg-channel:command-sent 1 \"bot\" \"18\" redraw)");
+    /* Anyone else's tap is answered at once and never reaches the agent. */
+    size_t tasks_before=count("host.worker-tasks");
+    incoming_tap(19,42,"ordinary","mode:iter",cmd); accept_batch(decide(cmd,1),1,commit);
+    command_is("19","tg-cmd:served");
+    snprintf(reply_key,sizeof(reply_key),"%s/0",commit);
+    intent_is(reply_key,"(telegram:answer-callback 1 42 \"q19\" \"These buttons are for operators.\")","(tg-channel:command-sent 1 \"bot\" \"19\" refusal)");
+    admission(reply_key,TELEGRAM_SEND);
+    /* A tap without data is ignored. */
+    incoming_tap(20,42,"operator",NULL,cmd); accept_batch(decide(cmd,1),0,commit);
+    assert(!record("telegram.commands","20") && count("host.worker-tasks")==tasks_before);
+    /* A command answered with a menu is sent with its buttons. */
+    incoming_text(21,42,"operator","/engine",cmd); accept_batch(decide(cmd,1),2,commit);
+    snprintf(request,sizeof(request),"%s/0",commit); published(request,"[\"command\",\"21\",\"/engine\",\"\",\"42.0\"]",task);
+    result(task,menu,worker_input); accept_batch(decide(worker_input,1),1,commit);
+    snprintf(reply_key,sizeof(reply_key),"%s/0",commit);
+    snprintf(expected,sizeof(expected),"(telegram:send-text 1 42 0 121 \"modes\" \"plain\" %s)",drawn);
+    intent_is(reply_key,expected,"(tg-channel:command-sent 1 \"bot\" \"21\" reply)");
+    admission(reply_key,TELEGRAM_SEND);
     /* Committed work survives a reopen. */
     cetta_durable_close(store); assert(cetta_durable_open(db,NULL,&store)==DURABLE_OK);
     lane("42.0","(tg-agent:sending \"42.0.00000000000000000003\" 0 1)");
-    printf("Telegram channel: %u pure policy checks; deliveries without waiting, acknowledgment-only answers, keyed submissions, lane order, receipts, definitive failure progress, held uncertainty, operator release, rejections, commands answered by the service or raced against their deadline, and stop/start at dispatch passed\n",policy_checks);
+    printf("Telegram channel: %u pure policy checks; deliveries without waiting, acknowledgment-only answers, keyed submissions, lane order, receipts, definitive failure progress, held uncertainty, operator release, rejections, commands answered by the service or raced against their deadline, menus, taps raced against their deadline, and stop/start at dispatch passed\n",policy_checks);
     cetta_durable_close(store); unlink(db); char path[300]; snprintf(path,sizeof(path),"%s-wal",db); unlink(path); snprintf(path,sizeof(path),"%s-shm",db); unlink(path); rmdir(dir);
     cetta_library_context_free(&context); eval_set_library_context(NULL); registry_free(&registry); space_free(&program);
     arena_free(&scratch); arena_free(&persistent); var_intern_free(&vars); symbol_table_free(&symbols); g_symbols=NULL; g_var_intern=NULL;

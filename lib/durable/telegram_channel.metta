@@ -16,6 +16,7 @@
 ;   ["rejected", key, reason]
 ;   ["released", lane, key, position]
 ;   ["command", key, name, arguments, lane]
+;   ["callback", key, data, lane, message]
 ; with result ["delivered", message-id] | ["failed", code] |
 ; ["not-sent"] | ["uncertain", reason].
 
@@ -52,10 +53,12 @@
        (if (== $disposition routed)
          (case $input
            (((telegram:input 1 $kind $chat $thread $sender $role $update)
-             (case (tg-cmd:of $kind $role $update)
-               (((tg-cmd:call $name $command-kind $args)
-                 (tg-channel:command $worker $source $id $chat $thread $update $name $command-kind $args $now $deadline))
-                ($ordinary (tg-channel:deliver $worker $source $id $lane $kind $role $update)))))
+             (if (== $kind "callback_query")
+               (tg-channel:tap $worker $source $id $chat $thread $role $update $now $deadline)
+               (case (tg-cmd:of $kind $role $update)
+                 (((tg-cmd:call $name $command-kind $args)
+                   (tg-channel:command $worker $source $id $chat $thread $update $name $command-kind $args $now $deadline))
+                  ($ordinary (tg-channel:deliver $worker $source $id $lane $kind $role $update))))))
             ($bad Empty)))
          (host:transition (tg-agent:ignored $source $id $disposition) () ())))))
 
@@ -102,6 +105,29 @@
              (host:transition (tg-channel:intake)
                ((host:put 1 $key (tg-cmd:waiting $now $chat $thread $message)))
                ($ask (durable:timer:after 2 $now $deadline $key (tg-channel:deadline 1 $source $key)))))))))))
+
+; A tap on a button of a menu, keyed by its update. An operator's tap is asked
+; of the agent and races the deadline like a delegated command: before it,
+; the answer both answers the tap and redraws the menu; after it, the service
+; has answered the tap and the answer only redraws the menu. Anyone else's tap
+; is answered at once. A tap never reaches the agent as input, and a
+; malformed one is ignored.
+(= (tg-channel:tap $worker $source $id $chat $thread $role $update $now $deadline)
+   (let $key (format-args "{}" ($id))
+     (case (tg-cmd:tap $update)
+       (((tg:some (tg-cmd:tap $query $data $message))
+         (if (== $role operator)
+           (host:transition (tg-channel:intake)
+             ((host:put 1 $key (tg-cmd:tapped $now $chat $message $query)))
+             ((durable:worker:request 0 $worker
+                (tg-cmd:tap-observation $key $data (format-args "{}.{}" ($chat $thread)) $message)
+                (tg-channel:asked 1 $source $key))
+              (durable:timer:after 2 $now $deadline $key (tg-channel:deadline 1 $source $key))))
+           (host:transition (tg-channel:intake)
+             ((host:put 1 $key (tg-cmd:served $now)))
+             ((host:send 1 (telegram:answer-callback 1 $chat $query (tg-cmd:operator-only-text))
+                (tg-channel:command-sent 1 $source $key refusal))))))
+        ($none (host:transition (tg-channel:intake) () ()))))))
 
 ; The client answered a delivery or receipt task. Any body only acknowledges
 ; it: actions are never taken from an acknowledgment.
@@ -211,34 +237,49 @@
               ($other (host:transition $state
                  ((host:put 1 $id (tg-agent:control-result 1 refused $batch))) ())))))))))
 
-; The agent answered a command. Views 2 task, 3 origin, 4 the command's
-; request, 5 its record (grant 3). Channel 0 = Telegram actions. Before the
-; deadline the answer is the reply; after it, the answer edits the notice,
-; at once if the notice was delivered, else when it is. Any other state, or
-; a body that is not an answer, only acknowledges the task.
+; The agent answered a command or a tap. Views 2 task, 3 origin, 4 the
+; request, 5 the record (grant 3). Channel 0 = Telegram actions. Before the
+; deadline the answer is the reply; after it, the answer edits the notice, at
+; once if the notice was delivered, else when it is. For a tap, the answer
+; answers the tap and redraws its menu before the deadline, and only redraws
+; it after. Any other state, or a body that is neither an answer nor a menu,
+; only acknowledges the task.
 (= (tg-channel:answer $worker)
    (match &self (host:record 0 $input (host:worker-result 1 $worker $task $revision $body))
      (match &self (host:record 4 $outkey (host:intent 1 "worker.request" "1" $request
                     (tg-channel:asked 1 $source $key)))
        (let $phase (collapse (match &self (host:record 5 $key $value) $value))
-         (case ((tg-cmd:answer-text $body) $phase)
-           ((((tg:some $text) ((tg-cmd:waiting $t0 $chat $thread $message)))
+         (case ((tg-cmd:reply $body) $phase)
+           ((((tg:some (tg-cmd:reply $toast $text $keyboard)) ((tg-cmd:waiting $t0 $chat $thread $message)))
              (host:transition (tg-channel:command)
                ((host:put 3 $key (tg-cmd:answered $t0)))
-               ((host:send 0 (telegram:send-text 1 $chat $thread $message $text "plain")
+               ((host:send 0 (tg-cmd:send $chat $thread $message $text $keyboard)
                   (tg-channel:command-sent 1 $source $key reply)))))
-            (((tg:some $text) ((tg-cmd:fell-back $t0 $chat $thread $message $sent)))
+            (((tg:some (tg-cmd:reply $toast $text $keyboard)) ((tg-cmd:fell-back $t0 $chat $thread $message $sent)))
              (if (> $sent 0)
                (host:transition (tg-channel:command)
                  ((host:put 3 $key (tg-cmd:edited $t0)))
-                 ((host:send 0 (telegram:edit-text 1 $chat $sent $text "plain")
+                 ((host:send 0 (tg-cmd:edit $chat $sent $text $keyboard)
                     (tg-channel:command-sent 1 $source $key edit))))
                (host:transition (tg-channel:command)
-                 ((host:put 3 $key (tg-cmd:edit-pending $t0 $chat $thread $message $text))) ())))
+                 ((host:put 3 $key (tg-cmd:edit-pending $t0 $chat $thread $message $text $keyboard))) ())))
+            (((tg:some (tg-cmd:reply $toast $text $keyboard)) ((tg-cmd:tapped $t0 $chat $message $query)))
+             (host:transition (tg-channel:command)
+               ((host:put 3 $key (tg-cmd:answered $t0)))
+               ((host:send 0 (telegram:answer-callback 1 $chat $query $toast)
+                  (tg-channel:command-sent 1 $source $key acknowledge))
+                (host:send 0 (tg-cmd:edit $chat $message $text $keyboard)
+                  (tg-channel:command-sent 1 $source $key redraw)))))
+            (((tg:some (tg-cmd:reply $toast $text $keyboard)) ((tg-cmd:tap-late $t0 $chat $message)))
+             (host:transition (tg-channel:command)
+               ((host:put 3 $key (tg-cmd:edited $t0)))
+               ((host:send 0 (tg-cmd:edit $chat $message $text $keyboard)
+                  (tg-channel:command-sent 1 $source $key redraw)))))
             ($other (host:transition (tg-channel:command) () ()))))))))
 
-; The deadline of a command. View 2 = its record (grant 0). Channel 0 =
-; Telegram actions. Only a command still waiting gets the notice.
+; The deadline of a command or a tap. View 2 = its record (grant 0).
+; Channel 0 = Telegram actions. Only a command still waiting gets the notice,
+; and only a tap still waiting is answered.
 (= (tg-channel:deadline $source $key)
    (case (collapse (match &self (host:record 2 $key $value) $value))
      ((((tg-cmd:waiting $t0 $chat $thread $message))
@@ -246,6 +287,11 @@
          ((host:put 0 $key (tg-cmd:fell-back $t0 $chat $thread $message 0)))
          ((host:send 0 (telegram:send-text 1 $chat $thread $message (tg-cmd:fallback-text) "plain")
             (tg-channel:command-sent 1 $source $key fallback)))))
+      (((tg-cmd:tapped $t0 $chat $message $query))
+       (host:transition (tg-channel:command)
+         ((host:put 0 $key (tg-cmd:tap-late $t0 $chat $message)))
+         ((host:send 0 (telegram:answer-callback 1 $chat $query (tg-cmd:tap-fallback-text))
+            (tg-channel:command-sent 1 $source $key late)))))
       ($other (host:transition (tg-channel:command) () ())))))
 
 ; A command message was sent. Views 2 its intent, 3 its outcome, 4 the
@@ -263,12 +309,19 @@
           ((((tg-agent:delivered $sent) ((tg-cmd:fell-back $t0 $chat $thread $message 0)))
             (host:transition (tg-channel:command)
               ((host:put 2 $key (tg-cmd:fell-back $t0 $chat $thread $message $sent))) ()))
+           (((tg-agent:delivered $sent) ((tg-cmd:edit-pending $t0 $chat $thread $message $text $keyboard)))
+            (host:transition (tg-channel:command)
+              ((host:put 2 $key (tg-cmd:edited $t0)))
+              ((host:send 0 (tg-cmd:edit $chat $sent $text $keyboard)
+                 (tg-channel:command-sent 1 $source $key edit)))))
            (((tg-agent:delivered $sent) ((tg-cmd:edit-pending $t0 $chat $thread $message $text)))
             (host:transition (tg-channel:command)
               ((host:put 2 $key (tg-cmd:edited $t0)))
               ((host:send 0 (telegram:edit-text 1 $chat $sent $text "plain")
                  (tg-channel:command-sent 1 $source $key edit)))))
            (($undelivered ((tg-cmd:fell-back $t0 $chat $thread $message 0)))
+            (host:transition (tg-channel:command) ((host:put 2 $key (tg-cmd:undelivered $t0))) ()))
+           (($undelivered ((tg-cmd:edit-pending $t0 $chat $thread $message $text $keyboard)))
             (host:transition (tg-channel:command) ((host:put 2 $key (tg-cmd:undelivered $t0))) ()))
            (($undelivered ((tg-cmd:edit-pending $t0 $chat $thread $message $text)))
             (host:transition (tg-channel:command) ((host:put 2 $key (tg-cmd:undelivered $t0))) ()))

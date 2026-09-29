@@ -10,7 +10,7 @@
 
 static Arena persistent, scratch;
 static const int64_t chats[]={42,-100,INT64_MIN};
-static CettaTelegramActionPolicy policy={chats,3,7};
+static CettaTelegramActionPolicy policy={chats,3,15};
 static unsigned checks;
 static Atom *parse(const char *text) {
     size_t pos=0; Atom *a=parse_sexpr(&persistent,text,&pos); assert(a && pos==strlen(text)); return a;
@@ -48,6 +48,78 @@ int main(int argc, char **argv) {
     out=accepted(send_text("\",\"chat_id\":123,\"text\":\"injected"),"sendMessage");
     assert(!strcmp(out.body,"{\"chat_id\":42,\"text\":\"\\\",\\\"chat_id\\\":123,\\\"text\\\":\\\"injected\"}"));
     accepted(parse("(telegram:send-text 1 42 0 0 \"x\" \"MarkdownV2\")"),"sendMessage");
+    /* Keyboards and callback answers. */
+    out=accepted(parse("(telegram:send-text 1 42 0 0 \"modes\" \"plain\" (telegram:keyboard (((telegram:button \"● iter\" \"mode:iter\") (telegram:button \"agent\" \"mode:agent\")) ((telegram:button \"x\" \"y\")))))"),"sendMessage");
+    assert(!strcmp(out.body,"{\"chat_id\":42,\"text\":\"modes\",\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"● iter\",\"callback_data\":\"mode:iter\"},{\"text\":\"agent\",\"callback_data\":\"mode:agent\"}],[{\"text\":\"x\",\"callback_data\":\"y\"}]]}}"));
+    out=accepted(parse("(telegram:edit-text 1 42 9 \"m\" \"plain\" (telegram:keyboard (((telegram:button \"a\\\"b\" \"c\\\\d\")))))"),"editMessageText");
+    assert(!strcmp(out.body,"{\"chat_id\":42,\"message_id\":9,\"text\":\"m\",\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"a\\\"b\",\"callback_data\":\"c\\\\d\"}]]}}"));
+    out=accepted(parse("(telegram:answer-callback 1 42 \"4382bfdwdsb323b2d9\" \"mode: iter\")"),"answerCallbackQuery");
+    assert(!strcmp(out.body,"{\"callback_query_id\":\"4382bfdwdsb323b2d9\",\"text\":\"mode: iter\"}"));
+    out=accepted(parse("(telegram:answer-callback 1 42 \"7\" \"\")"),"answerCallbackQuery");
+    assert(!strcmp(out.body,"{\"callback_query_id\":\"7\"}"));
+    const char *bad_menus[]={
+        "(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard ()))",
+        "(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (())))",
+        "(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (((telegram:button \"\" \"d\")))))",
+        "(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (((telegram:button \"a\" \"\")))))",
+        "(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (((telegram:button \"a\\nb\" \"d\")))))",
+        "(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (((telegram:button \"a\" \"d\" x)))))",
+        "(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (((telegram:url \"a\" \"https://x\")))))",
+        "(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard ((telegram:button \"a\" \"d\"))))",
+        "(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (((telegram:button a \"d\")))))",
+        "(telegram:send-text 1 42 0 0 \"m\" \"plain\" ())",
+        "(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (((telegram:button \"a\" \"d\")))) extra)",
+        "(telegram:edit-text 1 42 9 \"m\" \"plain\" (telegram:keyboard ()))",
+        "(telegram:answer-callback 1 43 \"7\" \"x\")", "(telegram:answer-callback 1 42 \"\" \"x\")",
+        "(telegram:answer-callback 1 42 \"a b\" \"x\")", "(telegram:answer-callback 1 42 \"a\\\"b\" \"x\")",
+        "(telegram:answer-callback 1 42 7 \"x\")", "(telegram:answer-callback 1 42 \"7\")",
+        "(telegram:answer-callback 1 42 \"7\" \"x\" extra)", "(telegram:answer-callback 2 42 \"7\" \"x\")"
+    };
+    for (size_t i=0;i<sizeof(bad_menus)/sizeof(*bad_menus);++i) rejected(parse(bad_menus[i]));
+    {   /* Limits: 8 buttons to a row, 100 in all, labels of 64 scalars and
+         * data of 64 bytes, toasts of 200 scalars. */
+        char *k=malloc(65536), *p;
+        for (int n=8;n<=9;++n) {
+            p=k+sprintf(k,"(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard ((");
+            for (int i=0;i<n;++i) p+=sprintf(p,"(telegram:button \"a\" \"d\")");
+            strcpy(p,"))))");
+            if (n==8) accepted(parse(k),"sendMessage"); else rejected(parse(k));
+        }
+        for (int n=100;n<=101;++n) {
+            p=k+sprintf(k,"(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (");
+            for (int i=0;i<n;++i) p+=sprintf(p,"((telegram:button \"a\" \"d\"))");
+            strcpy(p,")))");
+            if (n==100) accepted(parse(k),"sendMessage"); else rejected(parse(k));
+        }
+        for (int n=64;n<=65;++n) {
+            p=k+sprintf(k,"(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (((telegram:button \"");
+            for (int i=0;i<n;++i) p+=sprintf(p,"🌿");
+            strcpy(p,"\" \"d\")))))");
+            if (n==64) accepted(parse(k),"sendMessage"); else rejected(parse(k));
+            p=k+sprintf(k,"(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (((telegram:button \"a\" \"");
+            for (int i=0;i<n;++i) *p++='d';
+            strcpy(p,"\")))))");
+            if (n==64) accepted(parse(k),"sendMessage"); else rejected(parse(k));
+        }
+        for (int n=200;n<=201;++n) {
+            p=k+sprintf(k,"(telegram:answer-callback 1 42 \"7\" \"");
+            for (int i=0;i<n;++i) p+=sprintf(p,"🌿");
+            strcpy(p,"\")");
+            if (n==200) accepted(parse(k),"answerCallbackQuery"); else rejected(parse(k));
+        }
+        /* A full keyboard of the longest labels and data, all escaped, fits
+         * the planned body. */
+        p=k+sprintf(k,"(telegram:send-text 1 42 0 0 \"m\" \"plain\" (telegram:keyboard (");
+        for (int i=0;i<100;++i) {
+            p+=sprintf(p,"((telegram:button \"");
+            for (int j=0;j<64;++j) p+=sprintf(p,"🌿");
+            p+=sprintf(p,"\" \"");
+            for (int j=0;j<32;++j) p+=sprintf(p,"\\\"");
+            p+=sprintf(p,"\"))");
+        }
+        strcpy(p,")))");
+        out=accepted(parse(k),"sendMessage"); assert(out.size>100*(256+64)); free(k);
+    }
     const char *bad[]={
         "(telegram:send-text 1 43 0 0 \"x\" \"plain\")", "(telegram:send-text 1 0 0 0 \"x\" \"plain\")",
         "(telegram:send-text 2 42 0 0 \"x\" \"plain\")", "(telegram:send-text 1.0 42 0 0 \"x\" \"plain\")",
@@ -70,18 +142,19 @@ int main(int argc, char **argv) {
     for (size_t i=0;i<4097;++i) memcpy(large+4*i,"🌿",4);
     large[16384]=0; accepted(send_text(large),"sendMessage");
     memcpy(large+16384,"🌿",4); large[16388]=0; rejected(send_text(large)); free(large);
-    for (unsigned mask=0;mask<8;++mask) {
+    for (unsigned mask=0;mask<16;++mask) {
         policy.methods=mask;
+        assert(cetta_telegram_action_validate(&policy,parse("(telegram:answer-callback 1 42 \"7\" \"x\")"),NULL)==!!(mask&8)); ++checks;
         assert(cetta_telegram_action_validate(&policy,send_text("x"),NULL)==!!(mask&1));
         assert(cetta_telegram_action_validate(&policy,parse("(telegram:edit-text 1 42 1 \"x\" \"plain\")"),NULL)==!!(mask&2));
         assert(cetta_telegram_action_validate(&policy,parse("(telegram:delete-message 1 42 1)"),NULL)==!!(mask&4)); checks+=3;
     }
-    policy.methods=8; rejected(send_text("x")); policy.methods=7;
+    policy.methods=8; rejected(send_text("x")); policy.methods=16; rejected(send_text("x")); policy.methods=15;
     policy.chat_count=0; rejected(send_text("x")); policy.chat_count=129; rejected(send_text("x")); policy.chat_count=3;
     assert(!cetta_telegram_action_validate(NULL,send_text("x"),NULL)); ++checks;
     // Dispatch must not rely on acceptance's earlier policy check.
     Atom *previous=send_text("accepted earlier"); assert(cetta_telegram_action_validate(&policy,previous,NULL));
-    policy.methods=0; rejected(previous); policy.methods=7;
+    policy.methods=0; rejected(previous); policy.methods=15;
     Space program; space_init(&program); Registry registry; registry_init(&registry);
     registry_bind(&registry,"&self",atom_space(&persistent,&program));
     CettaLibraryContext context; cetta_library_context_init(&context); cetta_library_context_set_exec_path(&context,argv[0]);

@@ -166,7 +166,12 @@
                (case $payload
                  (((telegram:send-text 1 $chat $thread $reply $text $format)
                    (tg-agent:message-result (JsonObjectV1 $members) $chat))
+                  ((telegram:send-text 1 $chat $thread $reply $text $format $keyboard)
+                   (tg-agent:message-result (JsonObjectV1 $members) $chat))
                   ((telegram:edit-text 1 $chat $id $text $format)
+                   (case (tg-agent:message-result (JsonObjectV1 $members) $chat)
+                     (((tg-agent:delivered $id) (tg-agent:delivered $id)) ($bad (tg-agent:uncertain invalid-api-result)))))
+                  ((telegram:edit-text 1 $chat $id $text $format $keyboard)
                    (case (tg-agent:message-result (JsonObjectV1 $members) $chat)
                      (((tg-agent:delivered $id) (tg-agent:delivered $id)) ($bad (tg-agent:uncertain invalid-api-result)))))
                   ($bad (tg-agent:uncertain invalid-api-result)))))

@@ -8,6 +8,8 @@ socket), then present. Commands are also sent while the chat's own lane is
 held by an uncertain send and while the agent floods the service with
 submissions to another chat. A delegated command's late answer edits the
 service's notice; stop and start take effect where sends are dispatched.
+Taps on menu buttons race the same deadline: the tap is always answered in
+time, by the agent's answer or the service's, and the answer redraws the menu.
 """
 import json
 import pathlib
@@ -40,6 +42,11 @@ COMMANDS = '''
 (tg-cmd:agent "Ada")
 '''
 FALLBACK = 'No answer from Ada yet. This message will be updated when it arrives.'
+TAP_FALLBACK = 'No answer from Ada yet.'
+MENU_MESSAGE = 900
+MENU = ['menu', 'mode: iter', 'modes', [[['● iter', 'mode:iter'], ['agent', 'mode:agent']]]]
+KEYBOARD = {'inline_keyboard': [[{'text': '● iter', 'callback_data': 'mode:iter'},
+                                 {'text': 'agent', 'callback_data': 'mode:agent'}]]}
 
 
 class BotAPI(Peer):
@@ -49,8 +56,17 @@ class BotAPI(Peer):
 
     def command(self, update, chat, text, sender=OPERATOR):
         with self.lock:
+            assert not self.updates or update > self.updates[-1]['update_id'], update
             self.updates.append({'update_id': update, 'message': {'message_id': 500 + update,
                 'chat': {'id': chat, 'type': 'private'}, 'from': {'id': sender}, 'text': text}})
+        return time.monotonic()
+
+    def tap(self, update, chat, data, sender=OPERATOR):
+        with self.lock:
+            assert not self.updates or update > self.updates[-1]['update_id'], update
+            self.updates.append({'update_id': update, 'callback_query': {'id': 'q%d' % update,
+                'from': {'id': sender}, 'data': data,
+                'message': {'message_id': MENU_MESSAGE, 'chat': {'id': chat, 'type': 'private'}}}})
         return time.monotonic()
 
     def receipt(self, connection, method, path, body):
@@ -64,12 +80,23 @@ class BotAPI(Peer):
             self.message += 1
             message = self.message if name == 'sendMessage' else data.get('message_id')
             self.calls.append((time.monotonic(), name, data, message))
+        if name == 'answerCallbackQuery':
+            return 200, [], json.dumps({'ok': True, 'result': True}).encode()
         if data.get('text') == 'lost reply':
             return None
         if data.get('text') == 'slow':
             time.sleep(1.2)
         return 200, [], json.dumps({'ok': True, 'result': {'message_id': message,
             'chat': {'id': data['chat_id']}}}).encode()
+
+    def tap_answers(self, update):
+        with self.lock:
+            return [c for c in self.calls if c[1] == 'answerCallbackQuery' and
+                    c[2]['callback_query_id'] == 'q%d' % update]
+
+    def redraws(self):
+        with self.lock:
+            return [c for c in self.calls if c[1] == 'editMessageText' and c[2]['message_id'] == MENU_MESSAGE]
 
     def replies_to(self, update):
         with self.lock:
@@ -110,6 +137,14 @@ def tasks(path):
             return found
         found.append((task, json.loads(body)))
         after = task
+
+
+def tap_answered(proc, api, update, sent, bound, label):
+    """The one answer to a tap, and how long after the update it came."""
+    calls = wait(proc, lambda: api.tap_answers(update), label, bound + 5)
+    latency = calls[0][0] - sent
+    assert latency <= bound, (label, latency)
+    return calls[0], latency
 
 
 def replied(proc, api, update, sent, bound, label):
@@ -193,39 +228,103 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-commands-') as temp:
             _, latencies['help, flood'] = replied(proc, api, 5, sent, SERVICE_BOUND, 'help during flood')
             sent = api.command(6, CHAT, '/engine')
             _, latencies['delegated, flood'] = replied(proc, api, 6, sent, FALLBACK_BOUND, 'fallback during flood')
+            # A tap while the agent is absent: the service answers it at the
+            # deadline, and nothing redraws the menu yet.
+            sent = api.tap(7, CHAT, 'mode:iter')
+            call, latencies['tap, agent absent'] = tap_answered(proc, api, 7, sent, FALLBACK_BOUND, 'tap fallback')
+            assert call[2]['text'] == TAP_FALLBACK and latencies['tap, agent absent'] >= DEADLINE_MS / 1000 - .05
+            assert not api.redraws()
+            # The absent agent's receipts outgrow its task queue: the service
+            # keeps them waiting and keeps answering.
+            def flood_sent():
+                with api.lock:
+                    return sum(1 for c in api.calls if c[2].get('chat_id') == OTHER)
+            wait(proc, lambda: flood_sent() >= 400, 'flood past the task queue and the effect queue', 90)
+            sent = api.command(8, CHAT, '/help')
+            _, latencies['help, task queue full'] = replied(proc, api, 8, sent, SERVICE_BOUND, 'help with full task queue')
             flood_stop.set(); flooder.join(timeout=10)
-            assert (CHAT, 'held') not in [(c[2]['chat_id'], c[2].get('text')) for c in api.calls]
+            assert (CHAT, 'held') not in [(c[2].get('chat_id'), c[2].get('text')) for c in api.calls]
 
             # The agent arrives and answers the commands it was asked: each
             # late answer edits that command's own notice.
-            asked = wait(proc, lambda: [t for t in tasks(path) if t[1][0] == 'command'], 'command tasks')
+            # It reads its receipts; the questions that waited behind them
+            # follow.
+            questions = {}
+            def arrive():
+                for task, value in tasks(path):
+                    if value[0] in ('command', 'callback'):
+                        questions[task] = value
+                    else:
+                        rpc(path, RESULT, task, '[]')
+                return sum(v[0] == 'command' for v in questions.values()) == 3 and \
+                    any(v[0] == 'callback' for v in questions.values())
+            wait(proc, arrive, 'questions after receipts', 60)
+            taps = [t for t in sorted(questions.items()) if t[1][0] == 'callback']
+            assert [t[1][1:] for t in taps] == [['7', 'mode:iter', '42.0', MENU_MESSAGE]], taps
+            assert rpc(path, RESULT, taps[0][0], json.dumps(MENU))[0] == STORED
+            redrawn = wait(proc, api.redraws, 'late tap redraws the menu')
+            assert redrawn[0][2]['text'] == 'modes' and redrawn[0][2]['reply_markup'] == KEYBOARD, redrawn
+            assert len(api.tap_answers(7)) == 1
+            asked = sorted(((t, v) for t, v in questions.items() if v[0] == 'command'), key=lambda t: int(t[1][1]))
             assert [t[1][1:] for t in asked] == [['2', '/engine', '', '42.0'], ['4', '/engine', 'cetta', '42.0'],
                                                  ['6', '/engine', '', '42.0']], asked
             for task, (_, key, name, args, lane) in asked:
                 assert rpc(path, RESULT, task, json.dumps(['answer', 'engine for %s: cetta' % key]))[0] == STORED
             def edits():
                 with api.lock:
-                    return [c for c in api.calls if c[1] == 'editMessageText']
+                    return [c for c in api.calls if c[1] == 'editMessageText' and c[2]['message_id'] != MENU_MESSAGE]
             done = wait(proc, lambda: len(edits()) == 3 and edits(), 'three edits')
             assert {(c[2]['message_id'], c[2]['text']) for c in done} >= {(fallback_2, 'engine for 2: cetta'),
                                                                           (fallback_4, 'engine for 4: cetta')}, done
 
+            # The agent catches up on everything that waited for it.
+            def caught_up():
+                pending = tasks(path)
+                for task, value in pending:
+                    rpc(path, RESULT, task, '[]')
+                return not pending and not tasks(path)
+            wait(proc, caught_up, 'agent caught up', 60)
+
             # A present agent answers before the deadline: its answer is the
             # reply, and no notice is sent.
             responder_stop = threading.Event()
+            tapped = []
             def respond():
                 while not responder_stop.is_set():
                     for task, value in tasks(path):
-                        body = json.dumps(['answer', 'engine: cetta']) if value[0] == 'command' else '[]'
+                        if value[0] == 'callback':
+                            tapped.append(value[1])
+                        body = (json.dumps(['answer', 'engine: cetta']) if value[0] == 'command' else
+                                json.dumps(MENU) if value[0] == 'callback' else '[]')
                         rpc(path, RESULT, task, body)
                     time.sleep(.01)
             responder = threading.Thread(target=respond, daemon=True); responder.start()
-            sent = api.command(7, CHAT, '/engine')
-            call, latencies['delegated, agent present'] = replied(proc, api, 7, sent, FALLBACK_BOUND, 'answer')
+            sent = api.command(9, CHAT, '/engine')
+            call, latencies['delegated, agent present'] = replied(proc, api, 9, sent, FALLBACK_BOUND, 'answer')
             assert call[2]['text'] == 'engine: cetta', call
             time.sleep(DEADLINE_MS / 1000 + .3)
-            assert len(api.replies_to(7)) == 1 and not any(
-                c[2].get('text') == FALLBACK for c in api.calls if c[2].get('reply_parameters', {}).get('message_id') == 507)
+            assert len(api.replies_to(9)) == 1 and not any(
+                c[2].get('text') == FALLBACK for c in api.calls if c[2].get('reply_parameters', {}).get('message_id') == 509)
+
+            # A present agent answers a tap before the deadline: its toast
+            # answers the tap, its menu redraws the message, and the service
+            # sends no fallback.
+            before = len(api.redraws())
+            sent = api.tap(10, CHAT, 'mode:iter')
+            call, latencies['tap, agent present'] = tap_answered(proc, api, 10, sent, FALLBACK_BOUND, 'tap answer')
+            assert call[2]['text'] == 'mode: iter', call
+            wait(proc, lambda: len(api.redraws()) > before, 'menu redrawn')
+            assert api.redraws()[-1][2]['reply_markup'] == KEYBOARD
+            time.sleep(DEADLINE_MS / 1000 + .3)
+            assert len(api.tap_answers(10)) == 1
+
+            # Anyone else's tap is answered by the service at once and never
+            # reaches the agent.
+            sent = api.tap(11, CHAT, 'mode:agent', sender=5)
+            call, latencies['tap, not an operator'] = tap_answered(proc, api, 11, sent, SERVICE_BOUND, 'tap refusal')
+            assert call[2]['text'] == 'These buttons are for operators.'
+            time.sleep(.3)
+            assert tapped == ['10'], tapped
 
             # Stop and start take effect where sends are dispatched: an action
             # already accepted waits, a new submission is refused, and after
@@ -236,24 +335,24 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-commands-') as temp:
             batch = '%d.2.%020d' % (OTHER, 1)
             assert rpc(path, SUBMIT, batch, json.dumps([['send', 'slow', 'plain'], ['send', 'after slow', 'plain']]))[0] == STORED
             wait(proc, lambda: 'slow' in texts(), 'slow send started')
-            sent = api.command(8, CHAT, '/stop')
-            call, latencies['stop'] = replied(proc, api, 8, sent, SERVICE_BOUND, 'stop')
+            sent = api.command(12, CHAT, '/stop')
+            call, latencies['stop'] = replied(proc, api, 12, sent, SERVICE_BOUND, 'stop')
             assert call[2]['text'] == 'Stopped. Nothing Ada submits is sent until /start.'
             refused = '%d.1.%020d' % (OTHER, 1)
             assert rpc(path, SUBMIT, refused, json.dumps([['send', 'while stopped', 'plain']]))[0] == STORED
             time.sleep(1.8)
             assert 'after slow' not in texts() and 'while stopped' not in texts(), texts()[-5:]
-            sent = api.command(9, CHAT, '/start')
-            replied(proc, api, 9, sent, SERVICE_BOUND, 'start')
+            sent = api.command(13, CHAT, '/start')
+            replied(proc, api, 13, sent, SERVICE_BOUND, 'start')
             wait(proc, lambda: 'after slow' in texts(), 'accepted action after start')
             assert rpc(path, SUBMIT, '%d.1.%020d' % (OTHER, 2), json.dumps([['send', 'after start', 'plain']]))[0] == STORED
             wait(proc, lambda: 'after start' in texts(), 'send after start')
             assert 'while stopped' not in texts()
 
             # Someone who is not an operator: the same text is ordinary input.
-            api.command(10, CHAT, '/help', sender=5)
+            api.command(14, CHAT, '/help', sender=5)
             time.sleep(.5)
-            assert not api.replies_to(10)
+            assert not api.replies_to(14)
             responder_stop.set(); responder.join(timeout=10)
         finally:
             proc.send_signal(signal.SIGTERM)
@@ -262,4 +361,5 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-commands-') as temp:
             listener.close()
     print('commands: ' + ', '.join('%s %.0f ms' % (k, v * 1000) for k, v in latencies.items()))
     print('operator commands: answered by the service within the deadline with the agent absent, behind a held '
-          'lane and during a flood; late answers edit the notice; stop and start at dispatch passed')
+          'lane and during a flood; late answers edit the notice; taps are answered in time and redraw their menus; '
+          'a full task queue of an absent agent stops nothing; stop and start at dispatch passed')

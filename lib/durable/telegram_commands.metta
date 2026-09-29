@@ -22,16 +22,18 @@
 ; The message text as a plain string. A command is printable text without
 ; quotes or backslashes, so the JSON literal of such a text, without its
 ; quotes, is the text itself; a text needing any escape is not a command.
+(= (tg-cmd:plain $json-string)
+   (let $literal (json:stringify $json-string)
+     (case (str:find $literal "\\")
+       (((TextNotFound $needle)
+         (tg:some (str:slice $literal 1 (- (str:length $literal) 1))))
+        ($found tg:none)))))
+
 (= (tg-cmd:text $update)
    (case (telegram:field $update "message")
      (((tg:some $message)
        (case (telegram:field $message "text")
-         (((tg:some (JsonStringV1 $scalars))
-           (let $literal (json:stringify (JsonStringV1 $scalars))
-             (case (str:find $literal "\\")
-               (((TextNotFound $needle)
-                 (tg:some (str:slice $literal 1 (- (str:length $literal) 1))))
-                ($found tg:none)))))
+         (((tg:some (JsonStringV1 $scalars)) (tg-cmd:plain (JsonStringV1 $scalars)))
           ($other tg:none))))
       ($other tg:none))))
 
@@ -116,3 +118,114 @@
 ; The lifecycle latch, read from the given view.
 (= (tg-cmd:stopped $view)
    (== (collapse (match &self (host:record $view "latch" (tg-cmd:latch stopped)) True)) (True)))
+
+; Button menus. A delegated command, or a tap on one of the buttons, may be
+; answered with a menu: ["menu", toast, text, rows], rows being
+; [[[label, data], ...], ...]. The service sends or edits the text with the
+; buttons, and a tap's toast is its answer to the tap. A label is 1..64
+; scalars and data 1..64 bytes, neither needing a JSON escape; at most 100
+; rows and 100 buttons, 8 to a row. Empty rows mean no buttons. A menu that
+; breaks any of these is no answer.
+(= (tg-cmd:clean $text $scalars $bytes)
+   (case (str:find (json-stringify (JsonString $text)) "\\")
+     (((TextNotFound $needle)
+       (and (> (str:length $text) 0)
+            (and (<= (str:char-length $text) $scalars) (<= (str:length $text) $bytes))))
+      ($found False))))
+
+(= (tg-cmd:button $pair)
+   (case $pair
+     (((JsonArray ((JsonString $label) (JsonString $data)))
+       (if (and (tg-cmd:clean $label 64 256) (tg-cmd:clean $data 64 64))
+         (tg:some (telegram:button $label $data)) tg:none))
+      ($other tg:none))))
+
+; A row's buttons, and what remains of the budget of buttons.
+(= (tg-cmd:row $pairs $budget)
+   (if (== $pairs ()) (tg:row () $budget)
+     (if (<= $budget 0) tg:none
+       (let ($head $tail) (decons-atom $pairs)
+         (case (tg-cmd:button $head)
+           (((tg:some $button)
+             (case (tg-cmd:row $tail (- $budget 1))
+               (((tg:row $rest $left) (tg:row (cons-atom $button $rest) $left))
+                ($bad tg:none))))
+            ($bad tg:none)))))))
+
+(= (tg-cmd:rows $rows $budget $count)
+   (if (== $rows ()) (tg:some ())
+     (if (>= $count 100) tg:none
+       (let ($head $tail) (decons-atom $rows)
+         (case $head
+           (((JsonArray $pairs)
+             (if (or (== $pairs ()) (> (size-atom $pairs) 8)) tg:none
+               (case (tg-cmd:row $pairs $budget)
+                 (((tg:row $row $left)
+                   (case (tg-cmd:rows $tail $left (+ $count 1))
+                     (((tg:some $rest) (tg:some (cons-atom $row $rest)))
+                      ($bad tg:none))))
+                  ($bad tg:none)))))
+            ($bad tg:none)))))))
+
+(= (tg-cmd:keyboard $rows)
+   (case (tg-cmd:rows $rows 100 0)
+     (((tg:some ()) (tg:some ()))
+      ((tg:some $built) (tg:some (telegram:keyboard $built)))
+      ($bad tg:none))))
+
+(= (tg-cmd:message-text $text)
+   (let $length (str:char-length $text)
+     (if (== $length 0) "(empty answer)"
+       (if (> $length 3800) (str:char-slice $text 0 3800) $text))))
+
+(= (tg-cmd:toast $text)
+   (if (> (str:char-length $text) 200) (str:char-slice $text 0 200) $text))
+
+; An answer or a menu: (tg-cmd:reply toast text keyboard), keyboard () for none.
+(= (tg-cmd:reply $body)
+   (case (json-parse $body)
+     (((JsonArray ((JsonString "answer") (JsonString $text)))
+       (tg:some (tg-cmd:reply "" (tg-cmd:message-text $text) ())))
+      ((JsonArray ((JsonString "menu") (JsonString $toast) (JsonString $text) (JsonArray $rows)))
+       (case (tg-cmd:keyboard $rows)
+         (((tg:some $keyboard) (tg:some (tg-cmd:reply (tg-cmd:toast $toast) (tg-cmd:message-text $text) $keyboard)))
+          ($bad tg:none))))
+      ($other tg:none))))
+
+(= (tg-cmd:send $chat $thread $message $text $keyboard)
+   (if (== $keyboard ()) (telegram:send-text 1 $chat $thread $message $text "plain")
+     (telegram:send-text 1 $chat $thread $message $text "plain" $keyboard)))
+
+(= (tg-cmd:edit $chat $message $text $keyboard)
+   (if (== $keyboard ()) (telegram:edit-text 1 $chat $message $text "plain")
+     (telegram:edit-text 1 $chat $message $text "plain" $keyboard)))
+
+; A tap on a button: the query's ID, its data and the ID of the message that
+; carried the button. The ID and data need no JSON escape; anything else is
+; no tap.
+(= (tg-cmd:tap $update)
+   (case (telegram:field $update "callback_query")
+     (((tg:some $query)
+       (case ((telegram:field $query "id") (telegram:field $query "data") (telegram:field $query "message"))
+         ((((tg:some (JsonStringV1 $id)) (tg:some (JsonStringV1 $data)) (tg:some $message))
+           (case ((tg-cmd:plain (JsonStringV1 $id)) (tg-cmd:plain (JsonStringV1 $data))
+                  (telegram:optional-id $message "message_id" 0))
+             ((((tg:some $query-id) (tg:some $text) (tg:integer $message-id))
+               (if (and (> $message-id 0)
+                        (and (and (> (str:length $query-id) 0) (<= (str:length $query-id) 64))
+                             (and (> (str:length $text) 0) (<= (str:length $text) 64))))
+                 (tg:some (tg-cmd:tap $query-id $text $message-id))
+                 tg:none))
+              ($other tg:none))))
+          ($other tg:none))))
+      ($other tg:none))))
+
+; The agent's task for a tap: ["callback", key, data, lane, message].
+(= (tg-cmd:tap-observation $key $data $lane $message)
+   (format-args "[\"callback\",\"{}\",\"{}\",\"{}\",{}]" ($key $data $lane $message)))
+
+(= (tg-cmd:operator-only-text) "These buttons are for operators.")
+
+(= (tg-cmd:tap-fallback-text)
+   (let $agent (tg-cmd:agent-name)
+     (format-args "No answer from {} yet." ($agent))))

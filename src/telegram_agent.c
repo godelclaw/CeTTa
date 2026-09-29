@@ -68,7 +68,7 @@ bool cetta_telegram_agent_valid(const CettaTelegramAgent *c) {
         (!strcmp(c->program->version,"telegram-agent/1") || !strcmp(c->program->version,"telegram-channel/1")) &&
         c->program->context && c->program->space && component(c->source) && component(c->worker) &&
         c->actions && c->actions->chats && c->actions->chat_count && c->actions->chat_count<=128 &&
-        !(c->actions->methods&~7u) && c->fuel>0 && c->fuel<=2000000 &&
+        !(c->actions->methods&~15u) && c->fuel>0 && c->fuel<=2000000 &&
         c->program->context->session.language_id==CETTA_LANGUAGE_HE && c->program->context->session.profile &&
         c->program->context->session.profile->id==CETTA_PROFILE_HE_EXTENDED;
 }
