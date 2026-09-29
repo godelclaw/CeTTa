@@ -4,6 +4,7 @@
 #include "durable_value.h"
 #include "cetta_stdlib.h"
 #include "library.h"
+#include "parser.h"
 #include "symbol.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -21,8 +22,9 @@
 
 enum { USAGE=64, CONFIG=78, FAILURE=1 };
 typedef struct {
-    const char *root, *directory, *worker, *credential, *origin, *ca;
+    const char *root, *directory, *worker, *credential, *origin, *ca, *commands;
     int token_fd, listener, operator_fd;
+    int64_t deadline_ms;
     int64_t chats[128]; size_t count;
     int64_t operators[16]; size_t operator_count;
     int64_t initial_offset;
@@ -55,10 +57,65 @@ static bool component(const char *s) {
         (*s>='0' && *s<='9') || *s=='_' || *s=='-' || *s=='.')) return false;
     return true;
 }
+/* Operator commands are declarations only, checked here and added to the
+ * trusted program as inert facts: (tg-cmd:command "/name" KIND "help"),
+ * optionally (tg-cmd:agent "Name") and (tg-cmd:bot "username"). Anything
+ * else, a repeated name or a second stop/start/help, refuses the file. */
+static const char *declared(const Atom *a, size_t max) {
+    if (!a || a->kind!=ATOM_GROUNDED || a->ground.gkind!=GV_STRING) return NULL;
+    size_t n=strnlen(a->ground.sval,max+1);
+    if (!n || n>max) return NULL;
+    for (const unsigned char *p=(const unsigned char *)a->ground.sval;*p;++p)
+        if (*p<32 || *p==127 || *p=='"' || *p=='\\') return NULL;
+    return a->ground.sval;
+}
+static bool command_name(const char *s) {
+    size_t n=s?strlen(s):0;
+    if (n<2 || n>33 || s[0]!='/') return false;
+    for (size_t i=1;i<n;++i) if (!((s[i]>='a' && s[i]<='z') || (s[i]>='0' && s[i]<='9') || s[i]=='_')) return false;
+    return true;
+}
+static bool bot_name(const char *s) {
+    size_t n=s?strlen(s):0;
+    if (n<5 || n>32) return false;
+    for (size_t i=0;i<n;++i) if (!((s[i]>='a' && s[i]<='z') || (s[i]>='A' && s[i]<='Z') ||
+        (s[i]>='0' && s[i]<='9') || s[i]=='_')) return false;
+    return true;
+}
+static bool load_commands(const char *path, Arena *arena, Space *program) {
+    Atom **atoms=NULL; int n=parse_metta_file(path,arena,&atoms);
+    const char *names[64]; size_t count=0; unsigned singles=0; bool ok=n>=0 && n<=66;
+    for (int i=0;ok && i<n;++i) {
+        const Atom *d=atoms[i];
+        if (d->kind!=ATOM_EXPR || !d->expr.len) { ok=false; break; }
+        const Atom *head=d->expr.elems[0];
+        if (d->expr.len==4 && atom_is_symbol(head,"tg-cmd:command")) {
+            const char *name=declared(d->expr.elems[1],33), *help=declared(d->expr.elems[3],200);
+            const Atom *k=d->expr.elems[2];
+            unsigned single=atom_is_symbol(k,"help")?1:atom_is_symbol(k,"stop")?2:atom_is_symbol(k,"start")?4:0;
+            if (!name || !command_name(name) || !help || count==64 || (singles&single) ||
+                (!single && !atom_is_symbol(k,"delegated"))) { ok=false; break; }
+            for (size_t j=0;j<count;++j) if (!strcmp(names[j],name)) ok=false;
+            singles|=single; names[count++]=name;
+        } else if (d->expr.len==2 && atom_is_symbol(head,"tg-cmd:agent")) {
+            if ((singles&8) || !declared(d->expr.elems[1],32)) ok=false;
+            singles|=8;
+        } else if (d->expr.len==2 && atom_is_symbol(head,"tg-cmd:bot")) {
+            const char *bot=declared(d->expr.elems[1],32);
+            if ((singles&16) || !bot || !bot_name(bot)) ok=false;
+            singles|=16;
+        } else ok=false;
+    }
+    /* A stop without a start could never be undone from the chat. */
+    if (ok && (singles&6) && (singles&6)!=6) ok=false;
+    for (int i=0;ok && i<n;++i) space_add(program,atoms[i]);
+    free(atoms); return ok;
+}
 static void usage(void) {
     puts("Usage: cetta-telegram-service (--check | --run) --root DIR --state-dir DIR\n"
          "       --worker NAME --chat ID [--chat ID ...] [--operator ID ...]\n"
          "       [--program agent|channel] [--initial-offset N]\n"
+         "       [--commands FILE] [--command-deadline-ms N]\n"
          "       (--credential-file FILE | --credential-fd FD) [--listener-fd FD]\n"
          "       [--operator-fd FD]\n"
          "       [--mock-origin http[s]://127.0.0.1:PORT [--ca-file FILE]]\n"
@@ -91,6 +148,14 @@ static bool arguments(int argc, char **argv, Config *c) {
             if (c->offset_seen || !number(value,0,INT64_MAX-1,&n)) return false;
             c->offset_seen=true; c->initial_offset=n; continue;
         }
+        if (!strcmp(option,"--commands")) {
+            if (c->commands || value[0]!='/') return false;
+            c->commands=value; continue;
+        }
+        if (!strcmp(option,"--command-deadline-ms")) {
+            if (c->deadline_ms || !number(value,100,60000,&n)) return false;
+            c->deadline_ms=n; continue;
+        }
         if (!strcmp(option,"--program")) {
             if (c->program_seen || (strcmp(value,"agent") && strcmp(value,"channel"))) return false;
             c->program_seen=true; c->channel=!strcmp(value,"channel"); continue;
@@ -109,7 +174,8 @@ static bool arguments(int argc, char **argv, Config *c) {
         !component(c->worker) || !c->count || (!!c->credential==(c->token_fd>=0)) ||
         (c->credential && c->credential[0]!='/') || (c->ca && (c->ca[0]!='/' || !c->origin)) ||
         (c->listener>=0 && c->token_fd==c->listener) ||
-        (c->operator_fd>=0 && (c->operator_fd==c->listener || c->operator_fd==c->token_fd))) return false;
+        (c->operator_fd>=0 && (c->operator_fd==c->listener || c->operator_fd==c->token_fd)) ||
+        ((c->commands || c->deadline_ms) && !c->channel)) return false;
     /* Custom origins are exclusively numeric loopback fixtures, even for TLS.
      * The credential adapter validates scheme/port/trailing bytes afterwards. */
     if (c->origin) {
@@ -232,6 +298,7 @@ int main(int argc,char **argv) {
     if (!cetta_library_import_module(&context,module,&program,false,&scratch,&persistent,&registry,1000000,&import_error)) {
         error("trusted policy",CONFIG); goto done;
     }
+    if (c.commands && !load_commands(c.commands,&persistent,&program)) { error("commands",CONFIG); goto done; }
     CettaHostProgram trusted={c.channel?"telegram-channel/1":"telegram-agent/1",&program,&context};
     Atom *ids[128]; for (size_t i=0;i<c.count;++i) ids[i]=atom_int(&persistent,c.chats[i]);
     Atom *operators[16]; for (size_t i=0;i<c.operator_count;++i) operators[i]=atom_int(&persistent,c.operators[i]);
@@ -258,7 +325,8 @@ int main(int argc,char **argv) {
     s=cetta_service_new(store,&config,&service);
     if (s==DURABLE_OK) c.listener=-1;
     if (s==DURABLE_OK && stopped) { result=0; goto done; }
-    CettaTelegramSchedulerConfig ac={{&trusted,source_id,c.worker,&actions,2000000},256,256,8*1024*1024,NULL,app_fault};
+    CettaTelegramSchedulerConfig ac={{&trusted,source_id,c.worker,&actions,2000000,(uint32_t)c.deadline_ms},
+        256,256,8*1024*1024,NULL,app_fault};
     if (s==DURABLE_OK) s=cetta_telegram_scheduler_new(store,service,&ac,&scheduler);
     if (s==DURABLE_OK && c.operator_fd>=0) {
         s=cetta_telegram_control_new(store,&ac.agent,c.operator_fd,getuid(),&control);

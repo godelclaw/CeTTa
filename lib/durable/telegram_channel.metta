@@ -1,4 +1,6 @@
 !(import! &self durable:telegram_agent)
+!(import! &self durable:telegram_commands)
+!(import! &self durable:timer)
 
 ; Fixed service program, telegram-channel/1. The client is an agent's own
 ; long-lived loop: it reads deliveries and receipts as worker tasks, answers
@@ -13,6 +15,7 @@
 ;   ["delivery", key, position, count, result]
 ;   ["rejected", key, reason]
 ;   ["released", lane, key, position]
+;   ["command", key, name, arguments]
 ; with result ["delivered", message-id] | ["failed", code] |
 ; ["not-sent"] | ["uncertain", reason].
 
@@ -26,35 +29,78 @@
       (((host:actor 1 "telegram-channel/1" $state)) $state)
       ($other (tg-agent:held invalid-actor)))))
 
-; Dispatch query: view 0 = accepted intent, 1 = current actor. Only the
-; expected position is eligible; native admission also checks attempts/outcomes.
+; Dispatch query: view 0 = accepted intent, 1 = current actor, 2 = the
+; lifecycle latch. Only the expected position is eligible, and nothing while
+; stopped; native admission also checks attempts/outcomes.
 (= (tg-channel:dispatchable)
    (match &self (host:record 0 $key (host:intent 1 "telegram.action" "1" $action
      (tg-agent:sent 1 $source $lane $batch $position $count)))
-     (case (tg-channel:state)
-       (((tg-agent:sending $batch $position $count) True)
-        ($other False)))))
+     (if (tg-cmd:stopped 2) False
+       (case (tg-channel:state)
+         (((tg-agent:sending $batch $position $count) True)
+          ($other False))))))
 
-; Incoming input: views 2 = received record. Channel 0 = the client worker.
-; The chat's sending actor is not involved: reading never makes a draft stale
-; and never waits for cognition. Non-routed input uses the audit actor.
-(= (tg-channel:receive $worker $source $lane)
+; Incoming input: views 2 = received record, 3 = this update's command
+; record (grant 1), 4 = the lifecycle latch (grant 2). Channels: 0 = the
+; client worker, 1 = Telegram actions, 2 = timers. The chat's sending actor is
+; not involved: reading never makes a draft stale and never waits for
+; cognition. Non-routed input uses the audit actor. $now is the host's clock
+; sample for this decision; $deadline is the command deadline in ms.
+(= (tg-channel:receive $worker $source $lane $now $deadline)
    (match &self (host:record 0 $key (host:input 1 $source $id $ledger $lane $disposition))
      (match &self (host:record 2 $ledger (host:received 1 $source $id $lane $disposition $input))
        (if (== $disposition routed)
          (case $input
            (((telegram:input 1 $kind $chat $thread $sender $role $update)
-             (let $update-json (json:stringify $update)
-               (let $full (format-args "[\"input\",\"{}\",\"{}\",\"{}\",{}]" ($lane $kind $role $update-json))
-                 (let $observation
-                      (if (> (str:length $full) (tg-channel:limit))
-                        (format-args "[\"input-too-large\",\"{}\",\"{}\",\"{}\"]" ($lane $kind $role))
-                        $full)
-                   (host:transition (tg-channel:intake) ()
-                     ((durable:worker:request 0 $worker $observation
-                        (tg-channel:delivered 1 $source $lane $id))))))))
+             (case (tg-cmd:of $kind $role $update)
+               (((tg-cmd:call $name $command-kind $args)
+                 (tg-channel:command $worker $source $id $chat $thread $update $name $command-kind $args $now $deadline))
+                ($ordinary (tg-channel:deliver $worker $source $id $lane $kind $role $update)))))
             ($bad Empty)))
          (host:transition (tg-agent:ignored $source $id $disposition) () ())))))
+
+(= (tg-channel:deliver $worker $source $id $lane $kind $role $update)
+   (let $update-json (json:stringify $update)
+     (let $full (format-args "[\"input\",\"{}\",\"{}\",\"{}\",{}]" ($lane $kind $role $update-json))
+       (let $observation
+            (if (> (str:length $full) (tg-channel:limit))
+              (format-args "[\"input-too-large\",\"{}\",\"{}\",\"{}\"]" ($lane $kind $role))
+              $full)
+         (host:transition (tg-channel:intake) ()
+           ((durable:worker:request 0 $worker $observation
+              (tg-channel:delivered 1 $source $lane $id))))))))
+
+; An operator command, keyed by its update. A reply quotes the command
+; message and never waits for the chat's lane or for the agent.
+(= (tg-channel:command-reply $source $key $chat $thread $message $text $role)
+   (host:send 1 (telegram:send-text 1 $chat $thread $message $text "plain")
+     (tg-channel:command-sent 1 $source $key $role)))
+
+(= (tg-channel:command $worker $source $id $chat $thread $update $name $kind $args $now $deadline)
+   (let $key (format-args "{}" ($id))
+     (let $message (case (telegram:field $update "message")
+                     (((tg:some $m) (case (telegram:optional-id $m "message_id" 0)
+                                      (((tg:integer $n) $n) ($bad 0))))
+                      ($none 0)))
+       (let $ask (durable:worker:request 0 $worker (tg-cmd:observation $key $name $args)
+                   (tg-channel:asked 1 $source $key))
+         (case $kind
+           ((help
+             (host:transition (tg-channel:intake)
+               ((host:put 1 $key (tg-cmd:served $now)))
+               ((tg-channel:command-reply $source $key $chat $thread $message (tg-cmd:help-text) reply))))
+            (stop
+             (host:transition (tg-channel:intake)
+               ((host:put 1 $key (tg-cmd:served $now)) (host:put 2 "latch" (tg-cmd:latch stopped)))
+               ((tg-channel:command-reply $source $key $chat $thread $message (tg-cmd:stopped-text) reply) $ask)))
+            (start
+             (host:transition (tg-channel:intake)
+               ((host:put 1 $key (tg-cmd:served $now)) (host:put 2 "latch" (tg-cmd:latch running)))
+               ((tg-channel:command-reply $source $key $chat $thread $message (tg-cmd:started-text) reply) $ask)))
+            (delegated
+             (host:transition (tg-channel:intake)
+               ((host:put 1 $key (tg-cmd:waiting $now $chat $thread $message)))
+               ($ask (durable:timer:after 2 $now $deadline $key (tg-channel:deadline 1 $source $key)))))))))))
 
 ; The client answered a delivery or receipt task. Any body only acknowledges
 ; it: actions are never taken from an acknowledgment.
@@ -63,7 +109,8 @@
      (host:transition (tg-channel:intake) () ())))
 
 ; A keyed submission for one lane. Views 2 = the writable decision key
-; (grant 0), 3 = this lane's pending submissions. Channels: 0 = Telegram actions,
+; (grant 0), 3 = this lane's pending submissions, 4 = the lifecycle latch:
+; while stopped, a submission is rejected. Channels: 0 = Telegram actions,
 ; 1 = the client worker. The native host passes whether this is the lane's
 ; oldest pending submission in the ticket's own snapshot; a younger one waits.
 ; Destinations come from the key's lane, never from the client's JSON.
@@ -72,13 +119,14 @@
      (if (not $oldest) Empty
        (case (tg-channel:state)
          (((tg-agent:idle)
+           (if (tg-cmd:stopped 4) (tg-channel:reject $worker $source $key stopped)
            (case (tg-agent:batch $body $chat $thread)
              (((tg-agent:actions $actions)
                (let $count (size-atom $actions)
                  (host:transition (if (== $count 0) (tg-agent:idle) (tg-agent:sending $key 0 $count))
                    ((host:put 0 $key (tg-channel:decision 1 accepted $count)))
                    (tg-agent:intents $actions $source $lane $key 0 $count))))
-              ($other (tg-channel:reject $worker $source $key invalid-command-batch)))))
+              ($other (tg-channel:reject $worker $source $key invalid-command-batch))))))
           ($busy Empty))))))
 
 (= (tg-channel:reject $worker $source $key $reason)
@@ -161,3 +209,66 @@
                    ((durable:worker:request 0 $worker $notice (tg-channel:notified 1 $source $id))))))
               ($other (host:transition $state
                  ((host:put 1 $id (tg-agent:control-result 1 refused $batch))) ())))))))))
+
+; The agent answered a command. Views 2 task, 3 origin, 4 the command's
+; request, 5 its record (grant 3). Channel 0 = Telegram actions. Before the
+; deadline the answer is the reply; after it, the answer edits the notice,
+; at once if the notice was delivered, else when it is. Any other state, or
+; a body that is not an answer, only acknowledges the task.
+(= (tg-channel:answer $worker)
+   (match &self (host:record 0 $input (host:worker-result 1 $worker $task $revision $body))
+     (match &self (host:record 4 $outkey (host:intent 1 "worker.request" "1" $request
+                    (tg-channel:asked 1 $source $key)))
+       (let $phase (collapse (match &self (host:record 5 $key $value) $value))
+         (case ((tg-cmd:answer-text $body) $phase)
+           ((((tg:some $text) ((tg-cmd:waiting $t0 $chat $thread $message)))
+             (host:transition (tg-channel:command)
+               ((host:put 3 $key (tg-cmd:answered $t0)))
+               ((host:send 0 (telegram:send-text 1 $chat $thread $message $text "plain")
+                  (tg-channel:command-sent 1 $source $key reply)))))
+            (((tg:some $text) ((tg-cmd:fell-back $t0 $chat $thread $message $sent)))
+             (if (> $sent 0)
+               (host:transition (tg-channel:command)
+                 ((host:put 3 $key (tg-cmd:edited $t0)))
+                 ((host:send 0 (telegram:edit-text 1 $chat $sent $text "plain")
+                    (tg-channel:command-sent 1 $source $key edit))))
+               (host:transition (tg-channel:command)
+                 ((host:put 3 $key (tg-cmd:edit-pending $t0 $chat $thread $message $text))) ())))
+            ($other (host:transition (tg-channel:command) () ()))))))))
+
+; The deadline of a command. View 2 = its record (grant 0). Channel 0 =
+; Telegram actions. Only a command still waiting gets the notice.
+(= (tg-channel:deadline $source $key)
+   (case (collapse (match &self (host:record 2 $key $value) $value))
+     ((((tg-cmd:waiting $t0 $chat $thread $message))
+       (host:transition (tg-channel:command)
+         ((host:put 0 $key (tg-cmd:fell-back $t0 $chat $thread $message 0)))
+         ((host:send 0 (telegram:send-text 1 $chat $thread $message (tg-cmd:fallback-text) "plain")
+            (tg-channel:command-sent 1 $source $key fallback)))))
+      ($other (host:transition (tg-channel:command) () ())))))
+
+; A command message was sent. Views 2 its intent, 3 its outcome, 4 the
+; command's record (grant 2). Channel 0 = Telegram actions. A delivered
+; notice records its message, and an answer already waiting edits it. A
+; notice that was not delivered can never be edited.
+(= (tg-channel:command-complete)
+   (match &self (host:record 0 $input (host:completion 1 $effect $outkey))
+    (match &self (host:record 2 $outkey (host:intent 1 "telegram.action" "1" $action
+                   (tg-channel:command-sent 1 $source $key $role)))
+     (match &self (host:record 3 $outkey (host:outcome 1 $effect $attempt $kind $metadata $body))
+      (if (not (== $role fallback)) (host:transition (tg-channel:command) () ())
+       (let $result (tg-channel:classify (host:outcome 1 $effect $attempt $kind $metadata $body) $action)
+        (case ($result (collapse (match &self (host:record 4 $key $value) $value)))
+          ((((tg-agent:delivered $sent) ((tg-cmd:fell-back $t0 $chat $thread $message 0)))
+            (host:transition (tg-channel:command)
+              ((host:put 2 $key (tg-cmd:fell-back $t0 $chat $thread $message $sent))) ()))
+           (((tg-agent:delivered $sent) ((tg-cmd:edit-pending $t0 $chat $thread $message $text)))
+            (host:transition (tg-channel:command)
+              ((host:put 2 $key (tg-cmd:edited $t0)))
+              ((host:send 0 (telegram:edit-text 1 $chat $sent $text "plain")
+                 (tg-channel:command-sent 1 $source $key edit)))))
+           (($undelivered ((tg-cmd:fell-back $t0 $chat $thread $message 0)))
+            (host:transition (tg-channel:command) ((host:put 2 $key (tg-cmd:undelivered $t0))) ()))
+           (($undelivered ((tg-cmd:edit-pending $t0 $chat $thread $message $text)))
+            (host:transition (tg-channel:command) ((host:put 2 $key (tg-cmd:undelivered $t0))) ()))
+           ($other (host:transition (tg-channel:command) () ()))))))))))

@@ -8,6 +8,9 @@ typedef struct {
     const char *source, *worker;
     const CettaTelegramActionPolicy *actions;
     int fuel;
+    /* telegram-channel/1: how long an operator command waits for the agent
+     * before the service replies itself. 0 selects 2000 ms. */
+    uint32_t command_deadline_ms;
 } CettaTelegramAgent;
 bool cetta_telegram_agent_valid(const CettaTelegramAgent *agent);
 

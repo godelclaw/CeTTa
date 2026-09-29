@@ -5,6 +5,7 @@
 #include "durable_inbox.h"
 #include "durable_worker_host.h"
 #include "durable_value.h"
+#include "durable_timer.h"
 #include "library.h"
 #include <errno.h>
 #include <inttypes.h>
@@ -93,6 +94,13 @@ static bool submission_lane(const char *key, char lane[65], int64_t *chat, int64
     memcpy(lane,key,n-21); lane[n-21]=0;
     return lane_numbers(lane,chat,thread);
 }
+/* An operator command is keyed by its update ID. */
+static bool command_key(const char *key) {
+    size_t n=key?strnlen(key,21):0;
+    if (!n || n>20) return false;
+    for (size_t i=0;i<n;++i) if (key[i]<'0' || key[i]>'9') return false;
+    return true;
+}
 /* telegram-channel/1: the client reads deliveries and receipts as tasks and
  * acts only through keyed submissions. The sending state machine and its
  * admission are telegram-agent/1's; see cetta_telegram_agent_admit. */
@@ -104,12 +112,13 @@ static CettaDurableStatus channel_decide(CettaDurableStore *store,
     CettaHostDecision *decision=NULL;
     CettaDurableStatus s=read(store,"host.inbox",input_key,&a,&initial,&input);
     if (s!=DURABLE_OK) goto done;
-    char actor[160], ledger[96], expected[168], task[130], pending[160], lane[65];
-    CettaHostSpaceGrant scopes[3]; size_t count=0;
-    CettaHostChannelGrant channels[2]; size_t channel_count=0;
+    char actor[160], ledger[96], expected[168], task[130], pending[160], lane[65], command[32];
+    CettaHostSpaceGrant scopes[4]; size_t count=0;
+    CettaHostChannelGrant channels[3]; size_t channel_count=0;
     int64_t submit_chat=0, submit_thread=0;
     const CettaHostChannelGrant worker={"worker.request","1",cetta_worker_validate,(void *)c->worker};
     const CettaHostChannelGrant actions={"telegram.action","1",cetta_telegram_action_validate,(void *)c->actions};
+    const CettaHostChannelGrant timer={"timer.after","1",cetta_timer_validate,NULL};
     bool submission=false, oldest_needed=false;
     if (form(input,"host:input",7)) {
         Atom **v=input->expr.elems;
@@ -121,10 +130,19 @@ static CettaDurableStatus channel_decide(CettaDurableStore *store,
         bool routed=atom_is_symbol(v[6],"routed");
         if (!routed && !atom_is_symbol(v[6],"unauthorized") && !atom_is_symbol(v[6],"unsupported")) { s=DURABLE_CORRUPT; goto done; }
         snprintf(actor,sizeof(actor),"telegram/%s/%s",c->source,routed?"intake":"ignored");
+        /* An operator command is decided here, on its update: its record,
+         * the lifecycle latch, its reply and its deadline. The clock sample
+         * is recorded in the command's record and its timer. */
+        snprintf(command,sizeof(command),"%" PRId64,v[3]->ground.ival);
+        CettaClockSample now; if (!cetta_clock_sample(&now)) { s=DURABLE_IO; goto done; }
         scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.received",ledger},false};
-        channels[channel_count++]=worker;
-        Atom *args[]={atom_symbol(&a,"tg-channel:receive"),atom_string(&a,c->worker),atom_string(&a,c->source),atom_string(&a,routed_lane)};
-        call=atom_expr(&a,args,4);
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.commands",command},true};
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.lifecycle","latch"},true};
+        channels[channel_count++]=worker; channels[channel_count++]=actions; channels[channel_count++]=timer;
+        Atom *args[]={atom_symbol(&a,"tg-channel:receive"),atom_string(&a,c->worker),atom_string(&a,c->source),
+            atom_string(&a,routed_lane),atom_int(&a,now.utc_ms),
+            atom_int(&a,c->command_deadline_ms?c->command_deadline_ms:2000)};
+        call=atom_expr(&a,args,6);
     } else if (form(input,"host:worker-result",6)) {
         if (!text(input->expr.elems[2]) || strcmp(text(input->expr.elems[2]),c->worker)) { s=DURABLE_PRECONDITION; goto done; }
         const char *id=text(input->expr.elems[3]);
@@ -139,15 +157,28 @@ static CettaDurableStatus channel_decide(CettaDurableStore *store,
         s=read(store,"host.outbox",outkey,&a,&intent,&request); if (s!=DURABLE_OK) goto done;
         if (!form(request,"host:intent",6)) { s=DURABLE_VERSION; goto done; }
         Atom *reply=request->expr.elems[5];
+        bool asked=form(reply,"tg-channel:asked",4);
         if (!text(request->expr.elems[2]) || strcmp(text(request->expr.elems[2]),"worker.request") ||
             !text(request->expr.elems[3]) || strcmp(text(request->expr.elems[3]),"1") ||
-            !(form(reply,"tg-channel:delivered",5) || form(reply,"tg-channel:notified",4))) { s=DURABLE_VERSION; goto done; }
+            !(asked || form(reply,"tg-channel:delivered",5) || form(reply,"tg-channel:notified",4))) { s=DURABLE_VERSION; goto done; }
         if (!text(reply->expr.elems[2]) || strcmp(text(reply->expr.elems[2]),c->source)) { s=DURABLE_PRECONDITION; goto done; }
-        snprintf(actor,sizeof(actor),"telegram/%s/intake",c->source);
         scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.worker-tasks",task},false};
         scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.worker-origins",task},false};
         scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.outbox",outkey},false};
-        call=atom_expr2(&a,atom_symbol(&a,"tg-channel:ack"),atom_string(&a,c->worker));
+        if (asked) {
+            /* The agent's answer to a command races its deadline on the
+             * command's own actor and record, never on a chat lane. */
+            const char *key=text(reply->expr.elems[3]);
+            if (!command_key(key)) { s=DURABLE_CORRUPT; goto done; }
+            snprintf(command,sizeof(command),"%s",key);
+            snprintf(actor,sizeof(actor),"telegram/%s/command/%s",c->source,command);
+            scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.commands",command},true};
+            channels[channel_count++]=actions;
+            call=atom_expr2(&a,atom_symbol(&a,"tg-channel:answer"),atom_string(&a,c->worker));
+        } else {
+            snprintf(actor,sizeof(actor),"telegram/%s/intake",c->source);
+            call=atom_expr2(&a,atom_symbol(&a,"tg-channel:ack"),atom_string(&a,c->worker));
+        }
     } else if (form(input,"host:worker-submission",5)) {
         Atom **v=input->expr.elems; int64_t chat=0, thread=0;
         const char *key=text(v[3]);
@@ -162,6 +193,7 @@ static CettaDurableStatus channel_decide(CettaDurableStore *store,
             snprintf(actor,sizeof(actor),"telegram/%s/%s",c->source,lane);
             snprintf(pending,sizeof(pending),"submission/%s/%s.",c->worker,lane);
             scopes[count++]=(CettaHostSpaceGrant){{DURABLE_PREFIX,"host.inbox",pending},false};
+            scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.lifecycle","latch"},false};
             oldest_needed=true; submit_chat=chat; submit_thread=thread;
         } else {
             /* No lane can be named: reject without touching any chat actor. */
@@ -186,21 +218,49 @@ static CettaDurableStatus channel_decide(CettaDurableStore *store,
         scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.control-results",id},true};
         channels[channel_count++]=worker;
         call=atom_expr2(&a,atom_symbol(&a,"tg-channel:control"),atom_string(&a,c->worker));
+    } else if (form(input,"host:timer-event",10)) {
+        /* A command's deadline. The reply names the command; the command's
+         * own record decides whether a notice is still due. */
+        Atom *reply=input->expr.elems[9];
+        if (!form(reply,"tg-channel:deadline",4) || !text(reply->expr.elems[2]) ||
+            strcmp(text(reply->expr.elems[2]),c->source)) { s=DURABLE_PRECONDITION; goto done; }
+        const char *key=text(reply->expr.elems[3]);
+        if (!command_key(key)) { s=DURABLE_CORRUPT; goto done; }
+        snprintf(command,sizeof(command),"%s",key);
+        snprintf(actor,sizeof(actor),"telegram/%s/command/%s",c->source,command);
+        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.commands",command},true};
+        channels[channel_count++]=actions;
+        Atom *args[]={atom_symbol(&a,"tg-channel:deadline"),atom_string(&a,c->source),atom_string(&a,command)};
+        call=atom_expr(&a,args,3);
     } else if (form(input,"host:completion",4)) {
         const char *outkey=text(input->expr.elems[3]);
         s=read(store,"host.outbox",outkey,&a,&intent,&request); if (s!=DURABLE_OK) goto done;
         if (!form(request,"host:intent",6) || !text(request->expr.elems[2]) || strcmp(text(request->expr.elems[2]),"telegram.action") ||
-            !text(request->expr.elems[3]) || strcmp(text(request->expr.elems[3]),"1") ||
-            !form(request->expr.elems[5],"tg-agent:sent",7)) { s=DURABLE_PRECONDITION; goto done; }
-        Atom **reply=request->expr.elems[5]->expr.elems;
-        if (!text(reply[2]) || strcmp(text(reply[2]),c->source)) { s=DURABLE_PRECONDITION; goto done; }
-        const char *sent_lane=text(reply[3]); if (!component(sent_lane)) { s=DURABLE_CORRUPT; goto done; }
-        snprintf(actor,sizeof(actor),"telegram/%s/%s",c->source,sent_lane);
-        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.outbox",outkey},false};
-        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.outcomes",outkey},false};
-        scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.deliveries",outkey},true};
-        channels[channel_count++]=worker;
-        call=atom_expr2(&a,atom_symbol(&a,"tg-channel:complete"),atom_string(&a,c->worker));
+            !text(request->expr.elems[3]) || strcmp(text(request->expr.elems[3]),"1")) { s=DURABLE_PRECONDITION; goto done; }
+        Atom *sent=request->expr.elems[5];
+        if (form(sent,"tg-channel:command-sent",5)) {
+            if (!text(sent->expr.elems[2]) || strcmp(text(sent->expr.elems[2]),c->source)) { s=DURABLE_PRECONDITION; goto done; }
+            const char *key=text(sent->expr.elems[3]);
+            if (!command_key(key)) { s=DURABLE_CORRUPT; goto done; }
+            snprintf(command,sizeof(command),"%s",key);
+            snprintf(actor,sizeof(actor),"telegram/%s/command/%s",c->source,command);
+            scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.outbox",outkey},false};
+            scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.outcomes",outkey},false};
+            scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.commands",command},true};
+            channels[channel_count++]=actions;
+            Atom *head=atom_symbol(&a,"tg-channel:command-complete"); call=atom_expr(&a,&head,1);
+        } else {
+            if (!form(sent,"tg-agent:sent",7)) { s=DURABLE_PRECONDITION; goto done; }
+            Atom **reply=sent->expr.elems;
+            if (!text(reply[2]) || strcmp(text(reply[2]),c->source)) { s=DURABLE_PRECONDITION; goto done; }
+            const char *sent_lane=text(reply[3]); if (!component(sent_lane)) { s=DURABLE_CORRUPT; goto done; }
+            snprintf(actor,sizeof(actor),"telegram/%s/%s",c->source,sent_lane);
+            scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.outbox",outkey},false};
+            scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"host.outcomes",outkey},false};
+            scopes[count++]=(CettaHostSpaceGrant){{DURABLE_KEY,"telegram.deliveries",outkey},true};
+            channels[channel_count++]=worker;
+            call=atom_expr2(&a,atom_symbol(&a,"tg-channel:complete"),atom_string(&a,c->worker));
+        }
     } else { s=DURABLE_PRECONDITION; goto done; }
     CettaHostDecisionSpec spec={input_key,actor,c->program->version,scopes,count,channels,channel_count};
     s=cetta_host_begin(store,&spec,&decision); if (s!=DURABLE_OK) goto done;
@@ -359,7 +419,7 @@ CettaDurableStatus cetta_telegram_agent_admit(CettaDurableStore *store,
     Atom *payload=intent->expr.elems[4], *reply=intent->expr.elems[5];
     if (!strcmp(channel,"worker.request")) {
         bool ours=channel_mode(c)
-            ? form(reply,"tg-channel:delivered",5) || form(reply,"tg-channel:notified",4)
+            ? form(reply,"tg-channel:delivered",5) || form(reply,"tg-channel:notified",4) || form(reply,"tg-channel:asked",4)
             : form(reply,"tg-agent:return",7);
         if (!ours || !text(reply->expr.elems[2]) || strcmp(text(reply->expr.elems[2]),c->source)) {
             *admission=TELEGRAM_FOREIGN; goto done;
@@ -369,22 +429,32 @@ CettaDurableStatus cetta_telegram_agent_admit(CettaDurableStore *store,
         *admission=TELEGRAM_WORKER; goto done;
     }
     if (strcmp(channel,"telegram.action")) { *admission=TELEGRAM_FOREIGN; goto done; }
-    if (strcmp(version,"1") || !form(reply,"tg-agent:sent",7) || !text(reply->expr.elems[2]) ||
-        strcmp(text(reply->expr.elems[2]),c->source) || !component(text(reply->expr.elems[3]))) {
+    /* A command's own message is never ordered behind a chat lane or held
+     * by the lifecycle latch; a lane's actions are, and wait while stopped. */
+    bool command_send=channel_mode(c) && form(reply,"tg-channel:command-sent",5);
+    if (strcmp(version,"1") || (!command_send && !form(reply,"tg-agent:sent",7)) || !text(reply->expr.elems[2]) ||
+        strcmp(text(reply->expr.elems[2]),c->source) || !component(text(reply->expr.elems[3])) ||
+        (command_send && !command_key(text(reply->expr.elems[3])))) {
         s=DURABLE_VERSION; goto done;
     }
-    char actor[160]; snprintf(actor,sizeof(actor),"telegram/%s/%s",c->source,text(reply->expr.elems[3]));
+    char actor[160]; snprintf(actor,sizeof(actor),"telegram/%s/%s%s",c->source,command_send?"command/":"",
+        text(reply->expr.elems[3]));
     CettaDurableScope q[]={{DURABLE_KEY,"host.outbox",key},{DURABLE_KEY,"host.actors",actor},
-        {DURABLE_KEY,"host.attempts",key},{DURABLE_KEY,"host.outcomes",key}};
-    s=cetta_durable_observe(store,q,4,&o); if (s!=DURABLE_OK) goto done;
+        {DURABLE_KEY,"host.attempts",key},{DURABLE_KEY,"host.outcomes",key},
+        {DURABLE_KEY,"telegram.lifecycle","latch"}};
+    size_t views=channel_mode(c) && !command_send?5:4;
+    s=cetta_durable_observe(store,q,views,&o); if (s!=DURABLE_OK) goto done;
     if (!same(cetta_durable_observation_view(initial,0),cetta_durable_observation_view(o,0))) { s=DURABLE_CONFLICT; goto done; }
     if (cetta_durable_observation_view(o,3)->count) { *admission=TELEGRAM_DONE; goto done; }
     s=cetta_durable_watch_new(o,budget,watch); if (s!=DURABLE_OK) goto done;
     if (cetta_durable_observation_view(o,2)->count) goto done;
     if (!cetta_telegram_action_validate((void *)c->actions,payload,reply)) { s=DURABLE_INVALID; goto done; }
+    if (command_send) { *admission=TELEGRAM_SEND; goto done; }
     s=cetta_host_eval_create(c->program,&e); if (s!=DURABLE_OK) goto done;
-    for (size_t i=0;i<2;++i) {
-        const CettaDurableSnapshot *v=cetta_durable_observation_view(o,i);
+    /* Records 0 = intent, 1 = actor and, for the channel, 2 = latch. */
+    static const size_t record_view[]={0,1,4};
+    for (size_t i=0;i<(views==5?3u:2u);++i) {
+        const CettaDurableSnapshot *v=cetta_durable_observation_view(o,record_view[i]);
         if (!v->count) continue;
         Atom *value=NULL; s=cetta_durable_value_decode(&e->persistent,v->records[0].data,v->records[0].size,&value);
         if (s!=DURABLE_OK) goto done;
