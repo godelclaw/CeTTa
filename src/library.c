@@ -20,6 +20,7 @@
 #include "langdef_pack.h"
 #include "library_io.h"
 #include "library_cwp.h"
+#include "library_proc.h"
 #include "library_durable.h"
 #include "library_json.h"
 #include <ctype.h>
@@ -55,6 +56,7 @@ enum {
     CETTA_LIBRARY_IO = 1u << 10,
     CETTA_LIBRARY_DURABLE = 1u << 13,
     CETTA_LIBRARY_CWP = 1u << 14,
+    CETTA_LIBRARY_PROC = 1u << 15,
     CETTA_LIBRARY_PETTA_TABLING = 1u << 11,
 #if CETTA_BUILD_WITH_JSON_GSLT
     CETTA_LIBRARY_JSON = 1u << 12
@@ -81,6 +83,7 @@ static const CettaLibrarySpec CETTA_LIBRARIES[] = {
     {"io", CETTA_LIBRARY_IO},
     {"durable", CETTA_LIBRARY_DURABLE},
     {"cwp", CETTA_LIBRARY_CWP},
+    {"proc", CETTA_LIBRARY_PROC},
 #if CETTA_BUILD_WITH_JSON_GSLT
     {"json", CETTA_LIBRARY_JSON},
 #endif
@@ -10060,6 +10063,10 @@ static Atom *cetta_library_dispatch_native_value(
     }
     if (ctx->active_mask & CETTA_LIBRARY_CWP) {
         Atom *result = cetta_cwp_dispatch(a, head, args, nargs);
+        if (result) return result;
+    }
+    if (ctx->active_mask & CETTA_LIBRARY_PROC) {
+        Atom *result = cetta_proc_dispatch(a, head, args, nargs);
         if (result) return result;
     }
 #if CETTA_BUILD_WITH_JSON_GSLT

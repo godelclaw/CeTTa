@@ -55,7 +55,7 @@ int main(int argc,char **argv) {
     cetta_library_context_init(context); cetta_library_context_set_exec_path(context,argv[0]);
     cetta_eval_session_init_he_extended(&context->session);
     eval_set_library_context(context);
-    const char *modules[]={"io","fs","system","str","rhometta","durable"};
+    const char *modules[]={"io","fs","system","str","rhometta","durable","proc"};
     for (size_t i=0;i<sizeof(modules)/sizeof(*modules);++i) {
         Atom *error=NULL;
         if (!cetta_library_import(context,modules[i],&space,&scratch,&persistent,&registry,10000,&error)) {
@@ -103,6 +103,7 @@ int main(int argc,char **argv) {
     denied("(__cetta_lib_prolog_query anything ())");
     char expr[8192];
     snprintf(expr,sizeof(expr),"(fs:write \"%s\" \"forbidden\")",argv[2]); denied(expr);
+    snprintf(expr,sizeof(expr),"(proc:run (\"/usr/bin/touch\" \"%s\") \"/\" () 1000 10)",argv[2]); denied(expr);
     snprintf(expr,sizeof(expr),"(io:submit (http:request \"GET\" \"%s/counted\" () \"\" 1000 100))",argv[1]); denied(expr);
     char branch[9000];
     snprintf(branch,sizeof(branch),"(collapse (superpose (kept %s)))",expr);

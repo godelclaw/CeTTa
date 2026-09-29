@@ -655,7 +655,7 @@ SRC = src/symbol.c src/atom.c src/term_graph.c src/delay_service.c src/binding/f
 SRC += src/shared_transition.c
 SRC += src/gslt_language_manifest_v1.c
 SRC += src/gslt_support_profile_v1.c
-SRC += src/library_io.c src/library_cwp.c src/http_worker.c src/telegram_transport.c src/library_durable.c $(DURABLE_SRC)
+SRC += src/library_io.c src/library_cwp.c src/library_proc.c src/http_worker.c src/telegram_transport.c src/library_durable.c $(DURABLE_SRC)
 SRC += $(JSON_GSLT_RUNTIME_SRC)
 SRC += $(PETTA_TYPECHECK_CENSUS_SRC)
 SRC += \
@@ -27064,6 +27064,27 @@ ifeq ($(ENABLE_PYTHON),1)
 else
 	@echo "SKIP: test-petta-python-error-report (requires a Python-enabled build)"
 endif
+
+.PHONY: test-lib-proc
+test-petta-semantics: test-lib-proc
+# lib/proc runs a program as a child process: an explicit argument vector,
+# working directory and environment, an output cap, and a timeout that kills
+# the whole process group. Nothing of this process's environment or open
+# files reaches the program: it runs here with a file open on descriptor 7.
+test-lib-proc: $(BIN)
+	@set -eu; \
+	actual=$$($(CETTA_BIN_INVOKE) --lang petta tests/petta/proc_run.metta 7</dev/null 2>&1); \
+	if [ "$$actual" != "$$(cat tests/petta/proc_run.expected)" ]; then \
+		echo "FAIL: lib/proc"; \
+		diff <(cat tests/petta/proc_run.expected) \
+			<(printf '%s\n' "$$actual") | head -20; \
+		exit 1; \
+	fi; \
+	if ps -eo args | grep -qx 'sleep 31.25'; then \
+		echo "FAIL: lib/proc left a timed-out process group running"; \
+		exit 1; \
+	fi; \
+	echo "PASS: lib/proc runs a child process within its bounds"
 
 .PHONY: test-petta-match-cell-rows
 test-petta-semantics: test-petta-match-cell-rows
