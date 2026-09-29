@@ -101,6 +101,17 @@
       ((tg-agent:uncertain $reason) (format-args "[\"uncertain\",\"{}\"]" ($reason)))
       ($other "[\"uncertain\",\"unclassified\"]"))))
 
+; Effects never reuse a connection. A fresh connection that could not
+; resolve the host (6), connect (7), complete TLS (35) or verify the peer
+; (60), with no request byte issued, never carried the request: that is
+; not-sent, as certain as a transfer that never started. Timeouts and later
+; failures stay uncertain.
+(= (tg-channel:classify $outcome $action)
+   (case $outcome
+     (((host:outcome 1 $effect $attempt uncertain (True False $code $status True 0 False False False) $body)
+       (if (telegram:contains $code (6 7 35 60)) (tg-agent:not-sent) (tg-agent:outcome $outcome $action)))
+      ($other (tg-agent:outcome $outcome $action)))))
+
 ; A definitive outcome (delivered, failed with a 4xx, or never started)
 ; advances the lane and is reported. Only uncertain delivery holds the lane:
 ; the next message to that chat must not overtake one that may have arrived.
@@ -118,7 +129,7 @@
      (match &self (host:record 3 $outkey (host:outcome 1 $effect $attempt $kind $metadata $body))
       (case (tg-channel:state)
        (((tg-agent:sending $batch $position $count)
-         (let $result (tg-agent:outcome (host:outcome 1 $effect $attempt $kind $metadata $body) $action)
+         (let $result (tg-channel:classify (host:outcome 1 $effect $attempt $kind $metadata $body) $action)
            (let $result-json (tg-channel:result-json $result)
             (let $receipt (format-args "[\"delivery\",\"{}\",{},{},{}]"
                             ($batch $position $count $result-json))

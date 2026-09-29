@@ -165,6 +165,20 @@ int main(int argc,char **argv) {
     pure(parse("(tg-channel:advances (tg-agent:failed 400))"),"True");
     pure(parse("(tg-channel:advances (tg-agent:not-sent))"),"True");
     pure(parse("(tg-channel:advances (tg-agent:uncertain http-status))"),"False");
+    const char *send="(telegram:send-text 1 42 0 0 \"x\" \"plain\")";
+    char check[512];
+    /* Refused connection, nothing issued: provably not sent. */
+    snprintf(check,sizeof(check),"(tg-channel:classify (host:outcome 1 \"e\" \"a\" uncertain (True False 7 0 True 0 False False False) \"\") %s)",send);
+    pure(parse(check),"(tg-agent:not-sent)");
+    snprintf(check,sizeof(check),"(tg-channel:classify (host:outcome 1 \"e\" \"a\" uncertain (True False 35 0 True 0 False False False) \"\") %s)",send);
+    pure(parse(check),"(tg-agent:not-sent)");
+    /* Request bytes issued, or a timeout, or an unknown size: uncertain. */
+    snprintf(check,sizeof(check),"(tg-channel:classify (host:outcome 1 \"e\" \"a\" uncertain (True False 7 0 True 120 False False False) \"\") %s)",send);
+    pure(parse(check),"(tg-agent:uncertain transport)");
+    snprintf(check,sizeof(check),"(tg-channel:classify (host:outcome 1 \"e\" \"a\" uncertain (True False 28 0 True 0 False False False) \"\") %s)",send);
+    pure(parse(check),"(tg-agent:uncertain transport)");
+    snprintf(check,sizeof(check),"(tg-channel:classify (host:outcome 1 \"e\" \"a\" uncertain (True False 7 0 False 0 False False False) \"\") %s)",send);
+    pure(parse(check),"(tg-agent:uncertain transport)");
     char dir[]="/tmp/cetta-telegram-channel-XXXXXX"; assert(mkdtemp(dir));
     char db[256]; snprintf(db,sizeof(db),"%s/state.db",dir); assert(cetta_durable_open(db,NULL,&store)==DURABLE_OK);
     char input[168],request[64],task[65],worker_input[140],commit[33],sub[180],sub2[180],sub3[180],effect[140],key[64],receipt[65];

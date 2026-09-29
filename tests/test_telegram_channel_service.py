@@ -122,6 +122,27 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-channel-') as temp:
         p = subprocess.run([BIN, '--check', *base, *bad], capture_output=True, text=True, timeout=12)
         assert p.returncode == 64, (bad, p.returncode)
 
+    # A refused connection never carried the request: reported not-sent, and
+    # the chat keeps going, instead of holding for an operator.
+    closed = socket.socket(); closed.bind(('127.0.0.1', 0)); port = closed.getsockname()[1]; closed.close()
+    state = root / 'state-refused'; state.mkdir(mode=0o700)
+    path = root / 'refused.sock'
+    listener = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+    listener.bind(str(path)); listener.listen(16); path.chmod(0o600)
+    proc = subprocess.Popen([BIN, '--run', '--root', str(ROOT), '--state-dir', str(state), '--worker', 'lila',
+                             '--chat', '42', '--program', 'channel', '--credential-file', str(token),
+                             '--mock-origin', f'http://127.0.0.1:{port}', '--listener-fd', str(listener.fileno())],
+                            pass_fds=(listener.fileno(),), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        for n in (1, 2):
+            assert submit(path, '42.0.%020d' % n, [['send', 'unreachable %d' % n, 'plain']]) == STORED
+            task, receipt = next_task(proc, path, 'refused receipt %d' % n)
+            assert receipt == ['delivery', '42.0.%020d' % n, 0, 1, ['not-sent']], receipt
+            ack(path, task)
+    finally:
+        proc.send_signal(signal.SIGTERM); proc.communicate(timeout=10); listener.close()
+    print('refused connection: reported not-sent and the chat continues')
+
     for i, protocol in enumerate(('http/1.1', 'http/1.1', 'h2')):
         state = root / f'state-{i}'; state.mkdir(mode=0o700)
         db = state / 'journal.db'
