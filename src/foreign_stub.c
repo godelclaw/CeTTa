@@ -179,3 +179,8 @@ bool cetta_foreign_call_native(CettaForeignRuntime *rt,
     (void)out;
     return false;
 }
+
+char *cetta_foreign_python_error_report(Atom *error) {
+    (void)error;
+    return NULL;
+}

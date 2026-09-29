@@ -1,0 +1,6 @@
+error: uncaught PeTTa error: (Error (python_error RuntimeError (<py_RuntimeError>(0xADDR))) $V0)
+Python 'RuntimeError':
+  backend refused: token=<redacted>, Bearer <redacted>
+Python stack:
+  File "tests/petta/python_error_report.py", line 5, in refuse
+    raise RuntimeError("backend refused: token=<redacted>, Bearer <redacted>")

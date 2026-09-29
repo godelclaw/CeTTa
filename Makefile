@@ -27037,6 +27037,34 @@ else
 	@echo "SKIP: test-petta-py-call-data (requires a Python-enabled build)"
 endif
 
+.PHONY: test-petta-python-error-report
+test-petta-semantics: test-petta-python-error-report
+# An uncaught Python error is reported as SWI-PeTTa reports it, the
+# exception's type and message, then its Python stack, with credentials
+# screened out; the run ends with status 2.
+test-petta-python-error-report: $(BIN)
+ifeq ($(ENABLE_PYTHON),1)
+	@set -eu; \
+	status=0; \
+	errors=$$(mktemp); \
+	actual=$$($(CETTA_BIN_INVOKE) --lang petta \
+		tests/petta/python_error_report.metta 2>"$$errors") || status=$$?; \
+	report=$$(sed -E -e 's/0x[0-9a-f]+/0xADDR/g' \
+		-e 's|File "[^"]*/tests/petta/|File "tests/petta/|' "$$errors"); \
+	rm -f "$$errors"; \
+	if [ $$status -ne 2 ] || \
+		[ "$$actual" != "$$(cat tests/petta/python_error_report.expected)" ] || \
+		[ "$$report" != "$$(cat tests/petta/python_error_report.stderr.expected)" ]; then \
+		echo "FAIL: the report of an uncaught Python error (exit $$status)"; \
+		diff <(cat tests/petta/python_error_report.stderr.expected) \
+			<(printf '%s\n' "$$report") | head -20; \
+		exit 1; \
+	fi; \
+	echo "PASS: an uncaught Python error is reported with its message and stack"
+else
+	@echo "SKIP: test-petta-python-error-report (requires a Python-enabled build)"
+endif
+
 .PHONY: test-petta-match-cell-rows
 test-petta-semantics: test-petta-match-cell-rows
 # A stored row with variables meets a query holding a list built at run time
