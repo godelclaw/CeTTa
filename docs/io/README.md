@@ -26,7 +26,7 @@ optional hooks execute on the owner thread, without the worker mutex:
    result and retries recording with bounded exponential delays, never HTTP.
    The default budget is five attempts per mode; hosts can set `record_attempts`.
    Exhaustion parks the job and invokes the required `recording_stalled` hook.
-   This hook must surface degraded health through an operator/supervisor path
+   This hook must report degraded health through an operator/supervisor path
    that does not depend on the failing journal or on a cognitive turn.
 4. A permanently unrecordable full result may return USE_MINIMAL. The next
    observation has MINIMAL mode and the same metadata, but no body. The host
@@ -175,7 +175,7 @@ completions. `test-io-library` exercises real submit/wait/poll calls in both HE
 and PeTTa. The wrappers return Expression and dispatch directly so PeTTa does
 not leave them as unevaluated function bodies.
 `test-io-syntax`, `test-io-no-http` and `test-io-rho-bridge` cover the
-library surface. `test-io-browser` requires an Emscripten/browser toolchain.
+library's operations. `test-io-browser` requires an Emscripten/browser toolchain.
 
 The service orchestration profile is HE with the qualified rho/rhometta library.
 The cognitive worker can independently use PeTTa. Cross-process data does not
