@@ -25964,6 +25964,16 @@ test-petta-search-machine: test-petta-relational-head-phases
 test-petta-search-machine: test-petta-answer-producer-handoff
 test-petta-search-machine: test-petta-prepared-head-matching
 
+.PHONY: test-petta-json-booleans
+# PeTTa spells the booleans true and false; JSON values built or parsed in
+# PeTTa must still stringify.
+test-petta-json-booleans: $(BIN)
+	@set -e; \
+	actual=$$(./$(BIN) --lang petta tests/petta/json_petta_booleans.metta); \
+	expected=$$(cat tests/petta/json_petta_booleans.expected); \
+	test "$$actual" = "$$expected"; \
+	echo "PASS: JSON booleans round-trip in PeTTa"
+
 .PHONY: test-petta-prepared-head-matching
 # Prepared programs match equation heads without equation search, and must
 # decline wherever PeTTa matching differs: a call below a head is evaluated,
