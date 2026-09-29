@@ -655,7 +655,7 @@ SRC = src/symbol.c src/atom.c src/binding/frame_identity.c src/name_key.c src/at
 SRC += src/shared_transition.c
 SRC += src/gslt_language_manifest_v1.c
 SRC += src/gslt_support_profile_v1.c
-SRC += src/library_io.c src/http_worker.c src/telegram_transport.c src/library_durable.c $(DURABLE_SRC)
+SRC += src/library_io.c src/library_cwp.c src/http_worker.c src/telegram_transport.c src/library_durable.c $(DURABLE_SRC)
 SRC += $(JSON_GSLT_RUNTIME_SRC)
 SRC += $(PETTA_TYPECHECK_CENSUS_SRC)
 SRC += \
@@ -38452,10 +38452,13 @@ test-telegram-channel-service: $(TELEGRAM_SERVICE_BIN)
 	python3 tests/test_telegram_channel_service.py $(TELEGRAM_SERVICE_BIN)
 test-telegram-commands-service: $(TELEGRAM_SERVICE_BIN)
 	python3 tests/test_telegram_commands_service.py $(TELEGRAM_SERVICE_BIN)
+# CWP_CETTA: a cetta binary of any build (default ./cetta).
+test-cwp-client: $(TELEGRAM_SERVICE_BIN)
+	python3 tests/test_cwp_client.py $(TELEGRAM_SERVICE_BIN) $(or $(CWP_CETTA),./cetta)
 test-telegram-control: $(TELEGRAM_SERVICE_BIN) runtime/cetta-telegram-control
 	python3 tests/test_telegram_control.py $(TELEGRAM_SERVICE_BIN) runtime/cetta-telegram-control
 else
-telegram-service test-telegram-service test-telegram-channel-service test-telegram-commands-service test-telegram-control:
+telegram-service test-telegram-service test-telegram-channel-service test-telegram-commands-service test-cwp-client test-telegram-control:
 	@echo "telegram-service requires ENABLE_DURABLE=1, native HTTP and ENABLE_JSON_GSLT=1" >&2
 	@exit 1
 endif

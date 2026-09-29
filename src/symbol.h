@@ -311,6 +311,7 @@ static inline uint64_t symbol_table_instance_id(const SymbolTable *st) {
     X(lib_io_poll, "__cetta_lib_io_poll") \
     X(lib_io_wait, "__cetta_lib_io_wait") \
     X(lib_io_cancel, "__cetta_lib_io_cancel") \
+    X(lib_cwp_call, "__cetta_lib_cwp_call") \
     X(lib_json_capabilities_v1, "__cetta_lib_json_capabilities_v1") \
     X(lib_json_parse_v1, "__cetta_lib_json_parse_v1") \
     X(lib_json_parse, "__cetta_lib_json_parse") \
