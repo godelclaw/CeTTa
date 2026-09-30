@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "library_proc.h"
+#include "eval.h"
 #include "symbol.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -32,7 +33,14 @@ enum {
 enum { START_STDIO = 1, START_CWD = 2, START_EXEC = 3 };
 
 static const char *text(Atom *a) {
-    return a && a->kind == ATOM_GROUNDED && a->ground.gkind == GV_STRING ? a->ground.sval : NULL;
+    if (a && a->kind == ATOM_GROUNDED && a->ground.gkind == GV_STRING)
+        return a->ground.sval;
+    /* PeTTa's Python/Prolog text is an atom, including strings returned by
+     * py-call and read by sread. HE retains its grounded-string contract. */
+    if (a && a->kind == ATOM_SYMBOL && eval_current_language_id &&
+        eval_current_language_id() == CETTA_LANGUAGE_PETTA)
+        return atom_name_cstr(a);
+    return NULL;
 }
 
 static bool integer(Atom *a, int64_t lo, int64_t hi, int64_t *out) {
