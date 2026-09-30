@@ -39197,6 +39197,8 @@ test-petta-imported-host-bridges: $(BIN)
 	trap 'rm -f "$$actual"' EXIT INT TERM; \
 	$(BIN) --lang petta tests/petta/libpl_native_eval.metta > "$$actual"; \
 	diff -u tests/petta/libpl_native_eval.expected "$$actual"; \
+	$(BIN) --lang petta tests/petta/libpl_eval_errors.metta > "$$actual"; \
+	diff -u tests/petta/libpl_eval_errors.expected "$$actual"; \
 	$(BIN) --lang petta tests/petta/imported_swrite.metta > "$$actual"; \
 	diff -u tests/petta/imported_swrite.expected "$$actual"; \
 	echo "PASS: imported Prolog eval and swrite host bridges"

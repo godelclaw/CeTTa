@@ -24378,17 +24378,44 @@ bool eval_petta_from_lib_prolog(
     outcome_set_init_with_owner(&outcomes, arena);
     Bindings empty;
     bindings_init(&empty);
+    /* A callback is its own error boundary. A nested native evaluation must
+     * not leave its pending raise in the enclosing evaluator: SWI owns that
+     * exception until its catch handles it or the foreign call returns it.
+     * Keep Error-shaped values distinct from raised control outcomes. */
+    Atom *enclosing_raise = petta_eval_take_raise();
+    PettaDirectiveReport enclosing_report = g_petta_directive_report;
+    const PettaPlanNode *enclosing_plan = g_petta_source_plan;
+    const Atom *enclosing_plan_atom = g_petta_source_plan_atom;
+    g_petta_directive_report = (PettaDirectiveReport){0};
+    g_petta_source_plan = NULL;
+    g_petta_source_plan_atom = expression;
     eval_for_caller(
         g_eval_root_space, arena, NULL, expression,
         eval_current_effective_fuel_limit(), &empty, false, &outcomes);
     bindings_free(&empty);
+    Atom *callback_raise = petta_eval_take_raise();
+    bool callback_raised = callback_raise ||
+        g_petta_directive_report.raised;
     for (CettaCount index = 0u; index < outcomes.len; index++) {
         Atom *value = outcome_atom_materialize(arena, &outcomes.items[index]);
-        if (value && !atom_is_legacy_empty_sentinel(value))
+        if (callback_raised && !callback_raise &&
+            index + 1u == outcomes.len)
+            callback_raise = value;
+        if (!callback_raised && value &&
+            !atom_is_legacy_empty_sentinel(value))
             result_set_add(results, value);
     }
     outcome_set_free(&outcomes);
-    return true;
+    g_petta_pending_raise = enclosing_raise;
+    g_petta_directive_report = enclosing_report;
+    g_petta_source_plan = enclosing_plan;
+    g_petta_source_plan_atom = enclosing_plan_atom;
+    /* Success carries ordinary answers, including Error-shaped data. A
+     * failed callback carries only its raised error, if one was produced;
+     * the adapter converts that control outcome into a Prolog exception. */
+    if (callback_raise)
+        result_set_add(results, callback_raise);
+    return !callback_raised;
 }
 
 static void eval_direct_outcomes(Space *s, Arena *a, Atom *type, Atom *atom, int fuel,
