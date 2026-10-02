@@ -66,7 +66,7 @@
    (let $update-json (json:stringify $update)
      (let $full (format-args "[\"input\",\"{}\",\"{}\",\"{}\",{}]" ($lane $kind $role $update-json))
        (let $observation
-            (if (> (str:length $full) (tg-channel:limit))
+            (if (> (str:byte-length $full) (tg-channel:limit))
               (format-args "[\"input-too-large\",\"{}\",\"{}\",\"{}\"]" ($lane $kind $role))
               $full)
          (host:transition (tg-channel:intake) ()

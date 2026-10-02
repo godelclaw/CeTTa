@@ -240,6 +240,9 @@ typedef struct {
      * profile allows them they are the machine's own controls, the first
      * answers of a body and all of them; otherwise they are the host's. */
     bool bounded_collections;
+    /* Explicit dependent domains belong to the active language profile,
+     * not to the shared declaration cache or residual-type analysis. */
+    bool dependent_type_domains;
     /*
      * Called immediately before a machine transition.  Returning false
      * suspends without consuming the pending goal, so the same machine can
@@ -310,18 +313,16 @@ typedef struct {
         const PettaPlanNode *plan,
         const Bindings *environment, OutcomeSet *outcomes,
         CettaCallOutcome *end, const CettaDelayView *delay);
-    /* Apply a host-owned operation that the shared grounded table does not
-     * implement, such as a library operation or a Python call, to arguments
-     * the machine has already made ready.  The arguments are taken as the
-     * values they are and the answer is not evaluated further, as the
-     * reference translator calls a predicate: a call-shaped value stays
-     * data on both sides of the call.  Returns false, having run nothing,
-     * when the host owns no such operation; the goal then goes to
-     * `evaluate`.  Otherwise `outcome` says how the call ended. */
-    bool (*ready_native_call)(
-        void *context, Space *space, Arena *arena, Atom *head,
-        Atom **arguments, uint32_t argument_count,
-        CettaCallOutcome *outcome);
+    /* A strict application whose arguments the machine has computed.  The
+     * host applies its operation to those values without evaluating them
+     * again, and returns false, adding nothing, when the operation needs
+     * the ordinary evaluator; the call then goes to evaluate as before.
+     * `end` is how an applied operation ended, as for `evaluate`: RAISED
+     * with its error, which adds no answer.  Optional. */
+    bool (*apply_ready_values)(
+        void *context, Space *space, Arena *arena, Atom *expression,
+        const Bindings *environment, OutcomeSet *outcomes,
+        CettaCallOutcome *end);
     /* Create a new translation event at an explicit forcing boundary such as
      * PeTTa `eval`.  A returned plan fixes callability for that occurrence;
      * NULL declines because the host could not establish the event. */
@@ -330,10 +331,12 @@ typedef struct {
     /* Enumerate the intrinsic answers of the language's `get-type`
      * relation after its subject has reached the ready-value boundary.
      * The returned pointer array is caller-owned; every Atom is owned by
-     * `arena`.  Explicit user equations remain ordinary later relation
+     * `arena`. A NULL target is a fresh type; a non-NULL target is the
+     * current required-type operand, not a post-enumeration filter.
+     * Explicit user equations remain ordinary later relation
      * equations and are not included by this service. */
     bool (*get_type)(
-        void *context, Space *space, Arena *arena, Atom *value,
+        void *context, Space *space, Arena *arena, Atom *value, Atom *target,
         Atom ***types, uint32_t *count);
     /* Construct the active language's public Boolean datum.  Search owns the
      * truth relation; spelling and representation remain language-owned. */
@@ -385,7 +388,8 @@ typedef struct {
     bool (*named_state)(
         void *context, Space *space, Arena *arena, PeTTaForm form,
         Atom *name, Atom *value,
-        const Bindings *environment, OutcomeSet *outcomes);
+        const Bindings *environment, OutcomeSet *outcomes,
+        CettaCallOutcome *end);
     /*
      * Ground `add-atom` after the space argument is a value and the payload
      * has been substituted.  The host owns storage, typing, and program
@@ -567,6 +571,19 @@ typedef struct {
      * lexically.  A hyperpose branch runs apart from its caller, whose
      * variables its let patterns bind. */
     Atom *export_variables;
+    /* Observe a ready value's intrinsic metatype without interpreting it.
+     * A true return with NULL output means no metatype; false is a service
+     * fault. The output belongs to arena. Authored equations remain on the
+     * ordinary relation path; NULL callback keeps generic host dispatch. */
+    bool (*get_metatype)(
+        void *context, Space *space, Arena *arena, Atom *value, Atom **type);
+    /* Compile/instantiate declaration facts, not relational type answers.
+     * Atoms and literal modes belong to arena; free the returned call array.
+     * A NULL service uses the same uncached compilation. */
+    bool (*type_calls)(
+        void *context, Space *space, Arena *arena, Atom *head,
+        CettaExprLen supplied, PettaTypeCall **calls, uint32_t *count,
+        bool *hold_body);
 } PettaMachineHost;
 
 typedef enum {

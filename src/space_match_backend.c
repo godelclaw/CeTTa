@@ -1184,6 +1184,9 @@ static void imported_binding_set_to_exact_matches(SubstMatchSet *out,
         subst_matchset_push(out, 0, 0, &matches->items[i], true);
 }
 
+static bool native_cold_flat_candidates(
+    Space *space, Atom *pattern, CettaIndex **out, CettaIndex *count);
+
 static CettaIndex native_candidates(Space *s, Atom *pattern, CettaIndex **out) {
     SpaceMatchNativeState *st = &s->match_backend.native;
     /* A root variable matches every visible occurrence.  Its complete
@@ -1198,6 +1201,9 @@ static CettaIndex native_candidates(Space *s, Atom *pattern, CettaIndex **out) {
         for (CettaIndex i = 0; i < s->native.len; i++) (*out)[i] = i;
         return s->native.len;
     }
+    CettaIndex cold_count = 0u;
+    if (space_match_native_try_cold_candidates(s, pattern, out, &cold_count))
+        return cold_count;
     native_ensure_match_trie(s);
     cetta_runtime_stats_inc(CETTA_RUNTIME_COUNTER_MATCH_NATIVE_TRIE_LOOKUP);
     CettaIndex ncand = 0, ccand = 0;
@@ -1249,6 +1255,84 @@ static bool native_pattern_is_flat_linear(Atom *pattern) {
     }
     free(seen);
     return admissible;
+}
+
+/* A cold selective flat query need not retain an index of every term in
+ * the space. This is only a refutation filter: correlated stored variables
+ * and opaque representations remain candidates for the canonical matcher.
+ * Occurrences keep their source order, including repeated immutable ids. */
+static bool native_cold_flat_candidates(
+    Space *space, Atom *pattern, CettaIndex **out, CettaIndex *count) {
+    if (!space || !pattern || !out || !count || !space->native.universe ||
+        space->overlay_base || atom_structural_may_have_list_carrier(pattern) ||
+        !native_pattern_is_flat_linear(pattern))
+        return false;
+    bool rigid = false;
+    for (CettaExprIndex column = 0u; column < pattern->expr.len; column++) {
+        Atom *item = pattern->expr.elems[column];
+        if (item->kind == ATOM_VAR)
+            continue;
+        if (item->kind != ATOM_SYMBOL &&
+            (item->kind != ATOM_GROUNDED ||
+             (item->ground.gkind != GV_INT && item->ground.gkind != GV_FLOAT &&
+              item->ground.gkind != GV_BOOL && item->ground.gkind != GV_STRING)))
+            return false;
+        rigid = true;
+    }
+    if (!rigid)
+        return false;
+    CettaIndex *indices = NULL;
+    CettaIndex length = 0u, capacity = 0u;
+    for (CettaIndex position = 0u; position < space->native.len; position++) {
+        AtomId id = space_get_atom_id_at64(space, position);
+        const CettaTermHdr *header = tu_hdr(space->native.universe, id);
+        bool candidate = !header || tu_has_vars(space->native.universe, id);
+        if (!candidate && tu_kind(space->native.universe, id) == ATOM_EXPR &&
+            tu_arity(space->native.universe, id) == pattern->expr.len) {
+            candidate = true;
+            for (CettaExprIndex column = 0u; column < pattern->expr.len; column++) {
+                Atom *item = pattern->expr.elems[column];
+                if (item->kind == ATOM_VAR)
+                    continue;
+                AtomId child = tu_child(space->native.universe, id, column);
+                if (child == CETTA_ATOM_ID_NONE ||
+                    !native_stored_coordinate_matches(space->native.universe,
+                                                       child, item)) {
+                    candidate = false;
+                    break;
+                }
+            }
+        }
+        if (!candidate)
+            continue;
+        if (length == capacity) {
+            if (capacity > SIZE_MAX / sizeof(*indices) / 2u) {
+                free(indices);
+                return false;
+            }
+            capacity = capacity ? capacity * 2u : 16u;
+            indices = cetta_realloc(indices, (size_t)capacity * sizeof(*indices));
+        }
+        indices[length++] = position;
+    }
+    *out = indices;
+    *count = length;
+    return true;
+}
+
+bool space_match_native_try_cold_candidates(
+    Space *space, Atom *pattern, CettaIndex **out, CettaIndex *count) {
+    if (!space || !out || !count ||
+        (space->match_backend.kind != SPACE_ENGINE_NATIVE &&
+         space->match_backend.kind != SPACE_ENGINE_NATIVE_CANDIDATE_EXACT))
+        return false;
+    SpaceMatchNativeState *state = &space->match_backend.native;
+    if (state->match_trie || state->cold_flat_scans >= 4u ||
+        !native_cold_flat_candidates(space, pattern, out, count))
+        return false;
+    state->cold_flat_scans++;
+    cetta_runtime_stats_add(CETTA_RUNTIME_COUNTER_MATCH_NATIVE_CANDIDATES, *count);
+    return true;
 }
 
 static bool native_count_rigid_occurrences(
@@ -1585,8 +1669,9 @@ static bool native_count_flat_linear_view(
 
     SpaceMatchNativeState *state = &s->match_backend.native;
     bool indexed = state->match_trie && !state->match_trie_dirty;
-    if (!indexed && s->native.len > MATCH_TRIE_THRESHOLD)
-        return false;
+
+    /* A cold count view can scan the same authoritative AtomId sequence as
+     * the materialized-pattern count. It need not first build a full trie. */
 
     CettaIndex *candidates = NULL;
     CettaIndex candidate_len = s->native.len;
@@ -1625,7 +1710,12 @@ static bool native_count_flat_linear_view(
         }
         if (tu_kind(s->native.universe, candidate_id) != ATOM_EXPR ||
             tu_arity(s->native.universe, candidate_id) != column_count) {
-            if (tu_has_vars(s->native.universe, candidate_id)) {
+            if (tu_kind(s->native.universe, candidate_id) == ATOM_VAR ||
+                (tu_has_vars(s->native.universe, candidate_id) &&
+                 tu_kind(s->native.universe, candidate_id) == ATOM_EXPR &&
+                 (tu_head_sym(s->native.universe, candidate_id) == SYMBOL_ID_NONE ||
+                  tu_petta_value_representation(s->native.universe, candidate_id) !=
+                      PETTA_VALUE_ORDINARY))) {
                 free(candidates);
                 return false;
             }
@@ -6115,7 +6205,9 @@ static void imported_flatten_atom(ImportedFlatBuilder *b, Atom *atom) {
             tok.bval = atom->ground.bval;
         } else if (atom->ground.gkind == GV_STRING) {
             tok.kind = IMPORTED_FLAT_STRING;
-            tok.sym_id = symbol_intern_cstr(g_symbols, atom->ground.sval);
+            tok.sym_id = symbol_intern_bytes(
+                g_symbols, (const uint8_t *)atom->ground.sval,
+                atom->ground.slen);
         } else if (atom->ground.gkind == GV_BIGINT) {
             tok.kind = IMPORTED_FLAT_BIGINT;
             tok.sym_id = symbol_intern_cstr(g_symbols, atom_bigint_cstr(atom));
@@ -6128,6 +6220,11 @@ static void imported_flatten_atom(ImportedFlatBuilder *b, Atom *atom) {
         imported_builder_push(b, tok);
         return;
     case ATOM_EXPR:
+        if (atom_is_list_form(atom)) {
+            tok.kind = IMPORTED_FLAT_LIST;
+            imported_builder_push(b, tok);
+            return;
+        }
         tok.kind = IMPORTED_FLAT_EXPR;
         tok.arity = atom->expr.len;
         imported_builder_push(b, tok);
@@ -6176,7 +6273,9 @@ static bool imported_flatten_atom_id(ImportedFlatBuilder *b,
             break;
         case GV_STRING:
             tok.kind = IMPORTED_FLAT_STRING;
-            tok.sym_id = symbol_intern_cstr(g_symbols, tu_string_cstr(universe, atom_id));
+            tok.sym_id = symbol_intern_bytes(
+                g_symbols, (const uint8_t *)tu_string_cstr(universe, atom_id),
+                tu_string_len(universe, atom_id));
             break;
         case GV_BIGINT:
             tok.kind = IMPORTED_FLAT_BIGINT;
@@ -6200,6 +6299,13 @@ static bool imported_flatten_atom_id(ImportedFlatBuilder *b,
         imported_builder_push(b, tok);
         return true;
     case ATOM_EXPR:
+        if (tu_arity(universe, atom_id) > 0u &&
+            cetta_internal_tag_is_list(tu_internal_tag(
+                universe, tu_child(universe, atom_id, 0u)))) {
+            tok.kind = IMPORTED_FLAT_LIST;
+            imported_builder_push(b, tok);
+            return true;
+        }
         tok.kind = IMPORTED_FLAT_EXPR;
         tok.arity = tu_arity(universe, atom_id);
         imported_builder_push(b, tok);
@@ -6259,6 +6365,7 @@ static bool imported_token_equal(const ImportedFlatToken *lhs,
     case IMPORTED_FLAT_RATIONAL:
         return lhs->sym_id == rhs->sym_id;
     case IMPORTED_FLAT_GROUNDED_OTHER:
+    case IMPORTED_FLAT_LIST:
         if (lhs->origin_id != CETTA_ATOM_ID_NONE &&
             rhs->origin_id != CETTA_ATOM_ID_NONE) {
             return lhs->origin_id == rhs->origin_id;
@@ -7811,6 +7918,8 @@ static ImportedCorefVerdict imported_match_subtree_coref(const ImportedFlatToken
             if (!ct->origin || !atom_eq(qt->origin, ct->origin))
                 return IMPORTED_COREF_FAIL;
             break;
+        case IMPORTED_FLAT_LIST:
+            return IMPORTED_COREF_NEEDS_FALLBACK;
         case IMPORTED_FLAT_EXPR:
             if (qt->arity != ct->arity) return IMPORTED_COREF_FAIL;
             break;
@@ -7856,7 +7965,7 @@ static bool imported_match_subtree_legacy(const ImportedFlatToken *q, CettaIndex
                         return false;
                 } else if (!match_binding_values(
                                existing, binding_value_from_context(
-                                   imported_token_atom(ct, candidate_universe), epoch), b)) {
+                                   imported_token_atom(ct, candidate_universe), epoch), b, a)) {
                     return false;
                 }
             } else {
@@ -7875,7 +7984,7 @@ static bool imported_match_subtree_legacy(const ImportedFlatToken *q, CettaIndex
             VarId tagged_id = var_epoch_id(ct->var_id, epoch);
             BindingValue existing = bindings_lookup_value_id(b, tagged_id);
             if (existing.skeleton) {
-                if (!match_binding_values(binding_value_from_atom(qt->origin), existing, b)) return false;
+                if (!match_binding_values(binding_value_from_atom(qt->origin), existing, b, a)) return false;
             } else if (!bindings_add_id(
                            b, tagged_id, ct->sym_id, qt->origin)) {
                 return false;
@@ -7905,6 +8014,14 @@ static bool imported_match_subtree_legacy(const ImportedFlatToken *q, CettaIndex
         case IMPORTED_FLAT_GROUNDED_OTHER:
             if (!atom_eq(qt->origin,
                          imported_token_atom(ct, candidate_universe)))
+                return false;
+            break;
+        case IMPORTED_FLAT_LIST:
+            if (!match_binding_values(
+                    binding_value_from_atom(qt->origin),
+                    binding_value_from_context(
+                        imported_token_atom(ct, candidate_universe), epoch),
+                    b, a))
                 return false;
             break;
         case IMPORTED_FLAT_EXPR:

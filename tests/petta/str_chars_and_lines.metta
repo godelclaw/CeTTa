@@ -1,6 +1,6 @@
 !(import! &self str)
 !(import! &self fs)
-!(str:length "čau")
+!(str:byte-length "čau")
 !(str:char-length "čau")
 !(str:char-slice "čau" 0 1)
 !(str:char-slice "čau" 1 99)

@@ -26,7 +26,7 @@
 (= (telegram:integer $value)
    (case $value
      (((JsonNumberV1 $text)
-       (let $length (str:length $text)
+       (let $length (str:byte-length $text)
          (if (or (== $length 0) (> $length 20)) tg:bad
            (let $negative (str:starts-with $text "-")
              (let $start (if $negative 1 0)
@@ -37,7 +37,7 @@
 (= (telegram:digits $text $pos $end $acc $negative)
    (if (== $pos $end)
      (tg:integer (if $negative $acc (- 0 $acc)))
-     (let $digit (case (str:slice $text $pos (+ $pos 1))
+     (let $digit (case (str:byte-slice $text $pos (+ $pos 1))
                    (("0" 0) ("1" 1) ("2" 2) ("3" 3) ("4" 4)
                     ("5" 5) ("6" 6) ("7" 7) ("8" 8) ("9" 9) ($bad -1)))
        (if (or (< $digit 0)
@@ -183,7 +183,7 @@
           ($bad tg:bad))))))
 
 (= (telegram:decode $body $policy)
-   (if (> (str:length $body) 262144) (telegram:hold 1 body-limit)
+   (if (> (str:byte-length $body) 262144) (telegram:hold 1 body-limit)
      (case (json:parse $body)
        (((JsonFailureV1 $phase JsonResourceLimitV1 $source $detail) (telegram:hold 1 parser-limit))
         ($parsed (telegram:decode-value $parsed $policy))))))

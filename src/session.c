@@ -590,6 +590,18 @@ bool cetta_language_uses_rust_he_compat_semantics(CettaLanguageId language_id,
            profile->rust_he_compat_semantics;
 }
 
+/* CeTTa's list syntax [x y] is an extension: Prime and the profiles that
+ * enable CeTTa's extensions read it; the compatibility profiles keep the
+ * reference tokenization, in which [a,b] is one symbol. */
+bool cetta_language_reads_lists(CettaLanguageId language_id,
+                                const CettaProfile *profile) {
+    if (language_id == CETTA_LANGUAGE_PRIME)
+        return true;
+    return profile &&
+           cetta_profile_is_valid_for_language(language_id, profile) &&
+           profile->enable_cetta_extensions;
+}
+
 uint32_t cetta_module_provider_count(void) {
     return (uint32_t)(sizeof(CETTA_MODULE_PROVIDER_DESCRIPTORS) /
                       sizeof(CETTA_MODULE_PROVIDER_DESCRIPTORS[0]));
@@ -838,6 +850,8 @@ int cetta_eval_session_process_exit_code(const CettaEvalSession *session) {
 void cetta_eval_session_init(CettaEvalSession *session,
                              CettaLanguageId language_id,
                              const CettaProfile *profile) {
+    session->test_verdict = NULL;
+    session->test_verdict_context = NULL;
     session->language_id = language_id;
     session->speculative = false;
     atomic_init(&session->effect_denials, 0);

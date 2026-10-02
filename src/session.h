@@ -229,6 +229,10 @@ typedef struct {
     /* Shared by nested evaluations and their workers; never rolled back with
      * a rejected branch or hidden by an expression's error handling. */
     _Atomic uint64_t effect_denials;
+    /* Optional native assertion observer; execution owns the callback scope.
+     * It neither handles exceptions nor changes a dialect's test result. */
+    void (*test_verdict)(void *context, bool passed);
+    void *test_verdict_context;
 } CettaEvalSession;
 
 typedef struct {
@@ -267,6 +271,8 @@ bool cetta_language_allows_builtin(CettaLanguageId language_id,
                                    const char *name);
 bool cetta_language_enables_dependent_telescope(CettaLanguageId language_id,
                                                 const CettaProfile *profile);
+bool cetta_language_reads_lists(CettaLanguageId language_id,
+                                const CettaProfile *profile);
 bool cetta_language_uses_rust_he_compat_semantics(CettaLanguageId language_id,
                                                   const CettaProfile *profile);
 uint32_t cetta_module_provider_count(void);

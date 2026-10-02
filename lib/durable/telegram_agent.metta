@@ -52,7 +52,7 @@
    (case $input
      (((telegram:input 1 $kind $chat $thread $sender $role $update)
        (let $observation (json:stringify $update)
-         (if (> (str:length $observation) 65536)
+         (if (> (str:byte-length $observation) 65536)
            (host:transition (tg-agent:held observation-too-large) () ())
            (host:transition (tg-agent:waiting $source $lane $id $chat $thread) ()
              ((durable:worker:request 0 $worker $observation

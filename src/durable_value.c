@@ -65,7 +65,7 @@ static CettaDurableStatus encode(Writer *w, const Atom *a, unsigned depth) {
     CettaDurableStatus s=append(w,&tag,1);
     if (s!=DURABLE_OK) return s;
     if (text) {
-        size_t n=strnlen(text,VALUE_BYTES+1);
+        size_t n=tag=='T'?atom_string_len(a):strnlen(text,VALUE_BYTES+1);
         if (n>VALUE_BYTES) return DURABLE_LIMIT;
         s=number(w,n,4); return s==DURABLE_OK?append(w,text,n):s;
     }
@@ -171,12 +171,13 @@ static CettaDurableStatus decode(Reader *r, Arena *arena, unsigned depth, Atom *
         if (n && atom_is_symbol(items[0],"NativeHandle")) return DURABLE_INVALID;
         *out=atom_expr(arena,items,n);
     } else if (tag=='S'||tag=='T'||tag=='J'||tag=='Q') {
-        if (!read_number(r,4,&n) || n>r->size-r->pos || memchr(r->data+r->pos,0,n))
+        if (!read_number(r,4,&n) || n>r->size-r->pos ||
+            (tag!='T' && memchr(r->data+r->pos,0,n)))
             return DURABLE_CORRUPT;
         char *text=arena_alloc(arena,n+1);
         memcpy(text,r->data+r->pos,n); text[n]=0; r->pos+=n;
         if (tag=='S') *out=atom_symbol(arena,text);
-        if (tag=='T') *out=atom_string(arena,text);
+        if (tag=='T') *out=atom_string_n(arena,text,n);
         if (tag=='J') {
             if (!digits(text)) return DURABLE_CORRUPT;
             *out=atom_bigint(arena,text);

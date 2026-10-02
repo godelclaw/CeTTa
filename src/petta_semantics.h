@@ -140,6 +140,11 @@ static inline bool petta_semantics_facts_is_cons_constraint(
 }
 
 PeTTaForm petta_semantics_form(SymbolId head);
+/* Whether an application of head to nargs arguments is read as its special
+ * form: a special form is syntax only at the arities SWI-PeTTa's translator
+ * reads (translate_expr), and at any other it is an ordinary application of
+ * its name.  True for every other head. */
+bool petta_semantics_special_form_reads(SymbolId head, CettaExprLen nargs);
 
 /* A special form of PeTTa is syntax only where it is written.  Reached at
  * run time -- as the value of a variable or expression head, or as the head
@@ -230,6 +235,9 @@ bool petta_semantics_is_cons_constraint(const Atom *atom);
 bool petta_semantics_is_open_cons_value(const Atom *atom);
 Atom *petta_semantics_open_cons_value(
     Arena *arena, Atom *head, Atom *tail);
+/* A list value or a list pattern with a rest as its chain of cells. */
+Atom *petta_semantics_flat_list_spine(
+    Arena *arena, Atom *flat_list);
 /* Whether any open-cons carrier has been built in this process: until one
  * has, no value holds one.  Read on every unification, so inline. */
 extern atomic_bool g_petta_open_cons_built;
@@ -256,6 +264,9 @@ typedef enum {
 typedef struct {
     Atom *rest;
     CettaExprIndex flat_index;
+    /* One past the last element of the flat tail: its length, or for a list
+     * pattern [x... | r] the index of r, which the walk continues into. */
+    CettaExprIndex flat_end;
     bool in_flat_tail;
     bool invalid;
 } PeTTaLogicalListCursor;
@@ -264,7 +275,8 @@ void petta_semantics_logical_list_cursor_init(
     PeTTaLogicalListCursor *cursor, Atom *list);
 PeTTaLogicalListStep petta_semantics_logical_list_cursor_next(
     PeTTaLogicalListCursor *cursor, Atom **item);
-/* PeTTa's is_list/1: a flat expression, or cells ending in one. */
+/* PeTTa's is_list/1: a flat expression, or cells ending in one or in a
+ * list value, read through the list patterns they pass. */
 bool petta_semantics_is_closed_list(Atom *atom);
 /* Whether PeTTa runs `head` as the language's type-pure grounded operation.
  * A PeTTa form whose spelling such an operation shares, as `sort-atom`
@@ -279,8 +291,9 @@ static inline bool petta_semantics_grounded_type_pure(SymbolId head) {
 static inline bool petta_semantics_structural_test(SymbolId head) {
     return head == g_builtin_syms.alpha_eq || head == g_builtin_syms.op_eq;
 }
-/* The elements of a closed list as one flat expression: `list` itself when
- * it is flat, NULL when its cells end in a non-list or an unbound tail. */
+/* The elements of a closed list as one flat expression, or as a list value
+ * when its cells end in one: `list` itself when it is flat, NULL when its
+ * cells end in a non-list or an unbound tail. */
 Atom *petta_semantics_closed_list(Arena *arena, Atom *list);
 /* PeTTa's `sort-atom` (`total`) and `msort` of a value: a list sorts in
  * SWI's standard order; `sort-atom` gives () for a non-list, as its first
@@ -309,8 +322,16 @@ Atom *petta_semantics_syntax_error(Arena *arena, const char *text);
  * predicate `module:name/arity`, or an unbound context when `name` is NULL. */
 Atom *petta_semantics_cyclic_term_error(
     Arena *arena, const char *module, const char *name, int64_t arity);
+/* permission_error(modify, static_procedure, Name/Arity) in
+ * context(system:Predicate/1, _): Predicate (assertz, retractall) met the
+ * static predicate that static-import! made of a space's rows. */
+Atom *petta_semantics_static_procedure_error(
+    Arena *arena, SymbolId name, int64_t arity, const char *predicate);
 /* instantiation_error in context(Module:Name/Arity, _): the predicate needed
  * a bound argument. */
+/* A read of a state name that was never set: the reference's nb_getval/2
+ * raises existence_error(variable, Name). */
+Atom *petta_semantics_state_existence_error(Arena *arena, Atom *name);
 Atom *petta_semantics_instantiation_error(
     Arena *arena, const char *module, const char *name, int64_t arity);
 /* What (Predicate V) gives for the value V of its argument, the reference's
@@ -352,9 +373,10 @@ bool petta_semantics_logical_list_length(
 Atom *petta_semantics_materialize_closed_logical_list(
     Arena *arena, Atom *list);
 /* Reify the complete logical-list carrier for observation.  Closed spines
- * become PeTTa's flat expression carrier; an unresolved or improper tail is
- * retained as authored `(cons Head Tail)` syntax.  The private carrier tag is
- * never observable in either case. */
+ * become the kind they end in: PeTTa's flat expression carrier, or a list
+ * value for cells ending in one; an unresolved or improper tail is retained
+ * as authored `(cons Head Tail)` syntax.  The private carrier tag is never
+ * observable in either case. */
 Atom *petta_semantics_materialize_logical_list(
     Arena *arena, Atom *list);
 
@@ -463,22 +485,27 @@ Atom *petta_semantics_apply(Arena *arena, Atom *callable, Atom *argument);
 
 /*
  * PeTTa lexical functions use CeTTa's neutral ABT `Lam` constructor, tagged
- * by a dialect marker so hosted object-language lambdas remain ordinary data.
- * The body is canonical locally-nameless syntax.
+ * by a dialect marker and a nominal source-occurrence identity. The identity
+ * is minted at translation, preserved by copying/capture/substitution, and
+ * does not change the neutral constructor's binding structure. The body is
+ * canonical locally-nameless syntax.
  */
-Atom *petta_semantics_lambda_value(Arena *arena, Atom *canonical_body);
+Atom *petta_semantics_new_callable_identity(Arena *arena);
+Atom *petta_semantics_lambda_value(
+    Arena *arena, Atom *identity, Atom *canonical_body);
 bool petta_semantics_lambda_body(const Atom *atom, Atom **canonical_body);
 /* A value PeTTa applies when it heads an application: a lambda, a nullary
  * lambda or a partial application.  Each is recognized by its top level
  * alone. */
 bool petta_semantics_runtime_callable_value(const Atom *atom);
-Atom *petta_semantics_nullary_lambda_value(Arena *arena, Atom *body);
+Atom *petta_semantics_nullary_lambda_value(
+    Arena *arena, Atom *identity, Atom *body);
 bool petta_semantics_nullary_lambda_body(const Atom *atom, Atom **body);
 
 /*
- * A named under-application has PeTTa's observable `(partial f (args ...))`
- * representation.  These helpers are the sole recognizer/constructor for
- * that representation.
+ * A named under-application prints as `(partial f (args ...))` but has a
+ * private compound carrier. An authored list with that spelling is data.
+ * These helpers are the sole recognizer/constructor for the retained value.
  */
 Atom *petta_semantics_partial_value(
     Arena *arena, Atom *base, Atom *const *arguments, CettaExprLen nargs);
@@ -486,9 +513,35 @@ bool petta_semantics_partial_view(
     const Atom *atom, Atom **base, Atom **arguments);
 bool petta_semantics_partial_head(const Atom *head);
 
+/* The representation exposed to PeTTa value observers, independently of the
+ * expression-shaped implementation of a callable. A translated closed
+ * callable is a registered name; a partial or captured callable is a compound.
+ * Neither is a sequence. Ordinary authored expressions keep their list role. */
+PeTTaValueRepresentation petta_semantics_value_representation(const Atom *value);
+bool petta_semantics_is_nonlist_carrier(const Atom *value);
+bool petta_semantics_sequence_view(
+    const Atom *value, Atom *const **elements, CettaExprLen *length);
+
 /* Closed callable carriers are already PeTTa values.  A generated evaluator
  * must not reinterpret their representation as a fresh call. */
 bool petta_semantics_is_opaque_runtime_value(const Atom *value);
+/* A lambda's canonical value, or a partial application of one: a closure a
+ * program holds in its code once its lambdas are compiled.  It is a value
+ * wherever it stands, and nothing in its encoding is code. */
+bool petta_semantics_is_canonical_closure(const Atom *atom);
+/* SWI-PeTTa's MORK space `&mork` (mork_ffi/morkspaces.pl) and its step
+ * function `mm2-exec`, which is defined for that space alone. */
+bool petta_semantics_is_mm2_exec(SymbolId head);
+bool petta_semantics_is_mork_space_name(const Atom *atom);
+/* The parameters a compiled closure `(partial LAMBDA (captured ...))` still
+ * takes: its lambda's parameters beyond the captured variables.  False for
+ * anything else. */
+bool petta_semantics_closure_remaining(const Atom *atom,
+                                       CettaExprLen *remaining);
+/* The child of a function body that gives the body's value, as SWI-PeTTa
+ * reads a body it compiles: the body of let, chain and let*, the last form
+ * of progn, the first of prog1.  Zero for any other body. */
+CettaExprIndex petta_semantics_output_child(const Atom *body);
 
 /*
  * A CLOSED open-cons chain denotes exactly the flat list it spells — the
