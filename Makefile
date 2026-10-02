@@ -27697,6 +27697,16 @@ test-petta-py-call-data: $(BIN)
 	echo "PASS: a library operation without an answer fails"
 	@set -eu; \
 	actual=$$($(CETTA_BIN_INVOKE) --lang petta \
+		tests/petta/library_no_result_spelled.metta probe-arg 2>&1); \
+	if [ "$$actual" != "$$(cat tests/petta/library_no_result_spelled.expected)" ]; then \
+		echo "FAIL: a library operation without an answer, through its library"; \
+		diff <(cat tests/petta/library_no_result_spelled.expected) \
+			<(printf '%s\n' "$$actual") | head -20; \
+		exit 1; \
+	fi; \
+	echo "PASS: a library operation without an answer fails through its library"
+	@set -eu; \
+	actual=$$($(CETTA_BIN_INVOKE) --lang petta \
 		tests/petta/ready_native_value_delimiter.metta 2>&1); \
 	if [ "$$actual" != "$$(cat tests/petta/ready_native_value_delimiter.expected)" ]; then \
 		echo "FAIL: a delimited native value on the ready path"; \
@@ -40449,10 +40459,12 @@ test-tptp-official-dollar-words-v1-body: $(BIN) prepare-tptp-compact-morphism-v1
 # files under lib/petta and lib/prime are checked against it.  Prime needs
 # its own spelling only where the source hands values to natives.
 LIBRARY_SPELLING_TOOL_V1 = tools/library_spelling.py
-# The libraries that run on real PeTTa; the list library runs on the CeTTa
-# host's PeTTa lane, over natives real PeTTa does not have.
+# The libraries that run on real PeTTa; the list library and the native
+# libraries after it run on the CeTTa host's PeTTa lane, over natives real
+# PeTTa does not have.
 LIBRARY_PETTA_PORTABLE_SOURCES_V1 = langdef lib_bnf lib_tptp json str
-LIBRARY_PETTA_SPELLING_SOURCES_V1 = $(LIBRARY_PETTA_PORTABLE_SOURCES_V1) list
+LIBRARY_PETTA_SPELLING_SOURCES_V1 = $(LIBRARY_PETTA_PORTABLE_SOURCES_V1) list \
+	system fs proc cwp io durable
 LIBRARY_PRIME_SPELLING_SOURCES_V1 = json
 .PHONY: test-library-spellings-v1
 test-library-spellings-v1: $(LIBRARY_SPELLING_TOOL_V1) \
@@ -40467,7 +40479,7 @@ test-library-spellings-v1: $(LIBRARY_SPELLING_TOOL_V1) \
 		python3 $(LIBRARY_SPELLING_TOOL_V1) lib/$$lib.metta lib/prime/$$lib.metta \
 			--dialect=prime --check; \
 	done; \
-	echo '(LibrarySpellingsV1Summary 6 1)'
+	echo '(LibrarySpellingsV1Summary $(words $(LIBRARY_PETTA_SPELLING_SOURCES_V1)) $(words $(LIBRARY_PRIME_SPELLING_SOURCES_V1)))'
 
 # The PeTTa spellings use only real PeTTa's vocabulary: every head in an
 # evaluated position is one of its functions or forms (the reference file,
