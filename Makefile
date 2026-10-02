@@ -27681,8 +27681,9 @@ test-petta-semantics: test-petta-py-call-data
 # A library or Python operation takes the ready values of its arguments: a
 # value shaped like a call is data in and out of a Python call, a parsed
 # command reaching Python as the list it spells and a list Python returns
-# whose head names a function never run (SWI-PeTTa's answers), and an
-# operation that gives no answer fails.
+# whose head names a function never run (SWI-PeTTa's answers), an
+# operation that gives no answer fails, and a completed value handed back
+# through the evaluate path's delimiter is that value.
 test-petta-py-call-data: $(BIN)
 	@set -eu; \
 	actual=$$($(CETTA_BIN_INVOKE) --lang petta \
@@ -27694,6 +27695,16 @@ test-petta-py-call-data: $(BIN)
 		exit 1; \
 	fi; \
 	echo "PASS: a library operation without an answer fails"
+	@set -eu; \
+	actual=$$($(CETTA_BIN_INVOKE) --lang petta \
+		tests/petta/ready_native_value_delimiter.metta 2>&1); \
+	if [ "$$actual" != "$$(cat tests/petta/ready_native_value_delimiter.expected)" ]; then \
+		echo "FAIL: a delimited native value on the ready path"; \
+		diff <(cat tests/petta/ready_native_value_delimiter.expected) \
+			<(printf '%s\n' "$$actual") | head -20; \
+		exit 1; \
+	fi; \
+	echo "PASS: a delimited native value is that value on the ready path"
 ifeq ($(ENABLE_PYTHON),1)
 	@set -eu; \
 	actual=$$($(CETTA_BIN_INVOKE) --lang petta \

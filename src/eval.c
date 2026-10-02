@@ -39682,6 +39682,36 @@ static bool petta_eval_machine_admit_ground_atom(
     return *result != NULL;
 }
 
+/* V, when ATOM is the completed-value delimiter (function (return V)). */
+static bool petta_ready_delimited_value(Atom *atom, Atom **value) {
+    if (!atom || atom->kind != ATOM_EXPR || atom->expr.len != 2u ||
+        !atom_is_symbol_id(atom->expr.elems[0], g_builtin_syms.function))
+        return false;
+    Atom *body = atom->expr.elems[1];
+    if (!body || body->kind != ATOM_EXPR || body->expr.len != 2u ||
+        !atom_is_symbol_id(body->expr.elems[0], g_builtin_syms.return_text))
+        return false;
+    *value = body->expr.elems[1];
+    return true;
+}
+
+/* One answer of a ready application: a truth is spelled as the language
+ * spells it, as on the machine's own direct path; no result is no answer. */
+static void petta_ready_add_answer(void *context, Arena *arena,
+                                   OutcomeSet *outcomes,
+                                   const Bindings *environment,
+                                   Atom *result) {
+    bool truth = false;
+    if (petta_semantics_truth_value(result, &truth)) {
+        Atom *spelled = petta_eval_machine_boolean_value(
+            context, arena, truth);
+        if (spelled)
+            result = spelled;
+    }
+    if (!atom_is_empty(result) && !atom_is_petta_no_result(result))
+        outcome_set_add(outcomes, result, environment);
+}
+
 /* The machine computed every argument of this strict application, so each
  * is a value: PeTTa never evaluates a value again, whether it came from a
  * variable, a result or a datum.  Apply the grounded operation to them.
@@ -39726,17 +39756,34 @@ static bool petta_eval_machine_apply_ready_values(
     }
     if (!result)
         return false;
-    /* A truth answer is spelled as the language spells it, as on the
-     * machine's own direct path. */
-    bool truth = false;
-    if (petta_semantics_truth_value(result, &truth)) {
-        Atom *spelled = petta_eval_machine_boolean_value(
-            context, arena, truth);
-        if (spelled)
-            result = spelled;
+    /* A native that hands back completed values the way the evaluate path
+     * expects, (function (return V)) for one and a superpose of those for
+     * several (library_value_result), answers with those values: the
+     * delimiter only keeps the evaluate path from evaluating them. */
+    Atom *value = NULL;
+    if (petta_ready_delimited_value(result, &value)) {
+        petta_ready_add_answer(context, arena, outcomes, environment, value);
+        return true;
     }
-    if (!atom_is_empty(result) && !atom_is_petta_no_result(result))
-        outcome_set_add(outcomes, result, environment);
+    if (result->kind == ATOM_EXPR && result->expr.len == 2u &&
+        atom_is_symbol_id(result->expr.elems[0], g_builtin_syms.superpose) &&
+        result->expr.elems[1]->kind == ATOM_EXPR) {
+        Atom *branches = result->expr.elems[1];
+        bool delimited = true;
+        for (CettaExprIndex i = 0u; i < branches->expr.len && delimited; i++)
+            delimited = petta_ready_delimited_value(branches->expr.elems[i],
+                                                    &value);
+        if (delimited) {
+            for (CettaExprIndex i = 0u; i < branches->expr.len; i++) {
+                (void)petta_ready_delimited_value(branches->expr.elems[i],
+                                                  &value);
+                petta_ready_add_answer(context, arena, outcomes,
+                                       environment, value);
+            }
+            return true;
+        }
+    }
+    petta_ready_add_answer(context, arena, outcomes, environment, result);
     return true;
 }
 
