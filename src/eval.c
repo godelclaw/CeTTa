@@ -66143,6 +66143,19 @@ static bool petta_eval_machine_evaluate_host_body(
         Atom *result = NULL;
         Atom *reason = NULL;
         bool processed = false;
+        /* SWI-Prolog's text predicates accept an atom as well as a string, so
+         * PeTTa's process_metta_string takes a symbol's name too.  A Python str
+         * returned by py-call arrives as a symbol, as it does in PeTTa. */
+        const char *text = NULL;
+        if (host_expression && host_expression->kind == ATOM_EXPR &&
+            host_expression->expr.len == 2u) {
+            Atom *argument = host_expression->expr.elems[1];
+            if (argument->kind == ATOM_GROUNDED &&
+                argument->ground.gkind == GV_STRING)
+                text = argument->ground.sval;
+            else if (argument->kind == ATOM_SYMBOL)
+                text = atom_name_cstr(argument);
+        }
         if (transaction) {
             /*
              * PettaProgram's document-wide predeclaration index is not yet
@@ -66152,13 +66165,7 @@ static bool petta_eval_machine_evaluate_host_body(
              */
             reason = atom_symbol(
                 arena, "PettaProcessTextTransactionBoundary");
-        } else if (!host_expression ||
-                   host_expression->kind != ATOM_EXPR ||
-                   host_expression->expr.len != 2u ||
-                   host_expression->expr.elems[1]->kind !=
-                       ATOM_GROUNDED ||
-                   host_expression->expr.elems[1]->ground.gkind !=
-                       GV_STRING) {
+        } else if (!text) {
             reason = atom_symbol(
                 arena, "PettaProcessTextExpectedString");
         } else if (!eval_context ||
@@ -66170,7 +66177,7 @@ static bool petta_eval_machine_evaluate_host_body(
                 eval_context->library_context, space,
                 arena, eval_current_persistent_arena(),
                 g_registry,
-                host_expression->expr.elems[1]->ground.sval,
+                text,
                 &result, &reason);
         }
 

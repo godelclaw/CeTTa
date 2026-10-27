@@ -2,3 +2,6 @@
 !(process_metta_string "(= (embedded-add1 $x) (+ $x 1)) !(embedded-add1 4)")
 !(embedded-add1 9)
 !(process_metta_string "")
+!(import_prolog_function string_to_atom)
+!(process_metta_string (string_to_atom "(= (symbol-add1 $x) (+ $x 1)) !(symbol-add1 4)"))
+!(symbol-add1 9)
