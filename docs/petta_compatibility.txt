@@ -1,0 +1,104 @@
+Corrected stable PeTTa
+======================
+
+The default --lang petta is stable PeTTa with accepted repairs and established
+semantic decisions. petta@stable-fixed is an alias for that same current
+contract. The historical 1.0.6 selector is retired; old commits and artifacts
+remain reproducibility references, not additional runtime profiles. Typed
+PeTTa remains opt-in.
+
+Authority and reference
+-----------------------
+
+Explicit language decisions take precedence over settled contracts, which take
+precedence over observations of a pinned implementation. A new test or a new
+reference commit does not by itself establish the intended semantics.
+
+langdef/petta/reference.json pins the SWI source at e1db30d, libraries and their
+adaptations. tests/petta/swi_differences.metta retains numbered historical
+observations and intended native outcomes. Some entries are retired or open;
+being numbered does not make an observation an approved difference. Preserve
+DIFF-14's live declarations and DIFF-10's non-executable forward declarations.
+The accepted F5 type-confirmation repair and typed-partial repair supersede the
+older Undefined fallback and partial-codomain rejection observations.
+
+Qualification
+-------------
+
+make test-petta-release-reference verifies source/library identities and
+selected default observations. make test-petta-corrected-stable qualifies
+selected settled requirements, including positive and negative controls for
+imports, arithmetic, term order, partial saturation, live declarations, effect
+counts, forward interfaces and specialization. The broader test-petta-semantics
+gate also covers type confirmations, ready values, space occurrences and the
+registered native difference outcomes.
+
+tools/check_petta_stable_corpus.py records original programs unchanged, then
+instruments a separate copy for each engine's query boundaries. Answers are
+bags with multiplicity and alpha-equivalent variable sharing. Only a top-level
+collapse receives the permitted collection permutation. Ordered structures,
+ordinary list order, ordered effects, faults and unfinished runs remain
+observable. Printed variable names are normalized outside literal strings;
+arbitrary string data is not renamed. Written top-level repr/repra queries
+explicitly grant representation provenance; their rendered variable names may
+change while quoted string contents remain literal. The fixed-clock program is an additional
+control, not a replacement of the original date example.
+
+The corpus tool is diagnostic and returns successfully after recording its
+observations; it is not the semantic gate. Equal failures do not qualify a
+program. Differing output is not automatically an implementation defect. There
+is no conformance percentage inferred from raw agreement. Framing is for both
+implementations independently; one engine's answer counts never partition the
+other's output. The comparator has controls for multiplicity, variable sharing,
+ordered lists/effects, displaced query answers and identical unsuccessful runs.
+
+Observation-level disposition
+----------------------------
+
+The machine-readable ledger is tests/petta/corrected_stable_observations.json.
+It identifies the source hashes, observations, governing rules and native
+contract probes behind the former eleven-file report. It is not a file allowlist.
+
+  Imports: source-relative resolution, duplicate/cycle completion and catchable
+      missing/parse failures are repaired independently of the optional checker.
+      Repository-generated callers explicitly locate their own dependencies.
+  Arithmetic: strings and singleton lists no longer inherit SWI's numeric
+      coercions. Number operations and supported constants retain their meaning.
+      @<, @>, @<=, @>= use PeTTa's existing msort comparator.
+  Arrow declarations: builtin guards are repaired. A later call in a running
+      body observes its live declaration (DIFF-14); the reference's stale first
+      call expectation is inapplicable. Refusal of an incompatible declaration
+      is an OPEN admission question, not an approved exception or a proved bug.
+  Forward calls: declarations alone grant no executable authority. Installed
+      partial-producing aliases are followed by their selected source arity;
+      overload and cycle controls prevent unbounded interface traversal.
+  Dynamic arguments: declared-call selection precedes argument effects on both
+      direct and variable-head routes, retaining held values and cut scope.
+  Memo/reduce: the reduced failure also occurred without memoization. The repair
+      prevents specialization from inserting a second reduce around an already
+      explicit dispatch. It preserves intentionally authored nested reduces.
+  Named closures: an Atom codomain holds its body, retiring an old expanded
+      executable arity; owner and revision behavior remain separately tested.
+  Primitives: qualified occurrence storage/removal is retained. Unbound space
+      operands, whole-variable mutations and related Prolog instantiation-error
+      expectations remain OPEN and are excluded from established conformance.
+
+Original programs remain diagnostic evidence. The separately named
+corrected_stable_live_declarations probe exercises settled requirements without
+silently changing the reference's stale-caller or admission assertions. Clock
+reads from separate executions are an environment limitation; the explicit
+fixed-clock control qualifies the deterministic behavior instead.
+
+Historical results
+------------------
+
+The earlier 182/193 flat-output result at 0f86581a was diagnostic agreement,
+not eleven conformance bugs and not a conformance percentage. It mixed accepted
+differences, implementation defects, open operations and reference-specific
+assertions. Its raw results belong to that build. Newly passing prefixes do not
+prove unexecuted assertions; later failures must be examined independently.
+
+The audit retains the earlier partial/type/primitive/ready-value repairs for
+their independent semantic justification. No claim of complete evaluator
+identity, general cache correctness or full language specification follows from
+these finite regression checks. New semantic questions remain visible research.
