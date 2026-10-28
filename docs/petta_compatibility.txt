@@ -1,0 +1,61 @@
+Corrected stable PeTTa
+======================
+
+The default language is petta. petta@stable-fixed selects that same current
+contract; it is not a second evaluator. The old petta@1.0.6 selector is retired.
+Typed PeTTa remains opt-in. The binary version is independent of this choice.
+
+langdef/petta/reference.json identifies the corrected stable reference, its
+upstream stable ancestor, source files, default libraries and adaptations.
+The reference is published on godelclaw/PeTTa's stable-fixed branch. Updating
+that branch does not implicitly change the source revision pinned here.
+
+Qualification
+-------------
+
+make test-petta-release-reference checks library hashes and selected default
+observations. With --reference, tools/check_petta_release_reference.py also
+checks the complete pinned source membership and file hashes. Neither check
+establishes complete evaluator equivalence.
+
+tools/check_petta_stable_corpus.py runs the active pinned examples and regression
+programs through both evaluators. It preserves output order and duplicates,
+normalizes printed variable names, uses a fixed clock fixture for the date
+example, and supplies the authored local package import without a network clone.
+The five interactive/network/GPU exclusions are listed in reference.json.
+Every remaining disagreement makes this comparison exit unsuccessfully.
+
+Open conformance gaps
+---------------------
+
+The corrected reference has 193 active programs. The default update fixes the
+corrected_stable_boundaries, get_type_confirms and space_type_confirmation
+programs, improving 89 observed assertions against the prior engine. None of
+the 193 programs has a newly failing assertion prefix in that comparison.
+The following 11 programs already failed before this default update and still
+contain open obligations. They are not accepted differences or passing tests:
+
+  arithmetic_strings_and_expressions.metta
+      Embedded Prolog arithmetic accepts strings and singleton lists.
+  arrow_declaration_changes.metta
+      Builtin declaration guards and in-flight declaration snapshots differ.
+  dynamic_argument_scope.metta
+      A rejected overapplication evaluates an argument effect too early.
+  forward_application_plans.metta
+      A declared function without an installed body manufactures a partial.
+  import_duplicate_cycle.metta
+      A cyclic import does not publish all imported definitions.
+  import_error_surface.metta
+      Missing and malformed imports do not retain the reference error channel.
+  import_relative_nested.metta
+      Nested relative import lookup differs from the current source directory.
+  memo_definition_dependencies.metta
+      A newly installed callee does not refresh every cached parent.
+  named_space_lambda_revision.metta
+      Replaced named closure arity does not retain the reference rejection.
+  test_add_primitive.metta
+  unbound_atom_not_equation.metta
+      Unbound mutation requests do not raise the reference instantiation error.
+
+These obligations remain visible independently of the default switch. Passing
+the selected native semantic gates does not close this complete corpus check.
