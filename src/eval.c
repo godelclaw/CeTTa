@@ -19818,10 +19818,11 @@ static bool hyperpose_branch_thread_eligible_rec(
      * obtained from a space. Without its realized value there is no worker
      * ownership certificate. Keep the ordinary cooperative interpretation
      * before any branch enters, rather than replaying an entered callback. */
-    if (head->kind == ATOM_VAR ||
-        (head->kind == ATOM_EXPR &&
-         !petta_semantics_lambda_body(head, NULL) &&
-         !petta_semantics_nullary_lambda_body(head, NULL)))
+    if (cetta_foreign_provider_has_thread_affine() &&
+        (head->kind == ATOM_VAR ||
+         (head->kind == ATOM_EXPR &&
+          !petta_semantics_lambda_body(head, NULL) &&
+          !petta_semantics_nullary_lambda_body(head, NULL))))
         return false;
     if (head_id == g_builtin_syms.eval) {
         Atom *quoted = atom->expr.len == 2u ? atom->expr.elems[1] : NULL;
@@ -78138,12 +78139,18 @@ static bool petta_eval_machine_evaluate_host_body(
     Space *previous_root_space = g_eval_root_space;
     __attribute__((cleanup(petta_named_state_authority_scope_leave)))
     PettaNamedStateAuthorityScope state_scope = {0};
+    __attribute__((cleanup(petta_source_plan_scope_leave)))
+    PettaSourcePlanScope rebind_plan_scope = {0};
     if (transaction) {
         host_expression =
             petta_eval_transaction_rebind_atom(
                 transaction, arena, expression, true);
         if (!host_expression)
             return false;
+        if (g_petta_source_plan_atom == expression &&
+            host_expression != expression)
+            petta_source_plan_scope_enter(
+                &rebind_plan_scope, g_petta_source_plan, host_expression);
         petta_named_state_authority_scope_enter(
             &state_scope, transaction->side_effect_registry,
             petta_named_state_transaction_transport,
@@ -102378,6 +102385,12 @@ static __attribute__((noinline)) void metta_hyperpose_cooperative_branches(
     CettaLanguageId language_id, const Bindings *environment,
     const Bindings *empty, OutcomeSet *os) {
     Atom *list = expr_arg((*call), 0);
+    const PettaPlanNode *stream_plan =
+        language_id == CETTA_LANGUAGE_PETTA
+            ? stream_source_plan(*call)
+            : NULL;
+    const PettaPlanNode *branch_family_plan =
+        !atom_is_list_form(list) ? petta_plan_child(stream_plan, 1u) : NULL;
     /* The branches are the elements of the one sequence view (a list's
      * after its tag); an expression it declines has no known branches.  The
      * view is derived again after each branch, as the list is. */
@@ -102403,9 +102416,16 @@ static __attribute__((noinline)) void metta_hyperpose_cooperative_branches(
         if (caller_vars)
             petta_export_variables_scope_enter(
                 &export_scope, caller_vars, branch_expr);
+        __attribute__((cleanup(petta_source_plan_scope_leave)))
+        PettaSourcePlanScope source_scope = {0};
+        if (language_id == CETTA_LANGUAGE_PETTA)
+            petta_source_plan_scope_enter(
+                &source_scope, petta_plan_child(branch_family_plan, i),
+                branch_expr);
         eval_petta_relational_host_branch(
             s, a, (*expected), branch_expr, fuel, empty,
             environment, preserve_bindings, &branch);
+        petta_source_plan_scope_leave(&source_scope);
         petta_export_variables_scope_leave(&export_scope);
         eval_gc_outcome_suspension_end(&branch_suspension);
         list = expr_arg((*call), 0);
@@ -102463,6 +102483,12 @@ static __attribute__((noinline)) MettaDispatchResult metta_sequence_dispatch(
                 CURRENT_ENV, preserve_bindings, os))
             return METTA_DISPATCH_HANDLED;
         Atom *list = expr_arg((*call), 0);
+        const PettaPlanNode *stream_plan =
+            language_id == CETTA_LANGUAGE_PETTA
+                ? stream_source_plan(*call)
+                : NULL;
+        const PettaPlanNode *branch_family_plan =
+            !atom_is_list_form(list) ? petta_plan_child(stream_plan, 1u) : NULL;
         /* The alternatives are the elements of the one sequence view (a
          * list's after its tag); an expression it declines (a list pattern,
          * a braces node) has no known alternatives. */
@@ -102477,9 +102503,17 @@ static __attribute__((noinline)) MettaDispatchResult metta_sequence_dispatch(
             EvalGcOutcomeSuspension branch_suspension = {0};
             eval_gc_outcome_suspension_begin(
                 &branch_suspension, caller_root, os, &branch);
+            Atom *branch_expr = alternatives[i];
+            __attribute__((cleanup(petta_source_plan_scope_leave)))
+            PettaSourcePlanScope source_scope = {0};
+            if (language_id == CETTA_LANGUAGE_PETTA)
+                petta_source_plan_scope_enter(
+                    &source_scope, petta_plan_child(branch_family_plan, i),
+                    branch_expr);
             eval_petta_relational_host_branch(
-                s, a, (*expected), alternatives[i], fuel, empty,
+                s, a, (*expected), branch_expr, fuel, empty,
                 CURRENT_ENV, preserve_bindings, &branch);
+            petta_source_plan_scope_leave(&source_scope);
             eval_gc_outcome_suspension_end(&branch_suspension);
             /* Collection may move the represented branch list while the
              * child runs.  The call atom is the authoritative root, so

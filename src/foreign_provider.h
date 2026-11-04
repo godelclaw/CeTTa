@@ -23,6 +23,7 @@ Atom *cetta_foreign_provider_atom(Arena *, const CettaForeignProviderSpec *);
 bool cetta_foreign_provider_callable(const Atom *);
 bool cetta_foreign_provider_callable_at(struct Space *, const Atom *);
 bool cetta_foreign_provider_thread_affine(const Atom *);
+bool cetta_foreign_provider_has_thread_affine(void);
 /* False means the head is not a provider. A recognized refusal records its
  * incomplete cause and cannot authorize retrying entered host code. */
 bool cetta_foreign_provider_open(struct Space *, const CettaInvocation *, CettaOwnedExecution *,

@@ -9,6 +9,8 @@ typedef struct {
     CettaForeignProviderSpec spec;
 } ForeignProvider;
 
+static atomic_uint g_thread_affine_providers = 0u;
+
 static void provider_retain(void *pointer) {
     ForeignProvider *provider = pointer;
     atomic_fetch_add_explicit(&provider->references, 1u, memory_order_relaxed);
@@ -17,6 +19,8 @@ static void provider_release(void *pointer) {
     ForeignProvider *provider = pointer;
     if (atomic_fetch_sub_explicit(&provider->references, 1u, memory_order_acq_rel) != 1u)
         return;
+    if (provider->spec.owner_thread)
+        atomic_fetch_sub_explicit(&g_thread_affine_providers, 1u, memory_order_release);
     if (provider->spec.release) provider->spec.release(provider->spec.context);
     free(provider);
 }
@@ -37,6 +41,8 @@ Atom *cetta_foreign_provider_atom(Arena *arena, const CettaForeignProviderSpec *
     provider->hold = (CettaForeignHold){provider_retain, provider_release, provider_print};
     atomic_init(&provider->references, 1u);
     provider->spec = *spec;
+    if (spec->owner_thread)
+        atomic_fetch_add_explicit(&g_thread_affine_providers, 1u, memory_order_release);
     if (spec->retain) spec->retain(spec->context);
     Atom *atom = atom_foreign(arena, (CettaForeignValue *)provider);
     provider_release(provider);
@@ -51,6 +57,9 @@ bool cetta_foreign_provider_callable_at(Space *space, const Atom *atom) {
 bool cetta_foreign_provider_thread_affine(const Atom *atom) {
     ForeignProvider *provider = provider_of(atom);
     return (provider && provider->spec.owner_thread) || cetta_foreign_object_provider_callable(NULL, atom);
+}
+bool cetta_foreign_provider_has_thread_affine(void) {
+    return atomic_load_explicit(&g_thread_affine_providers, memory_order_acquire) != 0u;
 }
 
 bool cetta_foreign_provider_open(Space *space, const CettaInvocation *invocation,

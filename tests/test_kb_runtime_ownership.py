@@ -41,11 +41,22 @@ class RuntimeOwnershipTests(unittest.TestCase):
 
     def test_threaded_capture_preserves_value_roles_with_and_without_new_rules(self):
         for mode in ("Parallel", "ParallelAdded"):
-            with self.subTest(mode=mode):
+            with self.subTest(mode=mode, threads=2):
                 answers = self.worker.call(E(mode, self.value))
                 self.assertEqual(len(answers), 2)
                 for answer in answers:
                     self.preserved(answer)
+        cooperative_worker = Worker(WORKER, ROOT / "tests/support/kb_runtime_ownership_probe.metta", "kb-owner:run",
+                                    language="petta", import_mode="relative", num_threads=1)
+        try:
+            for mode in ("Parallel", "ParallelAdded"):
+                with self.subTest(mode=mode, threads=1):
+                    answers = cooperative_worker.call(E(mode, self.value))
+                    self.assertEqual(len(answers), 2)
+                    for answer in answers:
+                        self.preserved(answer)
+        finally:
+            cooperative_worker.close()
 
     def test_shared_mutation_keeps_preexisting_roles_in_sibling_workers(self):
         for mode in ("direct", "transaction"):
