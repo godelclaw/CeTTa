@@ -2584,14 +2584,21 @@ static uint32_t bridge_append_workspace_candidates(const char **candidates,
         "/rust/target/debug/libcetta_space_bridge.so"
     };
     const uint32_t nsuffixes = (uint32_t)(sizeof(suffixes) / sizeof(suffixes[0]));
-    for (uint32_t i = 0; i < nsuffixes && i < storage_cap; i++) {
+    uint32_t used = 0;
+    for (uint32_t depth = 0; depth < 2 && used < storage_cap; depth++) {
         size_t exe_len = strlen(exe_path);
-        size_t suffix_len = strlen(suffixes[i]);
-        if (exe_len + suffix_len + 1 > PATH_MAX)
-            continue;
-        memcpy(storage[i], exe_path, exe_len);
-        memcpy(storage[i] + exe_len, suffixes[i], suffix_len + 1);
-        candidates[ncandidates++] = storage[i];
+        for (uint32_t i = 0; i < nsuffixes && used < storage_cap; i++) {
+            size_t suffix_len = strlen(suffixes[i]);
+            if (exe_len + suffix_len + 1 > PATH_MAX)
+                continue;
+            memcpy(storage[used], exe_path, exe_len);
+            memcpy(storage[used] + exe_len, suffixes[i], suffix_len + 1);
+            candidates[ncandidates++] = storage[used++];
+        }
+        slash = strrchr(exe_path, '/');
+        if (!slash || slash == exe_path)
+            break;
+        *slash = '\0';
     }
     return ncandidates;
 }

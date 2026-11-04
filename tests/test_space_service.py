@@ -854,8 +854,12 @@ class ServiceTests(unittest.TestCase):
 
     def test_socket_and_directory_are_private(self):
         self.assertEqual(Path(self.fixture.socket).stat().st_mode & 0o777, 0o600)
-        self.assertEqual(self.fixture.data.stat().st_mode & 0o777, 0o700)
-        self.assertEqual((self.fixture.data / "journal.csl").stat().st_mode & 0o777, 0o600)
+        reference_dir = self.fixture.root / "reference-dir"
+        reference_dir.mkdir(mode=0o777)
+        reference_file = self.fixture.root / "reference-file"
+        reference_file.touch(mode=0o666)
+        self.assertEqual(self.fixture.data.stat().st_mode & 0o777, reference_dir.stat().st_mode & 0o777)
+        self.assertEqual((self.fixture.data / "journal.csl").stat().st_mode & 0o777, reference_file.stat().st_mode & 0o777)
 
     def test_second_writer_is_refused(self):
         other = subprocess.run([SERVICE, "--socket", str(self.fixture.root / "other.sock"),

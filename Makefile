@@ -473,7 +473,9 @@ test-rust-bridge: $(MORK_BRIDGE_WORKSPACE_MANIFEST)
 
 MORK_BRIDGE_LOADABLE_LIB := runtime/bootstrap/libcetta_space_bridge.loadable.$(MORK_BRIDGE_FEATURE_TAG).$(MORK_BRIDGE_PATH_TAG).so
 .PHONY: bridge-shared test-mork-shared-bridge
-bridge-shared: $(MORK_BRIDGE_WORKSPACE_MANIFEST)
+bridge-shared: $(MORK_BRIDGE_LOADABLE_LIB)
+$(MORK_BRIDGE_LOADABLE_LIB): $(MORK_BRIDGE_LOCAL_SOURCE_DEPS) $(MORK_BRIDGE_UPSTREAM_SOURCE_DEPS) $(MORK_BRIDGE_WORKSPACE_MANIFEST)
+	@mkdir -p $(dir $@) $(BOOTSTRAP_TMPDIR)
 	@set -e; exec 9>"$(MORK_BRIDGE_BUILD_LOCK)"; flock 9; \
 		cd $(MORK_BRIDGE_WORKDIR) && MAKEFLAGS= \
 		CARGO_TARGET_DIR='$(MORK_BRIDGE_TARGET_DIR)' \
@@ -50703,7 +50705,7 @@ $(SPACE_SERVICE_SCOPES_TEST_BIN): $(SPACE_SERVICE_SCOPES_TEST_OBJ) $(FALLBACK_EV
 .PHONY: test-space-service-scopes
 test-space-service-scopes: $(SPACE_SERVICE_SCOPES_TEST_BIN)
 	$(SPACE_SERVICE_SCOPES_TEST_BIN)
-test-space-service: test-space-service-commit test-space-service-scopes $(SPACE_SERVICE_BIN) $(BIN) $(VALUE_WORKER_BIN)
+test-space-service: test-space-service-commit test-space-service-scopes $(SPACE_SERVICE_BIN) $(BIN) $(VALUE_WORKER_BIN) $(if $(and $(filter 0,$(MORK_BUILD_HAS_BRIDGE)),$(filter 1,$(MORK_BRIDGE_DEPS_READY)),$(wildcard $(MORK_BRIDGE_MANIFEST))),$(MORK_BRIDGE_LOADABLE_LIB))
 	python3 tests/test_space_service.py $(SPACE_SERVICE_BIN) $(BIN) $(VALUE_WORKER_BIN)
 
 .PHONY: test-native-kb-service
