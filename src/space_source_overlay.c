@@ -71,6 +71,7 @@ typedef struct {
     SlotList var_slots;
     size_t added_live, maximum_bytes;
     uint64_t scope, serial, version;
+    bool limit_exceeded;
 } Overlay;
 
 typedef struct {
@@ -139,10 +140,13 @@ static bool exact_key(const Atom *a, unsigned char *tag, const char **bytes, siz
     return false;
 }
 
-static Packet *packet_new(Atom *atom, size_t maximum_bytes) {
+static Packet *packet_new(Atom *atom, size_t maximum_bytes, bool *limit_exceeded) {
     Packet *p = calloc(1, sizeof(*p));
     if (!p) return NULL;
-    if (cetta_atom_wire_encode_bounded(atom, maximum_bytes, &p->bytes, &p->size) != ATOM_WIRE_OK) {
+    CettaAtomWireStatus status = cetta_atom_wire_encode_bounded(
+        atom, maximum_bytes, &p->bytes, &p->size);
+    if (status != ATOM_WIRE_OK) {
+        if (status == ATOM_WIRE_LIMIT && limit_exceeded) *limit_exceeded = true;
         free(p); return NULL;
     }
     /* Portability validation is separate from in-process variable identity.
@@ -652,7 +656,7 @@ static bool source_admit(Space *space, Atom *const *atoms, CettaCount count) {
     if (!prepared_rows) return false;
     size_t prepared = 0;
     for (; prepared < count; ++prepared) {
-        Packet *p = packet_new(atoms[prepared], o->maximum_bytes);
+        Packet *p = packet_new(atoms[prepared], o->maximum_bytes, &o->limit_exceeded);
         if (!p) break;
         p->serial = o->serial + prepared + 1;
         prepared_rows[prepared] = p;
@@ -685,7 +689,7 @@ static bool remove_selected(Overlay *o, Cursor *c) {
         return true;
     }
     if (o->removed.count == SIZE_MAX / sizeof(Packet *)) return false;
-    Packet *p = packet_new(c->identity, o->maximum_bytes);
+    Packet *p = packet_new(c->identity, o->maximum_bytes, &o->limit_exceeded);
     if (!p) return false;
     if (!packet_log_reserve(&o->removed, o->removed.count + 1) ||
             !tombstone_reserve(&o->tombstones, o->tombstones.occupied + 1)) {
@@ -789,7 +793,7 @@ static CettaMatchCompletion source_remove_up_to(Space *space, Atom *pattern,
             }
             local_rows[locals++] = c->local;
         } else {
-            Packet *identity = packet_new(c->identity, o->maximum_bytes);
+            Packet *identity = packet_new(c->identity, o->maximum_bytes, &o->limit_exceeded);
             if (!identity || !packets_reserve(&base, &capacity, count + 1)) {
                 packet_free(identity); step = SPACE_OCCURRENCE_CURSOR_CAPACITY; break;
             }
@@ -967,4 +971,11 @@ bool space_source_overlay_changes(const Space *space, Arena *arena, Atom **addit
         if (!lists[part]) return false;
     }
     *additions = lists[0]; *removals = lists[1]; return true;
+}
+bool space_source_overlay_limit_exceeded(const Space *space) {
+    CETTA_SCOPED_SHARED_TRANSITION(capture);
+    if (!space || !space_owner_is_current(space) || space->match_backend.ops != &overlay_ops ||
+            !space->match_backend.source) return false;
+    const Overlay *o = space->match_backend.source;
+    return o->limit_exceeded;
 }

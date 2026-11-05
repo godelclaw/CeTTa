@@ -823,7 +823,7 @@ static bool edit_observe(void *raw,SpaceReadToken read) {
  * validate it here, then seal the global mutation epoch in the existing
  * program watch. The final guarded commit checks that epoch and the durable
  * revision in one physical publication interval. */
-static Atom *execute_space_edit(CettaLibraryContext *ctx,Arena *a,StoredSpace *owned,Atom *value,Atom *body,ProgramWatch *watch) {
+static Atom *execute_space_edit(CettaLibraryContext *ctx,Arena *a,StoredSpace *owned,Atom *value,Atom *body,ProgramWatch *watch,bool remote) {
     EditReads reads={.workspace=&owned->space};arena_init_detached(&reads.pins);
     CettaEvalReadScope scope={.observe=edit_observe,.context=&reads};
     Atom **values=NULL,*error=NULL;size_t count=0;
@@ -833,10 +833,12 @@ static Atom *execute_space_edit(CettaLibraryContext *ctx,Arena *a,StoredSpace *o
     eval_read_scope_leave(&scope);
     CettaSharedTransitionGuard publication={0};cetta_shared_transition_guard_enter(&publication);
     bool alive=stored_space_current(owned);
+    bool limit=alive && space_source_overlay_limit_exceeded(&owned->space);
     bool current=alive && !scope.incomplete && program_current(ctx,watch);
     for (size_t i=0;current && i<reads.count;i++) current=space_read_token_is_current(reads.items[i]);
     Atom *result=NULL,*added=NULL,*removed=NULL;
-    if (!complete) result=error ? atom_expr2(a,atom_symbol(a,"StoreSpaceFailed"),error) : refused(a,"edit-incomplete");
+    if (limit) result=remote ? remote_status(a,CETTA_RPC_LIMIT) : refused(a,"limit");
+    else if (!complete) result=error ? atom_expr2(a,atom_symbol(a,"StoreSpaceFailed"),error) : refused(a,"edit-incomplete");
     else if (!alive) result=refused(a,"edit-workspace-closed");
     else if (!current) result=refused(a,"edit-read-invalidated");
     else if (!count) result=atom_symbol(a,"StoreSpaceAborted");
@@ -883,7 +885,7 @@ static Atom *space_edit(CettaLibraryContext *ctx,Arena *a,Atom **args,uint32_t n
     Atom *value=opened->expr.elems[1];StoredSpace *owned=stored_space_arg(value);
     if (!owned) { cetta_native_handle_use_release(&view_use);cetta_native_handle_use_release(&use);return refused(a,"invalid-workspace"); }
     EditDomain domain={.view=view,.previous=active_edit_domains};active_edit_domains=&domain;
-    Atom *result=execute_space_edit(ctx,a,owned,value,args[2],watch);
+    Atom *result=execute_space_edit(ctx,a,owned,value,args[2],watch,false);
     active_edit_domains=domain.previous;
     cetta_native_handle_use_release(&view_use);cetta_native_handle_use_release(&use);
     return result ? result : refused(a,"capacity");
@@ -908,7 +910,7 @@ static Atom *source_edit(CettaLibraryContext *ctx,Arena *a,Atom **args,uint32_t 
     else {
         Atom *value=atom_space(a,&owned->space);RemoteEditDomain domain={.db=capture ? cetta_remote_capture_db(capture) : NULL,.previous=active_remote_edits};
         if(capture)active_remote_edits=&domain;
-        cetta_shared_transition_guard_leave(&guard);result=execute_space_edit(ctx,a,owned,value,args[1],watch);cetta_shared_transition_guard_enter(&guard);
+        cetta_shared_transition_guard_leave(&guard);result=execute_space_edit(ctx,a,owned,value,args[1],watch,capture!=NULL);cetta_shared_transition_guard_enter(&guard);
         if(capture)active_remote_edits=domain.previous;
     }
     if(owned)stored_space_release(owned);

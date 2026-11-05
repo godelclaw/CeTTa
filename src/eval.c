@@ -37394,6 +37394,7 @@ static bool eval_transform_evaluate(void *context, Arena *a, Atom *expression,
     bool enclosing_shared = g_he_shared_execution;
     bool enclosing_active = g_active_petta_search_machine;
     bool enclosing_raised = g_petta_machine_run_raised;
+    Atom *enclosing_pending_raise = petta_eval_take_raise();
     g_he_shared_execution = false;
     g_active_petta_search_machine = !prime;
     g_petta_machine_run_raised = false;
@@ -37410,9 +37411,11 @@ static bool eval_transform_evaluate(void *context, Arena *a, Atom *expression,
         eval_mark_interrupted(CETTA_EVAL_INCOMPLETE_HOST_FAILURE);
     CettaEvalCompletion completion = eval_completion_child_end(&tracker);
     bool raised = g_petta_machine_run_raised;
+    Atom *pending_raise = petta_eval_take_raise();
     g_he_shared_execution = enclosing_shared;
     g_active_petta_search_machine = enclosing_active;
     g_petta_machine_run_raised = enclosing_raised;
+    g_petta_pending_raise = enclosing_pending_raise;
     bindings_free(&environment);
     if (!handled || completion != CETTA_EVAL_COMPLETE || eval_unwinding() ||
         eval_cancel_check()) {
@@ -37421,8 +37424,9 @@ static bool eval_transform_evaluate(void *context, Arena *a, Atom *expression,
                                 atom_symbol(a, "TransformLetInterrupted"));
         return false;
     }
-    if (raised && outcomes.len) {
-        *error_out = outcomes.items[outcomes.len - 1u].atom;
+    if (pending_raise || (raised && outcomes.len)) {
+        *error_out = pending_raise
+            ? pending_raise : outcomes.items[outcomes.len - 1u].atom;
         outcome_set_free(&outcomes);
         return false;
     }

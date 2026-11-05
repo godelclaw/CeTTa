@@ -233,8 +233,10 @@ int main(int argc, char **argv) {
     Atom *bad[] = {parse(&data, "(must not publish)"), atom_space(&data, &reference)};
     assert(!space_admit_atoms_batch_from_source_arena(&overlay, &data, &data, bad, 2));
     assert(overlay.revision == revision && space_length64(&overlay) == length && !overlay.native.len);
+    assert(!space_source_overlay_limit_exceeded(&overlay));
     char large[5001]; memset(large, 'x', sizeof(large));
     assert(!space_admit_atom(&overlay, &data, atom_string_n(&data, large, sizeof(large))));
+    assert(space_source_overlay_limit_exceeded(&overlay));
     assert(overlay.revision == revision && space_length64(&overlay) == length);
     assert(space_remove_compared(&overlay, parse(&data, "(edge a b)"), incomplete, incomplete) == CETTA_MATCH_INCOMPLETE);
     assert(overlay.revision == revision && space_length64(&overlay) == length);

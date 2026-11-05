@@ -25,4 +25,6 @@ bool space_source_overlay_init_owned(Space *target, Space *owned_base,
 bool space_source_overlay_changes(const Space *space, Arena *arena,
     Atom **additions, Atom **removals);
 
+bool space_source_overlay_limit_exceeded(const Space *space);
+
 #endif

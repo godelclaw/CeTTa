@@ -132,8 +132,8 @@ def seed(path):
         client.close()
 
 
-def check(binary, worker, directory, case, marker, *, extra_args=()):
-    server = server_for(worker, directory, directory / 'store')
+def check(binary, worker, directory, case, marker, *, extra_args=(), maximum_bytes=1048576):
+    server = server_for(worker, directory, directory / 'store', maximum_bytes=maximum_bytes)
     try:
         server.start()
         seed(server.path)
@@ -142,8 +142,10 @@ def check(binary, worker, directory, case, marker, *, extra_args=()):
         source.write_text('!(import! &self ' + json.dumps(str(fixture)) + ')\n'
                           '!(println! (remote-fixture:run (' + case + ' '
                           + json.dumps(str(server.path)) + ')))\n')
-        run = subprocess.run([str(binary), *extra_args, '--lang', 'petta', str(source)],
-                             capture_output=True, text=True, timeout=40)
+        command = [str(binary), *extra_args, '--lang', 'petta', str(source)]
+        if maximum_bytes != 1048576:
+            command[1:1] = ['--value-bytes', str(maximum_bytes)]
+        run = subprocess.run(command, capture_output=True, text=True, timeout=40)
         assert run.returncode == 0 and marker in run.stdout.splitlines(), (
             case, run.returncode, run.stdout, run.stderr)
         assert 'AssertionFailed' not in run.stdout + run.stderr
@@ -173,7 +175,8 @@ def main():
                              ('Maintenance', 'REMOTE_MAINTENANCE_OK'),
                              ('Numbers', 'REMOTE_NUMBERS_OK'),
                              ('Removals', 'REMOTE_REMOVALS_OK'),
-                             ('LargeTransaction', 'REMOTE_LARGE_TRANSACTION_OK')]:
+                             ('LargeTransaction', 'REMOTE_LARGE_TRANSACTION_OK'),
+                             ('ValueLimits', 'REMOTE_VALUE_LIMITS_OK')]:
             directory = root / case
             directory.mkdir(mode=0o700)
             results.append(check(args.binary.resolve(), args.worker.resolve(), directory, case, marker))
@@ -182,6 +185,10 @@ def main():
         results.append(check(args.binary.resolve(), args.worker.resolve(), small_limit_dir,
                              'SmallClientReplyLimit', 'REMOTE_SMALL_CLIENT_REPLY_LIMIT_OK',
                              extra_args=('--value-bytes', '8192')))
+        raised_directory = root / 'ValueLimitsRaised'
+        raised_directory.mkdir(mode=0o700)
+        results.append(check(args.binary.resolve(), args.worker.resolve(), raised_directory,
+                             'ValueLimitsRaised', 'REMOTE_VALUE_LIMITS_RAISED_OK', maximum_bytes=2097152))
         if args.native_fixture:
             directory = root / 'native'
             directory.mkdir(mode=0o700)

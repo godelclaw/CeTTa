@@ -15,9 +15,9 @@ from check_native_kb_service import Client, Server, E, S, Var, encode, decode
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def server_for(worker, root, source):
+def server_for(worker, root, source, maximum_bytes=1048576):
     server = Server(worker, root, module=ROOT / 'examples/native_db_server.metta',
-                    entry='db-server:configuration')
+                    entry='db-server:configuration', maximum_bytes=maximum_bytes)
     server.environment.update(CETTA_DB_SOURCE=str(source), CETTA_DB_SOCKET=str(server.path))
     return server
 
