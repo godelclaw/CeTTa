@@ -123,6 +123,8 @@
 
 (= (db-fixture:run (Named $path))
   (let* (($db (db:open $path))
+         ($_ (assertEqual (catch (db:snapshot $db missing))
+              (Error db:snapshot (StoreRefused absent))))
          ($_ (assertEqual (db:ensure $db indexed ((SpaceIndexV1 3 1))) True))
          ($_ (assertEqual (db:ensure $db indexed ((SpaceIndexV1 3 1))) True))
          ($_ (db:transaction $db indexed (|-> ($space)
@@ -356,6 +358,8 @@
          ($_ (db:export-act $source (str:concat $path ".readonly.cact")))
          ($_ (db:close $source))
          ($file (db:open (str:concat $path ".readonly.cact")))
+         ($_ (assertEqual (catch (db:snapshot $file missing))
+              (Error db:snapshot collection-absent)))
          ($view (db:snapshot $file))
          ($_ (assertEqual (collapse (match $view (edge a $to) $to)) (b b)))
          ($cursor (db:query $file (edge a $to) $to))

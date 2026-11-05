@@ -24,9 +24,9 @@ CettaRemoteDb *cetta_remote_resource_db(const CettaRemoteResource *);
 void cetta_remote_resource_release(CettaRemoteResource *);
 void cetta_remote_resource_storage(const void *,CettaStorageCensus *);
 CettaValueRpcStatus cetta_remote_db_capture(CettaRemoteDb *,Atom *collection,
-    CettaRemoteCapture **);
+    Arena *,CettaRemoteCapture **,Atom **refusal);
 CettaValueRpcStatus cetta_remote_capture_related(CettaRemoteCapture *,Atom *collection,
-    CettaRemoteCapture **);
+    Arena *,CettaRemoteCapture **,Atom **refusal);
 CettaValueRpcStatus cetta_remote_capture_start(CettaRemoteCapture *,const char *operation,
     Atom *arguments,Arena *,CettaRemoteResource **,Atom **metadata);
 void cetta_remote_capture_retain(CettaRemoteCapture *);

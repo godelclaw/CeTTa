@@ -255,7 +255,13 @@ void cetta_remote_capture_release(CettaRemoteCapture *s) {
     if(!s || atomic_fetch_sub(&s->references,1)!=1)return;
     resource_release(s->resource);arena_free(&s->metadata);free(s);
 }
-static CettaValueRpcStatus capture_on(CettaRemoteDb *d,CettaRemoteCapture *origin,Atom *collection,CettaRemoteCapture **out) {
+static bool capture_refused(const Atom *a) {
+    return tagged(a,"StoreRefused",2) || tagged(a,"DbRefusedV1",2) ||
+        tagged(a,"DbErrorV1",2) || tagged(a,"ServiceRefusedV1",2) || tagged(a,"ServiceFailedV1",2);
+}
+static CettaValueRpcStatus capture_on(CettaRemoteDb *d,CettaRemoteCapture *origin,Atom *collection,
+        Arena *arena,CettaRemoteCapture **out,Atom **refusal) {
+    if(refusal)*refusal=NULL;
     if(!out)return CETTA_RPC_INVALID;
     *out=NULL;if(!d || !collection || atom_has_vars(collection))return CETTA_RPC_INVALID;
     CettaRemoteCapture *s=calloc(1,sizeof(*s));if(!s)return CETTA_RPC_CAPACITY;
@@ -270,24 +276,33 @@ static CettaValueRpcStatus capture_on(CettaRemoteDb *d,CettaRemoteCapture *origi
         origin ? "DbCaptureRelated" : "DbCapture",argument,&s->metadata,&answer);uint64_t limit;
     if(status==CETTA_RPC_OK) {
         CETTA_SCOPED_SHARED_TRANSITION(metadata);
-        Atom *meta=tagged(answer,"ServiceResourceV1",3) ? answer->expr.elems[2] : NULL;
-        if(meta)s->resource=resource_new(d,answer->expr.elems[1]);
-        if(!tagged(meta,"DbCapturedV1",8) || !atom_eq(meta->expr.elems[1],d->owner) || !atom_eq(meta->expr.elems[2],d->incarnation) ||
-            !natural(meta->expr.elems[3],&s->revision) || (origin && s->revision!=origin->revision) ||
-            !atom_eq(meta->expr.elems[4],collection) || !natural(meta->expr.elems[5],&s->count) ||
-            !natural(meta->expr.elems[6],&limit) || !limit || limit>SIZE_MAX || !atom_eq(meta->expr.elems[7],d->kind))status=CETTA_RPC_INVALID;
-        else {
-            if(!s->resource)status=CETTA_RPC_CAPACITY;
-            s->maximum=limit<d->maximum ? (size_t)limit : d->maximum;
+        if(capture_refused(answer)) {
+            status=CETTA_RPC_INVALID;
+            if(arena && refusal){*refusal=atom_deep_copy(arena,answer);if(!*refusal)status=CETTA_RPC_CAPACITY;}
+        } else {
+            Atom *meta=tagged(answer,"ServiceResourceV1",3) ? answer->expr.elems[2] : NULL;
+            if(meta)s->resource=resource_new(d,answer->expr.elems[1]);
+            if(!tagged(meta,"DbCapturedV1",8) || !atom_eq(meta->expr.elems[1],d->owner) || !atom_eq(meta->expr.elems[2],d->incarnation) ||
+                !natural(meta->expr.elems[3],&s->revision) || (origin && s->revision!=origin->revision) ||
+                !atom_eq(meta->expr.elems[4],collection) || !natural(meta->expr.elems[5],&s->count) ||
+                !natural(meta->expr.elems[6],&limit) || !limit || limit>SIZE_MAX || !atom_eq(meta->expr.elems[7],d->kind))status=CETTA_RPC_INVALID;
+            else {
+                if(!s->resource)status=CETTA_RPC_CAPACITY;
+                s->maximum=limit<d->maximum ? (size_t)limit : d->maximum;
+            }
         }
+    } else if(status==CETTA_RPC_REMOTE_ERROR && arena && refusal) {
+        CETTA_SCOPED_SHARED_TRANSITION(metadata);
+        if(capture_refused(answer)){*refusal=atom_deep_copy(arena,answer);if(!*refusal)status=CETTA_RPC_CAPACITY;}
     }
     if(status!=CETTA_RPC_OK){cetta_remote_capture_release(s);return status;}*out=s;return status;
 }
-CettaValueRpcStatus cetta_remote_db_capture(CettaRemoteDb *d,Atom *collection,CettaRemoteCapture **out) {
-    return capture_on(d,NULL,collection,out);
+CettaValueRpcStatus cetta_remote_db_capture(CettaRemoteDb *d,Atom *collection,Arena *arena,CettaRemoteCapture **out,Atom **refusal) {
+    return capture_on(d,NULL,collection,arena,out,refusal);
 }
-CettaValueRpcStatus cetta_remote_capture_related(CettaRemoteCapture *s,Atom *collection,CettaRemoteCapture **out) {
-    return s ? capture_on(s->resource->db,s,collection,out) : CETTA_RPC_INVALID;
+CettaValueRpcStatus cetta_remote_capture_related(CettaRemoteCapture *s,Atom *collection,Arena *arena,CettaRemoteCapture **out,Atom **refusal) {
+    if(refusal)*refusal=NULL;
+    return s ? capture_on(s->resource->db,s,collection,arena,out,refusal) : CETTA_RPC_INVALID;
 }
 Atom *cetta_remote_capture_context(const CettaRemoteCapture *s,Arena *a) {
     if(!s || s->revision>INT64_MAX)return NULL;

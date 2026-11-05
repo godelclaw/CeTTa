@@ -46,7 +46,7 @@ int main(int argc,char **argv) {
     Arena a;arena_init_detached(&a);TermUniverse universe;term_universe_init(&universe);term_universe_set_persistent_arena(&universe,&a);
     CettaIpcSession *session=cetta_ipc_session_new(connect_socket(argv[1]));assert(session);CettaRemoteDb *db=NULL;
     assert(cetta_remote_db_open(session,1048576,3000,&db)==CETTA_RPC_OK);cetta_ipc_session_release(session);
-    CettaRemoteCapture *capture=NULL;assert(cetta_remote_db_capture(db,atom_symbol(&a,"data"),&capture)==CETTA_RPC_OK);
+    CettaRemoteCapture *capture=NULL;assert(cetta_remote_db_capture(db,atom_symbol(&a,"data"),NULL,&capture,NULL)==CETTA_RPC_OK);
     Space source;space_init_with_universe(&source,&universe);assert(cetta_remote_capture_space(capture,&source));
     assert(space_length64(&source)==5);
     if(argc==3) {

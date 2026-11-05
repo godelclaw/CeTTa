@@ -441,11 +441,11 @@ static Atom *remote_dispatch(CettaLibraryContext *ctx,Arena *a,Atom *head,Atom *
         Atom *result=NULL;
         if(observation)result=cetta_remote_capture_context(origin,a);
         else {
-            Arena owned;arena_init_detached(&owned);Atom *collection=atom_deep_copy(&owned,args[1]);
+            Arena owned;arena_init_detached(&owned);Atom *collection=atom_deep_copy(&owned,args[1]),*refusal=NULL;
             CettaRemoteCapture *source=NULL;cetta_shared_transition_guard_leave(&guard);
-            CettaValueRpcStatus status=cetta_remote_capture_related(origin,collection,&source);
+            CettaValueRpcStatus status=cetta_remote_capture_related(origin,collection,&owned,&source,&refusal);
             cetta_shared_transition_guard_enter(&guard);
-            if(status!=CETTA_RPC_OK)result=remote_status(a,status);
+            if(status!=CETTA_RPC_OK)result=refusal ? atom_deep_copy(a,refusal) : remote_status(a,status);
             else {
                 StoredSpace *space=stored_space_new(NULL,(CettaDiskBytes){0});
                 if(!space)result=refused(a,"capacity");
@@ -502,9 +502,10 @@ static Atom *remote_dispatch(CettaLibraryContext *ctx,Arena *a,Atom *head,Atom *
         else {
             cetta_shared_transition_guard_leave(&guard);
             if(capture) {
-                CettaRemoteCapture *source=NULL;CettaValueRpcStatus status=cetta_remote_db_capture(db,argument,&source);
+                CettaRemoteCapture *source=NULL;Atom *refusal=NULL;
+                CettaValueRpcStatus status=cetta_remote_db_capture(db,argument,&owned,&source,&refusal);
                 cetta_shared_transition_guard_enter(&guard);
-                if(status!=CETTA_RPC_OK)result=remote_status(a,status);
+                if(status!=CETTA_RPC_OK)result=refusal ? atom_deep_copy(a,refusal) : remote_status(a,status);
                 else {
                     StoredSpace *space=stored_space_new(NULL,(CettaDiskBytes){0});
                     if(!space)result=refused(a,"capacity");

@@ -120,6 +120,8 @@
 (= (remote-fixture:run (ReadOnly $socket))
   (let* (($db (db:connect $socket))
          ($effect (str:concat $socket "-must-not-exist"))
+         ($_ (assertEqual (catch (db:snapshot $db missing))
+              (Error db:snapshot collection-absent)))
          ($_ (assertEqual (catch (db:transaction $db
                 (|-> ($space) (fs:write $effect "ACCIDENTAL_EXECUTION"))))
               (Error db:transaction read-only)))
@@ -171,6 +173,8 @@
 (= (remote-fixture:value (SpaceAnswerV1 $value $identities)) (quote $value))
 (= (remote-fixture:run (Collections $socket))
   (let* (($db (db:connect $socket))
+         ($_ (assertEqual (catch (db:snapshot $db missing))
+              (Error db:snapshot (StoreRefused absent))))
          ($_ (assertEqual (db:ensure $db other ()) True))
          ($_ (assertEqual (db:transaction $db other
                 (|-> ($space) (add-atom $space (tag b old)))) True))

@@ -289,7 +289,7 @@ def main():
                                          (False, 'OtherOwner', 'REMOTE_OTHER_OWNER_OK')]:
             directory = root / case
             directory.mkdir(mode=0o700)
-            second_directory = directory / 'second'
+            second_directory = root / (case + '-2')
             second_directory.mkdir(mode=0o700)
             first = server_for(args.worker.resolve(), directory, directory / 'store')
             second = server_for(args.worker.resolve(), second_directory,

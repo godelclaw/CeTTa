@@ -345,7 +345,9 @@
       ((StoreRemoteUnavailable (Error db:snapshot unavailable))
        (StoreRemoteUncertain (Error db:snapshot uncertain))
        ((StoreRemoteFailed $why) (Error db:snapshot $why))
-       ((StoreRefused $why) (Error db:snapshot $why))
+       ((DbErrorV1 $why) (Error db:snapshot $why))
+       ((DbRefusedV1 $why) (Error db:snapshot $why))
+       ((StoreRefused $why) (Error db:snapshot (StoreRefused $why)))
        ($space $space)))))
 
 (= (db:resolve $resource $collection $request $operation)
