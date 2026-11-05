@@ -24682,6 +24682,7 @@ bool space_checkpoint_native_copy(const Space *source, Space *image,
         image->id_present_key_len++;
     }
     image->id_present_incomplete=source->id_present_incomplete;
+    image->id_present_shared=source->id_present_shared;
     /* The exact index is copied as it is laid out: every slot of its table
      * (a vacant one included) and every slot of its head counts. */
     image->exact_idx = (ExactAtomIndex){0};
