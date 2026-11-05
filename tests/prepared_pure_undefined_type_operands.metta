@@ -8,7 +8,7 @@
 (= (is-kind $x) (== $x Kinded))
 (: Kinded Kind)
 (: seen (-> Atom %Undefined%))
-(= (seen $v) (case $v (((Error $a $b) (error $b)) ($x $x))))
+(= (seen $v) (case (metta $v %Undefined% &self) (((Error $a $b) (error $b)) ($x $x))))
 !(is-nil Nil)
 !(is-nil (Cons 1 Nil))
 !(is-nil 1)

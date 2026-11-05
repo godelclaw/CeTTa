@@ -37934,10 +37934,14 @@ bench-mam-linear-fibonacci: $(BIN)
 # Uncapped variable identities widened each Atom, so the same logical run
 # crosses eleven one-megabyte nursery intervals. The collection-count guard
 # keeps one interval of tolerance; byte and reclamation bounds remain strict.
-# The answer producer gives six answers: an answer whose head is bound at
-# run time takes the canonical route, as the head's value decides between
-# data and a call.  The empty deconstruction is refused before the producer
-# is entered and answers its error canonically, which the answer file checks.
+# The answer producer gives nine answers: six from the choice, duplicate and
+# deferred-choice queries, plus three from the two prepared-maybe-more queries
+# (whose two overlapping equations defeat the single-equation optional worker
+# and enumerate one and two answers through the answer producer).  An answer
+# whose head is bound at run time takes the canonical route, as the head's
+# value decides between data and a call.  The empty deconstruction is refused
+# before the producer is entered and answers its error canonically, which the
+# answer file checks.
 test-prepared-pure-call-machine-stats: $(BIN) test-prepared-pure-answer-resource-fallback
 ifeq ($(ENABLE_RUNTIME_STATS),1)
 	@result=$$(CETTA_GC=1 CETTA_GC_BUDGET_MB=1 \
@@ -37970,9 +37974,9 @@ ifeq ($(ENABLE_RUNTIME_STATS),1)
 	   [ "$${collections:-0}" -gt 12 ] || \
 	   [ "$${evacuated:-0}" -gt 1048576 ] || \
 	   [ "$${reclaimed:-0}" -lt 1 ] || \
-	   [ "$${answer_admissions:-0}" -lt 3 ] || \
-	   [ "$${answer_commits:-0}" -lt 3 ] || \
-	   [ "$${answer_count:-0}" -ne 6 ] || \
+	   [ "$${answer_admissions:-0}" -lt 5 ] || \
+	   [ "$${answer_commits:-0}" -lt 5 ] || \
+	   [ "$${answer_count:-0}" -ne 9 ] || \
 	   [ "$${answer_tail_calls:-0}" -lt 1 ]; then \
 		echo "FAIL: pure-call mechanism witness admission=$$admissions commit=$$commits decline=$$declines collections=$$collections evacuated=$$evacuated reclaimed=$$reclaimed answer-admission=$$answer_admissions answer-commit=$$answer_commits answer-decline=$$answer_declines answers=$$answer_count answer-tail-calls=$$answer_tail_calls"; \
 		exit 1; \
@@ -37985,10 +37989,22 @@ ifeq ($(ENABLE_RUNTIME_STATS),1)
 		'$$1 == "runtime-counter" && $$2 == "prepared-optional-call-empty" { print $$3 }'); \
 	optional_values=$$(printf '%s\n' "$$optional_result" | awk \
 		'$$1 == "runtime-counter" && $$2 == "prepared-optional-call-value" { print $$3 }'); \
-	if [ "$${optional_admissions:-0}" -ne 6 ] || \
-	   [ "$${optional_empty:-0}" -ne 3 ] || \
-	   [ "$${optional_values:-0}" -ne 3 ]; then \
-		echo "FAIL: optional call outcomes admission=$$optional_admissions empty=$$optional_empty value=$$optional_values"; \
+	optional_machine_result=$$(CETTA_OPEN_QUERY_BODIES=0 \
+		./$(BIN) --emit-runtime-stats --lang petta \
+		tests/prepared_pure_call_machine.metta 2>&1); \
+	optional_machine_admissions=$$(printf '%s\n' "$$optional_machine_result" | awk \
+		'$$1 == "runtime-counter" && $$2 == "prepared-optional-call-admission" { print $$3 }'); \
+	optional_machine_empty=$$(printf '%s\n' "$$optional_machine_result" | awk \
+		'$$1 == "runtime-counter" && $$2 == "prepared-optional-call-empty" { print $$3 }'); \
+	optional_machine_values=$$(printf '%s\n' "$$optional_machine_result" | awk \
+		'$$1 == "runtime-counter" && $$2 == "prepared-optional-call-value" { print $$3 }'); \
+	if [ "$${optional_admissions:-0}" -ne 3 ] || \
+	   [ "$${optional_empty:-0}" -ne 2 ] || \
+	   [ "$${optional_values:-0}" -ne 1 ] || \
+	   [ "$${optional_machine_admissions:-0}" -ne 6 ] || \
+	   [ "$${optional_machine_empty:-0}" -ne 3 ] || \
+	   [ "$${optional_machine_values:-0}" -ne 3 ]; then \
+		echo "FAIL: optional call outcomes admission=$$optional_admissions empty=$$optional_empty value=$$optional_values machine-admission=$$optional_machine_admissions machine-empty=$$optional_machine_empty machine-value=$$optional_machine_values"; \
 		exit 1; \
 	fi; \
 	need_result=$$(CETTA_GC=1 CETTA_GC_BUDGET_MB=1 \
