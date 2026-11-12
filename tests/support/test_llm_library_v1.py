@@ -225,6 +225,41 @@ class CodecFixtures(unittest.TestCase):
             self.assertTrue(result.startswith("ERROR:"), result)
             self.assertNotIn("private-fixture", result)
 
+    def test_a_failure_after_the_first_list_item_is_the_outcome(self):
+        # A list whose rest failed was once spliced into the list as two plain
+        # atoms that no check found: PeTTa answered ok with an unrenderable
+        # body or a garbled result, and HE did not finish.
+        def call(identity, arguments, kind="function"):
+            return {"id": identity, "type": kind, "function": {"name": "nop", "arguments": arguments}}
+        user = {"role": "user", "content": "q"}
+        def assistant(**fields):
+            return {"role": "assistant", "content": "a", **fields}
+        def request(*messages, **fields):
+            return {"model": "fixture-model", "max_tokens": 42, "messages": list(messages), **fields}
+        tool = {"type": "function", "function": {"name": "nop", "parameters": {"type": "object"}}}
+        thinking = {"type": "thinking", "thinking": "t", "signature": "s"}
+        tool_result = {"role": "tool", "tool_call_id": "c1", "content": "r"}
+        cases = [
+            (self.encode("anthropic", request(user, assistant(tool_calls=[call("c1", "{}"), call("c2", "{bad")]))),
+             "ERROR:invalid-tool-arguments"),
+            (self.encode("responses", request(user, assistant(tool_calls=[call("c1", "{}"), call("", "{}")]))),
+             "ERROR:invalid-call-identity"),
+            (self.encode("anthropic", request(user, assistant(reasoning_details=[thinking, {"type": "reasoning"}]))),
+             "ERROR:incompatible-reasoning"),
+            (self.encode("anthropic", request({"role": "user", "content": [{"type": "text", "text": "a"}, {"type": "image"}]})),
+             "ERROR:missing-field"),
+            (self.encode("responses", request(user, tools=[tool, {"type": "function", "function": {"name": "bad"}}])),
+             "ERROR:invalid-tool-schema"),
+            # A tool result after user text is refused wherever the turn is.
+            (self.encode("anthropic", request(user, assistant(), user, tool_result)), "ERROR:late-tool-result"),
+            (self.encode("anthropic", request(user, tool_result, assistant())), "ERROR:late-tool-result"),
+            (self.decode("chat-completions", {"choices": [{"index": 0, "finish_reason": "tool_calls",
+                "message": {"role": "assistant", "content": None,
+                            "tool_calls": [call("c1", "{}"), call("c2", "{}", "weird")]}}]}),
+             "ERROR:unsupported-tool-kind")]
+        self.assertEqual(self.each_dialect([expression for expression, _ in cases]),
+                         [expected for _, expected in cases])
+
     def test_nested_and_escaped_duplicate_keys_remain_rejected(self):
         wire = ('{"content":[{"type":"tool_use","id":"call","name":"nop",'
                 '"input":{"key":1,"\\u006bey":2}}],"stop_reason":"tool_use"}')
@@ -305,7 +340,7 @@ class CodecFixtures(unittest.TestCase):
 
     def test_three_semantic_mutants_are_detected(self):
         source = (ROOT / "lib/llm.metta").read_text()
-        mutants = [("order", "(cons-atom $part $rest)", "(cons-atom $part ())"),
+        mutants = [("order", "(llm:v1:cons $part $rest)", "(llm:v1:cons $part ())"),
                    ("identity", '(JsonPair "call_id" $id)', '(JsonPair "call_id" (JsonString "wrong"))'),
                    ("usage", r'\(if\s+\(== \$value JsonNull\)\s+JsonNull',
                     '(if (== $value JsonNull) (JsonNumber "0")')]

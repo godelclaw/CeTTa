@@ -128,6 +128,15 @@
          ($right (if (== $first ()) $second
            (let* (($head (car-atom $first)) ($tail (cdr-atom $first))
                   ($rest (llm:v1:append $tail $second))) (cons-atom $head $rest)){$head $tail $rest})))){$code $right}))){$code})
+; A list whose rest failed is that failure: cons-atom onto it would splice the
+; failure into the list as two plain atoms that no check finds. A failure
+; inside the head is earlier, so it comes first.
+(= (llm:v1:cons $head $rest)
+   (case $rest
+     (((llm:v1:failure $code)
+       (let $earlier (llm:v1:failure-in $head)
+         (case $earlier (((llm:v1:failure $first) (llm:v1:failure $first)) ($none (llm:v1:failure $code)))){$first $none}){$earlier})
+      ($list (cons-atom $head $list)))))
 (= (llm:v1:count $value)
    (if
      (== $value JsonNull)
@@ -237,7 +246,7 @@
    (if (== $blocks ()) ()
      (let* (($head (car-atom $blocks)) ($tail (cdr-atom $blocks))
             ($part (llm:v1:block $protocol $head $status))
-            ($rest (llm:v1:blocks $protocol $tail $status))) (cons-atom $part $rest)){$head $tail $part $rest}))
+            ($rest (llm:v1:blocks $protocol $tail $status))) (llm:v1:cons $part $rest)){$head $tail $part $rest}))
 (= (llm:v1:block $protocol $block $status)
    (let* (($type (llm:v1:required $block "type"))
            ($kind (llm:v1:text $type)))
@@ -303,7 +312,7 @@
      (let* (($head (car-atom $items)) ($tail (cdr-atom $items))
             ($item (llm:v1:response-item $head $default-status))
             ($rest (llm:v1:responses-items $tail $default-status)))
-       (cons-atom $item $rest)){$head $tail $item $rest}))
+       (llm:v1:cons $item $rest)){$head $tail $item $rest}))
 (= (llm:v1:response-item $item $default-status)
    (let* (($type (llm:v1:required $item "type")) ($kind (llm:v1:text $type)))
      (case $kind
@@ -335,7 +344,7 @@
              ($rest (llm:v1:chat-calls $tail $status)))
        (let
          $validated-output-11
-         (cons-atom $part $rest)
+         (llm:v1:cons $part $rest)
          (llm:v1:validated ($ignored9) $validated-output-11)){$validated-output-11}){$call $tail $type $ignored9 $function $id $name $args $part $rest}))
 (= (llm:v1:optional-array $value)
    (if (== $value JsonNull) () (llm:v1:array $value)))
@@ -381,7 +390,7 @@
    (if (== $choices ()) ()
      (let* (($head (car-atom $choices)) ($tail (cdr-atom $choices))
             ($item (llm:v1:chat-choice $head)) ($rest (llm:v1:chat-choices $tail)))
-       (cons-atom $item $rest)){$head $tail $item $rest}))
+       (llm:v1:cons $item $rest)){$head $tail $item $rest}))
 (= (llm:v1:decoded $protocol $wire)
    (let* (($version (llm:v1:version $protocol))
            ($ignored11 (if (llm:v1:object? $wire) True (llm:v1:failure expected-object)))
@@ -474,7 +483,7 @@
              ($rest (llm:v1:checked-text-blocks $tail)))
        (let
          $validated-output-16
-         (if (== $kind (JsonString "text")) (cons-atom $head $rest) (llm:v1:failure unsupported-content))
+         (if (== $kind (JsonString "text")) (llm:v1:cons $head $rest) (llm:v1:failure unsupported-content))
          (llm:v1:validated ($ignored) $validated-output-16)){$validated-output-16}){$head $tail $kind $text $ignored $rest}))
 (= (llm:v1:attachment $protocol $value)
    (let* (($source (llm:v1:required $value "protocol"))
@@ -517,7 +526,7 @@
              ($rest (llm:v1:request-calls $protocol $tail)))
        (let
          $validated-output-18
-         (cons-atom $item $rest)
+         (llm:v1:cons $item $rest)
          (llm:v1:validated ($checked) $validated-output-18)){$validated-output-18}){$head $tail $function $id $name $args $checked $bytes $input $item $rest}))
 (= (llm:v1:reasoning $protocol $blocks)
    (if
@@ -532,7 +541,7 @@
                  (or (== $type (JsonString "thinking")) (== $type (JsonString "redacted_thinking")))
                  (== $type (JsonString "reasoning"))))
              ($rest (llm:v1:reasoning $protocol $tail)))
-       (if $accepted (cons-atom $head $rest) (llm:v1:failure incompatible-reasoning))){$head $tail $type $accepted $rest}))
+       (if $accepted (llm:v1:cons $head $rest) (llm:v1:failure incompatible-reasoning))){$head $tail $type $accepted $rest}))
 (= (llm:v1:anthropic-message $message)
    (let* (($raw-role (llm:v1:required $message "role"))
            ($role (llm:v1:text $raw-role))
@@ -603,6 +612,10 @@
            (llm:v1:anthropic-conversation $tail $role-policy $system $next-22)){$message $next-22})){$head $tail $raw-role $role}))
 ; Merge only adjacent equal roles; a new tool result cannot follow user text.
 (= (llm:v1:merge-anthropic $messages $message)
+   (case $messages
+     (((llm:v1:failure $code) (llm:v1:failure $code))
+      ($list (llm:v1:merge-anthropic-list $messages $message)))))
+(= (llm:v1:merge-anthropic-list $messages $message)
    (if
      (== $messages ())
      (cons-atom $message ())
@@ -610,7 +623,7 @@
              ($tail (cdr-atom $messages)))
        (if
          (not (== $tail ()))
-         (let $rest (llm:v1:merge-anthropic $tail $message) (cons-atom $head $rest)){$rest}
+         (let $rest (llm:v1:merge-anthropic-list $tail $message) (llm:v1:cons $head $rest)){$rest}
          (let* (($old-role (llm:v1:get $head "role"))
                  ($new-role (llm:v1:get $message "role")))
            (if
@@ -761,7 +774,7 @@
              ($rest (llm:v1:tools $protocol $tail)))
        (let
          $validated-output-31
-         (cons-atom $item $rest)
+         (llm:v1:cons $item $rest)
          (llm:v1:validated ($ignored-type $checked $ignored-schema) $validated-output-31)){$validated-output-31}){$head $tail $type $ignored-type $fn $name $checked $schema $ignored-schema $description $description-value $item $rest}))
 (= (llm:v1:tool-choice $protocol $choice $policy $thinking)
    (let
@@ -1223,6 +1236,7 @@
 (: llm:v1:with (-> Atom Atom Atom %Undefined%))
 (: llm:v1:without (-> Atom Atom %Undefined%))
 (: llm:v1:append (-> Atom Atom %Undefined%))
+(: llm:v1:cons (-> Atom Atom %Undefined%))
 (: llm:v1:count (-> Atom %Undefined%))
 (: llm:v1:counter (-> Atom Atom %Undefined%))
 (: llm:v1:usage (-> Atom Atom %Undefined%))
@@ -1253,6 +1267,7 @@
 (: llm:v1:anthropic-message (-> Atom %Undefined%))
 (: llm:v1:anthropic-conversation (-> Atom Atom Atom Atom %Undefined%))
 (: llm:v1:merge-anthropic (-> Atom Atom %Undefined%))
+(: llm:v1:merge-anthropic-list (-> Atom Atom %Undefined%))
 (: llm:v1:only-tool-results (-> Atom %Undefined%))
 (: llm:v1:response-message (-> Atom Atom %Undefined%))
 (: llm:v1:response-conversation (-> Atom Atom Atom Atom %Undefined%))
