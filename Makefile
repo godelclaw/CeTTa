@@ -50186,7 +50186,7 @@ endif
 ifeq ($(HTTP_PROVIDER_CURL),1)
 HTTP_WORKER_TEST_BIN = runtime/test-http-worker-$(BUILD_OBJ_TAG)
 HTTP_WORKER_TEST_LINK_OBJ = $(filter-out src/http_worker.% src/durable_store.%,$(FALLBACK_EVAL_TEST_LINK_OBJ))
-$(HTTP_WORKER_TEST_BIN): tests/test_http_worker.c src/http_worker.c src/http_worker.h src/durable_store.c src/durable_store.h $(HTTP_WORKER_TEST_LINK_OBJ) $(BRIDGE_DEPS)
+$(HTTP_WORKER_TEST_BIN): tests/test_http_worker.c src/http_worker.c src/http_worker.h src/byte_fragment.h src/durable_store.c src/durable_store.h $(HTTP_WORKER_TEST_LINK_OBJ) $(BRIDGE_DEPS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -Isrc tests/test_http_worker.c src/http_worker.c src/durable_store.c $(HTTP_WORKER_TEST_LINK_OBJ) $(LDFLAGS) -o $@
 
 test-http-worker: $(HTTP_WORKER_TEST_BIN) $(IO_HTTP_FIXTURE_BIN)
@@ -50236,7 +50236,7 @@ test-speculative-eval: $(SPECULATIVE_EVAL_TEST_BIN) $(IO_HTTP_FIXTURE_BIN)
 .PHONY: test-telegram-transport
 ifeq ($(HTTP_PROVIDER_CURL),1)
 TELEGRAM_TRANSPORT_TEST_BIN = runtime/test-telegram-transport-$(BUILD_OBJ_TAG)
-$(TELEGRAM_TRANSPORT_TEST_BIN): tests/test_telegram_transport.c src/telegram_transport.c src/telegram_transport.h src/http_worker.c src/http_worker.h
+$(TELEGRAM_TRANSPORT_TEST_BIN): tests/test_telegram_transport.c src/telegram_transport.c src/telegram_transport.h src/http_worker.c src/http_worker.h src/byte_fragment.h
 	$(CC) -O2 -Wall -Wextra -Werror -std=c11 -pthread -Isrc $(HTTP_CFLAGS) -DCETTA_BUILD_HTTP_PROVIDER_CURL=$(HTTP_PROVIDER_CURL) tests/test_telegram_transport.c src/telegram_transport.c src/http_worker.c $(HTTP_LDFLAGS) -o $@
 test-telegram-transport: $(TELEGRAM_TRANSPORT_TEST_BIN)
 	python3 tests/test_telegram_transport.py $(TELEGRAM_TRANSPORT_TEST_BIN)

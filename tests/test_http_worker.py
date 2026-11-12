@@ -127,3 +127,54 @@ with http.server.ThreadingHTTPServer(("127.0.0.1", 0), DeadlineHandler) as serve
         assert server.counts == {"/drip": 1, "/silent": 1, "/stall": 1, "/forever": 1}, server.counts
     finally:
         server.shutdown(); owner.join(timeout=5)
+
+
+class FragmentFixture(http.server.ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(self):
+        super().__init__(("127.0.0.1", 0), FragmentHandler)
+        self.lock = threading.Lock()
+        self.receipts = []
+
+
+class FragmentHandler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, *args):
+        pass
+
+    def do_POST(self):
+        payload = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        with self.server.lock:
+            self.server.receipts.append((self.path, payload))
+        if self.path == "/redirect-307":
+            self.send_response(307)
+            self.send_header("Location", "/fragments-again")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("Content-Length", "2")
+        self.end_headers()
+        self.wfile.write(b"ok")
+        self.wfile.flush()
+
+
+with FragmentFixture() as server:
+    owner = threading.Thread(target=server.serve_forever, daemon=True)
+    owner.start()
+    try:
+        run = subprocess.run([test, "--fragments", f"http://127.0.0.1:{server.server_port}"],
+                             capture_output=True, text=True, timeout=15)
+        assert run.returncode == 0, (run.stdout, run.stderr)
+        expected = b'{"a":"' + (b"fragment" * 37500) + b'"}'
+        with server.lock:
+            receipts = list(server.receipts)
+        assert [path for path, payload in receipts] == ["/fragments", "/redirect-307", "/fragments-again"], receipts
+        assert all(payload == expected for path, payload in receipts), [len(p) for _, p in receipts]
+        print(run.stdout.strip())
+    finally:
+        server.shutdown()
+        owner.join(timeout=5)
+

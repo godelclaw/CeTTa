@@ -4,11 +4,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "byte_fragment.h"
 
 /* Native bytes only: no arena atoms or evaluator callbacks cross this API.
  * One thread owns all easy handles and runs prepare/observe. The multi handle
  * is touched elsewhere only through curl_multi_wakeup. */
 typedef struct CettaHttpWorker CettaHttpWorker;
+#define CETTA_HTTP_BODY_FRAGMENTS_MAX 1024u
 
 typedef struct {
     size_t jobs, request_bytes, response_bytes;
@@ -25,8 +27,14 @@ typedef struct {
     const char *method, *url;
     const char *const *headers;      /* complete header lines */
     size_t header_count;
+    /* A body is raw bytes, copied once on admission, or immutable fragments
+     * sent in order: each fragment is retained on admission and released
+     * when the job is retired, and no byte of it is copied. Set one or
+     * neither; a request with both is invalid. */
     const void *body;
     size_t body_size;
+    CettaByteFragment *const *body_fragments;
+    size_t body_fragment_count;
     uint32_t timeout_ms;
     /* Independent connect, first body byte, and subsequent body idle limits.
      * Zero disables first/idle; zero connect preserves the legacy total cap.
@@ -132,7 +140,8 @@ CettaHttpWorkerLimits cetta_http_worker_default_limits(void);
 CettaHttpWorkerStatus cetta_http_worker_new(const CettaHttpWorkerLimits *limits,
     const CettaHttpWorkerHooks *hooks, CettaHttpWorker **out);
 
-/* Copies request bytes on admission. The handle becomes usable after OK.
+/* Copies request bytes on admission, except body fragments, which it
+ * retains. The handle becomes usable after OK.
  * Outstanding jobs and owned request/body
  * buffers are bounded, including completed but unacknowledged results. Curl,
  * TLS and resolver internals have additional implementation-owned memory. */
