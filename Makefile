@@ -48210,6 +48210,21 @@ test-llm-library-v1:
 	@exit 1
 endif
 
+# Conversation encoding is linear in the conversation: PeTTa encodes 100, 400
+# and 1,600 messages in three shapes, and a per-message append is the
+# negative control the check must reject.
+.PHONY: test-llm-conversation-growth-v1
+ifeq ($(ENABLE_JSON_GSLT),1)
+test-llm-conversation-growth-v1: $(BIN) test-library-spellings-v1 lib/llm.metta \
+		tests/support/check_llm_conversation_growth.py
+	@python3 tests/support/check_llm_conversation_growth.py "$(abspath $(BIN))"
+test-all: test-llm-conversation-growth-v1
+else
+test-llm-conversation-growth-v1:
+	@echo 'test-llm-conversation-growth-v1 requires ENABLE_JSON_GSLT=1' >&2
+	@exit 1
+endif
+
 ifeq ($(HTTP_ENABLED)$(ENABLE_JSON_GSLT),11)
 test-llm-io-v1: $(BIN) test-library-spellings-v1 lib/llm/io.metta \
 		tests/support/test_llm_io_v1.py

@@ -134,6 +134,18 @@
        (let $earlier (llm:v1:failure-in $head)
          (case $earlier (((llm:v1:failure $first) (llm:v1:failure $first)) ($none (llm:v1:failure $code))))))
       ($list (cons-atom $head $list)))))
+; Newest-first accumulation: items in order go onto a newest-first list, and
+; a failure on either side stays the first failure, as llm:v1:append keeps it.
+(= (llm:v1:prepend-reversed $items $out)
+   (case $out
+     (((llm:v1:failure $code) (llm:v1:failure $code))
+      ($ready (case $items
+        (((llm:v1:failure $code) (llm:v1:failure $code))
+         ($list (llm:v1:reverse-onto $list $ready))))))))
+(= (llm:v1:in-order $newest-first)
+   (case $newest-first
+     (((llm:v1:failure $code) (llm:v1:failure $code))
+      ($list (llm:v1:reverse-onto $list ())))))
 (= (llm:v1:count $value)
    (if
      (== $value JsonNull)
@@ -584,79 +596,144 @@
                    (JsonObject ((JsonPair "role" $raw-role) (JsonPair "content" (JsonArray $blocks)))))
                  (llm:v1:validated ($ignored) $validated-output-21)))
              (llm:v1:failure unsupported-message-role)))))))
+; The conversation is built newest first and put in order once, so a message
+; costs its own size, however long the conversation. $turns holds finished
+; turns newest first. $open is the turn adjacent messages of its role still
+; join: (llm:v1:turn FIRST BLOCKS JOINED RESULTS-ONLY), BLOCKS newest first
+; (or the turn's first failure), JOINED once a second message has joined it,
+; and RESULTS-ONLY while every block is a tool result. A failed message is a
+; finished turn of its own, so the first failure in message order is the one
+; the wire check finds.
 (= (llm:v1:anthropic-conversation $messages $role-policy $system $conversation)
+   (llm:v1:anthropic-turns $messages $role-policy $system $conversation ()))
+(= (llm:v1:anthropic-turns $messages $role-policy $system $turns $open)
    (if
      (== $messages ())
-     (llm:v1:conversation $system $conversation)
+     (let* (($closed (llm:v1:close-turn $open $turns))
+             ($instructions (llm:v1:in-order $system))
+             ($conversation (llm:v1:reverse-onto $closed ())))
+       (llm:v1:conversation $instructions $conversation))
      (let* (($head (car-atom $messages))
              ($tail (cdr-atom $messages))
              ($raw-role (llm:v1:required $head "role"))
              ($role (llm:v1:text $raw-role)))
        (if
          (or (== $role "system") (== $role "developer"))
-         (if
-           (not (== $conversation ()))
-           (llm:v1:failure late-system-instructions)
-           (if
-             (and (== $role "developer") (not (== $role-policy (JsonString "merge-system-developer"))))
-             (llm:v1:failure unsupported-developer-role)
-             (let* (($content (llm:v1:get $head "content"))
-                     ($blocks (llm:v1:text-blocks $content))
-                     ($next (llm:v1:append $system $blocks)))
-               (llm:v1:anthropic-conversation $tail $role-policy $next $conversation))))
+         (let
+           $refusal
+           (llm:v1:instruction-refusal $role $role-policy $turns $open)
+           (case
+             $refusal
+             (((llm:v1:failure $code) (llm:v1:refused-conversation $code $system $turns $open))
+               ($admitted
+                 (let* (($content (llm:v1:get $head "content"))
+                         ($blocks (llm:v1:text-blocks $content))
+                         ($next (llm:v1:prepend-reversed $blocks $system)))
+                   (llm:v1:anthropic-turns $tail $role-policy $next $turns $open))))))
          (let* (($message (llm:v1:anthropic-message $head))
-                 ($next-22 (llm:v1:merge-anthropic $conversation $message)))
-           (llm:v1:anthropic-conversation $tail $role-policy $system $next-22))))))
-; Merge only adjacent equal roles; a new tool result cannot follow user text.
-(= (llm:v1:merge-anthropic $messages $message)
-   (case $messages
+                 ($joined (llm:v1:join-turn $open $message)))
+           (case
+             $joined
+             (((llm:v1:joined $next-open)
+                (llm:v1:anthropic-turns $tail $role-policy $system $turns $next-open))
+               ($separate
+                 (let* (($next-turns (llm:v1:close-turn $open $turns))
+                         ($opened (llm:v1:open-turn $message)))
+                   (llm:v1:anthropic-turns $tail $role-policy $system $next-turns $opened))))))))))
+(= (llm:v1:instruction-refusal $role $role-policy $turns $open)
+   (if
+     (not (and (== $turns ()) (== $open ())))
+     (llm:v1:failure late-system-instructions)
+     (if
+       (and (== $role "developer") (not (== $role-policy (JsonString "merge-system-developer"))))
+       (llm:v1:failure unsupported-developer-role)
+       True)))
+; A refused instruction is the outcome unless an earlier message failed: the
+; conversation so far then carries that earlier failure to the wire check.
+(= (llm:v1:refused-conversation $code $system $turns $open)
+   (let* (($closed (llm:v1:close-turn $open $turns))
+           ($earlier (llm:v1:failure-in ($system $closed))))
+     (case
+       $earlier
+       (((llm:v1:failure $first)
+          (let* (($instructions (llm:v1:in-order $system))
+                  ($conversation (llm:v1:reverse-onto $closed ())))
+            (llm:v1:conversation $instructions $conversation)))
+         ($none (llm:v1:failure $code))))))
+(= (llm:v1:open-turn $message)
+   (case
+     $message
      (((llm:v1:failure $code) (llm:v1:failure $code))
-      ($list (llm:v1:merge-anthropic-list $messages $message)))))
-(= (llm:v1:merge-anthropic-list $messages $message)
+       ($object
+         (let* (($content (llm:v1:get $message "content"))
+                 ($blocks (llm:v1:array $content))
+                 ($results-only (llm:v1:tool-results? $blocks))
+                 ($newest-first (llm:v1:prepend-reversed $blocks ())))
+           (llm:v1:turn $message $newest-first False $results-only))))))
+; Merge only adjacent equal roles; a new tool result cannot follow user text.
+; Once the turn holds a failure, that earlier failure is kept.
+(= (llm:v1:join-turn $open $message)
+   (case
+     $open
+     (((llm:v1:turn $first $blocks $joined $results-only)
+        (let* (($old-role (llm:v1:get $first "role"))
+                ($new-role (llm:v1:get $message "role")))
+          (if
+            (== $old-role $new-role)
+            (let* (($content (llm:v1:get $message "content"))
+                    ($new (llm:v1:array $content))
+                    ($late (llm:v1:late-tool-result? $new-role $new $blocks $results-only))
+                    ($next (llm:v1:prepend-reversed $new $blocks))
+                    ($next-results-only (if $results-only (llm:v1:tool-results? $new) False)))
+              (if
+                $late
+                (llm:v1:joined (llm:v1:failure late-tool-result))
+                (llm:v1:joined (llm:v1:turn $first $next True $next-results-only))))
+            separate)))
+       ($none separate))))
+(= (llm:v1:late-tool-result? $role $new $blocks $results-only)
    (if
-     (== $messages ())
-     (cons-atom $message ())
-     (let* (($head (car-atom $messages))
-             ($tail (cdr-atom $messages)))
-       (if
-         (not (== $tail ()))
-         (let $rest (llm:v1:merge-anthropic-list $tail $message) (llm:v1:cons $head $rest))
-         (let* (($old-role (llm:v1:get $head "role"))
-                 ($new-role (llm:v1:get $message "role")))
+     (== $role (JsonString "user"))
+     (case
+       $new
+       (((llm:v1:failure $code) False)
+         ($list
            (if
-             (not (== $old-role $new-role))
-             (let $pair (cons-atom $message ()) (cons-atom $head $pair))
-             (let* (($old-content (llm:v1:get $head "content"))
-                     ($old (llm:v1:array $old-content))
-                     ($new-content (llm:v1:get $message "content"))
-                     ($new (llm:v1:array $new-content))
-                     ($ignored
-                       (if
-                         (and (== $new-role (JsonString "user")) (not (== $new ())))
-                         (let* (($first (car-atom $new))
-                                 ($type (llm:v1:get $first "type")))
-                           (if
-                             (== $type (JsonString "tool_result"))
-                             (llm:v1:only-tool-results $old)
-                             True))
-                         True))
-                     ($both (llm:v1:append $old $new))
-                     ($merged (llm:v1:with $head "content" (JsonArray $both))))
-               (let
-                 $validated-output-23
-                 (cons-atom $merged ())
-                 (llm:v1:validated ($ignored) $validated-output-23)))))))))
-(= (llm:v1:only-tool-results $blocks)
+             (== $list ())
+             False
+             (let* (($first (car-atom $list))
+                     ($kind (llm:v1:get $first "type")))
+               (if
+                 (== $kind (JsonString "tool_result"))
+                 (case $blocks (((llm:v1:failure $earlier) False) ($ready (not $results-only))))
+                 False))))))
+     False))
+(= (llm:v1:tool-results? $blocks)
+   (case
+     $blocks
+     (((llm:v1:failure $code) False)
+       ($list
+         (if
+           (== $list ())
+           True
+           (let* (($head (car-atom $list))
+                   ($tail (cdr-atom $list))
+                   ($kind (llm:v1:get $head "type")))
+             (if (== $kind (JsonString "tool_result")) (llm:v1:tool-results? $tail) False)))))))
+(= (llm:v1:close-turn $open $turns)
    (if
-     (== $blocks ())
-     True
-     (let* (($head (car-atom $blocks))
-             ($tail (cdr-atom $blocks))
-             ($kind (llm:v1:get $head "type")))
-       (if
-         (== $kind (JsonString "tool_result"))
-         (llm:v1:only-tool-results $tail)
-         (llm:v1:failure late-tool-result)))))
+     (== $open ())
+     $turns
+     (let $turn (llm:v1:finished-turn $open) (cons-atom $turn $turns))))
+(= (llm:v1:finished-turn $open)
+   (case
+     $open
+     (((llm:v1:turn $first $blocks $joined $results-only)
+        (if
+          $joined
+          (let $in-order (llm:v1:in-order $blocks) (llm:v1:with $first "content" (JsonArray $in-order)))
+          $first))
+       ($failure $failure))))
 (= (llm:v1:response-message $message $role-policy)
    (let* (($role (llm:v1:required $message "role"))
            ($content (llm:v1:get $message "content"))
@@ -719,10 +796,13 @@
              $validated-output-27
              (llm:v1:append $first $tools)
              (llm:v1:validated ($ignored $ignored-role) $validated-output-27)))))))
+; Built newest first and put in order once, as the Anthropic conversation is.
 (= (llm:v1:response-conversation $messages $role-policy $system $items)
    (if
      (== $messages ())
-     (llm:v1:conversation $system $items)
+     (let* (($instructions (llm:v1:reverse-onto $system ()))
+             ($input (llm:v1:in-order $items)))
+       (llm:v1:conversation $instructions $input))
      (let* (($head (car-atom $messages))
              ($tail (cdr-atom $messages))
              ($role (llm:v1:required $head "role")))
@@ -732,18 +812,30 @@
            (or (== $role (JsonString "system")) (== $role (JsonString "developer"))))
          (if
            (not (== $items ()))
-           (llm:v1:failure late-system-instructions)
+           (llm:v1:refused-items late-system-instructions $system $items)
+           ; This instruction's failure is the outcome, whatever follows.
            (let* (($text (llm:v1:required $head "content"))
-                   ($checked (llm:v1:text $text))
-                   ($single (cons-atom $text ()))
-                   ($next (llm:v1:append $system $single)))
-             (let
-               $validated-output-29
-               (llm:v1:response-conversation $tail $role-policy $next $items)
-               (llm:v1:validated ($checked) $validated-output-29))))
+                   ($checked (llm:v1:text $text)))
+             (case
+               $checked
+               (((llm:v1:failure $code) (llm:v1:failure $code))
+                 ($valid
+                   (let $next (cons-atom $text $system)
+                     (llm:v1:response-conversation $tail $role-policy $next $items)))))))
          (let* (($new (llm:v1:response-message $head $role-policy))
-                 ($next-30 (llm:v1:append $items $new)))
+                 ($next-30 (llm:v1:prepend-reversed $new $items)))
            (llm:v1:response-conversation $tail $role-policy $system $next-30))))))
+(= (llm:v1:refused-items $code $system $items)
+   (let
+     $earlier
+     (llm:v1:failure-in $items)
+     (case
+       $earlier
+       (((llm:v1:failure $first)
+          (let* (($instructions (llm:v1:reverse-onto $system ()))
+                  ($input (llm:v1:in-order $items)))
+            (llm:v1:conversation $instructions $input)))
+         ($none (llm:v1:failure $code))))))
 (= (llm:v1:tools $protocol $tools)
    (if
      (== $tools ())
@@ -811,13 +903,18 @@
      (JsonObject ((JsonPair "type" (JsonString "ephemeral")) (JsonPair "ttl" $ttl)))))
 (= (llm:v1:cache-last $blocks)
    (let $marker (llm:v1:cache-marker JsonNull) (llm:v1:cache-last-with $marker $blocks)))
+; Failed blocks stay that failure; marking would rewrite its code.
 (= (llm:v1:cache-last-with $marker $blocks)
+   (case $blocks
+     (((llm:v1:failure $code) (llm:v1:failure $code))
+      ($list (llm:v1:cache-last-list $marker $list)))))
+(= (llm:v1:cache-last-list $marker $blocks)
    (if (== $blocks ()) ()
      (let* (($head (car-atom $blocks)) ($tail (cdr-atom $blocks)))
        (if (== $tail ())
          (let $cached (llm:v1:with $head "cache_control" $marker)
            (cons-atom $cached ()))
-         (let $rest (llm:v1:cache-last-with $marker $tail) (cons-atom $head $rest))))))
+         (let $rest (llm:v1:cache-last-list $marker $tail) (cons-atom $head $rest))))))
 ; A growing conversation caches at its newest user message and at the user
 ; message that ended the previous request, so each call reads the prefix the
 ; previous call wrote and writes only the new turn.
@@ -973,10 +1070,12 @@
          $validated-output-33))))
 (= (llm:v1:join-text $separator $items)
    (if (== $items ()) ""
-     (let* (($head (car-atom $items)) ($text (llm:v1:text $head)) ($tail (cdr-atom $items)))
-       (if (== $tail ()) $text
-         (let* (($rest (llm:v1:join-text $separator $tail)) ($suffix (str:concat $separator $rest)))
-           (str:concat $text $suffix))))))
+     (let $texts (llm:v1:texts $items) (str:join $separator $texts))))
+(= (llm:v1:texts $items)
+   (if (== $items ()) ()
+     (let* (($head (car-atom $items)) ($text (llm:v1:text $head)) ($tail (cdr-atom $items))
+            ($rest (llm:v1:texts $tail)))
+       (llm:v1:cons $text $rest))))
 (= (llm:v1:encode $protocol $text)
    (function
      (case
@@ -1233,6 +1332,8 @@
 (: llm:v1:with (-> Atom Atom Atom %Undefined%))
 (: llm:v1:without (-> Atom Atom %Undefined%))
 (: llm:v1:append (-> Atom Atom %Undefined%))
+(: llm:v1:prepend-reversed (-> Atom Atom %Undefined%))
+(: llm:v1:in-order (-> Atom %Undefined%))
 (: llm:v1:cons (-> Atom Atom %Undefined%))
 (: llm:v1:count (-> Atom %Undefined%))
 (: llm:v1:counter (-> Atom Atom %Undefined%))
@@ -1263,16 +1364,24 @@
 (: llm:v1:reasoning (-> Atom Atom %Undefined%))
 (: llm:v1:anthropic-message (-> Atom %Undefined%))
 (: llm:v1:anthropic-conversation (-> Atom Atom Atom Atom %Undefined%))
-(: llm:v1:merge-anthropic (-> Atom Atom %Undefined%))
-(: llm:v1:merge-anthropic-list (-> Atom Atom %Undefined%))
-(: llm:v1:only-tool-results (-> Atom %Undefined%))
+(: llm:v1:anthropic-turns (-> Atom Atom Atom Atom Atom %Undefined%))
+(: llm:v1:instruction-refusal (-> Atom Atom Atom Atom %Undefined%))
+(: llm:v1:refused-conversation (-> Atom Atom Atom Atom %Undefined%))
+(: llm:v1:open-turn (-> Atom %Undefined%))
+(: llm:v1:join-turn (-> Atom Atom %Undefined%))
+(: llm:v1:late-tool-result? (-> Atom Atom Atom Atom %Undefined%))
+(: llm:v1:tool-results? (-> Atom %Undefined%))
+(: llm:v1:close-turn (-> Atom Atom %Undefined%))
+(: llm:v1:finished-turn (-> Atom %Undefined%))
 (: llm:v1:response-message (-> Atom Atom %Undefined%))
 (: llm:v1:response-conversation (-> Atom Atom Atom Atom %Undefined%))
+(: llm:v1:refused-items (-> Atom Atom Atom %Undefined%))
 (: llm:v1:tools (-> Atom Atom %Undefined%))
 (: llm:v1:tool-choice (-> Atom Atom Atom Atom %Undefined%))
 (: llm:v1:cache-last (-> Atom %Undefined%))
 (: llm:v1:cache-marker (-> Atom %Undefined%))
 (: llm:v1:cache-last-with (-> Atom Atom %Undefined%))
+(: llm:v1:cache-last-list (-> Atom Atom %Undefined%))
 (: llm:v1:cache-message (-> Atom Atom %Undefined%))
 (: llm:v1:reverse-onto (-> Atom Atom %Undefined%))
 (: llm:v1:cache-newest (-> Atom Atom Atom %Undefined%))
@@ -1281,6 +1390,7 @@
 (: llm:v1:extensions (-> Atom Atom %Undefined%))
 (: llm:v1:encode-value (-> Atom Atom %Undefined%))
 (: llm:v1:join-text (-> Atom Atom %Undefined%))
+(: llm:v1:texts (-> Atom %Undefined%))
 (: llm:v1:encode (-> %Undefined% %Undefined% %Undefined%))
 (: llm:v1:protocol (-> Atom %Undefined%))
 (: llm:v1:request-fields (-> Atom %Undefined%))

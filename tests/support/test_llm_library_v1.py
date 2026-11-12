@@ -260,6 +260,51 @@ class CodecFixtures(unittest.TestCase):
         self.assertEqual(self.each_dialect([expression for expression, _ in cases]),
                          [expected for _, expected in cases])
 
+    def test_conversations_join_turns_in_order_and_keep_the_first_failure(self):
+        calls = [{"id": f"c{k}", "type": "function", "function": {"name": "nop", "arguments": "{}"}}
+                 for k in range(40)]
+        results = [{"role": "tool", "tool_call_id": f"c{k}", "content": f"r{k}"} for k in range(40)]
+        messages = ([{"role": "system", "content": f"rule {k}"} for k in range(3)]
+                    + [{"role": "user", "content": "go"}, {"role": "assistant", "content": "", "tool_calls": calls}]
+                    + results + [{"role": "user", "content": "next"}, {"role": "assistant", "content": "done"}])
+        request = {"model": "fixture-model", "max_tokens": 42, "messages": messages,
+                   "role_policy": "merge-system-developer"}
+        bad_block = {"role": "user", "content": [{"type": "text", "text": "a"}, {"type": "text", "text": 4}]}
+        def failing(*middle, **fields):
+            return {"model": "fixture-model", "max_tokens": 42, "role_policy": "merge-system-developer",
+                    "messages": [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"},
+                                 *middle], **fields}
+        anthropic, responses, earlier, cached, cached_system, instruction = self.each_dialect([
+            self.encode("anthropic", request), self.encode("responses", request),
+            # A tool result after a failed user turn reports that earlier failure.
+            self.encode("anthropic", failing(bad_block, results[0], {"role": "system", "content": "late"})),
+            # Cache marking keeps a failed turn's or instruction's own code.
+            self.encode("anthropic", failing(bad_block, cache_messages=True)),
+            self.encode("anthropic", {"model": "fixture-model", "max_tokens": 42, "messages": [
+                {"role": "system", "content": [{"type": "text", "text": 4}]}, {"role": "user", "content": "q"}]}),
+            # The first failing instruction wins over everything after it.
+            self.encode("responses", {**failing(), "messages": [
+                {"role": "system", "content": "ok"}, {"role": "system", "content": 4},
+                {"role": "user", "content": 5}, {"role": "system", "content": "late"}]})])
+        turns = anthropic["messages"]
+        self.assertEqual([t["role"] for t in turns], ["user", "assistant", "user", "assistant"])
+        joined = turns[2]
+        # A joined turn names its content first, as it always has on the wire.
+        self.assertEqual(list(joined), ["content", "role"])
+        self.assertEqual(list(turns[0]), ["role", "content"])
+        self.assertEqual([b.get("tool_use_id") for b in joined["content"][:-1]], [f"c{k}" for k in range(40)])
+        self.assertEqual(joined["content"][-1]["text"], "next")
+        self.assertEqual([b["text"] for b in anthropic["system"]], ["rule 0", "rule 1", "rule 2"])
+        self.assertEqual([t["id"] for t in turns[1]["content"] if t["type"] == "tool_use"],
+                         [f"c{k}" for k in range(40)])
+        self.assertEqual(responses["instructions"], "rule 0\n\nrule 1\n\nrule 2")
+        self.assertEqual([i.get("call_id") for i in responses["input"][1:]],
+                         [f"c{k}" for k in range(40)] * 2 + [None, None])
+        self.assertEqual(responses["input"][-2], {"role": "user", "content": "next"})
+        self.assertEqual((earlier, cached, cached_system, instruction),
+                         ("ERROR:expected-string", "ERROR:expected-string", "ERROR:expected-string",
+                          "ERROR:expected-string"))
+
     def test_nested_and_escaped_duplicate_keys_remain_rejected(self):
         wire = ('{"content":[{"type":"tool_use","id":"call","name":"nop",'
                 '"input":{"key":1,"\\u006bey":2}}],"stop_reason":"tool_use"}')
