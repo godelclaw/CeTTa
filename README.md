@@ -1,5 +1,9 @@
 # CeTTa
 
+> **This branch continues as [`experimental`](https://github.com/godelclaw/CeTTa/tree/experimental).**
+> `cetta-ours` stays at the commit where `experimental` began; new work, merges
+> and the engine the agents run are on `experimental`.
+
 CeTTa is a C runtime for the MeTTa family of languages. One binary reads and
 runs several MeTTa dialects over one shared substrate (atoms, spaces,
 matching, indexing and memory management), and it hosts native proof kernels
