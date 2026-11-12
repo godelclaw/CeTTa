@@ -250,7 +250,9 @@
 
 ; final requests a pending-scalar flush; it does not certify OS EOF. An empty chunk
 ; with final=False is not end. strict refuses malformed input; ignore erases
-; malformed bytes explicitly. Returned text is valid UTF-8, NUL included.
+; malformed bytes explicitly; replace writes one U+FFFD for each maximal
+; subpart (Unicode 3.9), as WHATWG and Python's errors='replace' decode.
+; Returned text is valid UTF-8, NUL included.
 (= (str:utf8-feed $state $bytes $final)
    (function (chain (eval (__cetta_lib_str_value utf8-feed ($state $bytes $final))) $result
      (return $result))))

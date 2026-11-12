@@ -109,6 +109,21 @@ static inline bool cetta_utf8_incomplete_prefix(const uint8_t *bytes, size_t len
     return true;
 }
 
+/* The length of the maximal subpart at an ill-formed position (Unicode 3.9,
+ * "U+FFFD Substitution of Maximal Subparts", as WHATWG decoders and Python's
+ * errors='replace' apply it): the longest proper prefix of a well-formed
+ * sequence starting there, or one byte when no well-formed sequence can
+ * start there. Each maximal subpart becomes one U+FFFD. */
+static inline size_t cetta_utf8_maximal_subpart(const uint8_t *bytes, size_t len, size_t pos) {
+    size_t best = 1u;
+    if (!bytes || pos >= len) return best;
+    for (size_t k = 2u; k <= 3u && pos + k <= len; k++) {
+        if (!cetta_utf8_incomplete_prefix(bytes + pos, k)) break;
+        best = k;
+    }
+    return best;
+}
+
 /* The UTF-8 encoding of a scalar value, NUL included, into four bytes. */
 static inline size_t cetta_utf8_encode(uint32_t scalar, uint8_t out[4]) {
     if (scalar < 0x80u) {

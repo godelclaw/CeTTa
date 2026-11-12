@@ -540,8 +540,8 @@
     {
       "source": "str.metta",
       "output": "str.metta",
-      "source_sha256": "75d9f6dded08f124cfc80ff88d5168f42b1a4a1458e03e1c1b304bf7873c8964",
-      "output_sha256": "4061315f7516c14dc1151e21b948f3593025ab7700e633d3d3a0d7da417a0b65",
+      "source_sha256": "c7ceb6265c539f003b58c6727ae19a218534952caa17db29ee1b5b655752cc1d",
+      "output_sha256": "30792aafafe9ecffe684c2d4edc3dff5caf0369d09426f6df7371a9448dde1b3",
       "edits": 52,
       "code_diagnostics": 0,
       "dialect_replacements": 4

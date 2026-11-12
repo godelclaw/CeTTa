@@ -44,8 +44,9 @@ static Atom *decoder(Arena *arena, Atom *policy, const char *tail, size_t length
 }
 
 Atom *cetta_str_utf8_new(Arena *arena, Atom *const *args, CettaStrRefusal *refusal) {
-    if (!atom_is_symbol(args[0], "strict") && !atom_is_symbol(args[0], "ignore"))
-        return expects(refusal, "expected strict or ignore UTF-8 policy");
+    if (!atom_is_symbol(args[0], "strict") && !atom_is_symbol(args[0], "ignore") &&
+        !atom_is_symbol(args[0], "replace"))
+        return expects(refusal, "expected strict, ignore or replace UTF-8 policy");
     return decoder(arena, args[0], "", 0u, 0);
 }
 
@@ -59,8 +60,8 @@ Atom *cetta_str_utf8_feed(Arena *arena, Atom *const *args, CettaStrRefusal *refu
         !bytes_arg(args[1], &bytes, &length) || !bool_arg(args[2], &final))
         return expects(refusal, "expected UTF-8 decoder state, bytes and final Boolean");
     Atom *policy = state->expr.elems[1], *count = state->expr.elems[3];
-    bool strict = atom_is_symbol(policy, "strict");
-    if ((!strict && !atom_is_symbol(policy, "ignore")) || count->kind != ATOM_GROUNDED ||
+    bool strict = atom_is_symbol(policy, "strict"), replace = atom_is_symbol(policy, "replace");
+    if ((!strict && !replace && !atom_is_symbol(policy, "ignore")) || count->kind != ATOM_GROUNDED ||
         count->ground.gkind != GV_INT || count->ground.ival < 0 ||
         (uint64_t)count->ground.ival < tail_length ||
         (tail_length && !cetta_utf8_incomplete_prefix((const uint8_t *)tail, tail_length)))
@@ -93,6 +94,14 @@ Atom *cetta_str_utf8_feed(Arena *arena, Atom *const *args, CettaStrRefusal *refu
             cetta_byte_buffer_free(&out);
             free(joined);
             return refuses(refusal, "StrMalformedUtf8V1", bad);
+        } else if (replace) {
+            /* One U+FFFD per maximal subpart; the next byte starts afresh. */
+            if (!cetta_byte_buffer_append(&out, "\xef\xbf\xbd", 3u)) {
+                cetta_byte_buffer_free(&out);
+                free(joined);
+                return refuses(refusal, "StrCapacityV1", (size_t)seen);
+            }
+            offset += cetta_utf8_maximal_subpart((const uint8_t *)joined, total, offset);
         } else offset++; /* Ignoring invalid bytes must not discard valid neighbours. */
     }
     Atom *next = decoder(arena, policy, joined + offset, total - offset,

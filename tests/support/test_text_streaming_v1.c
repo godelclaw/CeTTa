@@ -73,6 +73,72 @@ int main(void) {
             arena_reset(&arena, mark);
         }
     }
+    /* replace: one U+FFFD per maximal subpart (Unicode 3.9). Expected bytes are
+     * Python's bytes.decode('utf-8', 'replace'): truncated, overlong, surrogate,
+     * stray-continuation and out-of-range sequences, and Table 3-8's example.
+     * Every split of each buffer must decode to the same text. */
+    Atom *replace = invoke(&arena, "utf8-new", (Atom *[]){atom_symbol(&arena, "replace")});
+    mark = arena_mark(&arena);
+    static const struct { const char *in; size_t in_len; const char *out; size_t out_len; } replaced[] = {
+        {"\x61\xc3", 2u, "\x61\xef\xbf\xbd", 4u},
+        {"\xe2\x82", 2u, "\xef\xbf\xbd", 3u},
+        {"\xe2\x82\x61", 3u, "\xef\xbf\xbd\x61", 4u},
+        {"\xf0\x9f\x98", 3u, "\xef\xbf\xbd", 3u},
+        {"\xf0\x9f\x98\x61", 4u, "\xef\xbf\xbd\x61", 4u},
+        {"\xc0\x80", 2u, "\xef\xbf\xbd\xef\xbf\xbd", 6u},
+        {"\xc1\xbf", 2u, "\xef\xbf\xbd\xef\xbf\xbd", 6u},
+        {"\xe0\x80\x80", 3u, "\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd", 9u},
+        {"\xe0\x9f\xbf", 3u, "\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd", 9u},
+        {"\xf0\x80\x80\x80", 4u, "\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd", 12u},
+        {"\xf0\x8f\xbf\xbf", 4u, "\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd", 12u},
+        {"\xed\xa0\x80", 3u, "\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd", 9u},
+        {"\xed\xbf\xbf", 3u, "\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd", 9u},
+        {"\x80", 1u, "\xef\xbf\xbd", 3u},
+        {"\x80\xbf", 2u, "\xef\xbf\xbd\xef\xbf\xbd", 6u},
+        {"\x61\x80\x62", 3u, "\x61\xef\xbf\xbd\x62", 5u},
+        {"\xbf\xbf\xbf", 3u, "\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd", 9u},
+        {"\xf4\x90\x80\x80", 4u, "\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd", 12u},
+        {"\xf5\x80\x80\x80", 4u, "\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd", 12u},
+        {"\xff", 1u, "\xef\xbf\xbd", 3u},
+        {"\xfe\xff", 2u, "\xef\xbf\xbd\xef\xbf\xbd", 6u},
+        {"\xe2\x82\xac\xe2\x82", 5u, "\xe2\x82\xac\xef\xbf\xbd", 6u},
+        {"\x61\xf1\x80\x80\xe1\x80\xc2\x62\x80\x63\x80\xbf\x64", 13u, "\x61\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\x62\xef\xbf\xbd\x63\xef\xbf\xbd\xef\xbf\xbd\x64", 22u},
+        {"\xf1\x80\x80", 3u, "\xef\xbf\xbd", 3u},
+        {"\xe1\x80", 2u, "\xef\xbf\xbd", 3u},
+        {"\xc2", 1u, "\xef\xbf\xbd", 3u},
+        {"\xf4\x8f\xbf\xbf", 4u, "\xf4\x8f\xbf\xbf", 4u},
+        {"\xef\xbf\xbd", 3u, "\xef\xbf\xbd", 3u},
+    };
+    for (size_t i = 0u; i < sizeof(replaced) / sizeof(replaced[0]); i++) {
+        Atom *whole = feed(&arena, replace, replaced[i].in, replaced[i].in_len, true);
+        check(same_bytes(whole->expr.elems[1], replaced[i].out, replaced[i].out_len));
+        check(atom_string_len(whole->expr.elems[2]->expr.elems[2]) == 0u);
+        for (size_t split = 0u; split <= replaced[i].in_len; split++) {
+            Atom *prefix = feed(&arena, replace, replaced[i].in, split, false);
+            Atom *suffix = feed(&arena, prefix->expr.elems[2], replaced[i].in + split, replaced[i].in_len - split, true);
+            size_t a = atom_string_len(prefix->expr.elems[1]), b = atom_string_len(suffix->expr.elems[1]);
+            check(a + b == replaced[i].out_len);
+            check(!memcmp(prefix->expr.elems[1]->ground.sval, replaced[i].out, a));
+            check(!memcmp(suffix->expr.elems[1]->ground.sval, replaced[i].out + a, b));
+        }
+        arena_reset(&arena, mark);
+    }
+    for (unsigned first = 0; first < 256u; first++) {
+        for (unsigned second = 0; second < 256u; second++) {
+            char bytes[2] = {(char)first, (char)second};
+            Atom *whole = feed(&arena, replace, bytes, sizeof(bytes), true);
+            for (size_t split = 0u; split <= sizeof(bytes); split++) {
+                Atom *prefix = feed(&arena, replace, bytes, split, false);
+                Atom *suffix = feed(&arena, prefix->expr.elems[2], bytes + split, sizeof(bytes) - split, true);
+                Atom *left = prefix->expr.elems[1], *right = suffix->expr.elems[1], *expected = whole->expr.elems[1];
+                size_t a = atom_string_len(left), b = atom_string_len(right);
+                check(a + b == atom_string_len(expected));
+                check(!memcmp(left->ground.sval, expected->ground.sval, a));
+                check(!memcmp(right->ground.sval, expected->ground.sval + a, b));
+            }
+            arena_reset(&arena, mark);
+        }
+    }
     const uint32_t scalars[] = {0u, 0x7fu, 0x80u, 0x7ffu, 0x800u, 0xd7ffu, 0xe000u,
         0xffffu, 0x10000u, 0x10ffffu, 0x130u, 0x131u, 0x17fu, 0x212au, 0x2028u, 0x2029u};
     for (size_t i = 0; i < sizeof(scalars) / sizeof(scalars[0]); i++) {

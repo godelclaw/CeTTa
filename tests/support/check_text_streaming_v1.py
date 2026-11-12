@@ -145,7 +145,7 @@ def main():
     buffers += [rng.randbytes(rng.randrange(1, 24)) for _ in range(24)]
     decoder_cases = []
     for data in buffers:
-        for policy in ("strict", "ignore"):
+        for policy in ("strict", "ignore", "replace"):
             for cut in sorted({0, 1 if data else 0, len(data) // 2, len(data)}):
                 reference = codecs.getincrementaldecoder("utf-8")(errors=policy)
                 try:
