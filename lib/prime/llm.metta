@@ -984,7 +984,7 @@
      (case
        (car-atom $pairs)
        (((JsonPair $key $value) (let* (($present (llm:v1:get $body $key)) ($reserved (llm:v1:member? $key ("model" "messages" "input" "max_tokens" "max_completion_tokens" "max_output_tokens" "stream"))) ($tail (cdr-atom $pairs))) (if (or $reserved (not (== $present JsonNull))) (llm:v1:failure conflicting-extension) (let $next (llm:v1:with $body $key $value) (llm:v1:extensions $tail $next)){$next})){$present $reserved $tail}))){$key $value}))
-(= (llm:v1:encode-value $protocol $request)
+(= (llm:v1:wire-value $protocol $request)
    (let* (($version (llm:v1:version $protocol))
            ($model (llm:v1:required $request "model"))
            ($checked-request (llm:v1:request-fields $request))
@@ -1058,7 +1058,6 @@
                  (((JsonObject $pairs) $pairs) ($bad (llm:v1:failure expected-object)))){$pairs $bad}))
            ($wire (llm:v1:extensions $extensions $with-reasoning))
            ($checked-wire (llm:v1:checked $wire))
-           ($body-text (llm:v1:render $checked-wire))
            ($path
              (case
                $protocol
@@ -1067,7 +1066,7 @@
                  ("chat-completions" "/chat/completions")))))
      (let
        $validated-output-33
-       (llm:v1:encoded $path $body-text)
+       (llm:v1:wire $path $checked-wire)
        (llm:v1:validated
          ($version $checked-request $model-name $ignored-count $ignored-stream $valid-messages $valid-options $choice-tools-ready)
          $validated-output-33))))
@@ -1093,11 +1092,65 @@
 (= (llm:v1:decode-parsed $protocol $value)
    (case $value (((llm:v1:failure $code) (llm:v1:failure $code))
      ($wire (llm:v1:decoded $protocol $wire)))))
-(= (llm:v1:encode-parsed $protocol $value)
+(= (llm:v1:wire-parsed $protocol $value)
    (case $value (((llm:v1:failure $code) (llm:v1:failure $code))
      ($request (let $validation (llm:v1:validate-request $request)
        (case $validation (((llm:v1:failure $code) (llm:v1:failure $code))
-         ($ok (llm:v1:encode-value $protocol $request)))){$code $ok}){$validation}))){$code})
+         ($ok (llm:v1:wire-value $protocol $request)))){$code $ok}){$validation}))){$code})
+(= (llm:v1:encode-parsed $protocol $value)
+   (let $wire (llm:v1:wire-parsed $protocol $value) (llm:v1:rendered $wire)))
+; A request's wire is its path and its checked body, still a JSON value. The
+; text entries render it here; the value entries hand it to the caller.
+(= (llm:v1:encode-value $protocol $request)
+   (let $wire (llm:v1:wire-value $protocol $request) (llm:v1:rendered $wire)))
+(= (llm:v1:rendered $wire)
+   (case $wire
+     (((llm:v1:wire $path $body)
+       (let $text (llm:v1:render $body) (llm:v1:encoded $path $text)){$text})
+      ($failure $failure))))
+; A failed body is the wire's failure.
+(= (llm:v1:wire-checked $wire)
+   (case $wire
+     (((llm:v1:wire $path (llm:v1:failure $code)) (llm:v1:failure $code))
+      ($other $other))))
+; A value entry holds its value to the parser's contract: no object repeats
+; a key. Text with a repeated key never parses, so both entries refuse it.
+(= (llm:v1:held $value)
+   (if (llm:v1:distinct? $value) $value (llm:v1:failure invalid-or-ambiguous-json)))
+(= (llm:v1:distinct? $value)
+   (case $value
+     (((JsonObject $pairs) (llm:v1:distinct-pairs? $pairs ()))
+      ((JsonArray $items) (llm:v1:distinct-items? $items))
+      ($scalar True))))
+(= (llm:v1:distinct-pairs? $pairs $seen)
+   (if (== $pairs ()) True
+     (case (car-atom $pairs)
+       (((JsonPair $key $value)
+         (if (llm:v1:member? $key $seen) False
+           (if (llm:v1:distinct? $value)
+             (let* (($tail (cdr-atom $pairs)) ($next (cons-atom $key $seen)))
+               (llm:v1:distinct-pairs? $tail $next)){$tail $next}
+             False)))
+        ($other True))){$key $value $other}))
+(= (llm:v1:distinct-items? $items)
+   (if (== $items ()) True
+     (let $head (car-atom $items)
+       (if (llm:v1:distinct? $head)
+         (let $tail (cdr-atom $items) (llm:v1:distinct-items? $tail)){$tail}
+         False)){$head}))
+; The wire of a request that is already a JSON value, as llm:v1:parse builds
+; it: the body is checked and left unrendered, so a caller that adjusts it
+; renders once.
+(= (llm:v1:encode-wire $protocol $value)
+   (function
+     (case
+       (let* (($name (llm:v1:protocol $protocol))
+               ($request (llm:v1:held $value))
+               ($result (llm:v1:wire-parsed $name $request)))
+         (llm:v1:wire-checked $result)){$name $request $result}
+       (((llm:v1:failure $code) (return (llm:v1:error $code)))
+         ((Error $source $reason) (return (llm:v1:error invalid-protocol-data)))
+         ($wire (return (llm:v1:ok $wire))))){$code $source $reason $wire}))
 (= (llm:v1:replay-parsed $value $choice)
    (case $value (((llm:v1:failure $code) (llm:v1:failure $code))
      ($result (llm:v1:replay-value $result $choice)))))
@@ -1392,6 +1445,15 @@
 (: llm:v1:reasoning-options (-> Atom Atom Atom %Undefined%))
 (: llm:v1:extensions (-> Atom Atom %Undefined%))
 (: llm:v1:encode-value (-> Atom Atom %Undefined%))
+(: llm:v1:wire-value (-> Atom Atom %Undefined%))
+(: llm:v1:wire-parsed (-> Atom Atom %Undefined%))
+(: llm:v1:rendered (-> Atom %Undefined%))
+(: llm:v1:wire-checked (-> Atom %Undefined%))
+(: llm:v1:held (-> Atom %Undefined%))
+(: llm:v1:distinct? (-> Atom %Undefined%))
+(: llm:v1:distinct-pairs? (-> Atom Atom %Undefined%))
+(: llm:v1:distinct-items? (-> Atom %Undefined%))
+(: llm:v1:encode-wire (-> %Undefined% %Undefined% %Undefined%))
 (: llm:v1:join-text (-> Atom Atom %Undefined%))
 (: llm:v1:texts (-> Atom %Undefined%))
 (: llm:v1:encode (-> %Undefined% %Undefined% %Undefined%))

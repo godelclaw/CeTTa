@@ -342,9 +342,9 @@
     {
       "source": "llm/command.metta",
       "output": "llm/command.metta",
-      "source_sha256": "095b412a6f8f0d3039c089fdcabec58652f8c3af07ee7e0ac917ac3ca75e3377",
-      "output_sha256": "36a1595da7f3392d7f2fbb3f8f08f04ee879cbda4c88fa113869ba7393ea9686",
-      "edits": 10,
+      "source_sha256": "5250e3b5d95e2caadd8c9df9526d80c32aded10651ccd4b5a05cc7d52e987b32",
+      "output_sha256": "771e2f271e49569f854055b83799ad693cffc099ba5dba7d56fc602c3a465fa2",
+      "edits": 12,
       "code_diagnostics": 0
     },
     {
@@ -366,9 +366,9 @@
     {
       "source": "llm.metta",
       "output": "llm.metta",
-      "source_sha256": "14b4f49dfff4ebf8c08db2bec2e7298d5e35a4082c08b7cdcfe47e2f2a541582",
-      "output_sha256": "c10fb6bf14cb8851fdb72594c69d4de2e3ccc0af7b014b73268b223dc6723783",
-      "edits": 142,
+      "source_sha256": "3e535f17f3b9719d03df82ca8e83b71f7d5bac5b8af923b7aaf6ed1f27917117",
+      "output_sha256": "d4180351adbf6e7250b6d0a553aae7a3a3af13eb1b950b18ef273cb0265e56c8",
+      "edits": 149,
       "code_diagnostics": 0
     },
     {
