@@ -18,7 +18,7 @@
 (= (ah:profile $binary $language $first $second)
    (let* (($source (ah:profile-source))
           ($wanted (if (== $language "he")
-            "[(Error first (Fault detail))]\n[1]\n[raw]\n"
+            "[()]\n[(Error first (Fault detail))]\n[1]\n[raw]\n"
             "()\n(Error first (Fault detail))\n1\nraw\n")))
      (ah:check $binary (Profiles $language $first $second)
        ("--lang" $language "--profile" $first "--profile" $second "-e" $source) $wanted)))
@@ -33,15 +33,17 @@
 (= (ah:he-listing $binary)
    (case (proc:run ($binary "--lang" "he" "--list-profiles") "." (ah:environment) 15000 1048576)
      (((proc:exited 0 $text "")
-        (if (== (size-atom (str:split "ai\tHE experimental host; failure-values is not yet supported.\n" $text)) 2) ()
+        (if (== (size-atom (str:split "ai\tHE extended host for named experiments (declaration-only).\n" $text)) 2) ()
           (let $shown (println! (ProfileListingMismatch $text)) (system:exit 1))))
       ($bad (let $shown (println! (ProfileListingFailed $bad)) (system:exit 1))))))
 (= (ah:run $binary)
    (let* (($p1 (ah:profile $binary "petta" "extended" "ai"))
           ($p2 (ah:profile $binary "petta" "ai" "extended"))
-          ($h1 (ah:check $binary he-unavailable
+          ($h1 (ah:check $binary he-on
             ("--lang" "he" "--profile" "ai" "-e" "!(ai:experiment failure-values) !(+ 2 3)")
-            "[(Error (ai:experiment failure-values) (Forbidden ExperimentUnavailableInHost))]\n"))
+            "[()]\n[5]\n"))
+          ($hp1 (ah:profile $binary "he" "extended" "ai"))
+          ($hp2 (ah:profile $binary "he" "ai" "extended"))
           ($h2 (ah:check $binary he-off
             ("--lang" "he" "--profile" "ai" "-e" "!(car-atom [1 2]) !(+ 2 3)")
             "[1]\n[5]\n"))
@@ -92,4 +94,4 @@
           ($zero-engines (ah:zero-refused $binary ("--fuel" "0" "--list-space-engines")))
           ($zero-alias (ah:zero-refused $binary ("--fuel" "0" "--list-space-match-backends")))
           ($he-listing (ah:he-listing $binary)))
-     (HostControlsPass 25)))
+     (HostControlsPass 27)))

@@ -1,10 +1,10 @@
 AI experiments
 ==============
 
-Status: experimental, declaration-only, canonical PeTTa implementation.
+Status: experimental, declaration-only, PeTTa and HE implementations.
 Default and extended profiles retain their existing semantics. Selecting
 PeTTa's existing AI preset retains its sealed-sort behavior and does not
-activate failure-values. HE activation is explicitly refused in this cut.
+activate failure-values. Both PeTTa and HE admit the declaration.
 The AI preset now includes extended infrastructure, so it is not byte-equivalent
 to the earlier base-only AI preset on extension-specific programs.
 
@@ -26,11 +26,11 @@ Enable a named experiment at an evaluation root:
 
 Declarations are session-local and idempotent. A quoted declaration is data.
 Unknown names and malformed declarations report Unsolvable. The experiment
-registry admits only qualified hosts. HE --profile ai retains extended
-behavior; a failure-values declaration returns Forbidden with
-ExperimentUnavailableInHost. HE propagation remains future work.
-HE retains its stop-after-Error policy, so a refused declaration ends that
-program. A diagnostic printed as data does not imply a nonzero process exit.
+registry admits only its declared hosts. HE --profile ai retains extended
+behavior until the declaration is evaluated. With the experiment active,
+both hosts publish failures and continue later directives. A diagnostic
+printed as data does not imply a nonzero process exit. The inactive HE
+stop-after-Error policy is unchanged.
 
 Experiment: failure-values
 --------------------------
@@ -153,5 +153,13 @@ contracts. Graduation into a stable host requires a stronger review.
 Repeatable controls live in tests/ai/. test-ai runs their CeTTa driver and
 native protocol fixture and is included in test-all. Qualification records
 must name the revision, Lean hash, changed golden programs, mutations,
-performance and limitations. HE evidence from earlier prototypes does not
-qualify HE activation in this release.
+performance and limitations. HE controls exercise canonical and reference
+execution, including nested strict contexts and native producer provenance.
+
+HE instruction returns retain their result channel through metta, chain and
+function. These boundaries forward an existing raised occurrence; they do
+not classify a value by its Error spelling. The same handler operation
+implements catch in either host, while user equations retain ownership of
+their head. Ordinary HE quotation and minimal-step eval keep HE's syntax
+policy; unquote activates quoted code. Explicit collectors retain a partial
+prefix together with its terminal diagnostic without replaying effects.

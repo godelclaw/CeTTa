@@ -2880,7 +2880,7 @@ static bool he_canonical_match_schedule(Space *s, Arena *a, Atom *atom,
 }
 
 static void he_canonical_match_error(HeCanonicalFrame *frame, const char *reason) {
-    outcome_set_add(frame->target, space_arg_error(frame->arena,
+    ai_publish_error(frame->arena, frame->target, space_arg_error(frame->arena,
         frame->atom, reason), &frame->env);
     he_canonical_pop();
 }

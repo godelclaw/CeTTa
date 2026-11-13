@@ -185,7 +185,7 @@
      (case (am:exec $dir $name "semantic"
             ($binary "--lang" "petta" "--profile" "extended" "-e" $program) $cwd)
        (((proc:exited 0 $out "")
-          (if (or (am:contains $out "(AISuitePass 12 1984 25)") (== $out "true\n6\n")) (MutantSurvived $name)
+          (if (or (am:contains $out "(AISuitePass 12 1984 27)") (== $out "true\n6\n")) (MutantSurvived $name)
             (if (am:contains $out "Mismatch") (MutantKilled $name semantic)
               (am:fail (InvalidMutationRunner $name $out)))))
         ((proc:exited 1 $out $err)
