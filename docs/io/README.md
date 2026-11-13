@@ -336,6 +336,7 @@ Native Unix notifications also use the same handles:
 (io:submit (space:request socket (request id operation arguments) deadline-ms))
 (io:submit (host:notice))
 (io:submit (fs:changed directory (selected-file-names)))
+(io:submit (fs:changed directory (except ignored-file-names) modified))
 (io:wait-ready (io:ids handle other-handle) wait-ms)
 ```
 
@@ -343,7 +344,13 @@ CWP and space requests reuse their existing wire formats. A deadline of zero
 leaves the transaction open without a deadline. Failed space transactions
 distinguish no request sent from a missing reply after sending; the client
 does not automatically replay a write. File notifications are Linux inotify
-subscriptions; omit the file-name list to observe the whole directory.
+subscriptions; omit the file-name list to observe the whole directory, or
+give `(except name ...)` to observe all but those names. A watch completes
+when an entry is created, written and closed, moved in or deleted, or when
+the directory itself goes; with `modified` it also completes on a write to
+an entry its writer keeps open, as a long-lived SQLite writer commits to its
+WAL. Submit the watch before reading what it guards, so that a change made
+meanwhile completes it.
 `host:notice` observes a native generation counter. Existing embedded-host
 producers may call `cetta_bridge.notice()` after publishing their data; the
 notifier neither evaluates MeTTa nor owns the producer's queue.

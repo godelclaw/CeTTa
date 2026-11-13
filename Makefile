@@ -37155,6 +37155,11 @@ $(FILESYSTEM_NATIVE_TEST_V1): tests/support/test_filesystem_observations_v1.c sr
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections -o $@ tests/support/test_filesystem_observations_v1.c src/library_fs.c src/native_sha256.c src/native_handle.c src/atom.c src/binding/frame_identity.c $(SYMBOL_STANDALONE_SRC) $(LDFLAGS) -Wl,--gc-sections,--wrap=read,--wrap=__read_chk,--wrap=readdir,--wrap=malloc,--wrap=strdup,--wrap=fstatat,--wrap=closedir,--wrap=rename,--wrap=write,--wrap=fsync,--wrap=flock,--wrap=openat
 
+.PHONY: test-fs-changed-v1
+test-all: test-fs-changed-v1
+test-fs-changed-v1: $(BIN) tests/support/check_fs_changed_v1.py
+	@python3 tests/support/check_fs_changed_v1.py ./$(BIN)
+
 .PHONY: test-fs-size-v1
 test-all: test-fs-size-v1
 test-fs-size-v1: $(BIN) lib/fs.metta lib/petta/fs.metta lib/prime/fs.metta tests/support/check_fs_size_v1.py
