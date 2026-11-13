@@ -1,0 +1,36 @@
+(ran a)
+(ran a)
+(ran b)
+(ran 1)
+(ran second)
+(ran second)
+[()]
+[(True)]
+[(Forbidden)]
+[((budget 10))]
+[((Error outer (Unsolvable (missing name))))]
+[(Ok)]
+[(True)]
+[((Error bad-input (Unsolvable (missing name))))]
+[(3)]
+[(2 6)]
+[()]
+[((Error policy (Forbidden (quota exceeded))))]
+[((2 6 4))]
+[((Error bad-input (Unsolvable (missing name))))]
+[((Error bad-input (Unsolvable (missing name))))]
+[((a b c))]
+[((1 2 3 4))]
+[((1 2 3))]
+[(yes)]
+[((Error bad-input (Unsolvable (missing name))))]
+[((Error out:if (Unsolvable (NoVerdict maybe))))]
+[(False)]
+[(True)]
+[((Error size (Unsolvable too-small)))]
+[((Error bad-input (Unsolvable (missing name))))]
+[(fallback)]
+[(7)]
+[((Error lookup (Unsolvable no-answer)))]
+[((Error lookup (Unsolvable (ambiguous 2))))]
+[((Empty (Region a b)))]
