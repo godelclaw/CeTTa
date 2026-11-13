@@ -7891,6 +7891,15 @@ ifeq ($(ENABLE_SANITIZERS),1)
 	@$(MAKE) -s BUILD=$(BUILD_CANON) ENABLE_SANITIZERS=0 test-space-dense-scaling
 endif
 
+# Lookups grow linearly with the space in PeTTa: a head the space does not
+# hold or one atom holds, the first argument unbound, and a notice scan's
+# ground misses after removals, timed at 500 and 4,000 atoms against a
+# quadratic control the check must reject.
+.PHONY: test-space-growth-v1
+test-all: test-space-growth-v1
+test-space-growth-v1: $(BIN) tests/support/check_space_growth_v1.py
+	@python3 tests/support/check_space_growth_v1.py ./$(BIN)
+
 # A PeTTa document read a few forms at a time answers as one read whole, an
 # import calling an equation defined after it among them; and reading a
 # document in slices keeps the load flat: from one size to four times it,

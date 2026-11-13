@@ -3,6 +3,7 @@
 #include "dense_relation.h"
 #include "native_query.h"
 #include "shared_transition.h"
+#include "space_path_index.h"
 #include "stats.h"
 
 #include <stdlib.h>
@@ -366,6 +367,8 @@ static bool relational_account(CettaRelationalPlan *plan, size_t key_bytes, size
             !relational_add_bytes(&bytes, factor->width > 1u ? factor->width - 1u : 1u, sizeof(size_t)))
             return false;
     }
+    if (!relational_add_bytes(&bytes, (size_t)plan->scan_candidate_count, sizeof(CettaIndex)))
+        return false;
     plan->info.retained_bytes = bytes;
     if (__builtin_add_overflow(bytes, temporary, &bytes))
         return false;
@@ -500,6 +503,7 @@ void cetta_relational_plan_free(CettaRelationalPlan *plan) {
     free(plan->incidences);
     free(plan->scan_positions);
     free(plan->scan_constants);
+    free(plan->scan_candidates);
     for (size_t i = 0u; i < plan->open_part_count; i++) {
         cetta_relational_plan_free(plan->open_parts[i].plan);
         free(plan->open_parts[i].sources);
@@ -513,6 +517,55 @@ static bool relational_open_parts(
     CettaRelationalPlan *plan, Space *space, Arena *scratch, Atom **resolved,
     size_t pattern_count, CettaRelationalAdmission admission,
     const bool *ground_only, size_t *budget, const RelationalOpenRows *open);
+
+/* The rows a factor reads, in row order.  A pattern headed by a symbol meets
+ * only the rows the space's head index gives for its head and length, where
+ * the index serves the rows read as they stand: no row is removed by mark,
+ * and the rows read are the space's own, no fact a relation keeps.  Any
+ * other pattern reads every row below `rows`. */
+typedef struct {
+    CettaSpaceHeadCursor cursor;
+    bool indexed;
+    CettaIndex next, rows;
+} RelationalRowSource;
+
+static void relational_rows_open(Space *space, const Atom *pattern,
+                                 CettaIndex rows, RelationalRowSource *source) {
+    *source = (RelationalRowSource){.rows = rows};
+    if (pattern->expr.len >= 2u && pattern->expr.elems[0]->kind == ATOM_SYMBOL &&
+        space->native.marked == 0u && space->native.start == 0u &&
+        rows == space->native.len)
+        source->indexed = space_head_index_open_key(
+            space, atom_symbol_current_id(pattern->expr.elems[0]),
+            pattern->expr.len, &source->cursor);
+}
+
+static bool relational_rows_next(RelationalRowSource *source, CettaIndex *row) {
+    if (source->indexed)
+        return space_head_index_next(&source->cursor, source->rows, NULL, 0u, row);
+    if (source->next >= source->rows)
+        return false;
+    *row = source->next++;
+    return true;
+}
+
+/* Keep ROW as a candidate of a single-pattern enumeration. */
+static bool relational_candidate_push(CettaRelationalPlan *plan, CettaIndex row,
+                                      CettaCount *capacity) {
+    if (plan->scan_candidate_count == *capacity) {
+        CettaCount next = *capacity ? *capacity * 2u : 16u;
+        if (next < *capacity || next > SIZE_MAX / sizeof(CettaIndex))
+            return false;
+        CettaIndex *grown = realloc(plan->scan_candidates,
+                                    (size_t)next * sizeof(CettaIndex));
+        if (!grown)
+            return false;
+        plan->scan_candidates = grown;
+        *capacity = next;
+    }
+    plan->scan_candidates[plan->scan_candidate_count++] = row;
+    return true;
+}
 
 /* Prepare a plan whose factors listed in `ground_only` (NULL for none)
  * read only the rows without stored variables; `budget` counts the parts
@@ -678,8 +731,18 @@ static bool relational_plan_prepare_with(
             constants[c] = pattern->expr.elems[c]->kind == ATOM_VAR ? CETTA_ATOM_ID_NONE :
                 term_universe_lookup_atom_id(space->native.universe, pattern->expr.elems[c]);
         }
-        for (CettaIndex row = 0u; ready && row < rows; row++) {
+        RelationalRowSource source;
+        relational_rows_open(space, pattern, rows, &source);
+        /* A single-pattern enumeration matches its rows again when it runs:
+         * it keeps those the index gave, which no later row joins, since
+         * removals wait for the run's end and additions come after. */
+        bool keep_candidates = plan->rows_unsorted && source.indexed;
+        CettaCount candidate_capacity = 0u;
+        CettaIndex row;
+        while (ready && relational_rows_next(&source, &row)) {
             plan->info.scanned_rows++;
+            if (keep_candidates)
+                ready = relational_candidate_push(plan, row, &candidate_capacity);
             AtomId id = space_get_atom_id_at64(space, row);
             AtomKind kind = tu_kind(space->native.universe, id);
             /* A whole-atom variable can match every expression factor. Its
@@ -760,6 +823,9 @@ static bool relational_plan_prepare_with(
         if (ready && plan->rows_unsorted) {
             plan->scan_len = pattern->expr.len;
             plan->scan_rows = rows;
+            if (keep_candidates && !plan->scan_candidates)
+                plan->scan_candidates = relational_array(1u, sizeof(CettaIndex));
+            ready = !keep_candidates || plan->scan_candidates;
             plan->scan_positions = relational_array((size_t)pattern->expr.len,
                                                     sizeof(*positions));
             plan->scan_constants = relational_array((size_t)pattern->expr.len,
@@ -776,7 +842,8 @@ static bool relational_plan_prepare_with(
             relational_add_bytes(&temporary, pattern_count, sizeof(*resolved)) &&
             relational_add_bytes(&temporary, pattern->expr.len ? (size_t)pattern->expr.len : 1u, sizeof(*constants) + sizeof(*positions)) &&
             relational_add_bytes(&temporary, factor->width, sizeof(*tuple)) &&
-            relational_add_bytes(&temporary, factor->length + factor->capacity / 2u, factor->width * sizeof(*factor->tuples));
+            relational_add_bytes(&temporary, factor->length + factor->capacity / 2u, factor->width * sizeof(*factor->tuples)) &&
+            relational_add_bytes(&temporary, (size_t)candidate_capacity, sizeof(CettaIndex));
         if (ready)
             ready = relational_account(plan, (variable_capacity ? variable_capacity : 1u) * sizeof(*plan->variables), temporary) &&
                 (plan->rows_unsorted || relational_factor_sort(factor));

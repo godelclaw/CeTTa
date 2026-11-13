@@ -54,6 +54,10 @@ struct CettaRelationalPlan {
     size_t *scan_positions;
     AtomId *scan_constants;
     CettaIndex scan_rows;
+    /* The rows below `scan_rows` the pattern's head may meet, from the
+     * space's head index, in row order; NULL when every row is read. */
+    CettaIndex *scan_candidates;
+    CettaCount scan_candidate_count;
     /* The rows holding stored variables, which the factors do not hold. */
     RelationalOpenPart *open_parts;
     size_t open_part_count;
