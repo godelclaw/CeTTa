@@ -1,9 +1,9 @@
 ; Lookups by head over a space past the size a match reads row by row: the
-; rows of the head and rows with a variable head answer in row order; removed
-; rows are gone (PeTTa removes, as SWI-PeTTa's retractall does, every row the
-; atom unifies with, so (T 3) takes ($h 3) too); a ground lookup after a
-; removal still meets a remaining row with variables, and misses once the last
-; such row is removed.
+; rows of the head and rows with a variable head answer in row order, also
+; while a removed row is still marked; removed rows are gone (PeTTa removes,
+; as SWI-PeTTa's retractall does, every row the atom unifies with, so (T 3)
+; takes ($h 3) too); a ground lookup after a removal still meets a remaining
+; row with variables, and misses once the last such row is removed.
 !(bind! &s (new-space))
 !(add-atom &s (F 1))
 !(add-atom &s (G 2))
@@ -29,6 +29,7 @@
 !(collapse (match &s (Q $x) $x))
 !(collapse (match &s (G $x) (g $x)))
 !(remove-atom &s (F 4))
+!(collapse (match &s (F $x) $x))
 !(remove-atom &s (T 3))
 !(collapse (match &s (F $x) $x))
 !(collapse (match &s (T $x) $x))
