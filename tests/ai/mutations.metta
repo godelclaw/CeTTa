@@ -69,6 +69,8 @@
  "    if (machine->host.failure_values && !cetta_ai_audit_mutant(\"counted\"))\n        return false; /* The count-only carrier has no failure occurrences. */" 1)
 (AMReplace "eval" "        .range_discharge = !g_he_shared_execution && !prime_machine && !eval_failure_values(),"
  "        .range_discharge = !g_he_shared_execution && !prime_machine && (!eval_failure_values() || cetta_ai_audit_mutant(\"type-guard\"))," 1)
+(AMReplace "machine" "    if (!machine || !value || !formal)\n        return false;\n    if (atom_is_error(value) && !machine->host.failure_values)"
+ "    if (!machine || !value || !formal)\n        return false;\n    if (machine->host.failure_values && cetta_ai_audit_mutant(\"type-guard\")) return true;\n    if (atom_is_error(value) && !machine->host.failure_values)" 1)
 (AMReplace "eval" "        .literal_binding_patterns = g_he_shared_execution || prime_machine || eval_failure_values(),"
  "        .literal_binding_patterns = g_he_shared_execution || prime_machine || (eval_failure_values() && !cetta_ai_audit_mutant(\"let\"))," 1)
 (AMReplace "machine" "        if (machine->host.failure_values)\n            continue;\n        if (!petta_machine_callable_root(machine, pattern, NULL)"
