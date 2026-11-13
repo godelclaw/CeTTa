@@ -44,12 +44,14 @@ PRELUDE = """!(import! &self (library system))
 (= (step rare $p $i) (collapse (match $p (Q $x) $x)))
 (= (step control $p $i) (collapse (match $p ($h $x $x $a $b) $h)))
 (= (loop $look $p $i $n) (if (>= $i $n) () (let $_ (step $look $p $i) (loop $look $p (+ $i 1) $n))))
-(= (prepare forget $p $n) (unsee-all $p 0 $n))
+(= (prepare absent $p $n) ())
 (= (prepare rare $p $n) (add-atom $p (Q 7)))
-(= (prepare $other $p $n) ())
+(= (prepare forget $p $n) (unsee-all $p 0 $n))
+(= (prepare control $p $n) ())
+(= (lookups absent $n) (* 8 $n))
+(= (lookups rare $n) (* 8 $n))
 (= (lookups forget $n) $n)
 (= (lookups control $n) $n)
-(= (lookups $other $n) (* 8 $n))
 (= (run $look $n)
    (let* (($p (new-space)) ($_ (fill $p $p 0 $n)) ($_ (prepare $look $p $n))
           ($t0 (system:monotonic-ns)) ($_ (loop $look $p 0 (lookups $look $n))))
@@ -69,11 +71,11 @@ def elapsed(binary, work, look, n):
     for _ in range(3):
         proc = subprocess.run([binary, "--lang", "petta", source], cwd=work,
                               capture_output=True, text=True, timeout=600)
-        found = re.search(r"\(elapsed ([0-9.eE+-]+)\)", proc.stdout)
-        if not found:
-            raise SystemExit(f"FAIL: {look} at {n} gave no time: "
+        found = re.findall(r"\(elapsed ([0-9.eE+-]+)\)", proc.stdout)
+        if len(found) != 1:
+            raise SystemExit(f"FAIL: {look} at {n} gave {len(found)} times, not one: "
                              f"{proc.stdout[-300:]} {proc.stderr[-300:]}")
-        value = float(found.group(1))
+        value = float(found[0])
         best = value if best is None else min(best, value)
     return best
 
