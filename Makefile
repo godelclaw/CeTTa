@@ -54023,3 +54023,21 @@ test-petta-swi-arithmetic: $(BIN) tests/petta/swi_arithmetic.metta \
 		fi; \
 	done; \
 	echo "PASS: PeTTa arithmetic off the fast path answers as SWI's is/2 ($$(wc -l < tests/petta/swi_arithmetic.expected) rows, default and extended)"
+
+# A variable pattern over a space a symbol names, with no native rows and no
+# foreign engine to hold any, has no answer, with and without Prolog.
+.PHONY: test-petta-symbol-space-variable-match
+test-all: test-petta-symbol-space-variable-match
+test-petta-symbol-space-variable-match: $(BIN) \
+		tests/petta/symbol_space_variable_match.metta \
+		tests/petta/symbol_space_variable_match.expected
+	@for profile in default extended; do \
+		flags="--lang petta"; [ $$profile = default ] || flags="$$flags --profile $$profile"; \
+		actual=$$($(CETTA_BIN_INVOKE) $$flags tests/petta/symbol_space_variable_match.metta 2>&1); \
+		if [ "$$actual" != "$$(cat tests/petta/symbol_space_variable_match.expected)" ]; then \
+			echo "FAIL: variable-pattern match over a symbol space (petta $$profile)"; \
+			diff -u tests/petta/symbol_space_variable_match.expected <(printf '%s\n' "$$actual") | head -20; \
+			exit 1; \
+		fi; \
+	done; \
+	echo "PASS: a variable pattern over a symbol space with no rows has no answer (default and extended)"

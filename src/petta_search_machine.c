@@ -30515,9 +30515,13 @@ static bool petta_machine_start_ready_match_mode(
 
     /* A variable pattern enumerates every row regardless of relation arity.
      * This is the reference's get-atoms equation, invoked through the existing
-     * Predicate boundary so its binding returns to the machine trail. */
+     * Predicate boundary so its binding returns to the machine trail.  The
+     * rows of a space no native Space holds are foreign facts: a host with
+     * no foreign engine defines none, and the match has no answer. */
     if (!target && reference->kind == ATOM_SYMBOL &&
         pattern->kind == ATOM_VAR) {
+        if (!machine->host.foreign_predicate_defined)
+            return false;
         Atom *get_atoms = atom_symbol_id(
             &machine->heap, g_builtin_syms.get_atoms);
         Atom *predicate_body = get_atoms
