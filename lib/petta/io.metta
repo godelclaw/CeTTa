@@ -2,11 +2,18 @@
 ; do not edit.  The PeTTa spelling of the library: the same program with the
 ; HE-only native wrappers spelled as PeTTa calls.
 
-(: http:request (-> Atom Atom Expression String Number Number Atom))
-(: http:request (-> Atom Atom Expression String Number Number Bool Atom))
-(: http:request (-> Atom Atom Expression String Number Number Bool Atom Atom))
+(: http:request (-> Atom Atom Expression %Undefined% Number Number Atom))
+(: http:request (-> Atom Atom Expression %Undefined% Number Number Bool Atom))
+(: http:request (-> Atom Atom Expression %Undefined% Number Number Bool Atom Atom))
+(: http:request (-> Atom Atom Expression %Undefined% Number Number Bool Atom Atom Atom))
 (: http:timeouts (-> Number Number Number Atom))
 (: http:header (-> String String Atom))
+(: http:field (-> String %Undefined% Atom))
+(: http:file (-> String String Atom))
+(: http:file (-> String String String Atom))
+(: http:file (-> String String String String Atom))
+(: http:save (-> String Atom))
+(: http:saved (-> Number Expression String Number Atom))
 (: http:response (-> Number String Atom))
 (: http:chunk (-> Number String Atom Atom))
 (: http:response-with-metadata (-> Number String Atom Atom))

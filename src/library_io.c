@@ -26,8 +26,10 @@
 #include <time.h>
 #ifndef __EMSCRIPTEN__
 #include <fcntl.h>
+#include <inttypes.h>
 #include <poll.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #ifdef __linux__
 #include <sys/inotify.h>
@@ -95,6 +97,16 @@ typedef struct CettaIoRequest {
     char *ca_file;          /* a TLS connection's trust anchors, else the default store */
     CettaIoHeader *headers;
     CettaByteFragment *body;  /* shared with the string it came from, never copied */
+    /* (http:multipart PART ...): the parts, owned, sent in place of body. */
+    CettaHttpPart *parts;
+    size_t part_count;
+    /* (http:save PATH), absolute: a 2xx body goes to this file. */
+    char *save_path;
+    char **response_headers;  /* a saving request's response header fields */
+    size_t response_header_count;
+    bool saved, save_refused;
+    uint64_t saved_bytes;
+    int save_errno;
     int64_t timeout_ms;
     uint32_t connect_timeout_ms, first_byte_timeout_ms, idle_timeout_ms;
     size_t max_bytes;
@@ -280,6 +292,16 @@ static void io_request_free(CettaIoRuntime *runtime, CettaIoRequest *request) {
     free(request->ca_file);
     io_header_list_free(request->headers);
     cetta_fragment_release(request->body);
+    for (size_t i = 0; i < request->part_count; i++) {
+        CettaHttpPart *part = &request->parts[i];
+        free((char *)part->name); free((void *)part->value); free((char *)part->path);
+        free((char *)part->filename); free((char *)part->content_type);
+    }
+    free(request->parts);
+    free(request->save_path);
+    for (size_t i = 0; i < request->response_header_count; i++)
+        free(request->response_headers[i]);
+    free(request->response_headers);
     free(request->response);
 #ifndef __EMSCRIPTEN__
     cetta_proc_free(request->process);
@@ -530,24 +552,150 @@ static bool io_parse_headers(Atom *atom, const char *url, bool follow,
     return true;
 }
 
+#if CETTA_BUILD_HTTP_PROVIDER_CURL
+/* PATH, made absolute against the working directory. */
+static char *io_absolute_path(const char *path) {
+    if (path[0] == '/') return io_strdup(path);
+    char directory[PATH_MAX];
+    if (!getcwd(directory, sizeof(directory))) return NULL;
+    size_t size = strlen(directory) + strlen(path) + 2u;
+    char *absolute = cetta_malloc(size);
+    snprintf(absolute, size, "%s/%s", directory, path);
+    return absolute;
+}
+
+/* A part's name or file name (printable, no double quote) or media type
+ * (printable ASCII), at most 1024 bytes. */
+static bool io_part_text_ok(const char *text, bool media_type) {
+    if (!text || !*text || strlen(text) > 1024u) return false;
+    for (const unsigned char *p = (const unsigned char *)text; *p; p++)
+        if (*p < 0x20u || *p == 0x7fu || (media_type ? *p >= 0x80u : *p == '"'))
+            return false;
+    return true;
+}
+
+/* (http:multipart PART ...), each PART (http:field NAME VALUE), VALUE text
+ * or an integer, or (http:file NAME PATH [FILENAME [TYPE]]), PATH a readable
+ * regular file now; libcurl reads it as it sends the body. */
+static bool io_parse_multipart(Atom *form, CettaIoRequest *request,
+                               char *error, size_t error_size) {
+    size_t count = form->expr.len - 1u;
+    if (!count || count > CETTA_HTTP_PARTS_MAX) {
+        snprintf(error, error_size, "expected (http:multipart PART ...) with 1 to %u parts",
+                 CETTA_HTTP_PARTS_MAX);
+        return false;
+    }
+    request->parts = cetta_malloc(count * sizeof(*request->parts));
+    memset(request->parts, 0, count * sizeof(*request->parts));
+    size_t field_bytes = 0u;
+    for (size_t i = 0; i < count; i++) {
+        Atom *item = form->expr.elems[i + 1u];
+        CettaHttpPart *part = &request->parts[i];
+        request->part_count = i + 1u;
+        bool field = item && item->kind == ATOM_EXPR && item->expr.len == 3u &&
+                     atom_is_symbol(item->expr.elems[0], "http:field");
+        bool file = item && item->kind == ATOM_EXPR && item->expr.len >= 3u &&
+                    item->expr.len <= 5u && atom_is_symbol(item->expr.elems[0], "http:file");
+        const char *name = field || file ? io_text_arg(item->expr.elems[1]) : NULL;
+        if (!io_part_text_ok(name, false)) {
+            snprintf(error, error_size,
+                     "expected (http:field NAME VALUE) or (http:file NAME PATH [FILENAME [TYPE]]) parts, names printable without double quotes");
+            return false;
+        }
+        part->name = io_strdup(name);
+        if (field) {
+            Atom *value = item->expr.elems[2];
+            char digits[32];
+            const char *bytes = NULL;
+            size_t size = 0u;
+            if (value && value->kind == ATOM_GROUNDED && value->ground.gkind == GV_STRING) {
+                bytes = value->ground.sval; size = value->ground.slen;
+            } else if (value && value->kind == ATOM_GROUNDED && value->ground.gkind == GV_INT) {
+                snprintf(digits, sizeof(digits), "%" PRId64, value->ground.ival);
+                bytes = digits; size = strlen(digits);
+            } else if (value && value->kind == ATOM_SYMBOL) {
+                bytes = atom_name_cstr(value); size = bytes ? strlen(bytes) : 0u;
+            }
+            if (!bytes) {
+                snprintf(error, error_size, "an http:field value is text or an integer");
+                return false;
+            }
+            if (size > 8u * 1024u * 1024u - field_bytes) {
+                snprintf(error, error_size, "HTTP request exceeds admission limits");
+                return false;
+            }
+            field_bytes += size;
+            part->value_size = size;
+            if (size) {
+                void *copy = cetta_malloc(size);
+                memcpy(copy, bytes, size);
+                part->value = copy;
+            }
+            continue;
+        }
+        const char *path = io_text_arg(item->expr.elems[2]);
+        const char *filename = item->expr.len >= 4u ? io_text_arg(item->expr.elems[3]) : NULL;
+        const char *type = item->expr.len == 5u ? io_text_arg(item->expr.elems[4]) : NULL;
+        char *absolute = path && *path && strlen(path) <= 4096u ? io_absolute_path(path) : NULL;
+        struct stat info;
+        if (!absolute || stat(absolute, &info) || !S_ISREG(info.st_mode) ||
+            access(absolute, R_OK)) {
+            free(absolute);
+            snprintf(error, error_size, "an http:file part names a readable regular file");
+            return false;
+        }
+        part->path = absolute;
+        if ((item->expr.len >= 4u && !io_part_text_ok(filename, false)) ||
+            (item->expr.len == 5u && !io_part_text_ok(type, true))) {
+            snprintf(error, error_size,
+                     "an http:file part's file name is printable without double quotes, its type printable ASCII");
+            return false;
+        }
+        if (filename) part->filename = io_strdup(filename);
+        if (type) part->content_type = io_strdup(type);
+    }
+    return true;
+}
+
+/* (http:save PATH): an absolute file path in an existing directory. */
+static char *io_parse_save_path(Atom *option) {
+    const char *path = io_text_arg(option->expr.elems[1]);
+    size_t length = path ? strlen(path) : 0u;
+    if (!length || length > 4096u || path[length - 1u] == '/') return NULL;
+    char *absolute = io_absolute_path(path);
+    char *slash = absolute ? strrchr(absolute, '/') : NULL;
+    if (!slash) { free(absolute); return NULL; }
+    *slash = '\0';
+    struct stat info;
+    bool directory = !stat(absolute[0] ? absolute : "/", &info) && S_ISDIR(info.st_mode);
+    *slash = '/';
+    if (!directory) { free(absolute); return NULL; }
+    return absolute;
+}
+#endif
+
 static CettaIoRequest *io_parse_http_request(Atom *atom, char *error,
                                              size_t error_size) {
     const char *method;
     const char *url;
-    const char *body;
+    const char *body = NULL;
     int64_t timeout_ms;
     int64_t max_bytes;
-    if (!atom || atom->kind != ATOM_EXPR || (atom->expr.len < 7u || atom->expr.len > 9u) ||
+    Atom *body_atom = atom && atom->kind == ATOM_EXPR && atom->expr.len > 4u
+        ? atom->expr.elems[4] : NULL;
+    bool multipart = body_atom && body_atom->kind == ATOM_EXPR && body_atom->expr.len &&
+                     atom_is_symbol(body_atom->expr.elems[0], "http:multipart");
+    if (!atom || atom->kind != ATOM_EXPR || (atom->expr.len < 7u || atom->expr.len > 10u) ||
         !atom_is_symbol(atom->expr.elems[0], "http:request") ||
         !(method = io_text_arg(atom->expr.elems[1])) ||
         !(url = io_text_arg(atom->expr.elems[2])) ||
-        !(body = io_text_arg(atom->expr.elems[4])) ||
+        (!multipart && !(body = io_text_arg(body_atom))) ||
         !io_nonnegative_int_arg(atom->expr.elems[5], &timeout_ms) ||
         !io_nonnegative_int_arg(atom->expr.elems[6], &max_bytes) ||
         (uint64_t)timeout_ms > UINT32_MAX ||
         (uint64_t)max_bytes > SIZE_MAX - 1u) {
         snprintf(error, error_size,
-                 "expected (http:request method url headers body nonnegative-timeout-ms nonnegative-max-bytes)");
+                 "expected (http:request method url headers body nonnegative-timeout-ms nonnegative-max-bytes), the body text or (http:multipart PART ...)");
         return NULL;
     }
     bool follow_redirects=false;
@@ -572,11 +720,15 @@ static CettaIoRequest *io_parse_http_request(Atom *atom, char *error,
         snprintf(error, error_size, "only http and https URLs are supported");
         return NULL;
     }
-    Atom *body_atom = atom->expr.elems[4];
-    size_t body_size = body_atom->kind == ATOM_GROUNDED ? body_atom->ground.slen : strlen(body);
+    size_t body_size = multipart ? 0u
+        : body_atom->kind == ATOM_GROUNDED ? body_atom->ground.slen : strlen(body);
     if (strlen(url) > 8192u || body_size > 8u * 1024u * 1024u ||
         timeout_ms > INT_MAX || max_bytes >= INT_MAX) {
         snprintf(error, error_size, "HTTP request exceeds admission limits");
+        return NULL;
+    }
+    if (multipart && (!strcmp(method, "GET") || !strcmp(method, "HEAD"))) {
+        snprintf(error, error_size, "a multipart body needs a method that sends one, not GET or HEAD");
         return NULL;
     }
     CettaIoRequest *request = cetta_malloc(sizeof(*request));
@@ -584,8 +736,9 @@ static CettaIoRequest *io_parse_http_request(Atom *atom, char *error,
     request->retry_after = -1;
     request->method = io_strdup(method);
     request->url = io_strdup(url);
-    request->body = body_atom->kind == ATOM_GROUNDED ? atom_string_fragment(body_atom)
-                                                     : cetta_fragment_copy(body, body_size);
+    request->body = multipart ? cetta_fragment_copy("", 0u)
+        : body_atom->kind == ATOM_GROUNDED ? atom_string_fragment(body_atom)
+                                           : cetta_fragment_copy(body, body_size);
     if (!request->body) {
         snprintf(error, error_size, "cannot allocate the HTTP request body");
         io_request_free(NULL, request);
@@ -594,17 +747,50 @@ static CettaIoRequest *io_parse_http_request(Atom *atom, char *error,
     request->timeout_ms = timeout_ms;
     request->max_bytes = (size_t)max_bytes;
     request->follow_redirects = follow_redirects;
-    if (atom->expr.len==9u) {
-        Atom *options=atom->expr.elems[8]; int64_t connect, first, idle;
-        if (!options || options->kind!=ATOM_EXPR || (options->expr.len!=4u && options->expr.len!=5u) ||
+#if CETTA_BUILD_HTTP_PROVIDER_CURL
+    if (multipart && !io_parse_multipart(body_atom, request, error, error_size)) {
+        io_request_free(NULL, request);
+        return NULL;
+    }
+#else
+    if (multipart) {
+        snprintf(error, error_size, "multipart bodies require the native HTTP provider");
+        io_request_free(NULL, request);
+        return NULL;
+    }
+#endif
+    /* After follow-redirects, each of (http:timeouts ...) and (http:save
+     * PATH) at most once, in either order. */
+    bool timeouts = false;
+    for (CettaExprIndex index = 8u; index < atom->expr.len; index++) {
+        Atom *options = atom->expr.elems[index];
+        if (options && options->kind == ATOM_EXPR && options->expr.len == 2u &&
+            atom_is_symbol(options->expr.elems[0], "http:save") && !request->save_path) {
+#if CETTA_BUILD_HTTP_PROVIDER_CURL
+            if (!(request->save_path = io_parse_save_path(options))) {
+                snprintf(error, error_size,
+                         "expected (http:save PATH), PATH a file in an existing directory");
+                io_request_free(NULL, request); return NULL;
+            }
+            continue;
+#else
+            snprintf(error, error_size, "saving a response requires the native HTTP provider");
+            io_request_free(NULL, request); return NULL;
+#endif
+        }
+        int64_t connect, first, idle;
+        if (timeouts || !options || options->kind!=ATOM_EXPR ||
+            (options->expr.len!=4u && options->expr.len!=5u) ||
             !atom_is_symbol(options->expr.elems[0],"http:timeouts") ||
             !io_nonnegative_int_arg(options->expr.elems[1],&connect) ||
             !io_nonnegative_int_arg(options->expr.elems[2],&first) ||
             !io_nonnegative_int_arg(options->expr.elems[3],&idle) ||
             connect>INT_MAX || first>INT_MAX || idle>INT_MAX) {
-            snprintf(error,error_size,"expected (http:timeouts connect-ms first-byte-ms idle-ms)");
+            snprintf(error,error_size,
+                     "expected (http:timeouts connect-ms first-byte-ms idle-ms) and (http:save PATH), each at most once");
             io_request_free(NULL,request); return NULL;
         }
+        timeouts = true;
 #if CETTA_BUILD_HTTP_PROVIDER_EMSCRIPTEN
         if (connect || first || idle) {
             snprintf(error,error_size,"independent HTTP timeouts require the native provider");
@@ -627,6 +813,15 @@ static CettaIoRequest *io_parse_http_request(Atom *atom, char *error,
                           error, error_size)) {
         io_request_free(NULL, request);
         return NULL;
+    }
+    if (multipart) {
+        for (CettaIoHeader *header = request->headers; header; header = header->next)
+            if (!strcasecmp(header->key, "Content-Type")) {
+                snprintf(error, error_size,
+                         "a multipart body sets its own Content-Type, with its boundary");
+                io_request_free(NULL, request);
+                return NULL;
+            }
     }
     return request;
 }
@@ -715,10 +910,20 @@ static bool io_http_start(CettaIoRuntime *runtime, CettaIoRequest *request,
         headers[i] = cetta_malloc(n);
         snprintf(headers[i++], n, "%s: %s", h->key, h->value);
     }
+    /* A saved body must not hold a credential the request sends. */
+    const char *guards[16];
+    size_t guard_count = 0;
+    for (CettaIoHeader *h = request->headers; h && guard_count < 16u; h = h->next)
+        if (h->credential_secret) guards[guard_count++] = h->credential_secret;
     CettaHttpRequest input = {
         .id=request->id, .method=request->method, .url=request->url,
         .headers=(const char *const *)headers, .header_count=count,
-        .body_fragments=&request->body, .body_fragment_count=1,
+        .body_fragments=request->parts ? NULL : &request->body,
+        .body_fragment_count=request->parts ? 0 : 1,
+        .parts=request->parts, .part_count=request->part_count,
+        .save_path=request->save_path,
+        .save_guards=request->save_path && guard_count ? guards : NULL,
+        .save_guard_count=request->save_path ? guard_count : 0,
         .timeout_ms=(uint32_t)request->timeout_ms,
         .connect_timeout_ms=request->connect_timeout_ms,
         .first_byte_timeout_ms=request->first_byte_timeout_ms,
@@ -762,6 +967,12 @@ static void io_http_pump(CettaIoRuntime *runtime, uint64_t selected_id) {
         request->response_has_nul = result.body_size && memchr(result.body, 0, result.body_size);
         request->response = (char *)result.body;
         request->response_len = result.body_size;
+        request->response_headers = result.header_lines;
+        request->response_header_count = result.header_count;
+        request->saved = result.saved;
+        request->save_refused = result.save_refused;
+        request->saved_bytes = result.saved_bytes;
+        request->save_errno = result.save_errno;
         io_ready_append(runtime, request);
         return;
     }
@@ -1873,12 +2084,42 @@ static Atom *io_submit(CettaIoRuntime *runtime, Arena *arena,
                       atom_int(arena, (int64_t)request->id));
 }
 
+/* A saved response's header fields as (http:header NAME VALUE) items. */
+static Atom *io_http_header_items(Arena *arena, const CettaIoRequest *request) {
+    size_t count = request->response_header_count;
+    Atom **items = count ? arena_alloc(arena, count * sizeof(*items)) : NULL;
+    for (size_t i = 0; i < count; i++) {
+        const char *line = request->response_headers[i];
+        const char *colon = strchr(line, ':');
+        size_t name_size = colon ? (size_t)(colon - line) : strlen(line);
+        const char *value = colon ? colon + 1 : "";
+        while (*value == ' ') value++;
+        char *name = arena_alloc(arena, name_size + 1u);
+        memcpy(name, line, name_size);
+        name[name_size] = '\0';
+        items[i] = atom_expr3(arena, atom_symbol(arena, "http:header"),
+                              atom_string(arena, name), atom_string(arena, value));
+    }
+    return atom_expr(arena, items, (CettaExprLen)count);
+}
+
 static Atom *io_http_result(Arena *arena, CettaIoRequest *request) {
-    if (io_response_has_credential(request,
-            (const unsigned char *)request->response, request->response_len))
+    bool reflected = request->save_refused ||
+        io_response_has_credential(request,
+            (const unsigned char *)request->response, request->response_len);
+    for (size_t i = 0; !reflected && i < request->response_header_count; i++)
+        reflected = io_response_has_credential(request,
+            (const unsigned char *)request->response_headers[i],
+            strlen(request->response_headers[i]));
+    if (reflected)
         return atom_error(arena, io_http_source(arena, request),
             atom_expr2(arena, atom_symbol(arena, "http:error"),
                        atom_symbol(arena, "credential-in-response")));
+    if (request->save_errno)
+        return atom_error(arena, io_http_source(arena, request),
+            atom_expr(arena, (Atom *[]){atom_symbol(arena, "http:error"),
+                atom_symbol(arena, "save"), atom_int(arena, request->save_errno),
+                atom_string(arena, strerror(request->save_errno))}, 4u));
     if (request->response_budget_exceeded)
         return atom_error(arena, io_http_source(arena, request),
             atom_expr2(arena, atom_symbol(arena, "http:error"),
@@ -1906,6 +2147,11 @@ static Atom *io_http_result(Arena *arena, CettaIoRequest *request) {
             4u);
         return atom_error(arena, io_http_source(arena, request), reason);
     }
+    if (request->saved)
+        return atom_expr(arena, (Atom *[]){atom_symbol(arena, "http:saved"),
+            atom_int(arena, request->status), io_http_header_items(arena, request),
+            atom_string(arena, request->save_path),
+            atom_int(arena, (int64_t)request->saved_bytes)}, 5u);
     if (request->response_metadata) {
         Atom *items[] = {atom_symbol(arena,"http:response-with-metadata"), atom_int(arena,request->status),
             atom_string(arena,request->response?request->response:""),
