@@ -10,6 +10,8 @@
  "eval_current_uses_failure_values && eval_current_uses_failure_values() && !cetta_ai_audit_mutant(\"native-producer\")" 2)
 (HMReplace "eval" "    if (eval_failure_values() && outcome.kind == CETTA_CALL_RAISED) {"
  "    if (eval_failure_values() && outcome.kind == CETTA_CALL_RAISED) {\n        if (cetta_ai_audit_mutant(\"native-raise\")) { outcome_set_add(outcomes, ai_completed_data(a, outcome.term), environment); return true; }" 1)
+(HMReplace "eval" "        !ai_native_packet_admitted(&outcome, environment))"
+ "        !cetta_ai_audit_mutant(\"packet\") && !ai_native_packet_admitted(&outcome, environment))" 1)
 (HMReplace "eval" "        !cetta_call_result_is_frontier(outcome.result_form) && atom_is_error(outcome.term)) {"
  "        !cetta_call_result_is_frontier(outcome.result_form) && atom_is_error(outcome.term)) {\n        if (cetta_ai_audit_mutant(\"native-data\")) { ai_add_failure(a, outcomes, outcome.term, environment); return true; }" 1)
 (HMReplace "eval" "        (eval_failure_values() ? ai_outcome_raised(seed) : atom_is_error(result)))"
@@ -54,6 +56,7 @@
 (HMWitness "state" () "!(let $s (new-state before) (let $f (catch (change-state! $s (Error first (Forbidden detail)))) (Pair $f (get-state $s))))" "[(Pair (Error first (Forbidden detail)) before)]\n")
 (HMWitness "native-producer" () "!(let $v (index-atom (a b) 9) never)" "unused: native fixture establishes this channel")
 (HMWitness "native-raise" () "!(let $v (index-atom (a b) 9) never)" "unused: native fixture establishes this channel")
+(HMWitness "packet" () "unused" "unused: native fixture establishes whole-packet admission")
 (HMWitness "native-data" () "!(let $d (index-atom ((Error native datum)) 0) (Box $d))" "[(Box (Error native datum))]\n")
 (HMWitness "data-type" () "(: only-number (-> Number Number)) (= (only-number $x) $x) !(case (catch (only-number (index-atom ((Error native datum)) 0))) (((Error $w (Unsolvable $d)) rejected) ($x missed)))" "[rejected]\n")
 (HMWitness "budget" ("--fuel" "0") "!(+ 1 2)" "[(Error (+ 1 2) (Incomplete fuel-exhausted))]\n")
@@ -95,15 +98,22 @@
           (if (== $actual $wanted) (MutantSurvived $name)
             (MutantKilled $name semantic)))
         ($other (am:fail (UnexpectedHEMutationExecution $active $name $other)))))))
-(= (hm:native $dir $cwd $active)
-   (case (am:exec $dir $active "native-he" ((str:concat $dir "/native") "--ai-native-he") $cwd)
+(= (hm:native-one $dir $cwd $active $route)
+   (let* (($environment (cons-atom ("CETTA_HE_CANONICAL_EXECUTION" $route) (am:environment $active)))
+          ($result (proc:run ((str:concat $dir "/native") "--ai-native-he") $cwd $environment 15000 1048576))
+          ($saved (am:write (str:join "" ($dir "/" $active ".native-he-" $route ".log")) (repr $result))))
+   (case $result
      (((proc:exited 0 $out "")
         (if (am:contains $out "PASS: 25 HE AI native") (NativeControlPass)
           (am:fail (InvalidHENativeMutationControl $active $out))))
       ((proc:signaled 6 $out $err)
         (if (am:contains $err "Assertion") (MutantKilled $active native)
           (am:fail (UnexpectedHENativeAbort $active $out $err))))
-      ($other (am:fail (UnexpectedHENativeMutationExecution $active $other))))))
+      ($other (am:fail (UnexpectedHENativeMutationExecution $active $other)))))))
+(= (hm:native $dir $cwd $active)
+   (case (hm:native-one $dir $cwd $active "1")
+     (((NativeControlPass) (hm:native-one $dir $cwd $active "0"))
+      ($killed $killed))))
 (= (hm:exercise $dir $cwd $active $entry)
    (case (hm:native $dir $cwd $active)
      (((NativeControlPass) (hm:witness $dir $cwd $active $entry))
@@ -113,7 +123,7 @@
      (let* (($entry (car-atom $entries)) ($rest (cdr-atom $entries)))
        (case $entry
          (((Witness $name $arguments $source $expected)
-            (if (or (== $name "native-producer") (== $name "native-raise"))
+            (if (or (or (== $name "native-producer") (== $name "native-raise")) (== $name "packet"))
               (hm:controls $dir $cwd $rest)
               (case (hm:witness $dir $cwd "control" $entry)
                 (((MutantSurvived $name) (hm:controls $dir $cwd $rest))

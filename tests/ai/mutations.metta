@@ -37,8 +37,8 @@
  "    if (eval_failure_values() && outcome && outcome->completion != CETTA_EVAL_COMPLETE &&\n        !g_ai_cut_reified && !cetta_ai_audit_mutant(\"budget\")) {" 1)
 (AMReplace "machine" "                outcome->result_form == CETTA_CALL_RESULT_RAISED)"
  "                outcome->result_form == CETTA_CALL_RESULT_RAISED && !cetta_ai_audit_mutant(\"return\"))" 1)
-(AMReplace "eval" "if (!ai_outcome_raised(&source->items[i]))"
- "if (cetta_ai_audit_mutant(\"aggregate\") || !ai_outcome_raised(&source->items[i]))" 1)
+(AMReplace "eval" "if (!ai_outcome_raised(source))"
+ "if (cetta_ai_audit_mutant(\"aggregate\") || !ai_outcome_raised(source))" 1)
 (AMReplace "machine" "        Atom *quoted = machine->host.quote_is_inert_data\n            ? expression : expression->expr.elems[1];"
  "        Atom *quoted = machine->host.quote_is_inert_data\n            ? expression : expression->expr.elems[1];\n        if (machine->host.failure_values && cetta_ai_audit_mutant(\"quote\")) { Atom *code = petta_machine_apply_bindings(machine, environment, &machine->heap, quoted); const PettaPlanNode *translated = code && machine->host.translate_source ? petta_machine_translate_source(machine, code) : NULL; if (!code || (machine->host.translate_source && !translated)) { *failure = PETTA_MACHINE_STEP_CAPACITY; return false; } return petta_push_solve_planned(machine, code, expected, goal->barrier, translated); }" 1)
 (AMReplace "machine" "    if (machine->host.failure_values) {\n        error = cetta_ai_failure_value(&machine->heap, error);"

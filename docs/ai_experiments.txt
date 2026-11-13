@@ -163,3 +163,6 @@ implements catch in either host, while user equations retain ownership of
 their head. Ordinary HE quotation and minimal-step eval keep HE's syntax
 policy; unquote activates quoted code. Explicit collectors retain a partial
 prefix together with its terminal diagnostic without replaying effects.
+Completed native packets are validated as a whole before their first
+publication. A malformed suffix is a fault, not a partially admitted packet.
+Valid empty packets remain zero, and valid duplicates remain distinct.

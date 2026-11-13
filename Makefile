@@ -6943,6 +6943,7 @@ test-ai-he-suite: $(BIN) $(wildcard tests/ai/*.metta)
 test-ai-native-returns: $(SHARED_RETURN_PRODUCER_TEST_BIN)
 	@CETTA_PETTA_SEARCH_MACHINE=1 $(call cetta_exec,./$(SHARED_RETURN_PRODUCER_TEST_BIN)) --ai-native
 	@$(call cetta_exec,./$(SHARED_RETURN_PRODUCER_TEST_BIN)) --ai-native-he
+	@CETTA_HE_CANONICAL_EXECUTION=0 $(call cetta_exec,./$(SHARED_RETURN_PRODUCER_TEST_BIN)) --ai-native-he
 
 test-ai-failure-values: $(BIN) $(wildcard tests/ai/*.metta tests/ai/*.expected)
 	@set -eu; for language in petta; do \

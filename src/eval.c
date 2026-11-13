@@ -31359,6 +31359,21 @@ static __attribute__((noinline)) Atom *ai_collect_observation(
     return tuple ? ai_completed_data(arena, tuple) : NULL;
 }
 
+/* A completed packet is one producer receipt. Inspect every member before
+ * allowing its first publication; validation never interprets an expression. */
+static __attribute__((noinline)) bool ai_native_packet_admitted(
+    const CettaCallOutcome *packet, const Bindings *environment) {
+    CettaCallReturnCursor cursor = {
+        .outcome = *packet, .environment = environment, .select_expressions = true};
+    CettaOwnedReturn item;
+    CettaEvalCompletion completion = CETTA_EVAL_COMPLETE;
+    while (cetta_call_return_next(&cursor, &item, &completion) == CETTA_OWNED_EXECUTION_RETURN) {}
+    if (completion == CETTA_EVAL_COMPLETE)
+        return true;
+    eval_mark_interrupted(completion);
+    return false;
+}
+
 static bool sequence_native_call(
     Space *s, Arena *a, CettaCallOutcome outcome, bool expression_is_value,
     Atom *expected_type, const Bindings *environment, OutcomeSet *outcomes,
@@ -31368,6 +31383,9 @@ static bool sequence_native_call(
         eval_mark_interrupted(CETTA_EVAL_INCOMPLETE_HOST_FAILURE);
         return true;
     }
+    if (eval_failure_values() && cetta_call_result_is_frontier(outcome.result_form) &&
+        !ai_native_packet_admitted(&outcome, environment))
+        return true;
     if (outcome.kind == CETTA_CALL_INTERRUPTED) {
         eval_mark_interrupted(CETTA_EVAL_INCOMPLETE_CANCELLED);
         return true;
