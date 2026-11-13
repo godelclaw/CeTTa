@@ -24,7 +24,7 @@ import sys
 import tempfile
 
 SIZES = (400, 1600, 6400)
-CONTROL_SIZES = (100, 400)
+CONTROL_SIZES = (400, 1600)
 LINEAR_STEP = 8.0   # a 4x step: linear is about 4, quadratic about 16
 REPEATS = 3
 
