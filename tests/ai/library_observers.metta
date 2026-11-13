@@ -9,3 +9,11 @@
 !(let $value (out:reflect (Failed first Incomplete pending)) unreachable)
 !(let $value (catch (Error first (Fault bad))) (Box $value))
 !(out:kind (Error first (Fault bad)))
+; A real VALUE(Error) producer, through a wrapper and a second binding.
+!(import! &self (library fs))
+!(out:recover (fs:read-text "/nonexistent/ai-observation-canary") $failure handled)
+!(let $failure (catch (fs:read-text "/nonexistent/ai-observation-canary"))
+   (case $failure (((Error $where $reason)
+      (let $copy $failure (Inspected (out:kind $copy)))))))
+!(collapse (out:recover (fs:read-text "/nonexistent/ai-observation-canary")
+   $failure (missing (out:kind $failure))))

@@ -7,3 +7,7 @@ Forbidden
 (Error first (Incomplete pending))
 (Box (Error first (Fault bad)))
 (Error first (Fault bad))
+true
+handled
+(Inspected Fault)
+((missing Fault))

@@ -53989,12 +53989,14 @@ test-petta-translator-expansion: $(BIN)
 test-outcome-library: $(BIN)
 	@for profile in default extended ai; do \
 		flags="--lang petta"; [ $$profile = default ] || flags="$$flags --profile $$profile"; \
+		expected=tests/outcome_library.petta.expected; \
+		[ $$profile != ai ] || expected=tests/outcome_library.petta-ai.expected; \
 		for mode in 1 0; do \
 			actual=$$(CETTA_PETTA_TRANSLATOR_EXPANSION=$$mode \
 				$(CETTA_BIN_INVOKE) $$flags tests/outcome_library.metta 2>&1); \
-			if [ "$$actual" != "$$(cat tests/outcome_library.petta.expected)" ]; then \
+			if [ "$$actual" != "$$(cat $$expected)" ]; then \
 				echo "FAIL: lib/outcome (petta $$profile, expansion=$$mode)"; \
-				diff -u tests/outcome_library.petta.expected <(printf '%s\n' "$$actual") | head -20; \
+				diff -u $$expected <(printf '%s\n' "$$actual") | head -20; \
 				exit 1; \
 			fi; \
 		done; \

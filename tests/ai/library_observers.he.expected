@@ -7,3 +7,7 @@
 [(Error first (Incomplete pending))]
 [(Box (Error first (Fault bad)))]
 [(Error first (Fault bad))]
+[()]
+[handled]
+[(Inspected Fault)]
+[((missing Fault))]

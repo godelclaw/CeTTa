@@ -1480,11 +1480,6 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
         Space *target = resolve_single_space_arg(
             s, a, expr_arg(atom, 2), child_fuel);
         Atom *code = expr_arg(frame->atom, 0);
-        if (eval_failure_values() && atom_is_he_evaluated(code)) {
-            atom_deep_copy_strip_he_marks_enter();
-            code = atom_deep_copy(a, code);
-            atom_deep_copy_strip_he_marks_leave();
-        }
         if (target && code)
             eval_metta_outcomes(target, a, expr_arg(frame->atom, 1),
                 code, child_fuel, &frame->env, true, os);

@@ -74,6 +74,8 @@ PeTTa eval runs the selected source once. HE eval retains its minimal-step
 contract; returning syntax that contains Error is not producing a failure.
 Only the selected code value is activated. Captured data arguments inside
 an unmarked source call keep their completed-value role.
+metta respects an already completed input as a value; eval is the explicit
+value-to-code operation.
 
 A completed absence report (Empty SCOPE) is one ordinary datum, declared
 through the existing type system. It is neither computational zero nor a

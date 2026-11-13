@@ -85829,13 +85829,20 @@ static __attribute__((noinline)) bool petta_eval_machine_run(
                     answer = petta_flatten_closed_open_cons(
                         arena, answer);
                 }
+                if (eval_failure_values() && !raised) {
+                    answer = ai_completed_data(arena, answer);
+                    if (!answer) {
+                        bindings_free(&environment);
+                        break;
+                    }
+                }
                 CettaCount added_before = machine_outcomes->len;
                 outcome_set_add_prefixed(
                     arena, machine_outcomes, answer, &environment,
                     outer_environment, preserve_bindings);
-                if (raised && eval_failure_values() && machine_outcomes->len > added_before)
+                if (eval_failure_values() && machine_outcomes->len > added_before)
                     machine_outcomes->items[machine_outcomes->len - 1u].result_form =
-                        CETTA_CALL_RESULT_RAISED;
+                        raised ? CETTA_CALL_RESULT_RAISED : CETTA_CALL_RESULT_COMPLETED_VALUE;
                 if (machine_outcomes->len > added_before &&
                     !petta_eval_machine_answer_delayed(
                         &machine, answer, &environment, arena,
@@ -86100,13 +86107,20 @@ static __attribute__((noinline)) bool petta_eval_machine_run(
                     answer = petta_flatten_closed_open_cons(
                         arena, answer);
                 }
+                if (eval_failure_values() && !raised) {
+                    answer = ai_completed_data(arena, answer);
+                    if (!answer) {
+                        bindings_free(&environment);
+                        break;
+                    }
+                }
                 CettaCount added_before = machine_outcomes->len;
                 outcome_set_add_prefixed(
                     arena, machine_outcomes, answer, &environment,
                     outer_environment, preserve_bindings);
-                if (raised && eval_failure_values() && machine_outcomes->len > added_before)
+                if (eval_failure_values() && machine_outcomes->len > added_before)
                     machine_outcomes->items[machine_outcomes->len - 1u].result_form =
-                        CETTA_CALL_RESULT_RAISED;
+                        raised ? CETTA_CALL_RESULT_RAISED : CETTA_CALL_RESULT_COMPLETED_VALUE;
                 if (machine_outcomes->len > added_before &&
                     !petta_eval_machine_answer_delayed(
                         &machine, answer, &environment, arena,
@@ -108979,11 +108993,6 @@ petta_lowered_to_shared_form:
     /* ── metta (self-referential eval with type/space) ─────────────────── */
     if (head_id == g_builtin_syms.metta && nargs == 3 && g_registry) {
         Atom *to_eval = expr_arg(atom, 0);
-        if (eval_failure_values() && atom_is_he_evaluated(to_eval)) {
-            atom_deep_copy_strip_he_marks_enter();
-            to_eval = atom_deep_copy(a, to_eval);
-            atom_deep_copy_strip_he_marks_leave();
-        }
         if (language_id == CETTA_LANGUAGE_PRIME) {
             Atom *code = prime_need_ready_code(a, to_eval, CURRENT_ENV);
             if (code) to_eval = code;

@@ -12939,6 +12939,16 @@ static bool petta_machine_completion_fallback(const PettaMachineImpl *machine,
                      machine->host.eager_argument_faults && atom_is_error(value));
 }
 
+/* Called only for an established value occurrence. Marking keeps its role
+ * when an Atom-only continuation later substitutes it into source syntax. */
+static Atom *petta_machine_completed_data(PettaMachineImpl *machine, Atom *value,
+                                         PettaMachineStep *failure) {
+    Atom *completed = atom_he_evaluated_deep_copy(&machine->heap, value);
+    if (!completed)
+        *failure = PETTA_MACHINE_STEP_CAPACITY;
+    return completed;
+}
+
 /* Completed-producer visibility is the same for a retained bank and its
  * final unbanked return. Streamed successes count as prior successes too. */
 static bool petta_completion_value_visible(const PettaMachineImpl *machine,
@@ -21820,6 +21830,11 @@ static bool petta_machine_advance_choice(
         choice->as.provider.awaiting_accept = true;
         if (outcome.kind == CETTA_CALL_RAISED)
             return petta_machine_raise_error(machine, value);
+        if (machine->host.failure_values) {
+            value = petta_machine_completed_data(machine, value, failure);
+            if (!value)
+                return false;
+        }
         bool truth = false;
         if (petta_semantics_truth_value(value, &truth))
             value = petta_machine_boolean_value(machine, truth);
@@ -21863,6 +21878,12 @@ static bool petta_machine_advance_choice(
             if (machine->host.failure_values &&
                 outcome->result_form == CETTA_CALL_RESULT_RAISED)
                 return petta_machine_raise_error(machine, value);
+            if (machine->host.failure_values &&
+                (outcome->result_form == CETTA_CALL_RESULT_COMPLETED_VALUE || atom_is_error(value))) {
+                value = petta_machine_completed_data(machine, value, failure);
+                if (!value)
+                    return false;
+            }
             /* A conditional answer holds while its delayed goals do. */
             if (outcome->delayed &&
                 !petta_machine_delay_install(machine, outcome->delayed, failure)) {
@@ -21904,6 +21925,11 @@ static bool petta_machine_advance_choice(
             choice->as.superpose.next = cursor.position;
             Atom *value = returned.outcome.term;
             bool completed = returned.outcome.result_form == CETTA_CALL_RESULT_COMPLETED_VALUE;
+            if (machine->host.failure_values && completed) {
+                value = petta_machine_completed_data(machine, value, failure);
+                if (!value)
+                    return false;
+            }
             /* A variable value keeps its identity where the host asks, as
              * an outcome delivered by value does. */
             bool retain_source = completed &&
@@ -28649,7 +28675,7 @@ static bool petta_machine_type_accept(
     PettaMachineStep *failure) {
     if (!machine || !value || !formal)
         return false;
-    if (atom_is_error(value)) {
+    if (atom_is_error(value) && !machine->host.failure_values) {
         /*
          * Error is normally control, but Roman's type language can name it
          * as data inside a union.  Consult the declared formal before
@@ -31297,6 +31323,14 @@ static inline bool petta_machine_deliver_native_return(
         return petta_machine_deliver_native_slow(
             machine, outcome, expected, barrier, failure);
     Atom *value = outcome.term;
+    if (machine->host.failure_values &&
+        (outcome.result_form == CETTA_CALL_RESULT_COMPLETED_VALUE || atom_is_error(value))) {
+        value = petta_machine_completed_data(machine, value, failure);
+        if (!value) {
+            *failure = PETTA_MACHINE_STEP_CAPACITY;
+            return false;
+        }
+    }
     if (atom_is_petta_no_result(value))
         return false;
     bool truth = false;
@@ -36707,6 +36741,7 @@ static bool petta_machine_dispatch_activation_solve(
     }
 
     if (machine->host.failure_values && atom_is_error(goal->first) &&
+        (!goal->plan || goal->plan->role != PETTA_PLAN_VALUE) &&
         !atom_is_he_evaluated(goal->first)) {
         Atom *error = petta_machine_materialize_activation_source(
             machine, goal, goal->first);
@@ -38053,6 +38088,7 @@ static bool petta_machine_dispatch_solve(
     /* A written Error is the failure producer. A variable or native VALUE
      * returning the same syntax is already data, not a second raise. */
     if (machine->host.failure_values && atom_is_error(goal->first) &&
+        (!goal->plan || goal->plan->role != PETTA_PLAN_VALUE) &&
         !atom_is_he_evaluated(goal->first) &&
         !(goal->kind == PETTA_GOAL_HE_INTERPRET &&
           atom_is_symbol_id(goal->third, g_builtin_syms.atom))) {
@@ -42971,6 +43007,8 @@ static bool petta_machine_dispatch_goal(
                 return false;
             }
         }
+        if (machine->host.failure_values && !reduces && atom_is_error(value))
+            return petta_machine_raise_error(machine, value);
         if (!reduces && atom_structural_may_have_list_carrier(value)) {
             /* eval runs its whole term as code, so every list the term
              * holds, a cons-built open-cons carrier included, is read as
