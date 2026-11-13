@@ -10,7 +10,7 @@
 
 static Arena persistent, scratch;
 static const int64_t chats[]={42,-100,INT64_MIN};
-static CettaTelegramActionPolicy policy={chats,3,15};
+static CettaTelegramActionPolicy policy={chats,3,15,false};
 static unsigned checks;
 static Atom *parse(const char *text) {
     size_t pos=0; Atom *a=parse_sexpr(&persistent,text,&pos); assert(a && pos==strlen(text)); return a;
@@ -162,6 +162,16 @@ int main(int argc, char **argv) {
     policy.methods=8; rejected(send_text("x")); policy.methods=16; rejected(send_text("x")); policy.methods=15;
     policy.chat_count=0; rejected(send_text("x")); policy.chat_count=129; rejected(send_text("x")); policy.chat_count=3;
     assert(!cetta_telegram_action_validate(NULL,send_text("x"),NULL)); ++checks;
+    // Private chats: an unlisted user's chat only when the policy admits them
+    // all; an unlisted group never.
+    rejected(parse("(telegram:send-text 1 43 0 0 \"x\" \"plain\")"));
+    policy.private_chats=true;
+    accepted(parse("(telegram:send-text 1 43 0 0 \"x\" \"plain\")"),"sendMessage");
+    accepted(parse("(telegram:delete-message 1 9223372036854775807 1)"),"deleteMessage");
+    rejected(parse("(telegram:send-text 1 -43 0 0 \"x\" \"plain\")"));
+    rejected(parse("(telegram:send-text 1 0 0 0 \"x\" \"plain\")"));
+    policy.chat_count=0; rejected(parse("(telegram:send-text 1 43 0 0 \"x\" \"plain\")")); policy.chat_count=3;
+    policy.private_chats=false;
     // Dispatch must not rely on acceptance's earlier policy check.
     Atom *previous=send_text("accepted earlier"); assert(cetta_telegram_action_validate(&policy,previous,NULL));
     policy.methods=0; rejected(previous); policy.methods=15;
