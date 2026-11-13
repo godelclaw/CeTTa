@@ -395,6 +395,9 @@ typedef struct {
      * A fault occurrence returns from this application, rather than becoming
      * a field in its constructed value. */
     bool eager_argument_faults;
+    /* Typed raised occurrences propagate to the nearest explicit observer;
+     * no Error-shaped completed value is reclassified here. */
+    bool failure_values;
     /* PeTTa's collections are findall: an error raised while collecting
      * aborts the collection and propagates, as an exception does in
      * SWI-PeTTa.  Other dialects keep a raised error as an occurrence. */
@@ -1239,6 +1242,11 @@ int petta_machine_typecheck_exit_code(const PettaMachine *machine);
 /* True when the last answer is an Error that was raised and not caught,
  * rather than an Error value. */
 bool petta_machine_last_answer_raised(const PettaMachine *machine);
+/* Read an interrupted root collector's already-established, unconditional
+ * prefix and terminal diagnostic. This performs no computation or resumption;
+ * pending logical conditions cannot be exported as unconditional answers. */
+bool petta_machine_observe_interrupted_collection(
+    PettaMachine *machine, Arena *arena, Atom *diagnostic, Atom **value);
 /* A machine created to evaluate for a caller that delays goals starts from
  * a copy of them, as a child machine does. */
 bool petta_machine_inherit_delayed_goals(PettaMachine *machine,

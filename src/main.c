@@ -1455,6 +1455,7 @@ typedef struct {
     char lang_base[64];
     const char *version_name;
     const char *profile_name;
+    bool ai_profile;
     CettaSyntaxId syntax;
     const CettaLanguageSpec *lang;
     const CettaProfile *profile;
@@ -1466,6 +1467,7 @@ static void endpoint_init(CettaCliEndpoint *endpoint, const char *lang_name) {
     endpoint->lang_base[0] = '\0';
     endpoint->version_name = NULL;
     endpoint->profile_name = NULL;
+    endpoint->ai_profile = false;
     endpoint->syntax = CETTA_SYNTAX_AUTO;
     endpoint->lang = NULL;
     endpoint->profile = NULL;
@@ -1577,6 +1579,20 @@ static bool endpoint_resolve(CettaCliEndpoint *endpoint, const char *role,
         fprintf(stderr, "note: %s\n", endpoint->lang->note);
         return false;
     }
+    if (endpoint->ai_profile) {
+        if (strcmp(endpoint->profile_name, "ai") &&
+            strcmp(endpoint->profile_name, "extended")) {
+            fprintf(stderr, "error: ai currently composes with the default or extended profile\n");
+            return false;
+        }
+        endpoint->profile_name = "ai";
+    }
+    if (endpoint->lang->id == CETTA_LANGUAGE_AI && endpoint->profile_name &&
+        strcmp(endpoint->profile_name, "ai") &&
+        strcmp(endpoint->profile_name, "extended")) {
+        fputs("error: ai currently composes with the default or extended profile\n", stderr);
+        return false;
+    }
     if (endpoint->profile_name) {
         if (!cetta_language_has_named_profiles(endpoint->lang->id)) {
             fprintf(stderr, "error: %s language '%s' has no named profiles\n",
@@ -1598,6 +1614,8 @@ static bool endpoint_resolve(CettaCliEndpoint *endpoint, const char *role,
         return false;
     if (!endpoint->profile && endpoint->lang->id == CETTA_LANGUAGE_PRIME)
         endpoint->profile = cetta_profile_prime_default();
+    if (!endpoint->profile && endpoint->lang->id == CETTA_LANGUAGE_AI)
+        endpoint->profile = cetta_profile_petta_extended();
     if (!endpoint->profile && endpoint->lang->id == CETTA_LANGUAGE_HOL_LIGHT)
         endpoint->profile = cetta_profile_from_name_for_language(CETTA_LANGUAGE_HOL_LIGHT, "standard");
     return true;
@@ -1956,14 +1974,15 @@ static void print_usage(FILE *out) {
     fputs("       cetta -e '<expr>' [-e '<expr>' ...]  # inline expressions (multiple -e concatenate)\n", out);
     fputs("       cetta --repl [--lang petta --profile extended] # multiline source; :cancel / :quit\n", out);
     fputs("       cetta --translate --lang A [--syntax S] --lang B [--syntax T] <file>\n", out);
-    fputs("       cetta [--lang he[@0.2.10] --profile <he|he-compat|extended|he-prime>] <file.metta>\n", out);
+    fputs("       cetta [--lang he[@0.2.10] --profile <he|he-compat|extended|he-prime|ai>] <file.metta>\n", out);
     fputs("       note: HE is CeTTa's fork of Hyperon Experimental 0.2.10; he-compat keeps Rust's behavior where he differs\n", out);
     fputs("       cetta --lang prime [--profile <prime-default|identity-j|identity-scoped|identity-uip|identity-univalence>] <file.metta>\n", out);
     fputs("       cetta --lang prime@0.0.1 <file.metta> # Prime runtime\n", out);
     fputs("       cetta --lang hol-light [--profile <standard|open|sealed>] <proof.holr>\n", out);
     fputs("       note: hol aliases hol-light; HOLR is a checked proof stream, not OCaml source\n", out);
     fputs("       cetta --lang petta <file.metta> # corrected stable PeTTa\n", out);
-    fputs("       cetta --lang petta --profile ai <file.metta> # sealed sorts: declarations type answers, not held calls\n", out);
+    fputs("       cetta --lang petta --profile ai <file.metta> # extended syntax, sealed sorts; experiments opt in\n", out);
+    fputs("       cetta --lang ai <file.metta> # PeTTa extended; enable named experiments with !(ai:experiment failure-values)\n", out);
 #if CETTA_BUILD_WITH_PETTA_TYPECHECK_V2
     fputs("       cetta --lang petta@1.1 [--strict|--strict-det] <file.metta>\n", out);
     fputs("       cetta --lang petta --profile typecheck-v2 [--strict|--strict-det] <file.metta>\n", out);
@@ -2883,6 +2902,18 @@ static int cetta_main(int argc, char **argv) {
     current_endpoint = &source_endpoint;
 
     for (int i = 1; i < argc; i++) {
+        /* An informational exit cannot bypass validation of a preceding
+         * invalid budget. Zero-work execution belongs to an AI host. */
+        if (fuel_override_requested && fuel_override == 0 &&
+            (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h") ||
+             !strcmp(argv[i], "--version") || !strcmp(argv[i], "-v") ||
+             !strcmp(argv[i], "--list-languages") ||
+             !strcmp(argv[i], "--list-space-engines") ||
+             !strcmp(argv[i], "--list-space-match-backends") ||
+             !strcmp(argv[i], "--list-profiles"))) {
+            fputs("error: invalid fuel '0'\n", stderr);
+            return 2;
+        }
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             print_usage(stdout);
             return 0;
@@ -3074,7 +3105,7 @@ static int cetta_main(int argc, char **argv) {
             parsed = strtol(argv[++i], &endp, 10);
             if (!endp || *endp != '\0' ||
                 (parsed != -1 &&
-                 (parsed <= 0 || parsed > 100000000L))) {
+                 (parsed < 0 || parsed > 100000000L))) {
                 fprintf(stderr, "error: invalid fuel '%s'\n", argv[i]);
                 return 2;
             }
@@ -3222,7 +3253,19 @@ static int cetta_main(int argc, char **argv) {
                 print_usage(stderr);
                 return 1;
             }
-            current_endpoint->profile_name = argv[++i];
+            const char *requested = argv[++i];
+            const char *previous = current_endpoint->profile_name;
+            if ((current_endpoint->ai_profile && strcmp(requested, "ai") &&
+                    strcmp(requested, "extended")) ||
+                (!strcmp(requested, "ai") && previous &&
+                    strcmp(previous, "ai") && strcmp(previous, "extended"))) {
+                fputs("error: ai currently composes with the default or extended profile\n", stderr);
+                free(inline_buf);
+                return 2;
+            }
+            current_endpoint->profile_name = requested;
+            if (!strcmp(current_endpoint->profile_name, "ai"))
+                current_endpoint->ai_profile = true;
             continue;
         }
         if (strcmp(argv[i], "--import-mode") == 0) {
@@ -3303,6 +3346,12 @@ static int cetta_main(int argc, char **argv) {
     if (translate_mode && !target_endpoint.lang_name) {
         target_endpoint = source_endpoint;
     }
+    if (fuel_override_requested && fuel_override == 0 &&
+        strcmp(source_endpoint.lang_name, "ai") && !source_endpoint.ai_profile) {
+        fputs("error: invalid fuel '0'\n", stderr);
+        free(inline_buf);
+        return 2;
+    }
     if (!endpoint_resolve(&source_endpoint, "source", argv[0])) {
         free(inline_buf);
         return 2;
@@ -3371,7 +3420,17 @@ static int cetta_main(int argc, char **argv) {
     }
 
     const CettaLanguageSpec *lang = source_endpoint.lang;
+    bool ai_dialect = lang->id == CETTA_LANGUAGE_AI;
+    if (ai_dialect)
+        lang = cetta_language_from_id(CETTA_LANGUAGE_PETTA);
     profile = source_endpoint.profile;
+    if (fuel_override_requested && fuel_override == 0 && !ai_dialect &&
+        !(profile && (profile->id == CETTA_PROFILE_PETTA_AI ||
+                      profile->id == CETTA_PROFILE_HE_AI))) {
+        fputs("error: invalid fuel '0'\n", stderr);
+        free(inline_buf);
+        return 2;
+    }
     if (lang->id == CETTA_LANGUAGE_PETTA && filename && !inline_text) {
         petta_file_arg_cursor = filename_arg_index;
         petta_file_arg_end = filename_arg_index + 1;
@@ -3717,7 +3776,8 @@ static int cetta_main(int argc, char **argv) {
         goto cleanup;
     }
 
-    if (!cetta_runtime_session_init_in_domain(&runtime, arena, lang->id, profile, term_domain)) {
+    if (!cetta_runtime_session_init_in_domain(&runtime, arena,
+            ai_dialect ? CETTA_LANGUAGE_AI : lang->id, profile, term_domain)) {
         fprintf(stderr, "error: could not allocate execution resources\n");
         rc = 1;
         goto cleanup;
@@ -3783,6 +3843,8 @@ static int cetta_main(int argc, char **argv) {
             CETTA_EVAL_OPTION_VALUE_SYMBOL, prime_eval_residuals, 0);
     }
     eval_set_library_context(&runtime.libraries);
+    if (fuel_override_requested && fuel_override == 0)
+        cetta_eval_session_set_fuel_limit(&runtime.libraries.session, 0);
     cleanup.parser_rational_literals_old =
         parser_set_rational_literals_enabled(
             !cetta_language_uses_rust_he_compat_semantics(lang->id, profile));
@@ -4585,7 +4647,10 @@ petta_next_slice:
                  * in its place in the output, as an incomplete verdict
                  * rather than an answer list, and goes on with the next
                  * query; the run then exits 1. */
-                if (lang->id == CETTA_LANGUAGE_PRIME && !g_count_only) {
+                if ((runtime.libraries.session.experiments & CETTA_EXPERIMENT_FAILURE_VALUES) &&
+                    !g_count_only) {
+                    report_incomplete_and_continue = true;
+                } else if (lang->id == CETTA_LANGUAGE_PRIME && !g_count_only) {
                     fprintf(output_spool, "(Incomplete %s)\n",
                             eval_completion_reason(detailed.completion));
                     prime_incomplete_seen = true;
@@ -4620,6 +4685,7 @@ petta_next_slice:
             /* In Prime an Error is a value: it is reported as the query's
              * answer and the run goes on with the next query. */
             bool stop_after_error = !report_incomplete_and_continue &&
+                                    !(runtime.libraries.session.experiments & CETTA_EXPERIMENT_FAILURE_VALUES) &&
                                     lang->id != CETTA_LANGUAGE_PRIME &&
                                     result_set_has_error(results);
             /* SWI-PeTTa goes on after an Error value, a caught error among
@@ -4687,7 +4753,8 @@ petta_next_slice:
                     }
                 }
             } else if (!petta_answer_without_text) {
-                if (!report_incomplete_and_continue)
+                if (!report_incomplete_and_continue ||
+                    (runtime.libraries.session.experiments & CETTA_EXPERIMENT_FAILURE_VALUES))
                     write_results(output_spool, results, lang->id, profile);
                 /* The trust records of the oracles this answer used, and
                  * a failed check of one, which stops the run.  Without an

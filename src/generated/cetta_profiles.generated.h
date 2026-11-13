@@ -35,6 +35,7 @@ typedef enum {
     CETTA_PROFILE_HOL_OPEN = 24,
     CETTA_PROFILE_HOL_SEALED = 25,
     CETTA_PROFILE_PETTA_AI = 26,
+    CETTA_PROFILE_HE_AI = 27,
 } CettaProfileId;
 
 typedef enum {
@@ -65,7 +66,8 @@ typedef enum {
     cesta_table_apply_0(CETTA_LANGUAGE_GSLT_IL, UINT64_C(15)) \
     cesta_table_apply_0(CETTA_LANGUAGE_ZEROUV, UINT64_C(16)) \
     cesta_table_apply_0(CETTA_LANGUAGE_METTA_INTERACT, UINT64_C(17)) \
-    cesta_table_apply_0(CETTA_LANGUAGE_HOL_LIGHT, UINT64_C(18))
+    cesta_table_apply_0(CETTA_LANGUAGE_HOL_LIGHT, UINT64_C(18)) \
+    cesta_table_apply_0(CETTA_LANGUAGE_AI, UINT64_C(19))
 
 #define CETTA_PROFILE_BEFORE_ROWS(cesta_table_apply_0) \
     cesta_table_apply_0(CETTA_PROFILE_HE_FORMAL_VALUE, CETTA_PROFILE_HE_FORMAL, CETTA_LANGUAGE_HE, "he", "Hyperon Experimental 0.2.10 with CeTTa's deliberate differences; the default.", 1, 0, 0, 0, CETTA_LANGUAGE_VERSION_HE_0_2_10, CETTA_IDENTITY_POLICY_J, CETTA_CONTEXT_SELF_PROGRAM, 0) \
@@ -82,7 +84,8 @@ typedef enum {
     cesta_table_apply_0(CETTA_PROFILE_PRIME_QUOTE_AS_WRITTEN_VALUE, CETTA_PROFILE_PRIME_QUOTE_AS_WRITTEN, CETTA_LANGUAGE_PRIME, "quote-as-written", "Opt-in: substitution enters quotations and quoted parameters capture their arguments as written.", 0, 1, 1, 0, CETTA_LANGUAGE_VERSION_NONE, CETTA_IDENTITY_POLICY_J, CETTA_CONTEXT_SELF_PROGRAM, 1) \
     cesta_table_apply_0(CETTA_PROFILE_PETTA_EXTENDED_VALUE, CETTA_PROFILE_PETTA_EXTENDED, CETTA_LANGUAGE_PETTA, "extended", "Corrected stable PeTTa plus labeled shared CeTTa extensions.", 0, 1, 0, 0, CETTA_LANGUAGE_VERSION_PETTA_STABLE, CETTA_IDENTITY_POLICY_J, CETTA_CONTEXT_SELF_PROGRAM, 0) \
     cesta_table_apply_0(CETTA_PROFILE_PETTA_1_1_C_VALUE, CETTA_PROFILE_PETTA_1_1_C, CETTA_LANGUAGE_PETTA, "petta@1.1.c", "PeTTa's typed line with declarations as call contracts: a failed check raises on every route.", 0, 0, 0, 0, CETTA_LANGUAGE_VERSION_PETTA_1_1_C, CETTA_IDENTITY_POLICY_J, CETTA_CONTEXT_SELF_PROGRAM, 0) \
-    cesta_table_apply_0(CETTA_PROFILE_PETTA_AI_VALUE, CETTA_PROFILE_PETTA_AI, CETTA_LANGUAGE_PETTA, "ai", "Corrected stable PeTTa with sealed sorts: a function's declaration types its calls' answers, never an unevaluated application of it.", 0, 0, 0, 0, CETTA_LANGUAGE_VERSION_PETTA_STABLE, CETTA_IDENTITY_POLICY_J, CETTA_CONTEXT_SELF_PROGRAM, 0)
+    cesta_table_apply_0(CETTA_PROFILE_PETTA_AI_VALUE, CETTA_PROFILE_PETTA_AI, CETTA_LANGUAGE_PETTA, "ai", "PeTTa extended with sealed sorts; named experiments require a declaration.", 0, 1, 0, 0, CETTA_LANGUAGE_VERSION_PETTA_STABLE, CETTA_IDENTITY_POLICY_J, CETTA_CONTEXT_SELF_PROGRAM, 0) \
+    cesta_table_apply_0(CETTA_PROFILE_HE_AI_VALUE, CETTA_PROFILE_HE_AI, CETTA_LANGUAGE_HE, "ai", "HE experimental host; failure-values is not yet supported.", 1, 1, 0, 0, CETTA_LANGUAGE_VERSION_HE_0_2_10, CETTA_IDENTITY_POLICY_J, CETTA_CONTEXT_SELF_PROGRAM, 0)
 
 #define CETTA_PROFILE_TYPING_ROWS(cesta_table_apply_0) \
     cesta_table_apply_0(CETTA_PROFILE_PETTA_TYPECHECK_V2_VALUE, CETTA_PROFILE_PETTA_TYPECHECK_V2, CETTA_LANGUAGE_PETTA, "typecheck-v2", "PeTTa with native Roman-compatible residual type checking.", 0, 1, 0, 0, CETTA_LANGUAGE_VERSION_PETTA_1_1, CETTA_IDENTITY_POLICY_J, CETTA_CONTEXT_SELF_PROGRAM, 0) \

@@ -1,0 +1,9 @@
+()
+true
+(Box 3)
+(Box (+ 1 2))
+(Box (Error captured (Fault data)))
+(Error executed (Fault bad))
+true
+((Left (Error captured (Fault data))) (Right (Error captured (Fault data))))
+((Error executed (Fault bad)) (Error executed (Fault bad)))

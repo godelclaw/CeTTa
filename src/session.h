@@ -290,6 +290,8 @@ typedef struct {
 } CettaProcessControl;
 
 typedef struct {
+    /* Public dialect identity, independent of its current evaluator family. */
+    CettaLanguageId dialect_id;
     CettaLanguageId language_id;
     const CettaProfile *profile;
     CettaModulePolicy module_policy;
@@ -298,6 +300,8 @@ typedef struct {
     /* Native host authority, never a pragma/environment/MeTTa option. The
      * host supplies a fresh observation and accepts only closed proposals. */
     bool speculative;
+    /* Named experiments are session-local, never process-global switches. */
+    uint32_t experiments;
     /* Shared by nested evaluations and their workers; never rolled back with
      * a rejected branch or hidden by an expression's error handling. */
     _Atomic uint64_t effect_denials;
@@ -306,6 +310,19 @@ typedef struct {
     void (*test_verdict)(void *context, bool passed);
     void *test_verdict_context;
 } CettaEvalSession;
+
+typedef enum {
+    CETTA_EXPERIMENT_FAILURE_VALUES = 1u << 0,
+} CettaExperiment;
+
+bool cetta_session_allows_experiments(const CettaEvalSession *session);
+typedef enum {
+    CETTA_EXPERIMENT_ENABLED,
+    CETTA_EXPERIMENT_UNKNOWN,
+    CETTA_EXPERIMENT_UNSUPPORTED_HOST,
+} CettaExperimentAdmission;
+CettaExperimentAdmission cetta_session_enable_experiment(
+    CettaEvalSession *session, const char *name);
 
 typedef struct {
     const char *name;
