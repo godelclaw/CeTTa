@@ -70,8 +70,8 @@
     {
       "source": "fs.metta",
       "output": "fs.metta",
-      "source_sha256": "012196f3c77d0cb11968997936010427d99aa33b355cde53c3640ab64cb07b7d",
-      "output_sha256": "937570966e3370bde4dcc36e59284613905cd7dd569625db53dd25d074eea6dc",
+      "source_sha256": "6de98bd1181d3daff725b59c6870029368b364e68eef367a0cd09cea7825a9f0",
+      "output_sha256": "ff2155602521150058be6f86d1771ab240e3595fe7e070211c3fe9afe9230550",
       "edits": 53,
       "code_diagnostics": 0
     },
@@ -182,8 +182,8 @@
     {
       "source": "io.metta",
       "output": "io.metta",
-      "source_sha256": "f12ec3e4c6f70a390808130f217b16430ac2451c2c153968d71b4ffcc3e2c64b",
-      "output_sha256": "38a78af2e7fa8ece7ca827321875633ffe3b7ad1628895b42d032be1bc46b573",
+      "source_sha256": "22aad61505f7fc05998a0f1aa95293107c2043a646c69fc291d3be5a6768008d",
+      "output_sha256": "7e633f8260f26bd73bcdd0532fd55d57a9d8cc2546a715c51283c6f3d5c5f2e2",
       "edits": 16,
       "code_diagnostics": 0
     },
@@ -542,8 +542,8 @@
     {
       "source": "proc.metta",
       "output": "proc.metta",
-      "source_sha256": "a5cf29bad37646813dc10264b179d2c5124cec40ea21fcac488b6ef0699ccb38",
-      "output_sha256": "573745a646a56d747855248c9020d33579662ce01f29b7bd2da9e8559b47b25e",
+      "source_sha256": "0ebf4e9fe9ee5fa3f727bc2b4412c2e174f4ef0824dc44575d1454a29b055abd",
+      "output_sha256": "6160d601ea6747df65b4ba334282d673860e8a469650cd7b048dc12101547901",
       "edits": 2,
       "code_diagnostics": 0
     },
@@ -606,9 +606,9 @@
     {
       "source": "system.metta",
       "output": "system.metta",
-      "source_sha256": "517f9fc98d149edff373f849c5a3b7a2c5403b7a3d3a42166701c58297d395a9",
-      "output_sha256": "5f7305732e5c86df0dd5d89a2631a75237a55b6c4085fac63e00d69208f54529",
-      "edits": 27,
+      "source_sha256": "c14c1a2ec01d93ced2e05806117462338855585cd37e502648fd765ea408fe6f",
+      "output_sha256": "47bdb427fe2ad91a5f5136ca09918a9820c18e37c7d44ca0d1bd8a7924b7e0be",
+      "edits": 29,
       "code_diagnostics": 0
     },
     {

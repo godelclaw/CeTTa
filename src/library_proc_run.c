@@ -227,26 +227,37 @@ static Atom *stream_text(Arena *arena, const Stream *s) {
     return value;
 }
 
+/* One datagram to the service manager's $NOTIFY_SOCKET, the systemd notify
+ * protocol: a socket path, or @ and an abstract name. 1 when sent, 0 when the
+ * variable is unset or empty (no manager listens), -1 with errno otherwise.
+ * The socket never blocks: a manager that does not read is EAGAIN, not a
+ * stalled caller. */
+int cetta_service_notify(const char *message, size_t length) {
+    const char *address = getenv("NOTIFY_SOCKET");
+    if (!address || !address[0]) return 0;
+    struct sockaddr_un peer = {.sun_family = AF_UNIX};
+    size_t size = strlen(address);
+    if (size >= sizeof(peer.sun_path)) { errno = ENAMETOOLONG; return -1; }
+    memcpy(peer.sun_path, address, size + 1);
+    if (address[0] == '@') peer.sun_path[0] = 0;
+    int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
+    if (fd < 0) return -1;
+    socklen_t span = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + size + (address[0] != '@'));
+    ssize_t sent;
+    do sent = sendto(fd, message, length, MSG_NOSIGNAL, (struct sockaddr *)&peer, span);
+    while (sent < 0 && errno == EINTR);
+    int error = errno;
+    close(fd);
+    if (sent < 0) { errno = error; return -1; }
+    if ((size_t)sent != length) { errno = EMSGSIZE; return -1; }
+    return 1;
+}
+
 /* Optional observation of a blocking call. This never admits, refuses or
  * interrupts work: it only refreshes a progress file and the service watchdog.
  * Like libuv's exit callback, process identity belongs to the parent. */
 void cetta_proc_observe_wait(const char *path, uint64_t sequence) {
-    const char *address = getenv("NOTIFY_SOCKET");
-    if (address && address[0]) {
-        struct sockaddr_un peer = {.sun_family = AF_UNIX};
-        size_t length = strlen(address);
-        if (length < sizeof(peer.sun_path)) {
-            memcpy(peer.sun_path, address, length + 1);
-            if (address[0] == '@') peer.sun_path[0] = 0;
-            int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
-            if (fd >= 0) {
-                socklen_t size = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + length +
-                                             (address[0] != '@'));
-                (void)sendto(fd, "WATCHDOG=1", 10, MSG_NOSIGNAL, (struct sockaddr *)&peer, size);
-                close(fd);
-            }
-        }
-    }
+    (void)cetta_service_notify("WATCHDOG=1", 10);
     if (!path || !path[0]) return;
     char owner[96], stat[4096];
     snprintf(owner, sizeof(owner), "%ld:portable", (long)getpid());
@@ -318,8 +329,70 @@ static char *resolve_program(const char *program, const char *path_env, const ch
     }
 }
 
+Atom *cetta_proc_env_overrides(Atom *env) {
+    return env && env->kind == ATOM_EXPR && env->expr.len == 2u &&
+           env->expr.elems[0]->kind == ATOM_SYMBOL &&
+           !strcmp(atom_name_cstr(env->expr.elems[0]), "inherit")
+        ? env->expr.elems[1] : NULL;
+}
+
+void cetta_proc_env_free(char **env) {
+    if (!env) return;
+    for (size_t i = 0; env[i]; ++i) free(env[i]);
+    free(env);
+}
+
+/* An override's name, or NULL when the pair is malformed. */
+static const char *override_name(Atom *pair, const char **value) {
+    const char *name = pair && pair->kind == ATOM_EXPR && pair->expr.len == 2u
+                     ? text(pair->expr.elems[0]) : NULL;
+    *value = name ? text(pair->expr.elems[1]) : NULL;
+    return name && *value && *name && !strchr(name, '=') ? name : NULL;
+}
+
+char **cetta_proc_env_inherit(Atom *overrides, const char **reason) {
+    static const char malformed[] = "inherit takes a list of (\"NAME\" \"value\") pairs, each name once";
+    *reason = NULL;
+    if (!overrides || overrides->kind != ATOM_EXPR) { *reason = malformed; errno = EINVAL; return NULL; }
+    size_t count = 0, extra = overrides->expr.len;
+    while (environ[count]) ++count;
+    char **env = calloc(count + extra + 1, sizeof(*env));
+    if (!env) { errno = ENOMEM; return NULL; }
+    for (size_t i = 0; i < count; ++i)
+        if (!(env[i] = strdup(environ[i]))) { cetta_proc_env_free(env); errno = ENOMEM; return NULL; }
+    size_t used = count;
+    for (size_t k = 0; k < extra; ++k) {
+        const char *value, *other_value;
+        const char *name = override_name(overrides->expr.elems[k], &value);
+        for (size_t j = 0; name && j < k; ++j)
+            if (!strcmp(name, override_name(overrides->expr.elems[j], &other_value))) name = NULL;
+        if (!name) { *reason = malformed; cetta_proc_env_free(env); errno = EINVAL; return NULL; }
+        size_t length = strlen(name), size = length + strlen(value) + 2;
+        char *entry = malloc(size);
+        if (!entry) { cetta_proc_env_free(env); errno = ENOMEM; return NULL; }
+        snprintf(entry, size, "%s=%s", name, value);
+        size_t at = 0;
+        while (at < used && !(!strncmp(env[at], name, length) && env[at][length] == '=')) ++at;
+        if (at < used) free(env[at]);
+        else ++used;
+        env[at] = entry;
+    }
+    return env;
+}
+
+/* The value of NAME in a vector of NAME=VALUE entries, or NULL. */
+static const char *env_value(char *const *env, const char *name) {
+    size_t length = strlen(name);
+    for (size_t i = 0; env && env[i]; ++i)
+        if (!strncmp(env[i], name, length) && env[i][length] == '=') return env[i] + length + 1;
+    return NULL;
+}
+
+/* PARENT, when not 0, is the engine's process ID: the child is to die with
+ * the thread that forks it (cetta_proc_child_die_with_parent). */
 static void child_start(const char *program, char **argv, char **envp, const char *cwd,
-                        int out, int err, int report) {
+                        int out, int err, int report, pid_t parent) {
+    if (parent) cetta_proc_child_die_with_parent(parent, report);
     cetta_proc_child_exec(program, argv, envp, cwd, -1, out, err, report);
 }
 
@@ -341,25 +414,29 @@ CettaProcChild *cetta_proc_start(Atom *arguments, const char *cwd, Atom *environ
     }
     bool inherit = environment && environment->kind == ATOM_SYMBOL &&
                    !strcmp(atom_name_cstr(environment), "inherit");
+    Atom *overrides = cetta_proc_env_overrides(environment);
     if (!arguments || arguments->kind != ATOM_EXPR || !arguments->expr.len ||
-        (!inherit && (!environment || environment->kind != ATOM_EXPR)) ||
+        (!inherit && !overrides && (!environment || environment->kind != ATOM_EXPR)) ||
         !cwd || !*cwd || !out || !*out || !err || !*err) {
         snprintf(error, error_size, "expected argv, cwd, environment and two output paths");
         return NULL;
     }
-    size_t argc = arguments->expr.len, envc = inherit ? 0 : environment->expr.len;
-    char **argv = calloc(argc + 1, sizeof(*argv)), **envp = calloc(envc + 1, sizeof(*envp));
+    size_t argc = arguments->expr.len, envc = inherit || overrides ? 0 : environment->expr.len;
+    const char *reason = NULL;
+    char **argv = calloc(argc + 1, sizeof(*argv));
+    char **envp = overrides ? cetta_proc_env_inherit(overrides, &reason)
+                            : calloc(envc + 1, sizeof(*envp));
     char *program = NULL;
     int output = -1, errors = -1, report[2] = {-1, -1};
     CettaProcChild *child = calloc(1, sizeof(*child));
     if (child) { child->pidfd = -1; child->report = -1; }
-    if (!argv || !envp || !child) { errno = ENOMEM; goto failed; }
+    if (!argv || !envp || !child) { if (!reason) errno = ENOMEM; goto failed; }
     for (size_t i = 0; i < argc; ++i) {
         argv[i] = (char *)text(arguments->expr.elems[i]);
         if (!argv[i]) { errno = EINVAL; goto failed; }
     }
     if (!argv[0][0]) { errno = EINVAL; goto failed; }
-    const char *path = inherit ? getenv("PATH") : NULL;
+    const char *path = inherit ? getenv("PATH") : overrides ? env_value(envp, "PATH") : NULL;
     for (size_t i = 0; i < envc; ++i) {
         Atom *pair = environment->expr.elems[i];
         const char *name = pair && pair->kind == ATOM_EXPR && pair->expr.len == 2
@@ -394,8 +471,15 @@ CettaProcChild *cetta_proc_start(Atom *arguments, const char *cwd, Atom *environ
     sigfillset(&blocked);
     int mask_error = pthread_sigmask(SIG_SETMASK, &blocked, &previous);
     if (mask_error) { errno = mask_error; goto failed; }
+    /* The request outlives this call: its child dies with the engine only
+     * when the main thread, whose end is the engine's, forks it. */
+#ifdef SYS_gettid
+    pid_t parent = (pid_t)syscall(SYS_gettid) == getpid() ? getpid() : 0;
+#else
+    pid_t parent = 0;
+#endif
     child->pid = fork();
-    if (!child->pid) child_start(program, argv, inherit ? environ : envp, cwd, output, errors, report[1]);
+    if (!child->pid) child_start(program, argv, inherit ? environ : envp, cwd, output, errors, report[1], parent);
     int fork_error = errno;
     (void)pthread_sigmask(SIG_SETMASK, &previous, NULL);
     if (child->pid < 0) { child->pid = 0; errno = fork_error; goto failed; }
@@ -409,15 +493,19 @@ CettaProcChild *cetta_proc_start(Atom *arguments, const char *cwd, Atom *environ
     child->report = report[0]; report[0] = -1;
     goto done;
 failed:
-    snprintf(error, error_size, "process start: %s", strerror(errno));
+    snprintf(error, error_size, "process start: %s", reason ? reason : strerror(errno));
     cetta_proc_free(child); child = NULL;
 done:
     if (output >= 0) close(output);
     if (errors >= 0) close(errors);
     if (report[0] >= 0) close(report[0]);
     if (report[1] >= 0) close(report[1]);
-    if (envp) for (size_t i = 0; i < envc; ++i) free(envp[i]);
-    free(envp); free(argv); free(program);
+    if (overrides) cetta_proc_env_free(envp);
+    else {
+        if (envp) for (size_t i = 0; i < envc; ++i) free(envp[i]);
+        free(envp);
+    }
+    free(argv); free(program);
     return child;
 }
 
@@ -519,7 +607,8 @@ static Atom *proc_run(Arena *arena, Atom **args, uint32_t nargs) {
     int64_t timeout, max_bytes;
     if (!argv_atom || argv_atom->kind != ATOM_EXPR || argv_atom->expr.len < 1u)
         return invalid(arena, "argv must be a list of one or more strings");
-    if (!inherit && (!env_atom || env_atom->kind != ATOM_EXPR))
+    Atom *overrides = cetta_proc_env_overrides(env_atom);
+    if (!inherit && !overrides && (!env_atom || env_atom->kind != ATOM_EXPR))
         return invalid(arena, "env must be a list of (\"NAME\" \"value\") pairs");
     if (!cwd || !cwd[0])
         return invalid(arena, "cwd must be a directory path");
@@ -528,22 +617,29 @@ static Atom *proc_run(Arena *arena, Atom **args, uint32_t nargs) {
     if (!integer(args[4], 0, INT64_MAX, &max_bytes))
         return invalid(arena, "max-bytes must be a nonnegative integer (0 means unlimited)");
 
-    size_t argc = (size_t)argv_atom->expr.len, envc = inherit ? 0 : (size_t)env_atom->expr.len;
+    size_t argc = (size_t)argv_atom->expr.len,
+           envc = inherit || overrides ? 0 : (size_t)env_atom->expr.len;
+    const char *reason = NULL;
     char **argv = calloc(argc + 1, sizeof(*argv));
-    char **envp = calloc(envc + 1, sizeof(*envp));
+    char **envp = overrides ? cetta_proc_env_inherit(overrides, &reason)
+                            : calloc(envc + 1, sizeof(*envp));
     char *program = NULL;
     Atom *result = NULL;
     FILE *capture = NULL;
     Stream streams[2] = {{.fd = -1}, {.fd = -1}};
     int out[2] = {-1, -1}, err[2] = {-1, -1}, report[2] = {-1, -1}, pidfd = -1;
-    if (!argv || !envp) { result = failed(arena, "out of memory"); goto done; }
+    if (!argv || !envp) {
+        result = reason ? invalid(arena, reason) : failed(arena, "out of memory");
+        goto done;
+    }
     for (size_t i = 0; i < argc; ++i) {
         const char *arg = text(argv_atom->expr.elems[i]);
         if (!arg) { result = invalid(arena, "argv must be a list of one or more strings"); goto done; }
         argv[i] = (char *)arg;
     }
     if (!argv[0][0]) { result = invalid(arena, "the program name is empty"); goto done; }
-    const char *path_env = inherit ? getenv("PATH") : NULL;
+    const char *path_env = inherit ? getenv("PATH")
+                         : overrides ? env_value(envp, "PATH") : NULL;
     for (size_t i = 0; i < envc; ++i) {
         Atom *pair = env_atom->expr.elems[i];
         const char *name = pair && pair->kind == ATOM_EXPR && pair->expr.len == 2u
@@ -577,12 +673,14 @@ static Atom *proc_run(Arena *arena, Atom **args, uint32_t nargs) {
     sigfillset(&blocked);
     int mask_error = pthread_sigmask(SIG_SETMASK, &blocked, &previous);
     if (mask_error) { result = failed_errno(arena, "signals", mask_error); goto done; }
+    /* This thread waits for the child, so the child dies with the engine. */
+    pid_t parent = getpid();
     pid_t pid = fork();
     int fork_error = errno;
     if (pid != 0) (void)pthread_sigmask(SIG_SETMASK, &previous, NULL);
     if (pid < 0) { result = failed_errno(arena, "fork", fork_error); goto done; }
     if (pid == 0) child_start(program, argv, inherit ? environ : envp, cwd,
-                              out[1], merged ? out[1] : err[1], report[1]);
+                              out[1], merged ? out[1] : err[1], report[1], parent);
     setpgid(pid, pid);
     close(out[1]); out[1] = -1;
     if (err[1] >= 0) close(err[1]);
@@ -692,9 +790,12 @@ done:
     int fds[] = {out[0], out[1], err[0], err[1], report[0], report[1], pidfd};
     for (size_t i = 0; i < sizeof(fds) / sizeof(*fds); ++i)
         if (fds[i] >= 0) close(fds[i]);
-    if (envp)
-        for (size_t i = 0; i < envc; ++i) free(envp[i]);
-    free(envp);
+    if (overrides) cetta_proc_env_free(envp);
+    else {
+        if (envp)
+            for (size_t i = 0; i < envc; ++i) free(envp[i]);
+        free(envp);
+    }
     free(argv);
     free(program);
     return result;

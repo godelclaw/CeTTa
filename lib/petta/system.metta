@@ -6,6 +6,8 @@
 (: system:cwd (-> String))
 (: system:runtime-root (-> String))
 (= (system:wall-time) (__cetta_lib_system_host wall-time))
+(= (system:wall-time-ns) (__cetta_lib_system_host wall-time-ns))
+(= (system:notify $text) (__cetta_lib_system_host notify $text))
 (= (system:pid) (__cetta_lib_system_host pid))
 (= (system:executable) (__cetta_lib_system_host executable))
 (= (system:uuid4-hex) (__cetta_lib_system_host uuid4-hex))

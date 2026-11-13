@@ -8630,6 +8630,11 @@ static Atom *oem_grounded_operand(CettaOpenEquationCursor *cursor,
     return petta_semantics_flatten_closed_open_cons(&cursor->region, operand);
 }
 
+/* The empty list as a resolved operand: no cons cell is one. */
+static inline bool oem_empty_list(const Atom *atom) {
+    return atom->kind == ATOM_EXPR && atom->expr.len == 0u;
+}
+
 typedef enum {
     OEM_UNIFY_FAIL = 0,
     OEM_UNIFY_OK,
@@ -9872,8 +9877,15 @@ static inline __attribute__((always_inline)) OemRun oem_host_arithmetic(
         cursor->handoff = CETTA_OPEN_EQUATION_HANDOFF_UNSUPPORTED;
         return OEM_RUN_HANDOFF;
     }
-    args[0] = oem_grounded_operand(cursor, args[0]);
-    args[1] = oem_grounded_operand(cursor, args[1]);
+    /* (== X ()), the emptiness test, reads only whether X is empty, and a
+     * chain of cons cells never is, flattened or not. Flattening X here would
+     * cost its whole length at every step of a walk down a list it built. */
+    bool emptiness = step->op == g_builtin_syms.op_eq &&
+        (oem_empty_list(args[0]) || oem_empty_list(args[1]));
+    if (!emptiness) {
+        args[0] = oem_grounded_operand(cursor, args[0]);
+        args[1] = oem_grounded_operand(cursor, args[1]);
+    }
     if (!args[0] || !args[1]) {
         cursor->handoff = CETTA_OPEN_EQUATION_HANDOFF_UNSUPPORTED;
         return OEM_RUN_HANDOFF;
@@ -12923,8 +12935,9 @@ static bool oem_plain_list(const Atom *atom) {
  * variables included, and compared by identity, as SWI's ==/2 does, or,
  * by `alpha-unique-atom`, up to a renaming of their variables.  `append`,
  * `union-atom` and `length` also read a chain of cells that ends in a flat
- * list, as the flat list of its elements.  An unbound list, a partial or
- * improper chain, a cell anywhere else, a counted collection and, but for
+ * list, as the flat list of its elements, and `car-atom` and `cdr-atom` a
+ * flat list whose elements hold cells.  An unbound list, a partial or
+ * improper chain, any other cell, a counted collection and, but for
  * car-atom and cdr-atom, a non-list are the host's, which answers them
  * relationally or raises as SWI does. */
 /* The compiler has selected the operation and prepared its one argument.
@@ -12953,9 +12966,10 @@ static __attribute__((noinline)) OemRun oem_sequence_projection_step(
                 CETTA_RUNTIME_COUNTER_OPEN_EQUATION_OPEN_CONS_PROJECTION);
         return unified == OEM_UNIFY_OK ? OEM_RUN_CALLED : OEM_RUN_FAILED;
     }
+    /* A flat list is projected whatever its elements hold: the head and the
+     * rest read its spine alone, and the elements stand as they are, as they
+     * do for append and length. */
     if (list->kind == ATOM_VAR ||
-        (petta_semantics_open_cons_built() &&
-         atom_structural_may_have_list_carrier(list)) ||
         (list->kind == ATOM_EXPR && !oem_plain_list(list)))
         return OEM_RUN_DECLINED;
     CettaSequenceProjectionCall call = {

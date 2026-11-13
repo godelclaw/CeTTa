@@ -3,11 +3,17 @@
 
 ; Run a program as a child process. No shell is involved: ARGV is the
 ; program and its arguments. The child starts in CWD with ENV as its whole
-; environment. ENV is an explicit list or `inherit` for the parent environment, and
+; environment. ENV is an explicit list, `inherit` for the parent environment,
+; or (inherit (("NAME" "value") ...)) for the parent environment with each
+; NAME set to its value (in its place, or after the rest when the parent has
+; no such name; each NAME once), and
 ; with only standard input (empty), output and error open. It runs in a
 ; process group of its own, and the whole group is killed when TIMEOUT-MS
 ; runs out. A zero timeout means no deadline. A zero MAX-BYTES keeps all output;
 ; otherwise excess output is drained and its loss is marked in the result.
+; On Linux the child is killed when the engine ends, however it ends; what
+; the child starts itself is left to the caller's scope, or to an owned job
+; with lifetime owner.
 ;
 ;   (proc:run ("program" "argument" ...) "cwd" (("NAME" "value") ...)
 ;             timeout-ms max-bytes)
@@ -45,6 +51,7 @@
 ; Process observations preserve bytes and distinguish exit, signal, launch
 ; failure and interruption. Options are explicit (name value) pairs. A zero
 ; timeout or capture limit means no bound in capture mode (the default).
+; (env ENV) takes ENV as above; inherit is the default.
 ; Text decoding is a separate policy.
 ; lifetime owner selects tree ownership through the Linux process companion;
 ; the default lifetime group retains process-group cancellation.

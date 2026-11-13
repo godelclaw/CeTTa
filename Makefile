@@ -27145,6 +27145,16 @@ else
 endif
 .PHONY: test-lib-prolog-build-config
 
+# PeTTa's != before the embedded engine starts: native answers equal the
+# bridge's, and a first != no longer starts SWI.
+.PHONY: test-petta-libpl-unstarted-not-equal
+test-petta-libpl: test-petta-libpl-unstarted-not-equal
+test-petta-libpl-unstarted-not-equal: $(BIN) tests/support/check_petta_unstarted_not_equal.py
+	@if [ "$(LIB_PROLOG_ENABLED)" != 1 ]; then \
+		echo "SKIP: != before the engine starts requires embedded Prolog"; exit 0; \
+	fi; \
+	python3 tests/support/check_petta_unstarted_not_equal.py ./$(BIN)
+
 .PHONY: test-petta-libpl-read-evidence
 test-petta-libpl: test-petta-libpl-read-evidence
 test-petta-libpl-read-evidence: $(BIN)
@@ -37115,6 +37125,14 @@ test-proc-stdio-v1: $(BIN) tests/support/check_proc_stdio_v1.py
 	@python3 tests/support/check_proc_stdio_v1.py ./$(BIN)
 test-proc-stdio-fork-v1:
 	@$(MAKE) -s BUILD=core CETTA_PROC_FORK_SPAWN=1 test-proc-stdio-v1
+.PHONY: test-proc-parent-death-v1
+test-all: test-proc-parent-death-v1
+test-proc-parent-death-v1: $(BIN) tests/support/check_proc_parent_death_v1.py
+	@python3 tests/support/check_proc_parent_death_v1.py ./$(BIN)
+.PHONY: test-proc-env-v1
+test-all: test-proc-env-v1
+test-proc-env-v1: $(BIN) lib/proc.metta lib/io.metta tests/support/check_proc_env_v1.py
+	@python3 tests/support/check_proc_env_v1.py ./$(BIN)
 .PHONY: test-proc-lifetime-v1 test-proc-lifetime-fork-v1
 test-all: test-proc-lifetime-v1
 test-proc-lifetime-v1: $(BIN) tests/support/check_proc_lifetime_v1.py
@@ -37136,6 +37154,22 @@ FILESYSTEM_NATIVE_TEST_V1 = runtime/test-filesystem-observations-v1-$(BUILD_OBJ_
 $(FILESYSTEM_NATIVE_TEST_V1): tests/support/test_filesystem_observations_v1.c src/library_fs.c src/library_fs.h src/native_sha256.c src/native_sha256.h src/native_handle.c src/atom.c src/binding/frame_identity.c $(SYMBOL_STANDALONE_SRC) src/stats.h tests/test_runtime_stats_stubs.h $(BUILD_CONFIG_HEADER)
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections -o $@ tests/support/test_filesystem_observations_v1.c src/library_fs.c src/native_sha256.c src/native_handle.c src/atom.c src/binding/frame_identity.c $(SYMBOL_STANDALONE_SRC) $(LDFLAGS) -Wl,--gc-sections,--wrap=read,--wrap=__read_chk,--wrap=readdir,--wrap=malloc,--wrap=strdup,--wrap=fstatat,--wrap=closedir,--wrap=rename,--wrap=write,--wrap=fsync,--wrap=flock,--wrap=openat
+
+.PHONY: test-fs-changed-v1
+test-all: test-fs-changed-v1
+test-fs-changed-v1: $(BIN) tests/support/check_fs_changed_v1.py
+	@python3 tests/support/check_fs_changed_v1.py ./$(BIN)
+
+.PHONY: test-fs-size-v1
+test-all: test-fs-size-v1
+test-fs-size-v1: $(BIN) lib/fs.metta lib/petta/fs.metta lib/prime/fs.metta tests/support/check_fs_size_v1.py
+	@python3 tests/support/check_fs_size_v1.py ./$(BIN)
+
+.PHONY: test-system-host-v1
+test-all: test-system-host-v1
+test-system-host-v1: $(BIN) lib/system.metta lib/petta/system.metta lib/prime/system.metta \
+		tests/support/check_system_host_v1.py
+	@python3 tests/support/check_system_host_v1.py ./$(BIN)
 
 .PHONY: test-filesystem-v1
 test-all: test-filesystem-v1

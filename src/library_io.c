@@ -79,6 +79,7 @@ typedef struct CettaIoRequest {
     char *file_directory, *file_name;
     char **file_names;
     size_t file_name_count;
+    bool file_except; /* file_names are the entries ignored, not those selected */
     uint32_t file_mask;
     uint64_t notice_generation;
     CettaIpcClient *ipc;
@@ -1183,10 +1184,11 @@ static void io_file_pump(CettaIoRequest *request) {
         for (size_t offset = 0; offset + sizeof(struct inotify_event) <= (size_t)size;) {
             struct inotify_event *event = (struct inotify_event *)(buffer.bytes + offset);
             if (event->len > (size_t)size - offset - sizeof(*event)) return;
-            bool selected = !request->file_name_count ||
-                (event->mask & (IN_Q_OVERFLOW | IN_DELETE_SELF | IN_MOVE_SELF | IN_IGNORED));
-            for (size_t i = 0; !selected && i < request->file_name_count; ++i)
-                if (event->len && !strcmp(request->file_names[i], event->name)) selected = true;
+            bool named = false;
+            for (size_t i = 0; !named && i < request->file_name_count; ++i)
+                if (event->len && !strcmp(request->file_names[i], event->name)) named = true;
+            bool selected = (event->mask & (IN_Q_OVERFLOW | IN_DELETE_SELF | IN_MOVE_SELF | IN_IGNORED)) ||
+                (request->file_except ? !named : !request->file_name_count || named);
             if (selected) {
                 request->file_mask = event->mask;
                 request->file_name = io_strdup(event->len ? event->name : "");
@@ -1688,21 +1690,29 @@ static Atom *io_submit(CettaIoRuntime *runtime, Arena *arena,
 #ifdef __linux__
     if (input && input->kind == ATOM_EXPR && input->expr.len &&
         atom_is_symbol(input->expr.elems[0], "fs:changed")) {
+        /* (fs:changed directory [names [modified]]): names select entries,
+         * (except name ...) ignores them instead, and modified also wakes on
+         * a write to an entry still open, as a long-lived writer's commit is. */
         const char *directory = input->expr.len >= 2 ? io_text_arg(input->expr.elems[1]) : NULL;
-        Atom *names = input->expr.len == 3 ? input->expr.elems[2] : NULL;
-        if (!directory || input->expr.len > 3 || (names && names->kind != ATOM_EXPR))
-            return io_error(arena, head, args, nargs, "expected (fs:changed directory [names])");
+        Atom *names = input->expr.len >= 3 ? input->expr.elems[2] : NULL;
+        bool modified = input->expr.len == 4 && atom_is_symbol(input->expr.elems[3], "modified");
+        bool except = names && names->kind == ATOM_EXPR && names->expr.len &&
+            atom_is_symbol(names->expr.elems[0], "except");
+        if (!directory || input->expr.len > 4 || (input->expr.len == 4 && !modified) ||
+            (names && names->kind != ATOM_EXPR))
+            return io_error(arena, head, args, nargs, "expected (fs:changed directory [names [modified]])");
         request = calloc(1, sizeof(*request));
         if (!request) return io_error(arena, head, args, nargs, "file-watch allocation failed");
         request->provider = IO_FILE; request->file_fd = -1;
         request->file_directory = io_strdup(directory);
+        request->file_except = except;
         if (names) {
             request->file_names = calloc(names->expr.len, sizeof(char *));
             if (names->expr.len && !request->file_names) {
                 io_request_free(NULL, request);
                 return io_error(arena, head, args, nargs, "file-watch allocation failed");
             }
-            for (size_t i = 0; i < names->expr.len; ++i) {
+            for (size_t i = except ? 1u : 0u; i < names->expr.len; ++i) {
                 const char *name = io_text_arg(names->expr.elems[i]);
                 if (!name) { io_request_free(NULL, request); return io_error(arena, head, args, nargs, "file-watch names must be text"); }
                 request->file_names[request->file_name_count++] = io_strdup(name);
@@ -1719,7 +1729,8 @@ static Atom *io_submit(CettaIoRuntime *runtime, Arena *arena,
                 : "file-watch cannot start");
         }
         if (inotify_add_watch(request->file_fd, directory,
-            IN_CREATE | IN_CLOSE_WRITE | IN_MOVED_TO | IN_DELETE | IN_DELETE_SELF | IN_MOVE_SELF) < 0) {
+            IN_CREATE | IN_CLOSE_WRITE | IN_MOVED_TO | IN_DELETE | IN_DELETE_SELF | IN_MOVE_SELF |
+            (modified ? IN_MODIFY : 0u)) < 0) {
             io_request_free(NULL, request);
             return io_error(arena, head, args, nargs, "file-watch directory is unavailable");
         }

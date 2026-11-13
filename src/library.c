@@ -5451,17 +5451,33 @@ static Atom *cetta_library_dispatch_system(CettaLibraryContext *ctx,
         const char *operation = nargs ? library_text_arg(args[0]) : NULL;
         struct timespec now;
         if (!operation) return library_signature_error(a, head, args, nargs, "expected system operation");
-        if (!strcmp(operation, "wall-time") && nargs == 1) {
+        if ((!strcmp(operation, "wall-time") || !strcmp(operation, "wall-time-ns")) && nargs == 1) {
             int64_t ns;
             if (clock_gettime(CLOCK_REALTIME, &now) ||
                 __builtin_mul_overflow((int64_t)now.tv_sec, INT64_C(1000000000), &ns) ||
                 __builtin_add_overflow(ns, (int64_t)now.tv_nsec, &ns))
                 return library_signature_error(a, head, args, nargs, "cannot read wall clock");
+            /* time.time_ns(): the clock's nanoseconds since the epoch. */
+            if (!strcmp(operation, "wall-time-ns")) return atom_int(a, ns);
             /* time.time() as CPython 3.12 converts the clock's nanoseconds
              * (_PyTime_AsSecondsDouble): whole seconds by integer division,
              * any other count divided by 1e9 as a double. */
             return atom_float(a, ns % 1000000000 == 0 ? (double)(ns / 1000000000)
                                                       : (double)ns / 1e9);
+        }
+        /* sd_notify: the text as one datagram to $NOTIFY_SOCKET. True when
+         * sent, False when the variable is unset or empty, or the errno and
+         * message of the refusal. */
+        if (!strcmp(operation, "notify") && nargs == 2) {
+            const char *message = library_text_arg(args[1]);
+            if (!message || !message[0])
+                return library_signature_error(a, head, args, nargs,
+                    "expected a nonempty notification text, such as READY=1");
+            int sent = cetta_service_notify(message, strlen(message));
+            if (sent >= 0) return sent ? atom_true(a) : atom_false(a);
+            int code = errno;
+            return atom_expr3(a, atom_symbol(a, "system:os-error"), atom_int(a, code),
+                              atom_string(a, strerror(code)));
         }
         if (!strcmp(operation, "pid") && nargs == 1) return atom_int(a, getpid());
         /* The running executable, for a program that starts another process
