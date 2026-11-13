@@ -1,0 +1,7 @@
+(Sequential (Error step (Fault stop)) (before))
+(FieldsStayedInert ())
+(Inspected where ())
+(OperatorOrder (Error operator (Forbidden refused)) ())
+(ArgumentOrder (Error first (Fault bad)) (before))
+(Branches ((Error branch (Fault bad)) live) (live))
+(TypeAdmissionOrder (Error first (Fault bad)) (before))

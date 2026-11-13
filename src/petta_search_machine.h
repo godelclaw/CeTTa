@@ -395,6 +395,9 @@ typedef struct {
      * A fault occurrence returns from this application, rather than becoming
      * a field in its constructed value. */
     bool eager_argument_faults;
+    /* Typed raised occurrences propagate to the nearest explicit observer;
+     * no Error-shaped completed value is reclassified here. */
+    bool failure_values;
     /* PeTTa's collections are findall: an error raised while collecting
      * aborts the collection and propagates, as an exception does in
      * SWI-PeTTa.  Other dialects keep a raised error as an occurrence. */

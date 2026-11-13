@@ -45,6 +45,9 @@ typedef enum {
     CETTA_CALL_RESULT_COMPLETED_FRONTIER,
     /* `term` holds ordered expressions awaiting dialect completion. */
     CETTA_CALL_RESULT_EXPRESSION_FRONTIER,
+    /* Evaluator OutcomeSet only: a branch-local diagnostic, not VALUE.
+     * A native/owned-call adapter must export it using CETTA_CALL_RAISED. */
+    CETTA_CALL_RESULT_RAISED,
 } CettaCallResultForm;
 
 static inline bool cetta_call_result_is_frontier(CettaCallResultForm form) {

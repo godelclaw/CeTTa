@@ -67,6 +67,10 @@ static const CettaLanguageSpec CETTA_LANGUAGES[] = {
      "Direct MM2 lowering plus MORK-backed execution for pure program files",
      CETTA_RELATIVE_MODULE_POLICY_CURRENT_DIR_ONLY,
      CETTA_PORTABLE_RELATIONAL_NONE},
+    {CETTA_LANGUAGE_AI, "ai", "ai", true,
+     "Experimental AI dialect, initially PeTTa extended; named experiments are opt-in",
+     CETTA_RELATIVE_MODULE_POLICY_CURRENT_DIR_ONLY,
+     CETTA_PORTABLE_RELATIONAL_NONE},
     {CETTA_LANGUAGE_PETTA, "petta", "petta", true,
      "Corrected stable PeTTa, the default language (petta@1.1 is typed)",
      CETTA_RELATIVE_MODULE_POLICY_CURRENT_DIR_ONLY,
@@ -127,6 +131,10 @@ const CettaLanguageSpec *cetta_language_lookup(const char *name) {
         }
     }
     return NULL;
+}
+
+CettaLanguageId cetta_language_evaluator_family(CettaLanguageId id) {
+    return id == CETTA_LANGUAGE_AI ? CETTA_LANGUAGE_PETTA : id;
 }
 
 const CettaLanguageSpec *cetta_language_from_id(CettaLanguageId id) {

@@ -1,0 +1,124 @@
+AI experiments
+==============
+
+Status: experimental. These semantics do not change PeTTa, HE, he-compat or
+extended unless the AI profile or a named AI experiment is selected.
+
+Hosts
+-----
+
+  cetta --lang petta --profile ai program.metta
+  cetta --lang he --profile ai program.metta
+  cetta --lang ai program.metta
+
+The AI profiles inherit their host's extended reader, including list syntax
+and raw source regions. Repeating --profile ai and --profile extended works
+in either order. The existing PeTTa AI sealed-sort policy is retained.
+
+The AI language has its own dialect identity. It starts as PeTTa extended;
+its experiments are initially off. Enable the first experiment with a root
+declaration:
+
+  !(ai:experiment failure-values)
+
+Declarations are session-local and idempotent. A quoted declaration is data.
+An unknown name or malformed declaration reports Unsolvable. AI profiles
+enable failure-values at session initialization; both hosts use the same
+experiment state. New experiments require a named entry and an evidence log.
+
+Experiment: failure-values
+--------------------------
+
+A produced failure has the public spelling:
+
+  (Error WHERE (KIND DETAIL))
+
+KIND is Unsolvable, Forbidden, Incomplete or Fault. An already classified
+kind and its fields survive propagation. An unclassified legacy raise is
+Fault. Type-applicability rejection is Unsolvable. Budget exhaustion and
+no verdict are Incomplete; a host/protocol failure is Fault. WHERE and
+DETAIL are inert data, including when they describe executable syntax.
+
+Provenance is separate from spelling. A native RAISED occurrence is control;
+a native VALUE containing an Error term is data. catch converts a produced
+failure to data. Quotation and Atom-typed holding positions also preserve
+syntax as data. Inspecting or binding these values does not reactivate them.
+Explicit eval selects code deliberately.
+
+Position                         Rule
+--------                         ----
+let / let* source                Propagate; evaluate sources left to right.
+let / let* pattern               Held syntax; a mismatch gives zero.
+let / let* continuation          Run only for that branch's successful match.
+if condition                    Propagate; choose by the host's truth policy.
+if branches                     Run only the selected branch.
+case scrutinee                  An explicit resolved Error pattern may handle
+                                 a failure. A wildcard is not a handler.
+case pattern                    Held syntax, resolved in the captured bindings.
+case body                       Run only the selected match.
+collapse source                 Observe every occurrence, including failures,
+                                 duplicates and partial progress.
+superpose container             Held sequence of alternative programs.
+superpose alternative           Each branch keeps its own failure.
+unify operands                  Held terms, not programs to execute.
+unify branches                  Run only the selected branch.
+computed operator               Propagate before demanding its arguments.
+demanded function/native args   Propagate left to right; no later effect.
+held function/native args       Keep syntax according to the signature.
+constructor fields              Propagate where demanded; held fields stay data.
+catch source                    Observe each failure as one ordinary datum.
+directive result                Print failures; continue subsequent directives.
+eval / metta source             Held code, explicitly selected for execution.
+
+PeTTa eval runs the selected source once. HE eval retains its minimal-step
+contract; returning syntax that contains Error is not producing a failure.
+Only the selected code value is activated. Captured data arguments inside
+an unmarked source call keep their completed-value role.
+
+A completed absence report (Empty SCOPE) is one ordinary datum, declared
+through the existing type system. It is neither computational zero nor a
+failure. SCOPE must already be constructed inert data; constructing a report
+does not authorize executing the query it describes. No scope tag proves
+coverage or grants publication authority.
+
+Case-on-zero retains each host's policy: PeTTa uses an explicit bare Empty
+fallback, while HE can match its empty-source observation with a wildcard.
+This observation does not create a scoped (Empty SCOPE) certificate.
+
+Use an explicit observer when passing a failure to an ordinary strict
+function. For example, out:kind (catch SOURCE) and out:reify (catch SOURCE)
+work without privileged library-function names in the evaluator. A held
+function can itself use catch or an explicit Error case clause.
+
+Native conditional answers retain their delay owner inside the machine.
+An atom-only interface cannot acquire that owner from a copied term. An
+empty condition packet needs no solver; unresolved conditions report
+Incomplete with an inert description of the conditional value and goals.
+That description is not a continuation or a transferable solver capability.
+Malformed native metadata reports Fault, never completed absence.
+
+Evidence and scope
+------------------
+
+The Lean FailurePropagation.lean model specifies pure/read-only observation
+and proves agreement between independent denotational and continuation
+interpreters. It is not a refinement proof of the C evaluator or an effect
+confluence theorem. Its conservative-extension theorem fixes a host policy
+and requires a failure-free demanded trace. It does not establish global
+conservativity of every AI choice over PeTTa: held binding patterns and the
+pre-existing sealed-sort policy are explicit deviations. Graduation into a
+stable host requires that stronger review separately.
+
+The production PeTTa evaluator owns foreign calls, delays and occurrence
+roles. Its tier switches and translator expansion are integration axes.
+CETTA_PETTA_SEARCH_MACHINE=0 is additionally honored by failure-values for
+diagnostic comparison with the old direct evaluator on the pure fragment.
+That reference is not a second full PeTTa foreign/constraint implementation.
+It delegates explicit eval to the dialect's translator/evaluator primitive;
+its surrounding binding, choice and observation control remains independent.
+Unowned conditional answers may not be reported as unconditional values.
+
+Repeatable controls live in tests/ai/. Each experiment's qualification must
+record the engine revision, Lean source hash, observer table, changed golden
+programs, mutations, performance measurements and remaining limitations.
+Default and extended golden output must remain byte-identical.

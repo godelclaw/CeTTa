@@ -24,7 +24,8 @@ typedef enum {
     CETTA_LANGUAGE_GSLT_IL = 15,
     CETTA_LANGUAGE_ZEROUV = 16,
     CETTA_LANGUAGE_METTA_INTERACT = 17,
-    CETTA_LANGUAGE_HOL_LIGHT = 18
+    CETTA_LANGUAGE_HOL_LIGHT = 18,
+    CETTA_LANGUAGE_AI = 19
 } CettaLanguageId;
 
 typedef enum {
@@ -68,6 +69,9 @@ typedef struct {
 } CettaLanguageSpec;
 
 const CettaLanguageSpec *cetta_language_lookup(const char *name);
+/* Dialect identity and evaluator family are separate: AI currently uses
+ * PeTTa's execution machinery, without becoming a PeTTa alias. */
+CettaLanguageId cetta_language_evaluator_family(CettaLanguageId id);
 const CettaLanguageSpec *cetta_language_from_id(CettaLanguageId id);
 const char *cetta_language_canonical_name(CettaLanguageId id);
 const char *cetta_syntax_name(CettaSyntaxId syntax);

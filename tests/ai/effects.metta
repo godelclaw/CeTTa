@@ -1,0 +1,43 @@
+; Local state is an effect canary. A failure stops later work on that branch;
+; inspecting its diagnostic never runs the code named in its fields.
+(= (ae:new)
+   (let $candidate (new-state ())
+     (case $candidate
+       (((new-state $initial)
+         (let $reset (change-state! ae:events $initial) ae:events))
+        ($handle $handle)))))
+(= (ae:tick $state $label)
+   (let* (($old (get-state $state))
+          ($updated (cons-atom $label $old))
+          ($written (change-state! $state $updated))) $label))
+(= (ae:fail-before $state)
+   (let $before (ae:tick $state before) (Error first (Fault bad))))
+
+!(let $state (ae:new)
+   (let $failure (catch
+          (let* (($before (ae:tick $state before))
+                 ($failed (Error step (Fault stop)))
+                 ($after (ae:tick $state after))) never))
+     (Sequential $failure (get-state $state))))
+!(let $state (ae:new)
+   (case (Error (ae:tick $state where) (Fault (ae:tick $state detail)))
+     (((Error $where (Fault $detail)) (FieldsStayedInert (get-state $state))))))
+!(let $state (ae:new)
+   (case (Error (ae:tick $state where) (Fault detail))
+     (((Error $where (Fault $detail))
+       (case $where
+         (((ae:tick $owner $label) (Inspected $label (get-state $state)))))))))
+!(let $state (ae:new)
+   (let $failure (catch ((Error operator (Forbidden refused)) (ae:tick $state after)))
+     (OperatorOrder $failure (get-state $state))))
+!(let $state (ae:new)
+   (let $failure (catch (+ (ae:fail-before $state) (ae:tick $state after)))
+     (ArgumentOrder $failure (get-state $state))))
+!(let $state (ae:new)
+   (let $answers (collapse
+          (let $value (superpose ((Error branch (Fault bad)) live))
+            (ae:tick $state $value)))
+     (Branches $answers (get-state $state))))
+!(let $state (ae:new)
+   (let $failure (catch (+ (ae:fail-before $state) "bad"))
+     (TypeAdmissionOrder $failure (get-state $state))))

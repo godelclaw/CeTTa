@@ -6924,6 +6924,49 @@ test-shared-return-producer: $(SHARED_RETURN_PRODUCER_TEST_BIN)
 	@$(call cetta_exec,./$(SHARED_RETURN_PRODUCER_TEST_BIN))
 	@$(call cetta_exec,./$(SHARED_RETURN_PRODUCER_TEST_BIN)) --prime-native
 
+.PHONY: test-ai test-ai-suite test-ai-native-returns test-ai-failure-values test-ai-hosts test-ai-matrix
+test-ai: test-ai-native-returns test-ai-suite
+test-ai-suite: $(BIN) $(wildcard tests/ai/*.metta tests/ai/*.expected)
+	@set -eu; actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
+		"!(import! &self \"./tests/ai/suite.metta\") !(ais:run \"$(abspath $(BIN))\" \"$(CURDIR)\")"); \
+	expected=$$(printf 'true\n(AISuitePass 17 3968 13)'); \
+	if [ "$$actual" != "$$expected" ]; then printf '%s\n' "$$actual"; exit 1; fi; \
+	printf '%s\n' 'PASS: native AI suite: 17 fixture jobs, 3968 composition observations and 13 CLI controls'
+test-ai-native-returns: $(SHARED_RETURN_PRODUCER_TEST_BIN)
+	@CETTA_PETTA_SEARCH_MACHINE=1 $(call cetta_exec,./$(SHARED_RETURN_PRODUCER_TEST_BIN)) --ai-native
+	@CETTA_PETTA_SEARCH_MACHINE=0 $(call cetta_exec,./$(SHARED_RETURN_PRODUCER_TEST_BIN)) --ai-native
+
+test-ai-failure-values: $(BIN) $(wildcard tests/ai/*.metta tests/ai/*.expected)
+	@set -eu; for language in petta he; do \
+		machines=1; if [ "$$language" = petta ]; then machines='1 0'; fi; \
+		for machine in $$machines; do for name in failure_values positions effects library_observers; do \
+		if [ "$$name" = library_observers ] && [ "$$machine" = 0 ]; then continue; fi; \
+		route="CETTA_PETTA_SEARCH_MACHINE=$$machine"; \
+		fixture="tests/ai/$$name.metta"; \
+		actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
+			"!(import! &self \"./tests/ai/check_fixture.metta\") !(ai-test:check \"$(abspath $(BIN))\" \"$$language\" \"$$route\" \"$$fixture\" \"tests/ai/$$name.$$language.expected\" \"$(CURDIR)\")"); \
+		expected=$$(printf 'true\n(Pass "%s" "%s" "%s")' "$$language" "$$route" "$$fixture"); \
+		if [ "$$actual" != "$$expected" ]; then printf '%s\n' "$$actual"; exit 1; fi; \
+	done; done; done; printf '%s\n' 'PASS: AI semantic, state and library controls, driven by CeTTa'
+
+test-ai-hosts: $(BIN) tests/ai/host_controls.metta
+	@set -eu; actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
+		"!(import! &self \"./tests/ai/host_controls.metta\") !(ah:run \"$(abspath $(BIN))\")"); \
+	expected=$$(printf 'true\n(HostControlsPass 13)'); \
+	if [ "$$actual" != "$$expected" ]; then printf '%s\n' "$$actual"; exit 1; fi; \
+	printf '%s\n' 'PASS: 13 AI CLI, composition, activation and budget controls'
+
+test-ai-matrix: $(BIN) tests/ai/kind_matrix.metta
+	@set -eu; for language in petta he; do \
+		machines=1; if [ "$$language" = petta ]; then machines='1 0'; fi; \
+		for machine in $$machines; do route="CETTA_PETTA_SEARCH_MACHINE=$$machine"; \
+		actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
+			"!(import! &self \"./tests/ai/kind_matrix.metta\") !(km:run \"$(abspath $(BIN))\" \"$$language\" \"$$route\") !(km:nested \"$(abspath $(BIN))\" \"$$language\" \"$$route\")"); \
+		expected=$$(printf 'true\n(MatrixPass "%s" "%s" 92)\n(NestedMatrixPass "%s" "%s" 900)' \
+			"$$language" "$$route" "$$language" "$$route"); \
+		if [ "$$actual" != "$$expected" ]; then printf '%s\n' "$$actual"; exit 1; fi; \
+	done; done; printf '%s\n' 'PASS: 2976 four-kind and composed-context observations across PeTTa machine/reference and HE'
+
 $(CONDITIONAL_REGISTRATION_TEST_OBJ): tests/test_conditional_registration.c src/petta_search_machine.c $(BUILD_CONFIG_HEADER)
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -MF $(@:.o=.d) -Isrc -c $< -o $@

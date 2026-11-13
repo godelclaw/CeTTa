@@ -187,6 +187,8 @@ static bool cetta_eval_option_store(CettaEvaluatorOptions *options,
 
 static uint32_t cetta_language_base_builtin_mask(CettaLanguageId language_id) {
     switch (language_id) {
+    case CETTA_LANGUAGE_AI:
+        return CETTA_PROFILE_MASK_PETTA_EXTENDED;
     case CETTA_LANGUAGE_HE:
         return CETTA_PROFILE_MASK_HE_FORMAL;
     case CETTA_LANGUAGE_PRIME:
@@ -344,6 +346,7 @@ void cetta_language_print_versions(FILE *out, CettaLanguageId language_id) {
 }
 
 bool cetta_language_has_named_profiles(CettaLanguageId language_id) {
+    language_id = cetta_language_evaluator_family(language_id);
     return language_id == CETTA_LANGUAGE_HOL_LIGHT ||
            language_id == CETTA_LANGUAGE_HE ||
            language_id == CETTA_LANGUAGE_PRIME ||
@@ -355,11 +358,13 @@ bool cetta_language_has_named_profiles(CettaLanguageId language_id) {
 
 bool cetta_profile_is_valid_for_language(CettaLanguageId language_id,
                                          const CettaProfile *profile) {
+    language_id = cetta_language_evaluator_family(language_id);
     return !profile || profile->language_id == language_id;
 }
 
 const CettaProfile *cetta_profile_from_name_for_language(CettaLanguageId language_id,
                                                          const char *name) {
+    language_id = cetta_language_evaluator_family(language_id);
     if (!name) return NULL;
     if (language_id == CETTA_LANGUAGE_HOL_LIGHT) {
         for (size_t i = 0; i < sizeof CETTA_HOL_PROFILES / sizeof CETTA_HOL_PROFILES[0]; ++i)
@@ -370,6 +375,8 @@ const CettaProfile *cetta_profile_from_name_for_language(CettaLanguageId languag
         return NULL;
     }
     if (language_id == CETTA_LANGUAGE_HE) {
+        if (cetta_profile_name_matches(name, &CETTA_PROFILE_HE_AI_VALUE))
+            return &CETTA_PROFILE_HE_AI_VALUE;
         if (cetta_profile_name_matches(name, &CETTA_PROFILE_HE_FORMAL_VALUE) ||
             strcmp(name, "formal-he") == 0) {
             return &CETTA_PROFILE_HE_FORMAL_VALUE;
@@ -464,6 +471,7 @@ uint32_t cetta_profile_mask(const CettaProfile *profile) {
     case CETTA_PROFILE_HE_COMPAT:
         return CETTA_PROFILE_MASK_HE_COMPAT;
     case CETTA_PROFILE_HE_EXTENDED:
+    case CETTA_PROFILE_HE_AI:
         return CETTA_PROFILE_MASK_HE_EXTENDED;
     case CETTA_PROFILE_HE_PRIME:
         return CETTA_PROFILE_MASK_HE_PRIME;
@@ -496,9 +504,9 @@ uint32_t cetta_profile_mask(const CettaProfile *profile) {
         return 0u;
 #endif
     case CETTA_PROFILE_PETTA_EXTENDED:
+    case CETTA_PROFILE_PETTA_AI:
         return CETTA_PROFILE_MASK_PETTA_EXTENDED;
     case CETTA_PROFILE_PETTA_1_1_C:
-    case CETTA_PROFILE_PETTA_AI:
         return CETTA_PROFILE_MASK_PETTA_BASE;
     }
     return 0;
@@ -520,6 +528,7 @@ bool cetta_language_visible_in(CettaLanguageId language_id,
 
 void cetta_profile_print_inventory_for_language(FILE *out,
                                                 CettaLanguageId language_id) {
+    language_id = cetta_language_evaluator_family(language_id);
     if (!out) return;
     if (language_id == CETTA_LANGUAGE_HOL_LIGHT) {
         for (size_t i = 0; i < sizeof CETTA_HOL_PROFILES / sizeof CETTA_HOL_PROFILES[0]; ++i)
@@ -909,7 +918,8 @@ cetta_eval_session_relative_module_policy(const CettaEvalSession *session) {
 
 void cetta_eval_session_set_fuel_limit(CettaEvalSession *session, int fuel_limit) {
     if (!session) return;
-    session->options.fuel_limit = fuel_limit > 0 ? fuel_limit : -1;
+    session->options.fuel_limit = fuel_limit > 0 ||
+        (fuel_limit == 0 && cetta_session_allows_experiments(session)) ? fuel_limit : -1;
 }
 
 bool cetta_eval_session_record_generic_setting(CettaEvalSession *session,
@@ -960,7 +970,14 @@ void cetta_eval_session_init(CettaEvalSession *session,
                              const CettaProfile *profile) {
     session->test_verdict = NULL;
     session->test_verdict_context = NULL;
-    session->language_id = language_id;
+    session->dialect_id = language_id;
+    session->language_id = cetta_language_evaluator_family(language_id);
+    if (language_id == CETTA_LANGUAGE_AI && !profile)
+        profile = cetta_profile_petta_extended();
+    session->experiments = profile &&
+        (profile->id == CETTA_PROFILE_PETTA_AI ||
+         profile->id == CETTA_PROFILE_HE_AI)
+        ? CETTA_EXPERIMENT_FAILURE_VALUES : 0u;
     session->speculative = false;
     atomic_init(&session->effect_denials, 0);
     session->profile = cetta_profile_is_valid_for_language(language_id, profile)
@@ -970,6 +987,21 @@ void cetta_eval_session_init(CettaEvalSession *session,
         &session->module_policy, session->language_id, session->profile);
     cetta_evaluator_options_init(&session->options);
     cetta_eval_session_clear_process_exit(session);
+}
+
+bool cetta_session_allows_experiments(const CettaEvalSession *session) {
+    return session && (session->dialect_id == CETTA_LANGUAGE_AI ||
+        (session->profile && (session->profile->id == CETTA_PROFILE_PETTA_AI ||
+                              session->profile->id == CETTA_PROFILE_HE_AI)));
+}
+
+bool cetta_session_enable_experiment(CettaEvalSession *session, const char *name) {
+    if (!cetta_session_allows_experiments(session) || !name)
+        return false;
+    if (strcmp(name, "failure-values") != 0)
+        return false;
+    session->experiments |= CETTA_EXPERIMENT_FAILURE_VALUES;
+    return true;
 }
 
 void cetta_eval_session_init_he_compat(CettaEvalSession *session) {

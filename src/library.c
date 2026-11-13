@@ -336,6 +336,12 @@ static bool library_prime_host_intrinsic(SymbolId head) {
            eval_native_weight_head(head);
 }
 
+/* Keep the host call boundary stable while an AI experiment is enabled
+ * between roots. The native handler returns data when failure-values is off. */
+static bool library_ai_host_intrinsic(SymbolId head) {
+    return head == g_builtin_syms.error || eval_native_weight_head(head);
+}
+
 typedef struct {
     const char *name;
     CettaLibraryMask bit;
@@ -733,6 +739,12 @@ static bool library_context_init_services(CettaLibraryContext *ctx,
     if (!ctx) { errno = EINVAL; return false; }
     memset(ctx, 0, sizeof(*ctx));
     cetta_eval_session_init(&ctx->session, language_id, profile);
+    language_id = ctx->session.language_id;
+    profile = ctx->session.profile;
+    if (profile && profile->id == CETTA_PROFILE_PETTA_AI)
+        profile = cetta_profile_petta_extended();
+    else if (profile && profile->id == CETTA_PROFILE_HE_AI)
+        profile = cetta_profile_he_extended();
     ctx->prime_interpretation = prime_interpretation_selection_new(language_id,
         cetta_language_uses_rust_he_compat_semantics(language_id, profile),
         language_id == CETTA_LANGUAGE_PRIME && !(profile && profile->quote_as_written));
@@ -752,9 +764,10 @@ static bool library_context_init_services(CettaLibraryContext *ctx,
     if (mutex_error) { errno = mutex_error; return false; }
     ctx->active_mask = profile &&
         ((language_id == CETTA_LANGUAGE_HE &&
-          profile->id == CETTA_PROFILE_HE_EXTENDED) ||
+          (profile->id == CETTA_PROFILE_HE_EXTENDED ||
+           profile->id == CETTA_PROFILE_HE_AI)) ||
          (language_id == CETTA_LANGUAGE_PETTA &&
-          profile->id == CETTA_PROFILE_PETTA_EXTENDED))
+          profile->enable_cetta_extensions))
         ? CETTA_NATIVE_IMPORT_TRANSFORM : 0u;
     /* Managed source symbols can precede their first execution. Register
      * this finite intrinsic vocabulary before nested-call classification. */
@@ -882,7 +895,9 @@ static bool library_context_init_services(CettaLibraryContext *ctx,
             language_id == CETTA_LANGUAGE_PRIME
                 ? (native_weight_profile ? library_prime_host_intrinsic
                                          : cetta_prime_host_intrinsic_head)
-                : (native_weight_profile ? eval_native_weight_head : NULL))
+                : cetta_session_allows_experiments(&ctx->session)
+                    ? library_ai_host_intrinsic
+                    : (native_weight_profile ? eval_native_weight_head : NULL))
         : NULL;
     if (ctx->petta_program && native_weight_profile)
         petta_program_enable_graded_equations(ctx->petta_program);
