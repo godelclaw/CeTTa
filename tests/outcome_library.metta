@@ -73,3 +73,9 @@
 !(collapse (out:let* (($x 1) ($x 2)) $x))
 !(collapse (out:let* (((P $y) (Q 1))) $y))
 !(collapse (out:let (P $y) (P 5) (+ $y 1)))
+
+; Reified failures are data in every dialect; reflect makes them failures again.
+!(collapse (out:reify (bad)))
+!(collapse (out:reify 5))
+!(collapse (== (out:reify (refused)) (Failed policy Forbidden (quota exceeded))))
+!(collapse (out:reflect (Failed policy Forbidden (quota exceeded))))

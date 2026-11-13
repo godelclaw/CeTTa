@@ -29,12 +29,13 @@
 (= (out:incomplete $where $detail) (Error $where (Incomplete $detail)))
 (= (out:fault $where $detail) (Error $where (Fault $detail)))
 
-; Any expression headed by Error, of any arity, is a failure: natives answer
-; (Error CALL MESSAGE) and catch answers (Error TYPE CONTEXT).
+; An expression headed by Error with one to three arguments is a failure:
+; natives answer (Error CALL MESSAGE), catch answers (Error TYPE CONTEXT) or
+; (Error EXCEPTION).
 (= (out:failed? $value)
-   (if (== (get-metatype $value) Expression)
-     (if (== $value ()) False (== (car-atom $value) Error))
-     False))
+   (case $value
+     (((Error $where $reason) True) ((Error $fault) True) ((Error $type $context $more) True)
+      ($other False))))
 (= (out:ok? $value) (not (out:failed? $value)))
 
 (= (out:kind $value)
@@ -60,6 +61,19 @@
    (if (out:failed? $value)
      (out:fail (out:kind $value) $where (out:detail $value))
      $value))
+
+; A failure reified as inert data, and reflected back.  (Failed WHERE KIND
+; DETAIL) is no failure: it can be compared, stored and passed in any dialect.
+(: out:reify (-> Atom %Undefined%))
+(= (out:reify $source)
+   (let $value (catch (eval $source))
+     (if (out:failed? $value)
+       (Failed (out:where $value) (out:kind $value) (out:detail $value))
+       $value)))
+(= (out:reflect $value)
+   (case $value
+     (((Failed $where $kind $detail) (out:fail $kind $where $detail))
+      ($other $other))))
 
 (= (out:empty $scope) (Empty $scope))
 (= (out:absent? $value)
@@ -136,7 +150,8 @@
    (if (out:failed? $newest-first) $newest-first (reverse $newest-first)))
 
 ; Conditions decide only on True or False.  A failure propagates; any other
-; value is no verdict, which is neither branch.
+; value is no verdict, which is neither branch: an Incomplete failure, since no
+; verdict is unresolved work, never a refutation.
 (: out:if (-> Atom Atom Atom %Undefined%))
 (= (out:if $condition $then $else)
    (let $verdict (eval $condition)
@@ -145,7 +160,7 @@
          (out:no-verdict out:if $verdict)))))
 (= (out:no-verdict $where $verdict)
    (if (out:failed? $verdict) $verdict
-     (out:unsolvable $where (NoVerdict $verdict))))
+     (out:incomplete $where (NoVerdict $verdict))))
 (: out:and (-> Atom %Undefined%))
 (= (out:and $conditions)
    (if (== $conditions ()) True

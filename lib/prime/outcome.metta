@@ -88,6 +88,23 @@
            (Error $where ($kind $detail))){$detail}){$kind}
        $value)))
 
+; A failure reified as inert data, and reflected back.  (Failed WHERE KIND
+; DETAIL) is no failure: HE compares it, stores it and passes it as an
+; argument, which it does not do with an Error.
+(: out:reify (-> Atom %Undefined%))
+(= (out:reify $source)
+   (chain (metta $source %Undefined% (context-space)) $value
+     (if (out:is-failure $value)
+       (chain (metta (out:kind-of $value) %Undefined% (context-space)) $kind
+         (chain (metta (out:detail-of $value) %Undefined% (context-space)) $detail
+           (unify $value (Error $where $reason) (Failed $where $kind $detail) (Failed () $kind $detail))){$detail}){$kind}
+       $value)))
+(: out:reflect (-> %Undefined% %Undefined%))
+(= (out:reflect $value)
+   (case $value
+     (((Failed $where $kind $detail) (Error $where ($kind $detail)))
+      ($other $other))))
+
 ; HE reads an undeclared (Empty x) as no result; the constructor declaration
 ; keeps it data, as the scoped observations of an application declare it.
 (: Empty (-> Atom ScopedObservation))
@@ -175,7 +192,7 @@
 (: out:no-verdict (-> %Undefined% %Undefined% %Undefined%))
 (= (out:no-verdict $where $verdict)
    (if (out:is-failure $verdict) $verdict
-     (Error $where (Unsolvable (NoVerdict $verdict)))))
+     (Error $where (Incomplete (NoVerdict $verdict)))))
 (: out:and (-> Atom %Undefined%))
 (= (out:and $conditions)
    (if-equal $conditions () True

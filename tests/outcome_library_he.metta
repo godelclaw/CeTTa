@@ -50,3 +50,8 @@
 !(collapse (out:let* (((P $y) (Q 1))) $y))
 !(collapse (out:let (P $y) (P 5) (+ $y 1)))
 !(collapse (out:let* ((($u $v) (seen pair (P Q)))) ($v $u)))
+
+!(collapse (out:reify (bad)))
+!(collapse (out:reify 5))
+!(collapse (== (out:reify (refused)) (Failed policy Forbidden (quota exceeded))))
+!(collapse (out:reflect (Failed policy Forbidden (quota exceeded))))
