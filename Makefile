@@ -19977,7 +19977,8 @@ NORMAL_TEST_TARGETS := \
 	test-application-panel \
 	test-lang-chr \
 	test-provenance \
-	test-petta-hyperpose-named-state
+	test-petta-hyperpose-named-state \
+	test-prepared-pure-refusal-growth
 
 .PHONY: test test-all test-test-target-scope
 test: $(NORMAL_TEST_TARGETS)
@@ -52824,6 +52825,12 @@ ifeq ($(ENABLE_PYTHON),1)
 else
 	@echo "SKIP: Python callback completion (Python support disabled)"
 endif
+
+# A prepared-call refusal is recorded once and a request it does not settle
+# pauses its key: repeating the calls costs linear time, not quadratic.
+.PHONY: test-prepared-pure-refusal-growth
+test-prepared-pure-refusal-growth: $(BIN) tests/support/check_prepared_pure_refusal_growth.py
+	@python3 tests/support/check_prepared_pure_refusal_growth.py "$(abspath $(BIN))"
 
 .PHONY: test-python-objects test-python-package bench-python-interop-light
 test-all: test-python-objects

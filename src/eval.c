@@ -86959,7 +86959,11 @@ static bool prepared_pure_program_cache_insert_mode(
         total_structural_equality, program, false, count_store);
 }
 
-/* A source-qualified refusal has no operand payload to retain. */
+/* A source-qualified refusal has no operand payload to retain.  A refusal
+ * already recorded under the same key and revision is the same fact: a
+ * request for a different kind can compile and fail again with the same
+ * report, and storing each repetition would lengthen every later scan of
+ * the entries without bound. */
 static bool prepared_pure_program_cache_insert_decline_head(
     PreparedPureProgramCache *cache, Space *space, SymbolId head, CettaExprLen arity,
     const void *source_identity, CettaLanguageId language_id,
@@ -86969,11 +86973,18 @@ static bool prepared_pure_program_cache_insert_decline_head(
     uint64_t capability_revision =
         language_id == CETTA_LANGUAGE_PETTA && g_library_context
             ? petta_libpl_capability_revision(g_library_context->lib_prolog) : 0u;
-    return head != SYMBOL_ID_NONE &&
-        prepared_pure_program_cache_prepare_revision(cache, space, capability_revision) &&
-        prepared_pure_program_cache_store_entry(cache, space, head, arity,
-            source_identity, language_id, call_mode, kind,
-            entry_arguments_are_values, total_structural_equality, NULL, admission_refused, true);
+    if (head == SYMBOL_ID_NONE ||
+        !prepared_pure_program_cache_prepare_revision(cache, space, capability_revision))
+        return false;
+    for (const PreparedPureCacheEntry *entry = cache->entries; entry; entry = entry->next)
+        if (!entry->program && entry->admission_refused == admission_refused &&
+            prepared_pure_program_cache_entry_matches(entry, space, head, arity,
+                source_identity, language_id, call_mode, kind,
+                entry_arguments_are_values, total_structural_equality))
+            return true;
+    return prepared_pure_program_cache_store_entry(cache, space, head, arity,
+        source_identity, language_id, call_mode, kind,
+        entry_arguments_are_values, total_structural_equality, NULL, admission_refused, true);
 }
 
 static bool prepared_pure_program_cache_insert(
@@ -96006,8 +96017,18 @@ static bool prepared_pure_closed_invocation_try(
                 source_view.root, language_id, call_mode, kind,
                 cache_entry_arguments_are_values,
                 total_structural_equality, &compilation, generation);
-        if (cacheable_program &&
-            compilation.status == CETTA_PREPARED_PURE_COMPILE_UNCERTIFIED &&
+        /* An optional value is refused only when both demands are. An
+         * eager (PeTTa or HE) failure that certified one of them leaves this
+         * request without a certificate, so it pauses the key as an
+         * uncertified failure does; otherwise every later call would compile
+         * and fail again. Prime's call-by-need requests keep their rule. */
+        bool request_uncertified =
+            compilation.status == CETTA_PREPARED_PURE_COMPILE_UNCERTIFIED ||
+            (kind == PREPARED_PURE_PROGRAM_OPTIONAL_VALUE &&
+             call_mode == CETTA_GSLT_PURE_CALL_EAGER &&
+             !(cetta_prepared_pure_compile_refused(&compilation, space, false) &&
+               cetta_prepared_pure_compile_refused(&compilation, space, true)));
+        if (cacheable_program && request_uncertified &&
             space_program_token_matches_live_space(compilation.source, space) &&
             prepared_pure_program_cache_refusal_current(program_cache, space,
                 language_id, generation))
