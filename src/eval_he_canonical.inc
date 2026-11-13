@@ -2691,7 +2691,8 @@ static void he_canonical_resume_dispatch(HeCanonicalFrame *frame) {
         if (!frame->selected && frame->has_functions && !total_structural_eq) {
             if (!frame->has_non_functions || eval_type_check_auto_enabled())
                 for (uint32_t i = 0u; i < all_errors.len; i++)
-                    outcome_set_add(frame->target, all_errors.items[i], &frame->env);
+                    ai_publish_error(a, frame->target,
+                        ai_type_diagnostic(a, all_errors.items[i]), &frame->env);
             if (!frame->has_non_functions) {
                 applicability_errors_free(&all_errors);
                 he_canonical_pop();
@@ -3667,8 +3668,13 @@ static __attribute__((noinline)) bool he_ai_source_failure(HeCanonicalFrame *fra
             frame->kind != HE_CANONICAL_EVALUATE &&
             frame->kind != HE_CANONICAL_CALLER && frame->kind != HE_CANONICAL_CALL))
         return false;
-    Atom *source = bindings_apply_if_vars(&frame->env, frame->arena, frame->atom);
-    if (!atom_is_error(source) || atom_is_he_evaluated(source) ||
+    /* Looking for an intrinsic is a root observation, not substitution of
+     * an entire (possibly shared) value graph. Bound values keep their role. */
+    Atom *source = frame->atom;
+    if (!atom_is_error(source) || atom_is_he_evaluated(source))
+        return false;
+    source = bindings_apply_if_vars(&frame->env, frame->arena, source);
+    if (!source ||
         eval_atom_type_demand(frame->arena, source, frame->type
             ? frame->type : atom_undefined_type(frame->arena)) == HE_TYPE_KEEP)
         return false;

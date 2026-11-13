@@ -6935,11 +6935,11 @@ test-ai-suite: $(BIN) $(wildcard tests/ai/*.metta tests/ai/*.expected)
 	printf '%s\n' 'PASS: native PeTTa AI suite: 12 fixture jobs, 1984 composition observations and 27 CLI controls'
 test-ai-he-suite: $(BIN) $(wildcard tests/ai/*.metta)
 	@set -eu; actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
-		"!(import! &self \"./tests/ai/he_suite.metta\") !(hs:run \"$(abspath $(BIN))\")") || \
+		"!(import! &self \"./tests/ai/he_suite.metta\") !(hs:run \"$(abspath $(BIN))\") !(hs:graph \"$(abspath $(BIN))\" \"CETTA_HE_CANONICAL_EXECUTION=1\") !(hs:graph \"$(abspath $(BIN))\" \"CETTA_HE_CANONICAL_EXECUTION=0\")") || \
 		{ printf '%s\n' "$$actual"; exit 1; }; \
-	expected=$$(printf 'true\n(HEAISuitePass 1984 80 2)'); \
+	expected=$$(printf 'true\n(HEAISuitePass 1984 82 2)\n(HESharedGraphPass "CETTA_HE_CANONICAL_EXECUTION=1" 60)\n(HESharedGraphPass "CETTA_HE_CANONICAL_EXECUTION=0" 60)'); \
 	if [ "$$actual" != "$$expected" ]; then printf '%s\n' "$$actual"; exit 1; fi; \
-	printf '%s\n' 'PASS: native HE AI suite: 1984 composition observations, 80 producer/effect cases and 2 budget controls'
+	printf '%s\n' 'PASS: native HE AI suite: 1984 composition observations, 82 producer/effect cases and 2 budget controls'
 test-ai-native-returns: $(SHARED_RETURN_PRODUCER_TEST_BIN)
 	@CETTA_PETTA_SEARCH_MACHINE=1 $(call cetta_exec,./$(SHARED_RETURN_PRODUCER_TEST_BIN)) --ai-native
 	@$(call cetta_exec,./$(SHARED_RETURN_PRODUCER_TEST_BIN)) --ai-native-he

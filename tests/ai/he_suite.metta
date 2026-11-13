@@ -21,6 +21,15 @@
           (hs:budgets $binary))
      ((((HEContractResults $canonical 92 0) (HEContractResults $reference 92 0)
         (HEContractResults $canonical 900 0) (HEContractResults $reference 900 0)
-        (HEProducerResults $canonical 40 0) (HEProducerResults $reference 40 0)
-        (HEBudgetControlsPass 2)) (HEAISuitePass 1984 80 2))
+        (HEProducerResults $canonical 41 0) (HEProducerResults $reference 41 0)
+        (HEBudgetControlsPass 2)) (HEAISuitePass 1984 82 2))
       ($bad (let $shown (println! (HEAISuiteFailed $bad)) (system:exit 1))))))
+
+; The graph has only linear physical size. An exponential unfolding must
+; fail this bounded child run rather than consume the whole suite's budget.
+(= (hs:graph $binary $route)
+   (let $program "!(ai:experiment failure-values) (= (dag $n $leaf) (if (== $n 0) $leaf (let $t (dag (- $n 1) $leaf) (pair $t $t)))) !(let $d (dag 60 $x) (let $x 1 (let $e $d ok)))"
+     (case (proc:run ("/usr/bin/env" $route $binary "--lang" "he" "--profile" "ai" "-e" $program)
+                     "." inherit 10000 1048576)
+       (((proc:exited 0 "[()]\n[ok]\n" "") (HESharedGraphPass $route 60))
+        ($bad (HESharedGraphFailed $route $bad))))))

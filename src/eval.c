@@ -7229,8 +7229,7 @@ done:
 
 static bool eval_has_normal_constructor_value(Space *s, Arena *a, Atom *atom,
                                                int fuel) {
-    return !(eval_failure_values() && eval_current_language_id() == CETTA_LANGUAGE_HE) &&
-           !petta_atom_requires_control_eval(atom) &&
+    return !petta_atom_requires_control_eval(atom) &&
            !prime_need_is_canonical_app(atom) &&
            !prime_need_is_explicit_control_form(atom) &&
            !prime_need_atom_has_observable_ref(atom) &&

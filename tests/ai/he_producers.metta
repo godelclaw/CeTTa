@@ -41,6 +41,7 @@
 (HC native-value-typecheck "(: only-number (-> Number Number)) (= (only-number $x) $x) !(case (catch (only-number (index-atom ((Error native datum)) 0))) (((Error $w (Unsolvable $d)) rejected) ($x missed)))" "[rejected]\n")
 (HC match-space-failure "!(case (catch (match wrong (K $x) $x)) (((Error $w (Fault $d)) caught) ($x missed)))" "[caught]\n")
 (HC malformed-cons "!(case (catch (function (cons-atom 1 2))) (((Error $w (Fault $d)) caught) ($x missed)))" "[caught]\n")
+(HC type-failure-effect-fence "(: tf (-> Number Number)) (= (tf $x) $x) !(let* (($x (tf \"s\")) ($y (add-atom &self (eff-tf)))) done) !(collapse (match &self (eff-tf) yes))" "[(Error (tf \"s\") (Unsolvable (BadArgType 1 Number String)))]\n[()]\n")
 
 (= (hp:check $binary $route (ProducerCase $name $source $wanted))
    (let* (($program (str:concat "!(ai:experiment failure-values) " $source))
