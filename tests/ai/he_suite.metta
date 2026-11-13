@@ -21,8 +21,8 @@
           (hs:budgets $binary))
      ((((HEContractResults $canonical 92 0) (HEContractResults $reference 92 0)
         (HEContractResults $canonical 900 0) (HEContractResults $reference 900 0)
-        (HEProducerResults $canonical 41 0) (HEProducerResults $reference 41 0)
-        (HEBudgetControlsPass 2)) (HEAISuitePass 1984 82 2))
+        (HEProducerResults $canonical 62 0) (HEProducerResults $reference 62 0)
+        (HEBudgetControlsPass 2)) (HEAISuitePass 1984 124 2))
       ($bad (let $shown (println! (HEAISuiteFailed $bad)) (system:exit 1))))))
 
 ; The graph has only linear physical size. An exponential unfolding must
@@ -33,3 +33,12 @@
                      "." inherit 10000 1048576)
        (((proc:exited 0 "[()]\n[ok]\n" "") (HESharedGraphPass $route 60))
         ($bad (HESharedGraphFailed $route $bad))))))
+
+; Stored diagnostics may be shared leaves of a large value graph. This
+; exercises the direct data admission without invoking a pattern search.
+(= (hs:data-graph $binary $route)
+   (let $program "!(ai:experiment failure-values) (= (dag $n $leaf) (if (== $n 0) $leaf (let $t (dag (- $n 1) $leaf) (pair $t $t)))) !(let $leaf (catch (Error stored (Fault b))) (let $d (dag 60 $leaf) (let $s (new-space) (let $added (add-atom $s (Item $d)) (let $read (get-atoms $s) (let $forced $read ok))))))"
+     (case (proc:run ("/usr/bin/env" $route $binary "--lang" "he" "--profile" "ai" "-e" $program)
+                     "." inherit 10000 1048576)
+       (((proc:exited 0 "[()]\n[ok]\n" "") (HESharedDataGraphPass $route 60))
+        ($bad (HESharedDataGraphFailed $route $bad))))))

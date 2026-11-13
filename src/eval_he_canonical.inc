@@ -3255,7 +3255,7 @@ static inline __attribute__((always_inline)) void he_canonical_resume_match_kern
             valid = collect_match_visible_vars_rec(registers->source[i], &visible);
         Bindings projected;
         bindings_init(&projected);
-        valid = valid && project_match_visible_bindings(a, &visible, &row->env, &projected);
+        valid = valid && he_project_match_data(a, &visible, &row->env, &projected);
         match_visible_var_set_free(&visible);
         if (!valid) {
             bindings_free(&projected);

@@ -4687,6 +4687,11 @@ static void table_mode_env_init(void) {
 }
 
 static CettaTableMode active_search_table_mode(void) {
+    /* The legacy answer bank retains syntax and bindings, but no produced
+     * failure channel. Run the ordinary evaluator until the bank can retain
+     * that channel; replay must not turn a raised occurrence into data. */
+    if (eval_failure_values())
+        return CETTA_TABLE_MODE_NONE;
     const CettaEvalOptionEntry *table_mode = active_eval_option("search-table-mode");
     const char *repr = NULL;
     if (table_mode && table_mode->kind == CETTA_EVAL_OPTION_VALUE_SYMBOL)
@@ -7168,6 +7173,10 @@ static bool atom_is_constructor_normal_form(Space *s, Arena *a, Atom *atom,
     PUSH_ATOM(atom);
     while (len > 0) {
         Atom *cur = stack[--len];
+        /* An admitted datum is already a value, including diagnostic data.
+         * Do not unfold a shared value graph just to reject its Error leaf. */
+        if (cur && atom_is_he_evaluated(cur) && eval_failure_values())
+            continue;
         /* Tuple evaluation propagates errors and Empty rather than keeping
          * them as fields. PeTTa also normalizes symbolic truth values when
          * evaluating a field. None is an already-normal constructor payload. */
@@ -8917,6 +8926,50 @@ static Atom *ai_completed_data(Arena *arena, Atom *value) {
     if (!completed)
         eval_mark_incomplete(CETTA_EVAL_INCOMPLETE_CAPACITY);
     return completed;
+}
+
+/* Data admission protects diagnostic occurrences, not arbitrary code. HE
+ * may still reduce a constructed expression using equations added later.
+ * The existing graph image borrows unchanged nodes and copies each changed
+ * node once; a diagnostic's private value mark never mutates shared syntax. */
+static bool he_data_descends(void *context, Arena *arena, Atom *value) {
+    (void)context;
+    (void)arena;
+    return value && value->kind == ATOM_EXPR && value->expr.len > 0u &&
+        !atom_is_he_evaluated_throughout(value);
+}
+
+static Atom *he_data_build(void *context, Arena *arena, Atom *source,
+                           Atom **children, bool changed) {
+    (void)context;
+    if (atom_is_error(source))
+        return atom_he_evaluated_expr(arena, children, source->expr.len);
+    return changed ? atom_expr_rebuild(arena, source, children, source->expr.len) : source;
+}
+
+/* These callers admit values, not the program templates which use them.
+ * HE's raw instruction/code continuations do not cross this boundary. */
+static Atom *he_admit_data(Arena *arena, Atom *value) {
+    if (!eval_failure_values() || eval_current_language_id() != CETTA_LANGUAGE_HE)
+        return value;
+    Atom *data = atom_graph_image(NULL, arena, value, he_data_descends, he_data_build);
+    if (!data)
+        eval_mark_incomplete(CETTA_EVAL_INCOMPLETE_CAPACITY);
+    return data;
+}
+
+static Atom *he_admit_binding_atom(void *context, Atom *value) {
+    return he_admit_data(context, value);
+}
+
+static __attribute__((noinline)) bool he_admit_row_data(Arena *arena, Bindings *row) {
+    Bindings admitted;
+    if (!bindings_transport_logical(&admitted, row, he_admit_binding_atom, arena)) {
+        eval_mark_incomplete(CETTA_EVAL_INCOMPLETE_CAPACITY);
+        return false;
+    }
+    bindings_replace(row, &admitted);
+    return true;
 }
 
 /* Aggregates that consume answers as control must preserve the produced
@@ -14092,6 +14145,8 @@ static Atom *bindings_apply_projected_body_in(const Bindings *visible,
             new_elems[i] = next;
     }
     Atom *result = new_elems ? atom_expr(a, new_elems, body->expr.len) : body;
+    if (new_elems && eval_failure_values())
+        result = bindings_retain_rebuilt_role(a, body, result);
     const BindingsStructureHooks *hooks = &run->hooks;
     if (result && new_elems && hooks && hooks->own_list &&
         atom_sequence_is_own_list(body))
@@ -18669,7 +18724,7 @@ static bool direct_outcome_walk_space_atoms_row(Atom *atom, void *ctx) {
     /* A consumer may change resource redirects between rows. Each callback
      * therefore starts its own interpretation context; a batch snapshot may
      * share a session only while no consumer runs. */
-    item = payload_rebind_resources(atoms->arena, atom);
+    item = he_admit_data(atoms->arena, payload_rebind_resources(atoms->arena, atom));
     if (!item)
         return false;
 
@@ -41322,6 +41377,20 @@ static __attribute__((unused)) bool project_match_visible_bindings(Arena *a,
     return true;
 }
 
+/* Only explicit space readers use this projection. Function/branch
+ * instantiation keeps its existing code and value demand policies. */
+static bool he_project_match_data(Arena *arena, MatchVisibleVarSet *visible,
+    const Bindings *source, Bindings *projected) {
+    if (!project_match_visible_bindings(arena, visible, source, projected))
+        return false;
+    if (eval_failure_values() && eval_current_language_id() == CETTA_LANGUAGE_HE &&
+        !he_admit_row_data(arena, projected)) {
+        bindings_free(projected);
+        return false;
+    }
+    return true;
+}
+
 static bool collect_goal_instantiation_visible_vars(
     const CettaVarMap *goal_instantiation,
     MatchVisibleVarSet *visible) {
@@ -45040,7 +45109,7 @@ static inline __attribute__((always_inline)) void match_chain_dfs_kernel(
         return;
     if (si == ctx->nsteps) {
         __attribute__((cleanup(bindings_free))) Bindings projected;
-        if (!project_match_visible_bindings(ctx->a, ctx->visible, cur,
+        if (!he_project_match_data(ctx->a, ctx->visible, cur,
                                             &projected))
             return;
         cetta_runtime_stats_inc(CETTA_RUNTIME_COUNTER_BINDINGS_APPLY_EVAL_CHAIN_BODY);
@@ -45124,7 +45193,7 @@ static inline __attribute__((always_inline)) bool pathmap_conjunction_stream_row
     CETTA_GSLT_OWNED_BINDINGS(projected);
 
     if (!ctx || !bindings ||
-        !project_match_visible_bindings(
+        !he_project_match_data(
             ctx->arena, ctx->visible, bindings, &projected)) {
         return true;
     }
@@ -45436,7 +45505,7 @@ handle_match_kernel(Space *s, Arena *a, Atom *atom, Atom *type, int fuel,
         }
         for (CettaIndex bi = 0; bi < cur2.len; bi++) {
             __attribute__((cleanup(bindings_free))) Bindings projected2;
-            if (!project_match_visible_bindings(a, &visible2, &cur2.items[bi],
+            if (!he_project_match_data(a, &visible2, &cur2.items[bi],
                                                 &projected2))
                 continue;
             cetta_runtime_stats_inc(
@@ -45567,7 +45636,7 @@ handle_match_kernel(Space *s, Arena *a, Atom *atom, Atom *type, int fuel,
             Space *query_spaces[] = { ms };
             for (CettaIndex bi = 0; bi < matches.len; bi++) {
                 __attribute__((cleanup(bindings_free))) Bindings projected;
-                if (!project_match_visible_bindings(a, &visible, &matches.items[bi],
+                if (!he_project_match_data(a, &visible, &matches.items[bi],
                                                     &projected)) {
                     continue;
                 }
@@ -45579,7 +45648,7 @@ handle_match_kernel(Space *s, Arena *a, Atom *atom, Atom *type, int fuel,
         } else {
             for (CettaIndex bi = 0; bi < matches.len; bi++) {
                 __attribute__((cleanup(bindings_free))) Bindings projected;
-                if (!project_match_visible_bindings(a, &visible, &matches.items[bi],
+                if (!he_project_match_data(a, &visible, &matches.items[bi],
                                                     &projected)) {
                     continue;
                 }
@@ -46000,7 +46069,7 @@ handle_match_kernel(Space *s, Arena *a, Atom *atom, Atom *type, int fuel,
                      ri++) {
                     __attribute__((cleanup(bindings_free))) Bindings projected;
                     size_t project_before = a ? a->live_bytes : 0;
-                    if (!project_match_visible_bindings(a, &visible,
+                    if (!he_project_match_data(a, &visible,
                                                         &rows.items[ri],
                                                         &projected))
                         continue;
@@ -46025,7 +46094,7 @@ handle_match_kernel(Space *s, Arena *a, Atom *atom, Atom *type, int fuel,
             for (uint32_t bi = 0; bi < ncur; bi++) {
                 __attribute__((cleanup(bindings_free))) Bindings projected;
                 size_t project_before = a ? a->live_bytes : 0;
-                if (!project_match_visible_bindings(a, &visible, &cur_binds[bi],
+                if (!he_project_match_data(a, &visible, &cur_binds[bi],
                                                     &projected)) {
                     continue;
                 }
@@ -46510,7 +46579,7 @@ static bool count_projected_template(Arena *a, MatchVisibleVarSet *visible,
                                      Space *s, int fuel, uint64_t *count) {
     __attribute__((cleanup(bindings_free))) Bindings projected;
     uint64_t units = 0;
-    if (!project_match_visible_bindings(a, visible, bindings, &projected))
+    if (!he_project_match_data(a, visible, bindings, &projected))
         return true;
     if (!count_template_units(s, a, templ, &projected, fuel, &units)) {
         return false;
@@ -99986,7 +100055,7 @@ static __attribute__((noinline)) MettaDispatchResult metta_storage_dispatch(
                 empty);
             return METTA_DISPATCH_HANDLED;
         }
-        outcome_set_add(os, payload_rebind_resources(a, top), empty);
+        outcome_set_add(os, he_admit_data(a, payload_rebind_resources(a, top)), empty);
         return METTA_DISPATCH_HANDLED;
     }
 
@@ -100025,7 +100094,7 @@ static __attribute__((noinline)) MettaDispatchResult metta_storage_dispatch(
             return METTA_DISPATCH_HANDLED;
         }
         cetta_runtime_stats_inc(CETTA_RUNTIME_COUNTER_SPACE_POP);
-        outcome_set_add(os, payload_rebind_resources(a, popped), empty);
+        outcome_set_add(os, he_admit_data(a, payload_rebind_resources(a, popped)), empty);
         return METTA_DISPATCH_HANDLED;
     }
 
@@ -100083,7 +100152,7 @@ static __attribute__((noinline)) MettaDispatchResult metta_storage_dispatch(
                     empty);
                 return METTA_DISPATCH_HANDLED;
             }
-            outcome_set_add(os, payload_rebind_resources(a, item), empty);
+            outcome_set_add(os, he_admit_data(a, payload_rebind_resources(a, item)), empty);
         } else {
             if (!space_truncate64(target, idx)) {
                 Atom *space_error = space_backend_error_if_set(a, (*call));
@@ -100318,7 +100387,7 @@ static __attribute__((noinline)) MettaDispatchResult metta_storage_dispatch(
             petta_space_atom_snapshot_capture(a, target, &snapshot);
         if (snapshot_status ==
             PETTA_SPACE_ATOM_SNAPSHOT_MATERIALIZE_FAILED) {
-            outcome_set_add(os,
+            ai_publish_error(a, os,
                 space_backend_or_symbol_error(
                     a, (*call), "AttachedCompiledSpaceMaterializeFailed"),
                 empty);
@@ -100332,7 +100401,7 @@ static __attribute__((noinline)) MettaDispatchResult metta_storage_dispatch(
         }
         CettaCount first = os->len;
         for (CettaIndex i = 0; i < snapshot.len; i++) {
-            outcome_set_add_unfactored(os, snapshot.items[i], empty);
+            outcome_set_add_unfactored(os, he_admit_data(a, snapshot.items[i]), empty);
         }
         if (language_id == CETTA_LANGUAGE_PRIME &&
             !prime_completed_outcomes(s, a, os, first))

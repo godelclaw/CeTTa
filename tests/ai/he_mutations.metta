@@ -20,8 +20,16 @@
  "        if (cetta_ai_audit_mutant(\"collect-failure\") && ai_outcome_raised(item)) continue;\n        if (cetta_ai_audit_mutant(\"duplicates\") && count && atom_eq(items[count - 1u], value)) continue;\n        if (cetta_ai_audit_mutant(\"empty-data\") && atom_head_symbol_id(value) == g_builtin_syms.empty) continue;\n        items[count++] = value;\n    }\n    if (g_eval_completion_tracker" 1)
 (HMReplace "eval" "        !g_ai_cut_reified) {\n        Atom *diagnostic = ai_completion_diagnostic(a, expr, outcome->completion);"
  "        !g_ai_cut_reified && !cetta_ai_audit_mutant(\"budget\")) {\n        Atom *diagnostic = ai_completion_diagnostic(a, expr, outcome->completion);" 1)
-(HMReplace "canonical" "    if (!atom_is_error(source) || atom_is_he_evaluated(source) ||"
- "    if (cetta_ai_audit_mutant(\"source\") || !atom_is_error(source) || atom_is_he_evaluated(source) ||" 1)
+(HMReplace "canonical" "    if (!atom_is_error(source) || atom_is_he_evaluated(source))"
+ "    if (cetta_ai_audit_mutant(\"source\") || !atom_is_error(source) || atom_is_he_evaluated(source))" 1)
+(HMReplace "eval" "    if (!eval_failure_values() || eval_current_language_id() != CETTA_LANGUAGE_HE)\n        return value;"
+ "    if (cetta_ai_audit_mutant(\"data-admission\") || !eval_failure_values() || eval_current_language_id() != CETTA_LANGUAGE_HE)\n        return value;" 1)
+(HMReplace "eval" "    Atom *data = atom_graph_image(NULL, arena, value, he_data_descends, he_data_build);"
+ "    Atom *data = cetta_ai_audit_mutant(\"data-freeze\") ? atom_he_evaluated_deep_copy(arena, value) : atom_graph_image(NULL, arena, value, he_data_descends, he_data_build);" 1)
+(HMReplace "eval" "        !atom_is_he_evaluated_throughout(value);"
+ "        !atom_is_he_evaluated_throughout(value) && (!cetta_ai_audit_mutant(\"data-nesting\") || atom_is_error(value));" 1)
+(HMReplace "eval" "    if (new_elems && eval_failure_values())\n        result = bindings_retain_rebuilt_role(a, body, result);"
+ "    if (new_elems && eval_failure_values() && !cetta_ai_audit_mutant(\"data-substitution\"))\n        result = bindings_retain_rebuilt_role(a, body, result);" 1)
 (HMReplace "canonical" "if (eval_failure_values() && ai_forward_failure(a, frame->target,\n                item, tuple->ctx, true))"
  "if (eval_failure_values() && !cetta_ai_audit_mutant(\"tuple\") && ai_forward_failure(a, frame->target,\n                item, tuple->ctx, true))" 1)
 (HMReplace "canonical" "        if (!atom_is_error(pattern))"
@@ -60,6 +68,10 @@
 (HMWitness "native-data" () "!(let $d (index-atom ((Error native datum)) 0) (Box $d))" "[(Box (Error native datum))]\n")
 (HMWitness "data-type" () "(: only-number (-> Number Number)) (= (only-number $x) $x) !(case (catch (only-number (index-atom ((Error native datum)) 0))) (((Error $w (Unsolvable $d)) rejected) ($x missed)))" "[rejected]\n")
 (HMWitness "budget" ("--fuel" "0") "!(+ 1 2)" "[(Error (+ 1 2) (Incomplete fuel-exhausted))]\n")
+(HMWitness "data-admission" () "(Item (Error stored s)) !(match &self (Item $x) (Box $x))" "[(Box (Error stored s))]\n")
+(HMWitness "data-freeze" () "(= (one-of $x) NotReducible) !(let $l (one-of y) (let $t (cdr-atom $l) (let $c (cons-atom g $t) (let $added (add-atom &self (= (g y) done)) $c))))" "[done]\n")
+(HMWitness "data-nesting" () "!(let $d (cons-atom Holder ((Error stored (Fault b)))) (let (Holder $x) $d (Box $x)))" "[(Box (Error stored (Fault b)))]\n")
+(HMWitness "data-substitution" () "!(let $d (catch (Error $w (Fault b))) (let $w 5 (Box $d)))" "[(Box (Error 5 (Fault b)))]\n")
 
 (= (hm:file $root $dir $name $filename)
    (let* (($source (am:read (str:join "" ($root "/src/" $filename))))

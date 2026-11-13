@@ -767,7 +767,7 @@ static void he_raw_collect(Space *s, Arena *a, Atom *atom, int fuel,
             for (CettaIndex i = 0u; i < rows.len; i++) {
                 Bindings projected;
                 bindings_init(&projected);
-                if (project_match_visible_bindings(a, &visible,
+                if (he_project_match_data(a, &visible,
                                                    &rows.items[i], &projected)) {
                     Atom *result = bindings_apply_if_vars(
                         &projected, a, expr_arg(atom, 2));
@@ -1530,7 +1530,9 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
             Atom **result = arena_alloc(a, sizeof(*result) * (len + 1u));
             result[0] = expr_arg(atom, 0);
             for (CettaExprIndex i = 0u; i < len; i++) result[i + 1u] = elems[i];
-            outcome_set_add(os, atom_sequence_like(a, tail, result, len + 1u), &frame->env);
+            Atom *value = he_admit_data(a, atom_sequence_like(a, tail, result, len + 1u));
+            if (value)
+                outcome_set_add(os, value, &frame->env);
         } else {
             ai_publish_error(a, os, call_signature_error(
                 a, atom, "(cons-atom <head> (: <tail> Expression))"), &frame->env);
@@ -1541,7 +1543,9 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
         CettaExprLen len;
         if (atom_sequence_view(input, &elems, &len) && len > 0u) {
             Atom *tail = atom_sequence_like(a, input, elems + 1u, len - 1u);
-            outcome_set_add(os, atom_expr2(a, elems[0], tail), &frame->env);
+            Atom *value = he_admit_data(a, atom_expr2(a, elems[0], tail));
+            if (value)
+                outcome_set_add(os, value, &frame->env);
         } else {
             ai_publish_error(a, os, call_signature_error(
                 a, atom, "(decons-atom (: <expr> Expression))"), &frame->env);

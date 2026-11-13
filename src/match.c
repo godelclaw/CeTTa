@@ -6375,6 +6375,15 @@ static void bindings_apply_walk_release(BindingsApplyWalk *walk) {
     bindings_structure_hooks_release(&walk->owned_hooks);
 }
 
+Atom *bindings_retain_rebuilt_role(
+        Arena *arena, Atom *source, Atom *rebuilt) {
+    /* Keep the source occurrence's barrier; surrounding code inherits none.
+     * Stable HE keeps its existing code-substitution policy. */
+    return rebuilt && atom_is_he_evaluated(source) && atom_is_error(source) &&
+            eval_current_uses_failure_values && eval_current_uses_failure_values()
+        ? atom_he_evaluated_copy(arena, rebuilt) : rebuilt;
+}
+
 /* One traversal serves synchronous and retained callers. Synchronous entry
  * points specialize away the yield boundaries and keep their ordinary atom
  * constructor. Retained private construction folds each child's summary on
@@ -6523,6 +6532,8 @@ ascend:
         walk->result = top->assembly ? atom_expr_assembly_finish_splicing(top->assembly)
             : top->draft ? atom_expr_builder_finish(fold->a, top->draft) : top->atom;
         atom_expr_assembly_free(top->assembly);top->assembly = NULL;
+        if (changed)
+            walk->result = bindings_retain_rebuilt_role(fold->a, top->atom, walk->result);
         if (walk->result && changed && hooks && hooks->formed_node &&
             len > 0u && elems[0]->kind == ATOM_VAR &&
             walk->result->expr.elems[0] && walk->result->expr.elems[0]->kind == ATOM_SYMBOL)
@@ -9980,7 +9991,8 @@ static Atom *binding_value_instantiate_ground_node(
             return NULL;
         draft->expr.elems[index] = child;
     }
-    return atom_expr_builder_finish(arena, draft);
+    return bindings_retain_rebuilt_role(
+        arena, skeleton, atom_expr_builder_finish(arena, draft));
 }
 
 static BindingValue binding_value_ground_or_self(
