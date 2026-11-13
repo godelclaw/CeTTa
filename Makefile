@@ -7894,10 +7894,23 @@ endif
 # Lookups grow linearly with the space in PeTTa: a head the space does not
 # hold or one atom holds, the first argument unbound, and a notice scan's
 # ground misses after removals, timed at 500 and 4,000 atoms against a
-# quadratic control the check must reject.
+# quadratic control the check must reject.  The answers of lookups by head
+# past the size read row by row, with rows of a variable head, removals and
+# rows with variables, stay as they were in PeTTa and HE.
 .PHONY: test-space-growth-v1
 test-all: test-space-growth-v1
-test-space-growth-v1: $(BIN) tests/support/check_space_growth_v1.py
+test-space-growth-v1: $(BIN) tests/support/check_space_growth_v1.py \
+		tests/space_head_rows.metta tests/space_head_rows.petta.expected \
+		tests/space_head_rows.he.expected
+	@for lang in petta he; do \
+		actual=$$($(CETTA_BIN_INVOKE) --lang $$lang tests/space_head_rows.metta 2>&1); \
+		if [ "$$actual" != "$$(cat tests/space_head_rows.$$lang.expected)" ]; then \
+			echo "FAIL: lookups by head ($$lang)"; \
+			diff -u tests/space_head_rows.$$lang.expected <(printf '%s\n' "$$actual") | head -20; \
+			exit 1; \
+		fi; \
+	done; \
+	echo "PASS: lookups by head answer as before (PeTTa and HE)"
 	@python3 tests/support/check_space_growth_v1.py ./$(BIN)
 
 # A PeTTa document read a few forms at a time answers as one read whole, an
