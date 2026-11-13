@@ -21,6 +21,6 @@
           (hs:budgets $binary))
      ((((HEContractResults $canonical 92 0) (HEContractResults $reference 92 0)
         (HEContractResults $canonical 900 0) (HEContractResults $reference 900 0)
-        (HEProducerResults $canonical 36 0) (HEProducerResults $reference 36 0)
-        (HEBudgetControlsPass 2)) (HEAISuitePass 1984 72 2))
+        (HEProducerResults $canonical 40 0) (HEProducerResults $reference 40 0)
+        (HEBudgetControlsPass 2)) (HEAISuitePass 1984 80 2))
       ($bad (let $shown (println! (HEAISuiteFailed $bad)) (system:exit 1))))))

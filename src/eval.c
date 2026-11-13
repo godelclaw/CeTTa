@@ -12056,7 +12056,7 @@ static bool dispatch_native_space_mutation(Space *s, Arena *a, Atom *head,
     Atom *mork_handle_error = guard_mork_handle_syntax(
         s, a, call, space_ref, fuel, syntax, explicit_syntax);
     if (mork_handle_error) {
-        *outcome = cetta_call_value(mork_handle_error);
+        *outcome = eval_produced_failure(mork_handle_error);
         return true;
     }
 
@@ -12066,7 +12066,7 @@ static bool dispatch_native_space_mutation(Space *s, Arena *a, Atom *head,
     if (storage_target && storage_target->match_backend.kind == SPACE_ENGINE_SOURCE &&
         (!storage_target->match_backend.ops ||
          !storage_target->match_backend.ops->source_edits)) {
-        *outcome = cetta_call_value(
+        *outcome = eval_produced_failure(
             atom_error(a, call, atom_symbol(a, "ReadOnlySpace")));
         return true;
     }
@@ -12074,7 +12074,7 @@ static bool dispatch_native_space_mutation(Space *s, Arena *a, Atom *head,
     if (!target)
         target = petta_ensure_named_space(s, a, space_ref);
     if (!target) {
-        *outcome = cetta_call_value(space_arg_error(a, call,
+        *outcome = eval_produced_failure(space_arg_error(a, call,
             is_add ? "add-atom expects a space as the first argument"
                    : "remove-atom expects a space as the first argument"));
         return true;
@@ -12084,7 +12084,7 @@ static bool dispatch_native_space_mutation(Space *s, Arena *a, Atom *head,
     Atom *reserved = is_add && cetta_prime_space_is_program_space(target)
         ? cetta_prime_reserved_definition_error(a, payload) : NULL;
     if (reserved) {
-        *outcome = cetta_call_value(
+        *outcome = eval_produced_failure(
             atom_error(a, call, reserved->expr.elems[2]));
         return true;
     }
@@ -12092,14 +12092,14 @@ static bool dispatch_native_space_mutation(Space *s, Arena *a, Atom *head,
     Atom *mork_error = guard_mork_space_syntax(
         a, call, target, syntax, explicit_syntax);
     if (mork_error) {
-        *outcome = cetta_call_value(mork_error);
+        *outcome = eval_produced_failure(mork_error);
         return true;
     }
 
     if (space_match_backend_is_attached_compiled(target) &&
         !space_match_backend_materialize_attached(
             target, eval_storage_arena(a))) {
-        *outcome = cetta_call_value(space_backend_or_symbol_error(
+        *outcome = eval_produced_failure(space_backend_or_symbol_error(
             a, call, "AttachedCompiledSpaceMaterializeFailed"));
         return true;
     }
@@ -12108,7 +12108,7 @@ static bool dispatch_native_space_mutation(Space *s, Arena *a, Atom *head,
     EvalSpaceMutationEffect effect = eval_apply_space_mutation(
         target, a, call, payload, !is_add, false);
     if (effect.error) {
-        *outcome = cetta_call_value(effect.error);
+        *outcome = eval_produced_failure(effect.error);
     } else if (!effect.emit_result) {
         eval_mark_interrupted(CETTA_EVAL_INCOMPLETE_CAPACITY);
         *outcome = cetta_call_interrupted();
@@ -12250,7 +12250,7 @@ static bool dispatch_native_invocation(Space *s, Arena *a,
         Atom *handle_error = guard_mork_handle_syntax(
             s, a, call, args[0], eval_get_default_fuel(), "size", "mork:size");
         if (handle_error) {
-            *outcome = cetta_call_value(handle_error);
+            *outcome = eval_produced_failure(handle_error);
             return true;
         }
         if (args[0]->kind == ATOM_GROUNDED &&
@@ -12258,7 +12258,7 @@ static bool dispatch_native_invocation(Space *s, Arena *a,
             Atom *error = guard_mork_space_syntax(
                 a, call, (Space *)args[0]->ground.ptr, "size", "mork:size");
             if (error) {
-                *outcome = cetta_call_value(error);
+                *outcome = eval_produced_failure(error);
                 return true;
             }
         }
@@ -25828,7 +25828,7 @@ static bool emit_mork_add_atoms_from_stream_source(Space *s, Arena *a,
     arena_free(&ctx.scratch);
 
     if (ctx.error_atom) {
-        outcome_set_add(os, ctx.error_atom, &empty);
+        ai_publish_error(a, os, ctx.error_atom, &empty);
         return true;
     }
     if (ctx.error_message) {
@@ -26095,9 +26095,8 @@ static bool emit_add_atoms_from_evaluated_tuple(
     if (!target && eval_current_language_id() == CETTA_LANGUAGE_PETTA)
         target = petta_ensure_named_space(s, a, ready_space);
     if (!target && eval_current_language_id() == CETTA_LANGUAGE_PETTA) {
-        outcome_set_add(
-            os,
-            space_arg_error(
+        ai_publish_error(a,
+            os, space_arg_error(
                 a, call_atom,
                 "add-atoms expects a space as the first argument"),
             &empty);
@@ -26108,14 +26107,13 @@ static bool emit_add_atoms_from_evaluated_tuple(
     Atom *mork_error = guard_mork_space_syntax(
         a, call_atom, target, "add-atoms", "mork:add-atoms");
     if (mork_error) {
-        outcome_set_add(os, mork_error, &empty);
+        ai_publish_error(a, os, mork_error, &empty);
         return true;
     }
     if (!space_match_backend_materialize_attached(
             target, eval_storage_arena(a))) {
-        outcome_set_add(
-            os,
-            space_backend_or_symbol_error(
+        ai_publish_error(a,
+            os, space_backend_or_symbol_error(
                 a, call_atom, "AttachedCompiledSpaceMaterializeFailed"),
             &empty);
         return true;
@@ -26140,7 +26138,7 @@ static bool emit_add_atoms_from_evaluated_tuple(
             EvalSpaceMutationEffect effect = eval_apply_space_addition(
                 target, a, call_atom, logical_items[i], false);
             if (effect.error) {
-                outcome_set_add(os, effect.error, &empty);
+                ai_publish_error(a, os, effect.error, &empty);
                 return true;
             }
             if (!effect.emit_result)
@@ -26159,7 +26157,7 @@ static bool emit_add_atoms_from_evaluated_tuple(
             a, call_atom, target, logical_items[i],
             PETTA_TYPECHECK_MUTATION_ADD);
         if (type_error) {
-            outcome_set_add(os, type_error, &empty);
+            ai_publish_error(a, os, ai_type_diagnostic(a, type_error), &empty);
             return true;
         }
     }
@@ -31156,7 +31154,7 @@ static void emit_completed_native_value(Space *s, Arena *a, Atom *value,
     if (eval_current_language_id() == CETTA_LANGUAGE_HE && expected_type &&
         !atom_is_symbol_id(expected_type, g_builtin_syms.undefined_type) &&
         eval_atom_type_demand(a, value, expected_type) != HE_TYPE_KEEP &&
-        !atom_is_error(value) && !atom_is_legacy_empty_sentinel(value)) {
+        (eval_failure_values() || !atom_is_error(value)) && !atom_is_legacy_empty_sentinel(value)) {
         type_cast_outcomes(s, a, value, expected_type, environment, outcomes);
     } else {
         Atom *final = eval_grounded_result_is_final()
@@ -36744,9 +36742,8 @@ bool eval_space_mutation_contract_kind(
             : is_add_nodup
                 ? "add-atom-nodup expects a space as the first argument"
                 : "remove-atom expects a space as the first argument";
-        outcome_set_add(
-            outcomes,
-            space_arg_error(arena, call, message),
+        ai_publish_error(arena,
+            outcomes, space_arg_error(arena, call, message),
             &empty);
         return true;
     }
@@ -36773,9 +36770,8 @@ bool eval_space_mutation_contract_kind(
         : space_match_backend_materialize_attached(
               target, eval_storage_arena(arena));
     if (!materialized) {
-        outcome_set_add(
-            outcomes,
-            space_backend_or_symbol_error(
+        ai_publish_error(arena,
+            outcomes, space_backend_or_symbol_error(
                 arena, call, "AttachedCompiledSpaceMaterializeFailed"),
             &empty);
         return true;
@@ -45674,9 +45670,8 @@ handle_match_kernel(Space *s, Arena *a, Atom *atom, Atom *type, int fuel,
                             preserve_bindings, os);
                     outcome_set_free(&collected);
                     if (stream_result == SPACE_MATCH_PULL_VISIT_TERMINATED) {
-                        outcome_set_add(
-                            os,
-                            space_backend_or_symbol_error(
+                ai_publish_error(a,
+                    os, space_backend_or_symbol_error(
                                 a, atom,
                                 "PathMapIndexedConjunctionStreamFailed"),
                             &_empty);
@@ -46192,7 +46187,7 @@ static bool emit_direct_mork_atoms_rows(Space *s, Arena *a, Atom *syntax_atom,
     if (!ok) {
         Atom *space_error = space_backend_error_if_set(a, syntax_atom);
         const char *err = cetta_mork_bridge_last_error();
-        outcome_set_add(os,
+                ai_publish_error(a, os,
                         space_error ? space_error
                                     : atom_error(a, syntax_atom,
                                                  atom_string(a, err && *err
@@ -100260,9 +100255,8 @@ static __attribute__((noinline)) MettaDispatchResult metta_storage_dispatch(
                         a, read.space, &snapshot);
                 if (snapshot_status ==
                     PETTA_SPACE_ATOM_SNAPSHOT_MATERIALIZE_FAILED) {
-                    outcome_set_add(
-                        os,
-                        space_backend_or_symbol_error(
+            ai_publish_error(a,
+                os, space_backend_or_symbol_error(
                             a, (*call),
                             "AttachedCompiledSpaceMaterializeFailed"),
                         empty);
@@ -102312,7 +102306,7 @@ static __attribute__((noinline)) MettaDispatchResult metta_sequence_dispatch(
             outcome_set_add(os, held ? atom_prime_held_wrap(a, built) : built,
                             empty);
         } else {
-            outcome_set_add(os,
+            ai_publish_error(a, os,
                 call_signature_error(a, (*call),
                     "(cons-atom <head> (: <tail> Expression))"),
                 empty);
@@ -102428,7 +102422,7 @@ static __attribute__((noinline)) MettaDispatchResult metta_sequence_dispatch(
              * faults below. */
             return METTA_DISPATCH_HANDLED;
         } else {
-            outcome_set_add(os,
+            ai_publish_error(a, os,
                 call_signature_error(a, (*call),
                     "(decons-atom (: <expr> Expression))"),
                 empty);
@@ -103094,7 +103088,7 @@ static __attribute__((noinline)) MettaDispatchResult metta_state_dispatch(
         for (CettaCount i = 0u; i < values.len; i++) {
             Atom *value = outcome_atom_materialize(a, &values.items[i]);
             if (!value) { if (eval_unwinding()) break; else continue; }
-            if (atom_is_error(value)) {
+            if (eval_failure_values() ? ai_outcome_raised(&values.items[i]) : atom_is_error(value)) {
                 outcome_set_add_prefixed_outcome(a, os, &values.items[i],
                     CURRENT_ENV, preserve_bindings);
                 continue;
@@ -103106,8 +103100,12 @@ static __attribute__((noinline)) MettaDispatchResult metta_state_dispatch(
                 : atom_error(a, (*call), atom_symbol(a,
                     module ? "module space allocation failed"
                            : "module-space-no-deps expects a space as an argument"));
-            outcome_set_add_prefixed(a, os, result, &values.items[i].env,
-                CURRENT_ENV, preserve_bindings);
+            if (!own)
+                ai_publish_prefixed_error(a, os, result, &values.items[i].env,
+                    CURRENT_ENV, preserve_bindings);
+            else
+                outcome_set_add_prefixed(a, os, result, &values.items[i].env,
+                    CURRENT_ENV, preserve_bindings);
         }
         outcome_set_free(&values);
         return METTA_DISPATCH_HANDLED;
@@ -107676,7 +107674,7 @@ petta_lowered_to_shared_form:
              * repeated cons-atom costs its length, not its square. */
             outcome_set_add(os, atom_expr_prepend(a, hd, tl), &_empty);
         } else {
-            outcome_set_add(os,
+            ai_publish_error(a, os,
                 call_signature_error(a, atom,
                     "(cons-atom <head> (: <tail> Expression))"),
                 &_empty);
@@ -107768,7 +107766,7 @@ petta_lowered_to_shared_form:
              * faults below. */
             return;
         } else {
-            outcome_set_add(os,
+            ai_publish_error(a, os,
                 call_signature_error(a, atom,
                     "(decons-atom (: <expr> Expression))"),
                 &_empty);

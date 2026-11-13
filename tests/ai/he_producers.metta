@@ -37,6 +37,10 @@
 (HC fold-source-failure "!(fold (superpose (1 (Error original (Forbidden denied)) 3)) 0 $a $x (+ $a $x))" "[(Error original (Forbidden denied))]\n")
 (HC fold-step-failure "!(fold (superpose (1 2)) 0 $a $x (Error original (Incomplete no-verdict)))" "[(Error original (Incomplete no-verdict))]\n")
 (HC fold-error-data "!(let $d (index-atom ((Error native datum)) 0) (fold (superpose (1)) $d $a $x $a))" "[(Error native datum)]\n")
+(HC native-mutation-failure "!(case (catch (function (chain (eval (add-atom 7 payload)) $r (return never)))) (((Error $w (Fault $d)) caught) ($x missed)))" "[caught]\n")
+(HC native-value-typecheck "(: only-number (-> Number Number)) (= (only-number $x) $x) !(case (catch (only-number (index-atom ((Error native datum)) 0))) (((Error $w (Unsolvable $d)) rejected) ($x missed)))" "[rejected]\n")
+(HC match-space-failure "!(case (catch (match wrong (K $x) $x)) (((Error $w (Fault $d)) caught) ($x missed)))" "[caught]\n")
+(HC malformed-cons "!(case (catch (function (cons-atom 1 2))) (((Error $w (Fault $d)) caught) ($x missed)))" "[caught]\n")
 
 (= (hp:check $binary $route (ProducerCase $name $source $wanted))
    (let* (($program (str:concat "!(ai:experiment failure-values) " $source))
