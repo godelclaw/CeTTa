@@ -182,13 +182,20 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-commands-') as temp:
     for bad in ('!(import! &self fs)\n', '(= (tg-cmd:kind $x) help)\n', '(tg-cmd:command "/Help" help "x")\n',
                 '(tg-cmd:command "/a" delegated "x")\n(tg-cmd:command "/a" delegated "y")\n',
                 '(tg-cmd:command "/stop" stop "x")\n', '(tg-cmd:command "/a" other "x")\n',
-                '(tg-cmd:command "/a" delegated "say \\"hi\\"")\n'):
+                '(tg-cmd:command "/a" delegated "say \\"hi\\"")\n',
+                '(tg-cmd:bare-in-groups)\n(tg-cmd:bare-in-groups)\n', '(tg-cmd:bare-in-groups yes)\n'):
         wrong = root / 'wrong.metta'; wrong.write_text(bad)
         p = subprocess.run([BIN, '--check', *base, '--commands', str(wrong)], capture_output=True, text=True, timeout=12)
         assert p.returncode == 78, (bad, p.returncode, p.stderr)
     agent = [a if a != 'channel' else 'agent' for a in base]
     p = subprocess.run([BIN, '--check', *agent, '--commands', str(commands)], capture_output=True, text=True, timeout=12)
     assert p.returncode == 64, p.returncode
+    bare = root / 'bare.metta'; bare.write_text(COMMANDS + '(tg-cmd:bare-in-groups)\n')
+    p = subprocess.run([BIN, '--check', *base, '--commands', str(bare)], capture_output=True, text=True, timeout=12)
+    assert p.returncode == 0, (p.stdout, p.stderr)
+    # A launcher reads from the usage whether this service knows the declaration.
+    p = subprocess.run([BIN, '--help'], capture_output=True, text=True, timeout=12)
+    assert '(tg-cmd:bare-in-groups)' in p.stdout + p.stderr, (p.stdout, p.stderr)
     print('command declarations: only declarations are accepted')
 
     state = root / 'state'; state.mkdir(mode=0o700)
@@ -421,8 +428,44 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-commands-') as temp:
             out, err = proc.communicate(timeout=15)
             assert TOKEN.split(':')[1] not in out + err
             listener.close()
+
+    # A deployment that declares (tg-cmd:bare-in-groups): an operator's bare
+    # command in a group is a command, answered or asked like any other;
+    # anyone else's same text stays ordinary input.
+    state = root / 'state-bare'; state.mkdir(mode=0o700)
+    with peer('http/1.1', None, None, BotAPI) as (api, origin):
+        path = root / 'bare.sock'
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        listener.bind(str(path)); listener.listen(16); path.chmod(0o600)
+        proc = subprocess.Popen([BIN, '--run', '--root', str(ROOT), '--state-dir', str(state), '--worker', 'ada',
+                                 '--chat', str(CHAT), '--operator', str(OPERATOR),
+                                 '--program', 'channel', '--credential-file', str(token), '--mock-origin', origin,
+                                 '--listener-fd', str(listener.fileno()), '--commands', str(bare),
+                                 '--command-deadline-ms', str(DEADLINE_MS)],
+                                pass_fds=(listener.fileno(),), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            wait(proc, lambda: rpc(path)[0] == IDLE, 'service ready')
+            sent = api.command(1, CHAT, '/help', chat_type='supergroup')
+            call, latencies['bare help in a group, declared'] = replied(proc, api, 1, sent, SERVICE_BOUND, 'bare group help')
+            assert call[2]['text'].startswith('/help — list these commands'), call
+            api.command(2, CHAT, '/help', sender=5, chat_type='supergroup')
+            pending = wait(proc, lambda: [body for _, body in tasks(path) if body[0] == 'input'], 'ordinary input')
+            assert len(pending) == 1 and pending[0][3] == 'ordinary' and pending[0][4]['update_id'] == 2, pending
+            api.command(3, CHAT, '/engine cetta', chat_type='supergroup')
+            wait(proc, lambda: [body for _, body in tasks(path) if body[:4] == ['command', '3', '/engine', 'cetta']],
+                 'bare delegated command asked of the agent')
+            sent = api.command(4, CHAT, '/help', chat_type='private')
+            replied(proc, api, 4, sent, SERVICE_BOUND, 'private help')
+            assert not api.replies_to(2)
+            assert len([body for _, body in tasks(path) if body[0] == 'input']) == 1
+        finally:
+            proc.send_signal(signal.SIGTERM)
+            out, err = proc.communicate(timeout=15)
+            assert TOKEN.split(':')[1] not in out + err
+            listener.close()
     print('commands: ' + ', '.join('%s %.0f ms' % (k, v * 1000) for k, v in latencies.items()))
     print('operator commands: answered by the service within the deadline with the agent absent, after an uncertain '
           'send and during a flood; late answers edit the notice; taps are answered in time and redraw their menus; '
           'a full task queue of an absent agent stops nothing; stop and start at dispatch, answered by the agent; commands '
-          'addressed to this bot by the username it looked up; bare commands in a group ignored passed')
+          'addressed to this bot by the username it looked up; bare commands in a group ignored, and with the '
+          "declaration an operator's taken while anyone else's stays input passed")

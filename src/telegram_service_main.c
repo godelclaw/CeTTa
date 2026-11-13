@@ -66,8 +66,9 @@ static bool component(const char *s) {
 }
 /* Operator commands are declarations only, checked here and added to the
  * trusted program as inert facts: (tg-cmd:command "/name" KIND "help"),
- * optionally (tg-cmd:agent "Name") and (tg-cmd:bot "username"). Anything
- * else, a repeated name or a second stop/start/help, refuses the file. */
+ * optionally (tg-cmd:agent "Name"), (tg-cmd:bot "username") and
+ * (tg-cmd:bare-in-groups). Anything else, a repeated name or declaration, or
+ * a second stop/start/help, refuses the file. */
 static const char *declared(const Atom *a, size_t max) {
     if (!a || a->kind!=ATOM_GROUNDED || a->ground.gkind!=GV_STRING) return NULL;
     size_t n=strnlen(a->ground.sval,max+1);
@@ -92,7 +93,7 @@ static bool bot_name(const char *s) {
 static bool commands_name_bot;
 static bool load_commands(const char *path, Arena *arena, Space *program) {
     Atom **atoms=NULL; int n=parse_metta_file(path,arena,&atoms);
-    const char *names[64]; size_t count=0; unsigned singles=0; bool ok=n>=0 && n<=66;
+    const char *names[64]; size_t count=0; unsigned singles=0; bool ok=n>=0 && n<=67;
     for (int i=0;ok && i<n;++i) {
         Atom *d=atoms[i];
         if (d->kind!=ATOM_EXPR || !d->expr.len) { ok=false; break; }
@@ -112,6 +113,9 @@ static bool load_commands(const char *path, Arena *arena, Space *program) {
             const char *bot=declared(d->expr.elems[1],32);
             if ((singles&16) || !bot || !bot_name(bot)) ok=false;
             singles|=16; commands_name_bot=true;
+        } else if (d->expr.len==1 && atom_is_symbol(head,"tg-cmd:bare-in-groups")) {
+            if (singles&32) ok=false;
+            singles|=32;
         } else ok=false;
     }
     /* A stop without a start could never be undone from the chat. */
@@ -183,7 +187,9 @@ static void usage(void) {
          "--run requires a private Unix seqpacket listener: explicit fd or one\n"
          "systemd activation fd. The supervisor owns the socket's lifetime.\n"
          "--allow-private admits every private chat, not only the listed ones, and\n"
-         "lets the agent answer in them.");
+         "lets the agent answer in them.\n"
+         "--commands FILE declares the operator commands; (tg-cmd:bare-in-groups) in\n"
+         "it makes an operator's bare /command a command in a group too.");
 }
 static bool arguments(int argc, char **argv, Config *c) {
     *c=(Config){.token_fd=-1,.listener=-1,.operator_fd=-1}; unsigned seen=0;

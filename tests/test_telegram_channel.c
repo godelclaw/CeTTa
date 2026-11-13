@@ -153,10 +153,16 @@ static Atom *json_update(const char *json) {
     assert(ok->kind==ATOM_EXPR && ok->expr.len==2 && atom_is_symbol(ok->expr.elems[0],"tg:ok"));
     Atom *v=atom_deep_copy(&persistent,ok->expr.elems[1]); eval_outcome_free(&r); return v;
 }
-static Atom *text_update(int message,int chat,const char *text) {
+static Atom *typed_update(int message,int chat,const char *type,const char *text) {
     char json[512];
-    snprintf(json,sizeof(json),"{\"message\":{\"message_id\":%d,\"chat\":{\"id\":%d,\"type\":\"private\"},\"text\":\"%s\"}}",message,chat,text);
+    snprintf(json,sizeof(json),"{\"message\":{\"message_id\":%d,\"chat\":{\"id\":%d,\"type\":\"%s\"},\"text\":\"%s\"}}",message,chat,type,text);
     return json_update(json);
+}
+static Atom *text_update(int message,int chat,const char *text) { return typed_update(message,chat,"private",text); }
+/* The command a message of KIND from a sender of ROLE carries. */
+static void command_of(const char *kind,const char *role,Atom *update,const char *expected) {
+    Atom *parts[]={atom_symbol(&persistent,"tg-cmd:of"),atom_string(&persistent,kind),atom_symbol(&persistent,role),update};
+    pure(atom_expr(&persistent,parts,4),expected);
 }
 /* A tap on a button of message MESSAGE; a NULL data leaves the data out. */
 static Atom *tap_update(int id,int message,int chat,const char *data) {
@@ -243,6 +249,24 @@ int main(int argc,char **argv) {
     pure(parse("(tg-cmd:parse \"/unknown\" True)"),"tg:none");
     pure(parse("(tg-cmd:parse \"please /help\" True)"),"tg:none");
     pure(parse("(tg-cmd:parse \"\" True)"),"tg:none");
+    /* A deployment whose operators mean a bare command for every agent in
+     * the group declares it. Without the declaration nothing changes; with
+     * it only an operator's message is a command, as anywhere else. */
+    Atom *group_help=typed_update(1,-42,"supergroup","/help");
+    const char *help_call="(tg-cmd:call \"/help\" help \"\")";
+    command_of("message","operator",group_help,"tg:none");
+    command_of("message","operator",text_update(1,42,"/help"),help_call);
+    space_add(commands_space,parse("(tg-cmd:bare-in-groups)"));
+    command_of("message","operator",group_help,help_call);
+    command_of("message","operator",typed_update(1,-42,"group","/engine  a b"),"(tg-cmd:call \"/engine\" delegated \"a b\")");
+    command_of("message","ordinary",group_help,"tg:none");
+    command_of("message","wake-peer",group_help,"tg:none");
+    command_of("edited_message","operator",group_help,"tg:none");
+    command_of("message","operator",typed_update(1,-42,"supergroup","/help@OtherBot"),"tg:none");
+    command_of("message","operator",typed_update(1,-42,"supergroup","/help@AdaTestBot"),help_call);
+    command_of("message","operator",typed_update(1,-42,"supergroup","/unknown"),"tg:none");
+    command_of("message","operator",typed_update(1,-42,"supergroup","please /help"),"tg:none");
+    command_of("message","ordinary",text_update(1,42,"/help"),"tg:none");
     pure(parse("(tg-cmd:answer-text \"[\\\"answer\\\",\\\"engine: cetta\\\"]\")"),"(tg:some \"engine: cetta\")");
     pure(parse("(tg-cmd:answer-text \"[\\\"answer\\\",\\\"\\\"]\")"),"(tg:some \"(empty answer)\")");
     pure(parse("(tg-cmd:answer-text \"[]\")"),"tg:none");

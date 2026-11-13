@@ -54,8 +54,8 @@
     {
       "source": "durable/telegram_commands.metta",
       "output": "durable/telegram_commands.metta",
-      "source_sha256": "af581116300bf5e88cdd6a8df7209506168c68c387bec93118da5e074f0a59e1",
-      "output_sha256": "695be13b47acd2903c55cfb02015438953fd3c23211f6744d239c095fb827aa5",
+      "source_sha256": "ccbf95cad4ca68c45b53aa36b00f999f45ebb7529f1dc7d0a415aa47dc264103",
+      "output_sha256": "b8a4e00cc35e686f2365e11bcc71b270fec432af4aa017444f9a4ded06573b76",
       "edits": 40,
       "code_diagnostics": 0
     },
