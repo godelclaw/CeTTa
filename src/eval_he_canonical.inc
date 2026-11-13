@@ -1373,7 +1373,7 @@ static void he_canonical_resume_result(HeCanonicalFrame *frame) {
         return;
     }
     if (atom_is_legacy_empty_sentinel(preview) ||
-        outcome_atom_is_error(a, seed)) {
+        (eval_failure_values() ? ai_outcome_raised(seed) : outcome_atom_is_error(a, seed))) {
         he_canonical_publish(frame, &frame->work, false);
         he_canonical_pop();
         return;

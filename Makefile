@@ -6935,7 +6935,8 @@ test-ai-suite: $(BIN) $(wildcard tests/ai/*.metta tests/ai/*.expected)
 	printf '%s\n' 'PASS: native PeTTa AI suite: 12 fixture jobs, 1984 composition observations and 27 CLI controls'
 test-ai-he-suite: $(BIN) $(wildcard tests/ai/*.metta)
 	@set -eu; actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
-		"!(import! &self \"./tests/ai/he_suite.metta\") !(hs:run \"$(abspath $(BIN))\")"); \
+		"!(import! &self \"./tests/ai/he_suite.metta\") !(hs:run \"$(abspath $(BIN))\")") || \
+		{ printf '%s\n' "$$actual"; exit 1; }; \
 	expected=$$(printf 'true\n(HEAISuitePass 1984 80 2)'); \
 	if [ "$$actual" != "$$expected" ]; then printf '%s\n' "$$actual"; exit 1; fi; \
 	printf '%s\n' 'PASS: native HE AI suite: 1984 composition observations, 80 producer/effect cases and 2 budget controls'

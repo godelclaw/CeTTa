@@ -15938,7 +15938,8 @@ static bool he_inert_result_cast(Space *s, Arena *a, Atom *declared_type,
         atom_is_symbol_id(declared_type, g_builtin_syms.atom))
         return false;
     Atom *result = outcome_atom_materialize(a, seed);
-    if (!result || atom_is_legacy_empty_sentinel(result) || atom_is_error(result))
+    if (!result || atom_is_legacy_empty_sentinel(result) ||
+        (eval_failure_values() ? ai_outcome_raised(seed) : atom_is_error(result)))
         return false;
     OutcomeSet cast;
     outcome_set_init(&cast);
