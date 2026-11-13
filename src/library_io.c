@@ -2,6 +2,7 @@
 
 #include "library_io.h"
 #include "http_worker.h"
+#include "atom_fragment.h"
 #include "library_proc_run.h"
 #include "proc_owner.h"
 #include "ipc_client.h"
@@ -92,7 +93,7 @@ typedef struct CettaIoRequest {
     char *url;
     char *ca_file;          /* a TLS connection's trust anchors, else the default store */
     CettaIoHeader *headers;
-    char *body;
+    CettaByteFragment *body;  /* shared with the string it came from, never copied */
     int64_t timeout_ms;
     uint32_t connect_timeout_ms, first_byte_timeout_ms, idle_timeout_ms;
     size_t max_bytes;
@@ -277,7 +278,7 @@ static void io_request_free(CettaIoRuntime *runtime, CettaIoRequest *request) {
     free(request->url);
     free(request->ca_file);
     io_header_list_free(request->headers);
-    free(request->body);
+    cetta_fragment_release(request->body);
     free(request->response);
 #ifndef __EMSCRIPTEN__
     cetta_proc_free(request->process);
@@ -543,8 +544,7 @@ static CettaIoRequest *io_parse_http_request(Atom *atom, char *error,
         !io_nonnegative_int_arg(atom->expr.elems[5], &timeout_ms) ||
         !io_nonnegative_int_arg(atom->expr.elems[6], &max_bytes) ||
         (uint64_t)timeout_ms > UINT32_MAX ||
-        (uint64_t)max_bytes > SIZE_MAX - 1u ||
-        strlen(body) > (size_t)LONG_MAX) {
+        (uint64_t)max_bytes > SIZE_MAX - 1u) {
         snprintf(error, error_size,
                  "expected (http:request method url headers body nonnegative-timeout-ms nonnegative-max-bytes)");
         return NULL;
@@ -571,7 +571,9 @@ static CettaIoRequest *io_parse_http_request(Atom *atom, char *error,
         snprintf(error, error_size, "only http and https URLs are supported");
         return NULL;
     }
-    if (strlen(url) > 8192u || strlen(body) > 8u * 1024u * 1024u ||
+    Atom *body_atom = atom->expr.elems[4];
+    size_t body_size = body_atom->kind == ATOM_GROUNDED ? body_atom->ground.slen : strlen(body);
+    if (strlen(url) > 8192u || body_size > 8u * 1024u * 1024u ||
         timeout_ms > INT_MAX || max_bytes >= INT_MAX) {
         snprintf(error, error_size, "HTTP request exceeds admission limits");
         return NULL;
@@ -581,7 +583,13 @@ static CettaIoRequest *io_parse_http_request(Atom *atom, char *error,
     request->retry_after = -1;
     request->method = io_strdup(method);
     request->url = io_strdup(url);
-    request->body = io_strdup(body);
+    request->body = body_atom->kind == ATOM_GROUNDED ? atom_string_fragment(body_atom)
+                                                     : cetta_fragment_copy(body, body_size);
+    if (!request->body) {
+        snprintf(error, error_size, "cannot allocate the HTTP request body");
+        io_request_free(NULL, request);
+        return NULL;
+    }
     request->timeout_ms = timeout_ms;
     request->max_bytes = (size_t)max_bytes;
     request->follow_redirects = follow_redirects;
@@ -709,7 +717,7 @@ static bool io_http_start(CettaIoRuntime *runtime, CettaIoRequest *request,
     CettaHttpRequest input = {
         .id=request->id, .method=request->method, .url=request->url,
         .headers=(const char *const *)headers, .header_count=count,
-        .body=request->body, .body_size=strlen(request->body),
+        .body_fragments=&request->body, .body_fragment_count=1,
         .timeout_ms=(uint32_t)request->timeout_ms,
         .connect_timeout_ms=request->connect_timeout_ms,
         .first_byte_timeout_ms=request->first_byte_timeout_ms,
@@ -872,9 +880,9 @@ static bool io_http_start(CettaIoRuntime *runtime, CettaIoRequest *request,
     attributes.onerror = io_fetch_error;
     attributes.onprogress = io_fetch_progress;
     attributes.requestHeaders = request->fetch_headers;
-    if (request->body[0]) {
-        attributes.requestData = request->body;
-        attributes.requestDataSize = strlen(request->body);
+    if (request->body->size) {
+        attributes.requestData = (const char *)request->body->bytes;
+        attributes.requestDataSize = request->body->size;
     }
     request->runtime = runtime;
     request->fetch = emscripten_fetch(&attributes, request->url);

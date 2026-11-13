@@ -43,6 +43,9 @@ typedef struct Job {
     uint64_t retry_at;
     uint64_t started_at, first_byte_at, last_byte_at;
     size_t request_bytes, response_capacity;
+    /* The body, owned as retained fragments, and the read callback's place. */
+    CettaByteFragment **fragments;
+    size_t fragment_count, body_size, read_fragment, read_offset;
     CURL *easy;
     struct curl_slist *headers;
     struct Job *next;
@@ -122,7 +125,9 @@ static void free_job(Job *j) {
         while (n--) *p++=0;
         free((char *)j->request.headers[i]);
     }
-    free((char **)j->request.headers); free((void *)j->request.body);
+    free((char **)j->request.headers);
+    for (size_t i=0;i<j->fragment_count;++i) cetta_fragment_release(j->fragments[i]);
+    free(j->fragments);
     cetta_http_result_free(&j->result); free(j);
 }
 
@@ -176,6 +181,35 @@ static size_t receive(char *data, size_t size, size_t count, void *context) {
     return n;
 }
 
+/* Curl reads the body from its fragments in order, and seeks within them
+ * when it must send the body again (a redirect, or a resend it may do on a
+ * reused connection); no fragment is copied whole. */
+static size_t send_body(char *buffer, size_t size, size_t count, void *context) {
+    Job *j=context; size_t room=size*count, written=0;
+    while (room && j->read_fragment<j->fragment_count) {
+        const CettaByteFragment *f=j->fragments[j->read_fragment];
+        size_t n=f->size-j->read_offset;
+        if (!n) { ++j->read_fragment; j->read_offset=0; continue; }
+        if (n>room) n=room;
+        memcpy(buffer+written,f->bytes+j->read_offset,n);
+        written+=n; room-=n; j->read_offset+=n;
+    }
+    return written;
+}
+
+static int seek_body(void *context, curl_off_t offset, int origin) {
+    Job *j=context;
+    if (origin!=SEEK_SET || offset<0 || (uint64_t)offset>j->body_size) return CURL_SEEKFUNC_CANTSEEK;
+    size_t left=(size_t)offset; j->read_fragment=0;
+    while (left && j->read_fragment<j->fragment_count) {
+        size_t size=j->fragments[j->read_fragment]->size;
+        if (left<size) break;
+        left-=size; ++j->read_fragment;
+    }
+    j->read_offset=left;
+    return CURL_SEEKFUNC_OK;
+}
+
 /* These functions execute only on the owner thread. */
 static CURLcode configure(Job *j) {
     j->easy=curl_easy_init();
@@ -207,8 +241,11 @@ static CURLcode configure(Job *j) {
     if (!strcmp(j->request.method,"GET")) SET(CURLOPT_HTTPGET,1L);
     else {
         SET(CURLOPT_CUSTOMREQUEST,j->request.method);
-        SET(CURLOPT_POSTFIELDS,j->request.body);
-        SET(CURLOPT_POSTFIELDSIZE_LARGE,(curl_off_t)j->request.body_size);
+        j->read_fragment=0; j->read_offset=0;
+        SET(CURLOPT_POST,1L);
+        SET(CURLOPT_READFUNCTION,send_body); SET(CURLOPT_READDATA,j);
+        SET(CURLOPT_SEEKFUNCTION,seek_body); SET(CURLOPT_SEEKDATA,j);
+        SET(CURLOPT_POSTFIELDSIZE_LARGE,(curl_off_t)j->body_size);
     }
 #undef SET
     return CURLE_OK;
@@ -439,8 +476,23 @@ CettaHttpWorkerStatus cetta_http_worker_new(const CettaHttpWorkerLimits *limits,
     *out=w; return HTTP_WORKER_OK;
 }
 
+/* A body's size, or SIZE_MAX when its fragments are not a valid body. */
+static size_t body_bytes(const CettaHttpRequest *r) {
+    if (!r->body_fragment_count) return r->body_fragments ? SIZE_MAX : r->body_size;
+    if (!r->body_fragments || r->body || r->body_size ||
+        r->body_fragment_count>CETTA_HTTP_BODY_FRAGMENTS_MAX) return SIZE_MAX;
+    size_t total=0;
+    for (size_t i=0;i<r->body_fragment_count;++i) {
+        const CettaByteFragment *f=r->body_fragments[i];
+        if (!f || f->size>INT_MAX-total) return SIZE_MAX;
+        total+=f->size;
+    }
+    return total;
+}
+
 static CettaHttpWorkerStatus measure_request(const CettaHttpRequest *r, size_t *bytes) {
-    if (!r || !r->id || !r->method || !*r->method || !r->url ||
+    size_t body_size=r?body_bytes(r):SIZE_MAX;
+    if (!r || !r->id || !r->method || !*r->method || !r->url || body_size>INT_MAX ||
         (strncasecmp(r->url,"http://",7) && strncasecmp(r->url,"https://",8)) ||
         r->header_count>256 || (r->header_count && !r->headers) ||
         (r->body_size && !r->body) || r->max_response_bytes>=INT_MAX ||
@@ -453,7 +505,8 @@ static CettaHttpWorkerStatus measure_request(const CettaHttpRequest *r, size_t *
         unsigned char c=(unsigned char)r->method[i];
         if (c<=32 || c>=127 || strchr("()<>@,;:\\\"/[]?={}",c)) return HTTP_WORKER_INVALID;
     }
-    size_t total=sizeof(Job)+(r->header_count+1)*sizeof(char *)+method_size+url_size+r->body_size+3;
+    size_t total=sizeof(Job)+(r->header_count+1)*sizeof(char *)+method_size+url_size+body_size+3+
+        (r->body_fragment_count?r->body_fragment_count:1)*(sizeof(CettaByteFragment *)+sizeof(CettaByteFragment));
     const char *options[]={r->proxy,r->ca_file};
     for (size_t i=0;i<2;++i) if (options[i]) {
         size_t n=strnlen(options[i],4097);
@@ -473,17 +526,27 @@ static CettaHttpWorkerStatus clone_request(const CettaHttpRequest *r, size_t byt
     Job *j=calloc(1,sizeof(*j));
     if (!j) return HTTP_WORKER_NOMEM;
     j->request=*r; j->request.method=strdup(r->method); j->request.url=strdup(r->url);
+    j->request.body=NULL; j->request.body_size=0;
+    j->request.body_fragments=NULL; j->request.body_fragment_count=0;
     j->request.proxy=r->proxy?strdup(r->proxy):NULL;
     j->request.ca_file=r->ca_file?strdup(r->ca_file):NULL;
     char **headers=calloc(r->header_count+1,sizeof(*headers)); j->request.headers=(const char *const *)headers;
     j->request.header_count=0;
-    unsigned char *body=malloc(r->body_size+1); j->request.body=body;
-    if (!j->request.method || !j->request.url || !headers || !body ||
+    size_t count=r->body_fragment_count?r->body_fragment_count:1;
+    j->fragments=calloc(count,sizeof(*j->fragments));
+    if (j->fragments) j->fragment_count=count;
+    if (!j->request.method || !j->request.url || !headers || !j->fragments ||
         (r->proxy && !j->request.proxy) || (r->ca_file && !j->request.ca_file)) {
         free_job(j); return HTTP_WORKER_NOMEM;
     }
-    if (r->body_size) memcpy(body,r->body,r->body_size);
-    body[r->body_size]=0;
+    if (r->body_fragment_count)
+        for (size_t i=0;i<count;++i) {
+            j->fragments[i]=cetta_fragment_retain(r->body_fragments[i]);
+            j->body_size+=j->fragments[i]->size;
+        }
+    else if (!(j->fragments[0]=cetta_fragment_copy(r->body,r->body_size))) {
+        free_job(j); return HTTP_WORKER_NOMEM;
+    } else j->body_size=r->body_size;
     for (size_t i=0;i<r->header_count;++i) {
         headers[i]=strdup(r->headers[i]);
         if (!headers[i]) { free_job(j); return HTTP_WORKER_NOMEM; }

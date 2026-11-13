@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "atom.h"
+#include "atom_fragment.h"
 #include "tensor_dense_v1.h"
 #include "state_cell.h"
 #include "u64_index.h"
@@ -6590,6 +6591,18 @@ Atom *atom_string_n(Arena *a, const char *bytes, size_t len) {
 
 Atom *atom_string(Arena *a, const char *val) {
     return atom_string_n(a, val, val ? strlen(val) : 0u);
+}
+
+CettaByteFragment *atom_string_fragment(const Atom *atom) {
+    if (!atom || atom->kind != ATOM_GROUNDED || atom->ground.gkind != GV_STRING)
+        return NULL;
+    if (atom->structural_facts & ATOM_STRUCTURAL_STRING_STORAGE) {
+        AtomStringStorage *storage = ((const RetainedStringAtom *)atom)->storage;
+        atom_string_storage_retain(storage);
+        return cetta_fragment_borrow(atom->ground.sval, atom->ground.slen, storage,
+                                     atom_string_storage_release);
+    }
+    return cetta_fragment_copy(atom->ground.sval, atom->ground.slen);
 }
 
 #ifdef CETTA_TEST_HOOKS

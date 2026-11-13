@@ -457,6 +457,45 @@ static void connection_policy(const char *base, bool idempotent, const char *met
     assert(cetta_http_worker_free(w)==0);
 }
 
+/* A fragment body is retained while its job lives and never copied; the
+ * peer receives the fragments' concatenation, and a 307 resends it from the
+ * start by seeking within them. A fragment list that is not a body is
+ * refused before admission. */
+static void fragments(const char *base) {
+    static char big[300000];
+    for (size_t i=0;i<sizeof big;++i) big[i]="fragment"[i%8];
+    CettaByteFragment *parts[4]={cetta_fragment_copy("{\"a\":\"",6),cetta_fragment_copy(big,sizeof big),
+        cetta_fragment_copy("",0),cetta_fragment_copy("\"}",2)};
+    for (unsigned i=0;i<4;++i) assert(parts[i] && cetta_fragment_references(parts[i])==1);
+    CettaByteFragment *holes[2]={parts[0],NULL};
+    CettaHttpWorker *w=worker(NULL,NULL);
+    char endpoint[512]; url(endpoint,base,"/fragments");
+    CettaHttpRequest r=request(1,endpoint); r.method="POST";
+    r.body_fragments=holes; r.body_fragment_count=2;
+    assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_INVALID);
+    r.body_fragments=parts; r.body_fragment_count=4; r.body="x"; r.body_size=1;
+    assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_INVALID);
+    r.body=NULL; r.body_size=0; r.body_fragment_count=0;
+    assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_INVALID);
+    r.body_fragment_count=CETTA_HTTP_BODY_FRAGMENTS_MAX+1;
+    assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_INVALID);
+    r.body_fragment_count=4;
+    for (unsigned i=0;i<4;++i) assert(cetta_fragment_references(parts[i])==1);
+    assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_OK);
+    for (unsigned i=0;i<4;++i) assert(cetta_fragment_references(parts[i])==2);
+    CettaHttpResult result=take(w); body(&result,"ok",2); cetta_http_result_free(&result);
+    for (unsigned i=0;i<4;++i) assert(cetta_fragment_references(parts[i])==1);
+    /* The worker's references keep the bytes alive after the caller lets go. */
+    url(endpoint,base,"/redirect-307");
+    r=request(2,endpoint); r.method="POST"; r.follow_redirects=true;
+    r.body_fragments=parts; r.body_fragment_count=4;
+    assert(cetta_http_worker_submit(w,&r)==HTTP_WORKER_OK);
+    for (unsigned i=0;i<4;++i) cetta_fragment_release(parts[i]);
+    result=take(w); body(&result,"ok",2); cetta_http_result_free(&result);
+    assert(cetta_http_worker_free(w)==0);
+    puts("HTTP worker fragments: retained not copied, sent in order, resent after a 307, malformed lists refused");
+}
+
 typedef struct { atomic_uint entered, release, observed; } CancelPrepare;
 static CettaHttpPrepare held_prepare(void *ctx, uint64_t id) {
     CancelPrepare *c=ctx; assert(id==1);
@@ -524,6 +563,9 @@ static void deadline_cases(const char *base) {
 int main(int argc, char **argv) {
     if (argc==3 && !strcmp(argv[1],"--deadlines")) {
         deadline_cases(argv[2]); return 0;
+    }
+    if (argc==3 && !strcmp(argv[1],"--fragments")) {
+        fragments(argv[2]); return 0;
     }
     if (argc==5 && !strcmp(argv[1],"--connection-policy")) {
         connection_policy(argv[2],!strcmp(argv[3],"idempotent"),argv[4]); return 0;

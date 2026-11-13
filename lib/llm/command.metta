@@ -33,8 +33,8 @@
              ($value (JsonObject ((JsonPair "type" (JsonString "text")) (JsonPair "text" $head))))
              ($result (cons-atom $value $rest)))
        (llm:v1:validated ($text) $result))))
-(: llm:v1:command-value (-> Atom Atom %Undefined%))
-(= (llm:v1:command-value $protocol $request)
+(: llm:v1:command-wire (-> Atom Atom %Undefined%))
+(= (llm:v1:command-wire $protocol $request)
    (let* (($fields
              (case
                $request
@@ -91,7 +91,6 @@
                          (JsonPair "max_tokens" $tokens))))))))
            ($wire (llm:v1:command-reasoning $protocol $request $base))
            ($checked (llm:v1:checked $wire))
-           ($body-text (llm:v1:render $checked))
            ($path
              (case
                $protocol
@@ -100,7 +99,16 @@
                  ("chat-completions" "/chat/completions")))))
      (llm:v1:validated
        ($fields $version $model-text $limit $blocks $user-text)
-       (llm:v1:encoded $path $body-text))))
+       (llm:v1:wire $path $checked))))
+(: llm:v1:command-value (-> Atom Atom %Undefined%))
+(= (llm:v1:command-value $protocol $request)
+   (let $wire (llm:v1:command-wire $protocol $request) (llm:v1:rendered $wire)))
+(: llm:v1:command-wire-parsed (-> Atom Atom %Undefined%))
+(= (llm:v1:command-wire-parsed $protocol $value)
+   (case
+     $value
+     (((llm:v1:failure $code) (llm:v1:failure $code))
+       ($request (llm:v1:command-wire $protocol $request)))))
 (: llm:v1:command-parsed (-> Atom Atom %Undefined%))
 (= (llm:v1:command-parsed $protocol $value)
    (case
@@ -118,3 +126,16 @@
        (((llm:v1:failure $code) (return (llm:v1:error $code)))
          ((Error $source $reason) (return (llm:v1:error invalid-protocol-data)))
          ($encoded (return (llm:v1:ok $encoded)))))))
+; The command wire of a request that is already a JSON value: checked, with
+; its body unrendered for the caller to adjust and render once.
+(: llm:v1:encode-command-wire (-> %Undefined% %Undefined% %Undefined%))
+(= (llm:v1:encode-command-wire $protocol $value)
+   (function
+     (case
+       (let* (($name (llm:v1:protocol $protocol))
+               ($request (llm:v1:held $value))
+               ($result (llm:v1:command-wire-parsed $name $request)))
+         (llm:v1:wire-checked $result))
+       (((llm:v1:failure $code) (return (llm:v1:error $code)))
+         ((Error $source $reason) (return (llm:v1:error invalid-protocol-data)))
+         ($wire (return (llm:v1:ok $wire)))))))

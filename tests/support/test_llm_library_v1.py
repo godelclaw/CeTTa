@@ -32,6 +32,8 @@ class CodecFixtures(unittest.TestCase):
 (= (fixture:show $outcome)
    (case $outcome
      (((llm:v1:ok (llm:v1:encoded $path $body)) $body)
+      ((llm:v1:ok (llm:v1:wire $path $body))
+       (llm:v1:render (JsonObject ((JsonPair "path" (JsonString $path)) (JsonPair "body" $body)))))
       ((llm:v1:ok $value) (llm:v1:render $value))
       ((llm:v1:error $code) (str:concat "ERROR:" (str:symbol->string $code)))
       ($other "INVALID-OUTCOME"))))
@@ -426,6 +428,67 @@ class CodecFixtures(unittest.TestCase):
         for lang in ("he", "petta"):
             library = ROOT / "lib" / ("petta" if lang == "petta" else "") / "llm/command.metta"
             self.assertEqual(self.run_forms(lang, expressions, library), expected)
+
+    def test_value_entries_answer_the_text_entries_wire_unrendered(self):
+        call = {"id": "call-a", "type": "function", "function": {"name": "nop", "arguments": "{}"}}
+        tools = [{"type": "function", "function": {"name": "nop", "parameters": {"type": "object"}}}]
+        conversation = {"model": "fixture-model", "max_tokens": 42, "messages": [
+            {"role": "system", "content": "system \u03bb \"quoted\"\n"},
+            {"role": "user", "content": "task"},
+            {"role": "assistant", "content": "first", "tool_calls": [call]},
+            {"role": "tool", "tool_call_id": "call-a", "content": "one"},
+            {"role": "user", "content": "next"}]}
+        requests = [self.request(), conversation, {**conversation, "cache_messages": True, "cache_ttl": "1h"},
+            {**self.request(), "role_policy": "merge-system-developer", "tools": tools,
+             "tool_choice": "required", "reasoning": {"effort": "low"}},
+            {**self.request(), "role_policy": "merge-system-developer",
+             "extensions": {"metadata": {"k": [1, 2.5, None, True]}}},
+            {**self.request(), "max_tokens": 0}, {**self.request(), "stream": True},
+            {"model": "fixture-model", "max_tokens": 42}, {**self.request(), "unknown_field": 1}]
+        protocols = ("anthropic", "responses", "chat-completions")
+        paths = {"anthropic": "/messages", "responses": "/responses", "chat-completions": "/chat/completions"}
+
+        def by_value(entry, protocol, request):
+            text = json.dumps(request, ensure_ascii=False)
+            return f'(let $v (llm:v1:parse {quoted(text)}) ({entry} {quoted(protocol)} $v))'
+
+        cases = [(p, r) for p in protocols for r in requests]
+        texts = self.each_dialect([self.encode(p, r) for p, r in cases])
+        values = self.each_dialect([by_value("llm:v1:encode-wire", p, r) for p, r in cases])
+        accepted = 0
+        for (protocol, request), text, value in zip(cases, texts, values):
+            if isinstance(text, str):
+                self.assertEqual(value, text, (protocol, request))
+            else:
+                accepted += 1
+                self.assertEqual(value, {"path": paths[protocol], "body": text}, (protocol, request))
+        self.assertEqual(accepted, 12)
+
+        command = {"model": "fixture", "max_tokens": 42, "stable": ["one", "two \u03bb"],
+                   "user": "input", "reasoning": {"effort": "low"}, "cache_key": "caller-cache-identity"}
+        commands = [command, {**command, "stable": []}, {**command, "max_tokens": 0},
+                    {**command, "extra": 1}, {**command, "user": 3}]
+        command_cases = [(p, r) for p in protocols for r in commands]
+        for lang in ("he", "petta"):
+            library = ROOT / "lib" / ("petta" if lang == "petta" else "") / "llm/command.metta"
+            texts = self.run_forms(lang, [f'(llm:v1:encode-command {quoted(p)} {quoted(json.dumps(r))})'
+                                          for p, r in command_cases], library)
+            values = self.run_forms(lang, [by_value("llm:v1:encode-command-wire", p, r)
+                                           for p, r in command_cases], library)
+            for (protocol, request), text, value in zip(command_cases, texts, values):
+                expected = text if isinstance(text, str) else {"path": paths[protocol], "body": text}
+                self.assertEqual(value, expected, (lang, protocol, request))
+
+        # A value is held to the parser's contract: a repeated key, at any
+        # depth, is refused as the same text would be.
+        repeated = ('(JsonObject ((JsonPair "model" (JsonString "m")) (JsonPair "max_tokens" (JsonNumber "4"))'
+                    ' (JsonPair "messages" (JsonArray ((JsonObject ((JsonPair "role" (JsonString "user"))'
+                    ' (JsonPair "content" (JsonString "a")) (JsonPair "role" (JsonString "user")))))))))')
+        text = ('{"model": "m", "max_tokens": 4, "messages": '
+                '[{"role": "user", "content": "a", "role": "user"}]}')
+        self.assertEqual(self.each_dialect([f'(llm:v1:encode-wire "anthropic" {repeated})',
+                                            f'(llm:v1:encode "anthropic" {quoted(text)})']),
+                         ["ERROR:invalid-or-ambiguous-json"] * 2)
 
     def test_explicit_legacy_projection_retains_calls_but_rejects_unknown_items(self):
         responses = {"status": "completed", "output": [
