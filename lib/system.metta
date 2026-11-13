@@ -6,6 +6,20 @@
 (= (system:wall-time)
    (function (case (__cetta_lib_system_host wall-time)
      (($result (return $result))))))
+; time.time_ns(): the wall clock as an integer count of nanoseconds since the
+; epoch.
+(= (system:wall-time-ns)
+   (function (case (__cetta_lib_system_host wall-time-ns)
+     (($result (return $result))))))
+; sd_notify: TEXT, such as "READY=1", "WATCHDOG=1" or "STATUS=...", or several
+; of these on lines of their own, as one datagram to the service manager's
+; $NOTIFY_SOCKET (a socket path, or @ and an abstract name). True when sent;
+; False when the variable is unset or empty, where no manager listens; or
+; (system:os-error errno message) when the send is refused. It never waits
+; for the manager.
+(= (system:notify $text)
+   (function (case (__cetta_lib_system_host notify $text)
+     (($result (return $result))))))
 (= (system:pid)
    (function (case (__cetta_lib_system_host pid)
      (($result (return $result))))))

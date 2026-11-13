@@ -227,26 +227,37 @@ static Atom *stream_text(Arena *arena, const Stream *s) {
     return value;
 }
 
+/* One datagram to the service manager's $NOTIFY_SOCKET, the systemd notify
+ * protocol: a socket path, or @ and an abstract name. 1 when sent, 0 when the
+ * variable is unset or empty (no manager listens), -1 with errno otherwise.
+ * The socket never blocks: a manager that does not read is EAGAIN, not a
+ * stalled caller. */
+int cetta_service_notify(const char *message, size_t length) {
+    const char *address = getenv("NOTIFY_SOCKET");
+    if (!address || !address[0]) return 0;
+    struct sockaddr_un peer = {.sun_family = AF_UNIX};
+    size_t size = strlen(address);
+    if (size >= sizeof(peer.sun_path)) { errno = ENAMETOOLONG; return -1; }
+    memcpy(peer.sun_path, address, size + 1);
+    if (address[0] == '@') peer.sun_path[0] = 0;
+    int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
+    if (fd < 0) return -1;
+    socklen_t span = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + size + (address[0] != '@'));
+    ssize_t sent;
+    do sent = sendto(fd, message, length, MSG_NOSIGNAL, (struct sockaddr *)&peer, span);
+    while (sent < 0 && errno == EINTR);
+    int error = errno;
+    close(fd);
+    if (sent < 0) { errno = error; return -1; }
+    if ((size_t)sent != length) { errno = EMSGSIZE; return -1; }
+    return 1;
+}
+
 /* Optional observation of a blocking call. This never admits, refuses or
  * interrupts work: it only refreshes a progress file and the service watchdog.
  * Like libuv's exit callback, process identity belongs to the parent. */
 void cetta_proc_observe_wait(const char *path, uint64_t sequence) {
-    const char *address = getenv("NOTIFY_SOCKET");
-    if (address && address[0]) {
-        struct sockaddr_un peer = {.sun_family = AF_UNIX};
-        size_t length = strlen(address);
-        if (length < sizeof(peer.sun_path)) {
-            memcpy(peer.sun_path, address, length + 1);
-            if (address[0] == '@') peer.sun_path[0] = 0;
-            int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
-            if (fd >= 0) {
-                socklen_t size = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + length +
-                                             (address[0] != '@'));
-                (void)sendto(fd, "WATCHDOG=1", 10, MSG_NOSIGNAL, (struct sockaddr *)&peer, size);
-                close(fd);
-            }
-        }
-    }
+    (void)cetta_service_notify("WATCHDOG=1", 10);
     if (!path || !path[0]) return;
     char owner[96], stat[4096];
     snprintf(owner, sizeof(owner), "%ld:portable", (long)getpid());

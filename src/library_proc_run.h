@@ -31,5 +31,7 @@ Atom *cetta_proc_information(Arena *arena, CettaProcChild *child);
 Atom *cetta_proc_outcome(Arena *arena, CettaProcChild *child);
 void cetta_proc_free(CettaProcChild *child);
 void cetta_proc_observe_wait(const char *path, uint64_t sequence);
+/* One datagram to $NOTIFY_SOCKET: 1 sent, 0 unset or empty, -1 and errno. */
+int cetta_service_notify(const char *message, size_t length);
 
 #endif

@@ -60,9 +60,14 @@ long the evaluator waited before consuming it. Timers have no worker effects.
 requests the whole file. `fs:entries path` lists names without a page limit.
 `fs:update-text` operation `replace` atomically updates a state file without
 a backup, creating its parent directories. The existing `write` operation
-continues to preserve a backup. `system:wall-time`, `system:format-time`,
-`system:pid`, `system:pid-alive?` and `system:read-line` expose native host
-utilities; `format-time` takes a format, epoch seconds and `local` or `utc`.
+continues to preserve a backup. `system:wall-time`, `system:wall-time-ns`,
+`system:format-time`, `system:pid`, `system:pid-alive?` and `system:read-line`
+expose native host utilities; `format-time` takes a format, epoch seconds and
+`local` or `utc`, and `wall-time-ns` is the wall clock as integer nanoseconds.
+`system:notify text` sends one datagram to `$NOTIFY_SOCKET` (systemd's notify
+protocol, for example `READY=1` or `WATCHDOG=1`): `True` when sent, `False`
+when the variable is unset or empty, or `(system:os-error errno message)`. It
+never waits for the service manager.
 
 With `ENABLE_HTTP=1`, native requests run on one curl owner thread per I/O
 runtime. The evaluator can sleep or compute without polling to drive transfers.
