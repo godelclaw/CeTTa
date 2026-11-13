@@ -528,7 +528,7 @@ LIB_PROLOG_LIBDIR :=
 LIB_PROLOG_VERSION :=
 LIB_PROLOG_CONFIG_ID := disabled
 LIB_PROLOG_RPATH :=
-LIB_PROLOG_SRC := src/petta_libpl_stub.c
+LIB_PROLOG_SRC := src/petta_libpl_stub.c src/petta_swi_arith.c
 endif
 HTTP_ENABLED := 0
 HTTP_PROVIDER_CURL := 0
@@ -54005,3 +54005,21 @@ test-outcome-library: $(BIN)
 		fi; \
 	done; \
 	echo "PASS: lib/outcome (petta default, extended and ai, expanded and per call; he, extended)"
+
+# PeTTa arithmetic off the native fast path is SWI-Prolog's is/2 and
+# comparison, which a build without Prolog computes natively: the expected
+# answers are SWI 10's, and both builds give them.
+.PHONY: test-petta-swi-arithmetic
+test-all: test-petta-swi-arithmetic
+test-petta-swi-arithmetic: $(BIN) tests/petta/swi_arithmetic.metta \
+		tests/petta/swi_arithmetic.expected
+	@for profile in default extended; do \
+		flags="--lang petta"; [ $$profile = default ] || flags="$$flags --profile $$profile"; \
+		actual=$$($(CETTA_BIN_INVOKE) $$flags tests/petta/swi_arithmetic.metta 2>&1); \
+		if [ "$$actual" != "$$(cat tests/petta/swi_arithmetic.expected)" ]; then \
+			echo "FAIL: PeTTa arithmetic as SWI's is/2 (petta $$profile)"; \
+			diff -u tests/petta/swi_arithmetic.expected <(printf '%s\n' "$$actual") | head -20; \
+			exit 1; \
+		fi; \
+	done; \
+	echo "PASS: PeTTa arithmetic off the fast path answers as SWI's is/2 ($$(wc -l < tests/petta/swi_arithmetic.expected) rows, default and extended)"

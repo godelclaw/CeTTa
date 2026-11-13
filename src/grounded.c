@@ -3129,6 +3129,10 @@ static bool grounded_is_binary_numeric_operator(SymbolId head_id) {
            head_id == g_builtin_syms.numeric_eq;
 }
 
+/* The bits of the largest integer power PeTTa builds exactly: SWI's bound,
+ * a result its default 1 GiB global stack holds. */
+#define GROUNDED_PETTA_POWER_BITS_MAX ((unsigned __int128)1 << 33)
+
 /* The -math functions; NULL for any other head.  Dispatch is its only
  * caller, and its heads are tested in dispatch's own code. */
 static inline __attribute__((always_inline)) Atom *grounded_math_function(
@@ -3176,10 +3180,32 @@ static inline __attribute__((always_inline)) Atom *grounded_math_function(
             bool exact =
                 num_arg_to_mpz(&base, exact_base) &&
                 num_arg_to_mpz(&power, exact_power) &&
-                mpz_sgn(exact_power) >= 0 &&
-                mpz_fits_ulong_p(exact_power);
+                mpz_sgn(exact_power) >= 0;
             Atom *result = NULL;
-            if (exact) {
+            if (exact && mpz_cmpabs_ui(exact_base, 1u) <= 0) {
+                /* 0, 1 and -1 to any power, as SWI takes them. */
+                mpz_set_si(exact_result,
+                           mpz_sgn(exact_base) == 0
+                               ? (mpz_sgn(exact_power) == 0 ? 1 : 0)
+                           : mpz_sgn(exact_base) > 0 || mpz_even_p(exact_power)
+                               ? 1 : -1);
+                result = atom_from_mpz(a, exact_result);
+            } else if (exact &&
+                       (!mpz_fits_ulong_p(exact_power) ||
+                        (unsigned __int128)mpz_sizeinbase(exact_base, 2) *
+                                mpz_get_ui(exact_power) >
+                            GROUNDED_PETTA_POWER_BITS_MAX)) {
+                /* A power no stack holds: SWI raises a resource error
+                 * rather than build it. */
+                Atom *formal = atom_expr2(a, atom_symbol(a, "resource_error"),
+                                          atom_symbol(a, "stack"));
+                result = formal
+                    ? atom_error(a, formal, atom_var_with_id(
+                          a, "_", fresh_var_id()))
+                    : NULL;
+                if (result)
+                    g_grounded_raised = true;
+            } else if (exact) {
                 mpz_pow_ui(
                     exact_result, exact_base,
                     mpz_get_ui(exact_power));
