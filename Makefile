@@ -7896,12 +7896,16 @@ endif
 # ground misses after removals, timed at 500 and 4,000 atoms against a
 # quadratic control the check must reject.  The answers of lookups by head
 # past the size read row by row, with rows of a variable head, removals and
-# rows with variables, stay as they were in PeTTa and HE.
+# rows with variables, stay as they were in PeTTa and HE, and so do those of
+# a lookup by head joined with a pattern of a variable head while removed
+# rows are marked, with relations from a head's first fact and without.
 .PHONY: test-space-growth-v1
 test-all: test-space-growth-v1
 test-space-growth-v1: $(BIN) tests/support/check_space_growth_v1.py \
 		tests/space_head_rows.metta tests/space_head_rows.petta.expected \
-		tests/space_head_rows.he.expected
+		tests/space_head_rows.he.expected tests/space_head_rows_kept.metta \
+		tests/space_head_rows_kept.petta.expected \
+		tests/space_head_rows_kept.he.expected
 	@for lang in petta he; do \
 		actual=$$($(CETTA_BIN_INVOKE) --lang $$lang tests/space_head_rows.metta 2>&1); \
 		if [ "$$actual" != "$$(cat tests/space_head_rows.$$lang.expected)" ]; then \
@@ -7909,6 +7913,15 @@ test-space-growth-v1: $(BIN) tests/support/check_space_growth_v1.py \
 			diff -u tests/space_head_rows.$$lang.expected <(printf '%s\n' "$$actual") | head -20; \
 			exit 1; \
 		fi; \
+		for route in "" CETTA_SPACE_DENSE=eager; do \
+			actual=$$(env $$route $(CETTA_BIN_INVOKE) --lang $$lang \
+				tests/space_head_rows_kept.metta 2>&1); \
+			if [ "$$actual" != "$$(cat tests/space_head_rows_kept.$$lang.expected)" ]; then \
+				echo "FAIL: a lookup by head over facts kept in relations ($$lang $${route:-native})"; \
+				diff -u tests/space_head_rows_kept.$$lang.expected <(printf '%s\n' "$$actual") | head -20; \
+				exit 1; \
+			fi; \
+		done; \
 	done; \
 	echo "PASS: lookups by head answer as before (PeTTa and HE)"
 	@python3 tests/support/check_space_growth_v1.py ./$(BIN)
