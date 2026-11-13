@@ -2903,10 +2903,18 @@ static int cetta_main(int argc, char **argv) {
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            if (fuel_override_requested && fuel_override == 0) {
+                fputs("error: invalid fuel '0'\n", stderr);
+                return 2;
+            }
             print_usage(stdout);
             return 0;
         }
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0) {
+            if (fuel_override_requested && fuel_override == 0) {
+                fputs("error: invalid fuel '0'\n", stderr);
+                return 2;
+            }
             print_version(stdout);
             return 0;
         }
@@ -3333,6 +3341,12 @@ static int cetta_main(int argc, char **argv) {
 
     if (translate_mode && !target_endpoint.lang_name) {
         target_endpoint = source_endpoint;
+    }
+    if (fuel_override_requested && fuel_override == 0 &&
+        strcmp(source_endpoint.lang_name, "ai") && !source_endpoint.ai_profile) {
+        fputs("error: invalid fuel '0'\n", stderr);
+        free(inline_buf);
+        return 2;
     }
     if (!endpoint_resolve(&source_endpoint, "source", argv[0])) {
         free(inline_buf);

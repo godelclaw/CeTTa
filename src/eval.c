@@ -40392,9 +40392,24 @@ Atom *cetta_prime_reserved_definition_error(Arena *a, Atom *atom) {
    For most atoms, bindings are empty. For equation queries, bindings
    contain variable assignments from bidirectional matching. */
 
-static void metta_eval_bind(Space *s, Arena *a, Atom *atom, int fuel, OutcomeSet *os) {
+static __attribute__((noinline)) void metta_eval_bind_core(
+    Space *s, Arena *a, Atom *atom, int fuel, OutcomeSet *os);
+
+static __attribute__((noinline)) void metta_eval_bind_ai(
+    Space *s, Arena *a, Atom *atom, int fuel, OutcomeSet *os) {
     __attribute__((cleanup(ai_failure_scope_leave))) AiFailureScope ai_scope =
-        {a, os, os->len, eval_failure_values()};
+        {a, os, os->len, true};
+    metta_eval_bind_core(s, a, atom, fuel, os);
+}
+
+static void metta_eval_bind(Space *s, Arena *a, Atom *atom, int fuel, OutcomeSet *os) {
+    if (eval_failure_values())
+        return metta_eval_bind_ai(s, a, atom, fuel, os);
+    return metta_eval_bind_core(s, a, atom, fuel, os);
+}
+
+static __attribute__((noinline)) void metta_eval_bind_core(
+    Space *s, Arena *a, Atom *atom, int fuel, OutcomeSet *os) {
     if (eval_failure_values() && atom_is_error(atom) && !atom_is_he_evaluated(atom)) {
         Bindings empty;
         bindings_init(&empty);
@@ -40557,12 +40572,30 @@ static void metta_eval_bind(Space *s, Arena *a, Atom *atom, int fuel, OutcomeSet
         he_mark_answers_of(a, atom, os, he_answers_start);
 }
 
-static void metta_eval_bind_typed_in_env(
+static __attribute__((noinline)) void metta_eval_bind_typed_core(
+    Space *s, Arena *a, Atom *type, Atom *atom, int fuel,
+    const Bindings *initial_env, OutcomeSet *os);
+
+static __attribute__((noinline)) void metta_eval_bind_typed_ai(
     Space *s, Arena *a, Atom *type, Atom *atom, int fuel,
     const Bindings *initial_env, OutcomeSet *os) {
     __attribute__((cleanup(ai_failure_scope_leave))) AiFailureScope ai_scope =
-        {a, os, os->len, eval_failure_values() && !g_petta_pending_raise &&
+        {a, os, os->len, !g_petta_pending_raise &&
             eval_atom_type_demand(a, atom, type ? type : atom_undefined_type(a)) != HE_TYPE_KEEP};
+    metta_eval_bind_typed_core(s, a, type, atom, fuel, initial_env, os);
+}
+
+static void metta_eval_bind_typed_in_env(
+    Space *s, Arena *a, Atom *type, Atom *atom, int fuel,
+    const Bindings *initial_env, OutcomeSet *os) {
+    if (eval_failure_values())
+        return metta_eval_bind_typed_ai(s, a, type, atom, fuel, initial_env, os);
+    return metta_eval_bind_typed_core(s, a, type, atom, fuel, initial_env, os);
+}
+
+static __attribute__((noinline)) void metta_eval_bind_typed_core(
+    Space *s, Arena *a, Atom *type, Atom *atom, int fuel,
+    const Bindings *initial_env, OutcomeSet *os) {
     if (eval_failure_values() && atom_is_error(atom) && !atom_is_he_evaluated(atom) &&
         !atom_is_symbol_id(type, g_builtin_syms.atom)) {
         Bindings empty;
@@ -84259,6 +84292,24 @@ static const char *petta_eval_machine_failure_name(
  * observation boundary, since answer normalization drops faults that sit
  * beside successes.  Suspension is marked by its own source (fuel,
  * cancellation), not here. */
+static void ai_observe_machine_cut(PettaMachine *machine, Arena *arena,
+    OutcomeSet *outcomes, Atom *expression, const Bindings *outer, bool preserve) {
+    Atom *diagnostic = ai_completion_diagnostic(arena, expression,
+        g_eval_completion_tracker->completion);
+    Atom *partial = NULL;
+    if (!diagnostic || !petta_machine_observe_interrupted_collection(
+            machine, arena, diagnostic, &partial))
+        return;
+    Bindings empty;
+    bindings_init(&empty);
+    CettaCount start = outcomes->len;
+    outcome_set_add_prefixed(arena, outcomes, partial, &empty, outer, preserve);
+    if (outcomes->len > start) {
+        outcomes->items[outcomes->len - 1u].result_form = CETTA_CALL_RESULT_COMPLETED_VALUE;
+        g_ai_cut_reified = true;
+    }
+}
+
 static void petta_eval_machine_record_stop(
     Arena *arena, OutcomeSet *outcomes, Atom *expression,
     PettaMachineStep step, const Bindings *stop_environment,
@@ -84811,14 +84862,14 @@ static PettaMachineHost petta_eval_machine_host(
             ? petta_eval_machine_admit_branch_capture : NULL,
         .quote_is_inert_data = prime_machine,
         .graded_equations = native_control_profile_active(),
-        .source_output_constraints = source_output_constraints && !eval_failure_values(),
+        .source_output_constraints = source_output_constraints,
         .structural_equation_heads = g_he_shared_execution,
         .exact_equation_arity = g_he_shared_execution,
         .literal_binding_patterns = g_he_shared_execution || prime_machine || eval_failure_values(),
         .unmatched_call_is_value = g_he_shared_execution || prime_machine,
         .empty_result_is_failure = g_he_shared_execution,
         .case_switches_on_empty = g_he_shared_execution,
-        .range_discharge = !g_he_shared_execution && !prime_machine,
+        .range_discharge = !g_he_shared_execution && !prime_machine && !eval_failure_values(),
         .retain_query_variable_identity = g_he_shared_execution || prime_machine,
         .return_occurrence_owner = prime_machine
             ? petta_eval_machine_return_occurrence_owner : NULL,
@@ -85900,6 +85951,10 @@ static __attribute__((noinline)) bool petta_eval_machine_run(
             }
             if (step == PETTA_MACHINE_STEP_SUSPENDED) {
                 if (petta_machine_await_source(&machine)) continue;
+                if (eval_failure_values() && g_eval_completion_tracker &&
+                    g_eval_completion_tracker->completion != CETTA_EVAL_COMPLETE)
+                    ai_observe_machine_cut(&machine, arena, machine_outcomes,
+                        expression, outer_environment, preserve_bindings);
                 if (prime_machine || portable_machine) {
                     machine_declined = true;
                     if (prime_machine) {
@@ -103065,8 +103120,7 @@ static __attribute__((noinline)) MettaDispatchResult metta_conditional_dispatch(
                     outcome_set_add_prefixed_outcome(a, os, &conds.items[i],
                         CURRENT_ENV, preserve_bindings);
                 else
-                    outcome_set_add_prefixed(a, os, cond, cond_env,
-                        CURRENT_ENV, preserve_bindings);
+                    outcome_set_add(os, cond, cond_env);
                 continue;
             }
             bool true_branch = is_true_atom(cond);
@@ -104833,13 +104887,40 @@ static void he_complete_prepared_answers(
 }
 
 struct PrimeNativeOwnedRequest;
-static void metta_call_impl_owned(
+static __attribute__((noinline)) void metta_call_impl_core(
+    Space *s, Arena *a, Atom *atom, Atom *etype, int fuel,
+    bool preserve_bindings, const Bindings *initial_env,
+    int strict_ready_argument,
+    OutcomeSet *os, struct PrimeNativeOwnedRequest *owned_request);
+
+static __attribute__((noinline)) void metta_call_impl_ai(
     Space *s, Arena *a, Atom *atom, Atom *etype, int fuel,
     bool preserve_bindings, const Bindings *initial_env,
     int strict_ready_argument,
     OutcomeSet *os, struct PrimeNativeOwnedRequest *owned_request) {
     __attribute__((cleanup(ai_failure_scope_leave))) AiFailureScope ai_scope =
-        {a, os, os->len, eval_failure_values() && !g_petta_pending_raise};
+        {a, os, os->len, !g_petta_pending_raise};
+    metta_call_impl_core(s, a, atom, etype, fuel, preserve_bindings,
+        initial_env, strict_ready_argument, os, owned_request);
+}
+
+static void metta_call_impl_owned(
+    Space *s, Arena *a, Atom *atom, Atom *etype, int fuel,
+    bool preserve_bindings, const Bindings *initial_env,
+    int strict_ready_argument,
+    OutcomeSet *os, struct PrimeNativeOwnedRequest *owned_request) {
+    if (eval_failure_values())
+        return metta_call_impl_ai(s, a, atom, etype, fuel, preserve_bindings,
+            initial_env, strict_ready_argument, os, owned_request);
+    return metta_call_impl_core(s, a, atom, etype, fuel, preserve_bindings,
+        initial_env, strict_ready_argument, os, owned_request);
+}
+
+static __attribute__((noinline)) void metta_call_impl_core(
+    Space *s, Arena *a, Atom *atom, Atom *etype, int fuel,
+    bool preserve_bindings, const Bindings *initial_env,
+    int strict_ready_argument,
+    OutcomeSet *os, struct PrimeNativeOwnedRequest *owned_request) {
     (void)owned_request;
     __attribute__((cleanup(prime_eval_stack_call_leave)))
     PrimeEvalStackCallGuard eval_stack_call_guard = {0};
@@ -105085,69 +105166,6 @@ tail_call: ;
     }
     if (eval_failure_values() && atom_is_he_evaluated(atom)) {
         outcome_set_add(os, atom, CURRENT_ENV);
-        return;
-    }
-    CettaControlOperationPlan ai_observer;
-    if (eval_failure_values() && language_id == CETTA_LANGUAGE_PETTA &&
-        native_control_profile_active() && atom && atom->kind == ATOM_EXPR &&
-        atom->expr.len == 2u &&
-        cetta_control_operation_decode(atom_head_symbol_id(atom), 1u,
-            &ai_observer, &g_builtin_syms) &&
-        (ai_observer.operation == CETTA_CONTROL_HANDLE ||
-         ai_observer.operation == CETTA_CONTROL_COLLECT)) {
-        bool collection = ai_observer.operation == CETTA_CONTROL_COLLECT;
-        OutcomeSet inner;
-        outcome_set_init(&inner);
-        __attribute__((cleanup(eval_gc_outcome_suspension_end)))
-        EvalGcOutcomeSuspension observation_suspension = {0};
-        eval_gc_outcome_suspension_begin(
-            &observation_suspension, &eval_gc_root_frame, os, &inner);
-        eval_for_caller(s, a, NULL, atom->expr.elems[1], fuel,
-            CURRENT_ENV, true, &inner);
-        if (g_eval_completion_tracker &&
-            g_eval_completion_tracker->completion != CETTA_EVAL_COMPLETE &&
-            !g_ai_cut_reified) {
-            ai_add_failure(a, &inner, ai_completion_diagnostic(a,
-                atom->expr.elems[1], g_eval_completion_tracker->completion), &_empty);
-            g_ai_cut_reified = true;
-        }
-        if (collection) {
-            Atom **items = inner.len ? arena_alloc(a, sizeof(*items) * inner.len) : NULL;
-            if (inner.len && !items) {
-                outcome_set_free(&inner);
-                eval_mark_incomplete(CETTA_EVAL_INCOMPLETE_CAPACITY);
-                return;
-            }
-            CettaExprLen count = 0u;
-            for (CettaCount i = 0u; i < inner.len; i++) {
-                Atom *value = outcome_atom_materialize(a, &inner.items[i]);
-                if (value && !atom_is_legacy_empty_sentinel(value)) {
-                    Atom *completed = ai_completed_data(a, value);
-                    if (!completed) {
-                        outcome_set_free(&inner);
-                        return;
-                    }
-                    items[count++] = completed;
-                }
-            }
-            outcome_set_add(os, atom_expr(a, items, count), &_empty);
-        } else {
-            for (CettaCount i = 0u; i < inner.len; i++) {
-                if (ai_outcome_raised(&inner.items[i])) {
-                    Atom *data = ai_completed_data(a,
-                        outcome_atom_materialize(a, &inner.items[i]));
-                    if (!data) {
-                        outcome_set_free(&inner);
-                        return;
-                    }
-                    outcome_set_add(os, data, &inner.items[i].env);
-                } else {
-                    outcome_set_add_prefixed_outcome(a, os, &inner.items[i],
-                        CURRENT_ENV, preserve_bindings);
-                }
-            }
-        }
-        outcome_set_free(&inner);
         return;
     }
     if (atom_is_error(atom) || atom_is_legacy_empty_sentinel(atom)) {

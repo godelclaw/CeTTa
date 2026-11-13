@@ -1242,6 +1242,11 @@ int petta_machine_typecheck_exit_code(const PettaMachine *machine);
 /* True when the last answer is an Error that was raised and not caught,
  * rather than an Error value. */
 bool petta_machine_last_answer_raised(const PettaMachine *machine);
+/* Read an interrupted root collector's already-established, unconditional
+ * prefix and terminal diagnostic. This performs no computation or resumption;
+ * pending logical conditions cannot be exported as unconditional answers. */
+bool petta_machine_observe_interrupted_collection(
+    PettaMachine *machine, Arena *arena, Atom *diagnostic, Atom **value);
 /* A machine created to evaluate for a caller that delays goals starts from
  * a copy of them, as a child machine does. */
 bool petta_machine_inherit_delayed_goals(PettaMachine *machine,

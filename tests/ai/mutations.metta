@@ -21,10 +21,6 @@
  "eval_failure_values() ? (ai_outcome_raised(&conds.items[i]) && !cetta_ai_audit_mutant(\"if\"))" 1)
 (AMReplace "eval" "if (failure && !atom_is_error(pattern))"
  "if (failure && (cetta_ai_audit_mutant(\"case-explicit\") || (!atom_is_error(pattern) && !cetta_ai_audit_mutant(\"case-wildcard\"))))" 1)
-(AMReplace "eval" "if (ai_outcome_raised(&inner.items[i])) {"
- "if (ai_outcome_raised(&inner.items[i]) && !cetta_ai_audit_mutant(\"catch\")) {" 1)
-(AMReplace "eval" "            CettaExprLen count = 0u;\n            for (CettaCount i = 0u; i < inner.len; i++) {\n                Atom *value = outcome_atom_materialize(a, &inner.items[i]);"
- "            CettaExprLen count = 0u;\n            for (CettaCount i = 0u; i < inner.len; i++) {\n                if (cetta_ai_audit_mutant(\"collapse\") && ai_outcome_raised(&inner.items[i])) continue;\n                Atom *value = outcome_atom_materialize(a, &inner.items[i]);\n                if (cetta_ai_audit_mutant(\"duplicates\") && count && value && atom_eq(items[count - 1u], value)) continue;" 1)
 (AMReplace "eval" "             bound_arg->kind == ATOM_VAR);\n        bool hold_observed = false;"
  "             bound_arg->kind == ATOM_VAR);\n        if (eval_failure_values() && cetta_ai_audit_mutant(\"holding\") && atom_is_symbol_id(frame->arg_type, g_builtin_syms.atom)) { held_position = false; frame->arg_type = atom_undefined_type(a); }\n        bool hold_observed = false;" 1)
 (AMReplace "eval" "        Atom *target_operand =\n            bindings_apply_if_vars(CURRENT_ENV, a, expr_arg((*call), 0));"
@@ -65,6 +61,14 @@
  "        if (!cetta_ai_audit_mutant(\"case-wildcard\") && (!pattern || pattern->kind != ATOM_EXPR || !pattern->expr.len ||\n            !atom_is_symbol(pattern->expr.elems[0], \"Error\")))" 1)
 (AMReplace "machine" "        if (marker.kind != PETTA_GOAL_CATCH_READY)"
  "        if (marker.kind != PETTA_GOAL_CATCH_READY || cetta_ai_audit_mutant(\"catch\"))" 1)
+(AMReplace "machine" "            PettaMachineStep step = pull.step;\n            if (step == PETTA_MACHINE_STEP_ANSWER && answer &&"
+ "            PettaMachineStep step = pull.step;\n            if (step == PETTA_MACHINE_STEP_ANSWER && answer && ((cetta_ai_audit_mutant(\"collapse\") && choice->as.collapse.machine->impl->last_answer_is_control_error) || (cetta_ai_audit_mutant(\"duplicates\") && choice->as.collapse.item_len && atom_eq(choice->as.collapse.items[choice->as.collapse.item_len - 1u], answer)))) { bindings_free(&environment); continue; }\n            if (step == PETTA_MACHINE_STEP_ANSWER && answer &&" 1)
+(AMReplace "machine" "if (raised && (machine->host.failure_values ||"
+ "if (raised && ((machine->host.failure_values && !cetta_ai_audit_mutant(\"foldall\")) ||" 1)
+(AMReplace "machine" "    if (machine->host.failure_values)\n        return false; /* The count-only carrier has no failure occurrences. */"
+ "    if (machine->host.failure_values && !cetta_ai_audit_mutant(\"counted\"))\n        return false; /* The count-only carrier has no failure occurrences. */" 1)
+(AMReplace "eval" "        .range_discharge = !g_he_shared_execution && !prime_machine && !eval_failure_values(),"
+ "        .range_discharge = !g_he_shared_execution && !prime_machine && (!eval_failure_values() || cetta_ai_audit_mutant(\"type-guard\"))," 1)
 (AMReplace "eval" "        .literal_binding_patterns = g_he_shared_execution || prime_machine || eval_failure_values(),"
  "        .literal_binding_patterns = g_he_shared_execution || prime_machine || (eval_failure_values() && !cetta_ai_audit_mutant(\"let\"))," 1)
 (AMReplace "machine" "        if (machine->host.failure_values)\n            continue;\n        if (!petta_machine_callable_root(machine, pattern, NULL)"
@@ -106,6 +110,9 @@
 (AMMutant "duplicates")
 (AMMutant "quote")
 (AMMutant "aggregate")
+(AMMutant "foldall")
+(AMMutant "counted")
+(AMMutant "type-guard")
 
 (= (am:fail $problem) (let $shown (println! $problem) (system:exit 2)))
 (= (am:read $path)
@@ -176,7 +183,7 @@
      (case (am:exec $dir $name "semantic"
             ($binary "--lang" "petta" "--profile" "extended" "-e" $program) $cwd)
        (((proc:exited 0 $out "")
-          (if (or (am:contains $out "(AISuitePass 12 1984 18)") (== $out "true\n6\n")) (MutantSurvived $name)
+          (if (or (am:contains $out "(AISuitePass 12 1984 21)") (== $out "true\n6\n")) (MutantSurvived $name)
             (if (am:contains $out "Mismatch") (MutantKilled $name semantic)
               (am:fail (InvalidMutationRunner $name $out)))))
         ((proc:exited 1 $out $err)
@@ -202,7 +209,7 @@
       ($other (am:fail (UnexpectedNativeMutationExecution $name $other))))))
 (= (am:walk $dir $cwd $names $killed $survived)
    (if (== $names ())
-     (if (and (== $killed 24) (== $survived 0)) (MutationSummary 24 24 0)
+     (if (and (== $killed 27) (== $survived 0)) (MutationSummary 27 27 0)
        (am:fail (MutationSurvivors $killed $survived)))
      (let* (($name (car-atom $names)) ($rest (cdr-atom $names))
             ($result (am:exercise $dir $name $cwd)) ($shown (println! $result)))
@@ -214,6 +221,6 @@
    (case (am:exercise $dir "control" $cwd)
      (((MutantSurvived "control")
         (let $names (collapse (match &self (AMMutant $name) $name))
-          (if (== (size-atom $names) 24) (am:walk $dir $cwd $names 0 0)
+          (if (== (size-atom $names) 27) (am:walk $dir $cwd $names 0 0)
             (am:fail (InvalidMutationCount (size-atom $names))))))
       ($bad (am:fail (MutationControlFailed $bad))))))

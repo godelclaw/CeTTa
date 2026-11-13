@@ -26,6 +26,10 @@
    (case (proc:run (cons-atom $binary $arguments) "." (ah:environment) 15000 1048576)
      (((proc:exited 2 "" "error: ai currently composes with the default or extended profile\n") ())
       ($bad (let $shown (println! (HostAdmissionFailed $arguments $bad)) (system:exit 1))))))
+(= (ah:zero-refused $binary $arguments)
+   (case (proc:run (cons-atom $binary $arguments) "." (ah:environment) 15000 1048576)
+     (((proc:exited 2 "" "error: invalid fuel '0'\n") ())
+      ($bad (let $shown (println! (ZeroFuelAdmissionFailed $arguments $bad)) (system:exit 1))))))
 (= (ah:run $binary)
    (let* (($p1 (ah:profile $binary "petta" "extended" "ai"))
           ($p2 (ah:profile $binary "petta" "ai" "extended"))
@@ -74,5 +78,8 @@
           ($bad-last (ah:reject $binary
             ("--lang" "petta" "--profile" "typecheck-v2" "--profile" "ai" "-e" "!(+ 1 2)")))
           ($bad-dialect (ah:reject $binary
-            ("--lang" "ai" "--profile" "typecheck-v2" "-e" "!(+ 1 2)"))))
-     (HostControlsPass 18)))
+            ("--lang" "ai" "--profile" "typecheck-v2" "-e" "!(+ 1 2)")))
+          ($zero-version (ah:zero-refused $binary ("--fuel" "0" "--version")))
+          ($zero-language (ah:zero-refused $binary ("--fuel" "0" "--lang" "nosuch" "-e" "!(x)")))
+          ($zero-profile (ah:zero-refused $binary ("--fuel" "0" "--profile" "nosuch" "-e" "!(x)"))))
+     (HostControlsPass 21)))

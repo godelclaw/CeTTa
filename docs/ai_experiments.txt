@@ -5,6 +5,8 @@ Status: experimental, declaration-only, canonical PeTTa implementation.
 Default and extended profiles retain their existing semantics. Selecting
 PeTTa's existing AI preset retains its sealed-sort behavior and does not
 activate failure-values. HE activation is explicitly refused in this cut.
+The AI preset now includes extended infrastructure, so it is not byte-equivalent
+to the earlier base-only AI preset on extension-specific programs.
 
 Hosts and activation
 --------------------
@@ -27,6 +29,8 @@ Unknown names and malformed declarations report Unsolvable. The experiment
 registry admits only qualified hosts. HE --profile ai retains extended
 behavior; a failure-values declaration returns Forbidden with
 ExperimentUnavailableInHost. HE propagation remains future work.
+HE retains its stop-after-Error policy, so a refused declaration ends that
+program. A diagnostic printed as data does not imply a nonzero process exit.
 
 Experiment: failure-values
 --------------------------
@@ -54,6 +58,8 @@ Position                         Rule
 --------                         ----
 let / let* source                Propagate; evaluate sources left to right.
 let / let* pattern               Held syntax; a mismatch gives zero.
+                                 Structural cons patterns can destructure
+                                 computed lists without running user code.
 let / let* continuation          Run only for that branch's successful match.
 if condition                    Propagate; choose by the host's truth policy.
 if branches                     Run only the selected branch.
@@ -63,6 +69,9 @@ case pattern                    Held syntax, resolved in captured bindings.
 case body                       Run only the selected match.
 collapse source                 Observe every occurrence, including failures,
                                  duplicates and partial progress.
+unique / alpha-unique source     Collect, then deduplicate ordinary data.
+union / intersection /          Collect each source, then combine ordinary
+subtraction sources             data using their existing sequence/set rules.
 superpose container             Held sequence of alternative programs.
 superpose alternative           Each branch keeps its own failure.
 unify operands                  Held terms, not programs to execute.
@@ -75,9 +84,22 @@ catch source                    Observe each failure as one ordinary datum.
 forall completed generator      Preserve its first produced failure before
                                  treating its values as Boolean control.
 forall selected predicate       Propagate its failure rather than return false.
+foldall generator / step        Propagate the original failure instead of
+                                 publishing an apparently completed state.
 hyperpose alternatives          Preserve branch occurrences and failure roles.
 directive result                Print failures; continue subsequent directives.
 eval / metta source             Held code, explicitly selected for execution.
+
+The collection operators' internal reify is an explicit observation boundary.
+For example, unique of two identical produced failures emits one intact Error
+datum; different WHERE or KIND fields stay distinct. Intersection and
+subtraction may exclude such data by their ordinary data rules. A failure in
+the operator before collection, or in its consumer afterward, still propagates.
+
+In the active experiment, an uncaught failure or a budget cut is a returned
+value and does not by itself change the process exit status. Command-line,
+reader and explicit process-exit failures retain their separate status rules.
+Programs that use this profile must inspect the returned outcomes.
 
 PeTTa eval runs selected code once. metta respects an already completed input
 as a value; eval deliberately activates the selected code value. Captured
