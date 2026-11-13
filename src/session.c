@@ -247,6 +247,14 @@ const CettaProfile *cetta_profile_petta_extended(void) {
     return &CETTA_PROFILE_PETTA_EXTENDED_VALUE;
 }
 
+const CettaProfile *cetta_profile_base(const CettaProfile *profile) {
+    if (profile && profile->id == CETTA_PROFILE_PETTA_AI)
+        return cetta_profile_petta_extended();
+    if (profile && profile->id == CETTA_PROFILE_HE_AI)
+        return cetta_profile_he_extended();
+    return profile;
+}
+
 #if CETTA_BUILD_WITH_PETTA_TYPECHECK_V2
 const CettaProfile *cetta_profile_petta_typecheck_v2(void) {
     return &CETTA_PROFILE_PETTA_TYPECHECK_V2_VALUE;
@@ -999,16 +1007,18 @@ CettaExperimentAdmission cetta_session_enable_experiment(
     static const struct {
         const char *name;
         uint32_t bit;
-        CettaLanguageId host;
+        uint64_t host_mask;
     } experiments[] = {
-        {"failure-values", CETTA_EXPERIMENT_FAILURE_VALUES, CETTA_LANGUAGE_PETTA},
+        {"failure-values", CETTA_EXPERIMENT_FAILURE_VALUES,
+            (UINT64_C(1) << CETTA_LANGUAGE_PETTA) | (UINT64_C(1) << CETTA_LANGUAGE_HE)},
     };
     if (!cetta_session_allows_experiments(session) || !name)
         return CETTA_EXPERIMENT_UNKNOWN;
     for (size_t i = 0u; i < sizeof(experiments) / sizeof(experiments[0]); i++) {
         if (strcmp(name, experiments[i].name) != 0)
             continue;
-        if (session->language_id != experiments[i].host)
+        if ((unsigned)session->language_id >= 64u ||
+            !(experiments[i].host_mask & (UINT64_C(1) << session->language_id)))
             return CETTA_EXPERIMENT_UNSUPPORTED_HOST;
         session->experiments |= experiments[i].bit;
         return CETTA_EXPERIMENT_ENABLED;

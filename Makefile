@@ -6916,7 +6916,7 @@ $(SHARED_RETURN_PRODUCER_TEST_OBJ): tests/test_shared_return_producer.c src/shar
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -MF $(@:.o=.d) -Isrc -c $< -o $@
 
 $(SHARED_RETURN_PRODUCER_TEST_BIN): $(SHARED_RETURN_PRODUCER_TEST_OBJ) $(FALLBACK_EVAL_TEST_LINK_OBJ) $(BRIDGE_DEPS)
-	$(CC) $(CFLAGS) -o $@ $^ -Wl,--wrap=malloc,--wrap=calloc,--wrap=grounded_call,--wrap=cetta_library_call_native $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $^ -Wl,--wrap=malloc,--wrap=calloc,--wrap=grounded_call,--wrap=cetta_library_call_native,--wrap=he_typing_dispatch $(LDFLAGS)
 
 .PHONY: test-shared-return-producer
 test-all: test-shared-return-producer

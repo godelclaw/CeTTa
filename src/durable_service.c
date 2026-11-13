@@ -63,7 +63,7 @@ CettaDurableStatus cetta_service_new(CettaDurableStore *store,
         if (!program || !program->version || !*program->version || strnlen(program->version,256)>255 ||
             !program->space || !program->context || !p->policy || p->fuel<=0 || p->fuel>2000000 ||
             program->context->session.language_id!=CETTA_LANGUAGE_HE ||
-            !program->context->session.profile || program->context->session.profile->id!=CETTA_PROFILE_HE_EXTENDED ||
+            !program->context->session.profile || cetta_profile_base(program->context->session.profile)->id!=CETTA_PROFILE_HE_EXTENDED ||
             !p->poll.credential || !p->poll.source || !*p->poll.source || strnlen(p->poll.source,65)>64 ||
             !p->poll.limit || p->poll.limit>100 || p->poll.update_count>64 ||
             (p->poll.update_count && !p->poll.allowed_updates) || c->dispatch.timeout_ms<1000 ||

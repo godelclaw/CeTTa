@@ -135,7 +135,7 @@ static bool config_valid(const CettaActivityConfig *c) {
             c->planning.return_slice.preparation!=UINT64_MAX &&
             c->planning.return_slice.limit_transport && c->planning.return_slice.transport &&
             c->planning.return_slice.transport!=UINT64_MAX:
-        c->fuel>0 && session->language_id==CETTA_LANGUAGE_HE && session->profile->id==CETTA_PROFILE_HE_EXTENDED;
+        c->fuel>0 && session->language_id==CETTA_LANGUAGE_HE && cetta_profile_base(session->profile)->id==CETTA_PROFILE_HE_EXTENDED;
     return admitted && c->cleanup_quantum!=UINT64_MAX &&
         c->program->version && !strcmp(c->program->version,"activity/1") &&
         c->program->space && c->program->context && component(c->worker) &&

@@ -538,6 +538,9 @@ void eval_read_scope_leave(CettaEvalReadScope *scope);
 bool eval_interaction_values(Space *space, Arena *arena, Atom *expression,
     Atom ***values_out, size_t *len_out, Atom **error_out);
 bool eval_current_profile_enables_dependent_telescope(void) __attribute__((weak));
+/* Native call boundaries consult this only after a producer has recorded
+ * its own fault. It never classifies an arbitrary Error-shaped value. */
+bool eval_current_uses_failure_values(void) __attribute__((weak));
 /* The type stamp store (space.c) keeps typings across inferences where the
  * evaluator vouches for an atom's arena.  eval_type_stamp_scope says whether
  * the current evaluation may, and names the language and profile it types

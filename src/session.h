@@ -336,6 +336,8 @@ const CettaProfile *cetta_profile_he_extended(void);
 const CettaProfile *cetta_profile_he_prime(void);
 const CettaProfile *cetta_profile_prime_default(void);
 const CettaProfile *cetta_profile_petta_extended(void);
+/* Experiments layer on a stable evaluator profile; they do not replace it. */
+const CettaProfile *cetta_profile_base(const CettaProfile *profile);
 #if CETTA_BUILD_WITH_PETTA_TYPECHECK_V2
 const CettaProfile *cetta_profile_petta_typecheck_v2(void);
 const CettaProfile *cetta_profile_petta_typecheck_v3(void);

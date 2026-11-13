@@ -4571,7 +4571,7 @@ petta_next_slice:
                        lang->id == CETTA_LANGUAGE_PRIME ||
                        (lang->id == CETTA_LANGUAGE_HE && fuel_override_requested &&
                         fuel_override >= 0) ||
-                       (profile && profile->id == CETTA_PROFILE_HE_EXTENDED)) {
+                       (profile && cetta_profile_base(profile)->id == CETTA_PROFILE_HE_EXTENDED)) {
                 /* Complete directive streams are observed with a tracker, which
                  * claims there are no further answers, so it is always
                  * observed with a completion tracker.  Finite fuel reaches

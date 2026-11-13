@@ -3529,7 +3529,8 @@ bool grounded_call(Arena *a, Atom *head, Atom **args, uint32_t nargs,
     if (!result)
         return false;
     if (raised && atom_is_error(result) &&
-        grounded_current_language_is_petta())
+        (grounded_current_language_is_petta() ||
+         (eval_current_uses_failure_values && eval_current_uses_failure_values())))
         *out = cetta_call_raised(result);
     else if (atom_is_petta_no_result(result))
         *out = cetta_call_failure();
@@ -3945,10 +3946,14 @@ static Atom *grounded_dispatch_open(Arena *a, Atom *head, Atom **args,
         if (grounded_current_language_is_petta() &&
             petta_semantics_is_open_cons_value(value))
             value = petta_semantics_materialize_closed_logical_list(a, value);
-        if (!atom_sequence_view(value, &elems, &len))
+        if (!atom_sequence_view(value, &elems, &len)) {
+            if (eval_current_uses_failure_values && eval_current_uses_failure_values())
+                return grounded_raise(a, head, args, nargs,
+                    atom_symbol(a, "ExpectedListOrExpression"));
             return atom_error(
                 a, grounded_call_expr(a, head, args, nargs),
                 atom_symbol(a, "ExpectedListOrExpression"));
+        }
         if (atom_is_list(value) == to_list)
             return value;
         return to_list ? atom_list(a, elems, len)

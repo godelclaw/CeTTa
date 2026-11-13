@@ -68,7 +68,7 @@ CettaTermMatchStatus cetta_pattern_bind_retrieval(Arena *arena,
 
 bool cetta_pattern_module_enabled(const CettaLibraryContext *context) {
     if (!context || !(context->active_mask & CETTA_NATIVE_IMPORT_PAT)) return false;
-    const CettaProfile *profile = context->session.profile;
+    const CettaProfile *profile = cetta_profile_base(context->session.profile);
     return context->session.language_id == CETTA_LANGUAGE_PETTA ||
         (context->session.language_id == CETTA_LANGUAGE_HE && profile &&
          profile->id == CETTA_PROFILE_HE_EXTENDED);

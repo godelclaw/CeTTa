@@ -724,7 +724,7 @@ static void he_raw_collect(Space *s, Arena *a, Atom *atom, int fuel,
         Atom *const *elements;
         CettaExprLen count;
         if (!atom_sequence_view(list, &elements, &count)) {
-            outcome_set_add(&raw, call_signature_error(
+            ai_publish_error(a, &raw, call_signature_error(
                 a, atom, "(superpose (: <alternatives> Expression))"), &env);
         } else if (count == 0u) {
             outcome_set_add(&raw, legacy_empty_sentinel(a), &env);
@@ -749,7 +749,7 @@ static void he_raw_collect(Space *s, Arena *a, Atom *atom, int fuel,
         Space *target = resolve_single_space_arg(
             s, a, expr_arg(atom, 0), fuel);
         if (!target) {
-            outcome_set_add(&raw, call_signature_error(
+            ai_publish_error(a, &raw, call_signature_error(
                 a, atom, "(match <space> <pattern> <template>)"), &env);
         } else {
             BindingSet rows;
@@ -1205,8 +1205,11 @@ static void he_instruction_publish_return(HeInstructionFrame *frame,
         const Outcome *source, Atom *value) {
     CettaCount before = frame->target->len;
     outcome_set_add(frame->target, value, &source->env);
-    if (frame->target->len > before)
+    if (frame->target->len > before) {
+        if (eval_failure_values())
+            frame->target->items[frame->target->len - 1u].result_form = source->result_form;
         outcome_set_delay_last(frame->target, source->delayed);
+    }
 }
 
 /* Pure function-handler cases may finish before later body alternatives.
@@ -1224,6 +1227,9 @@ static Atom *he_function_noreturn_caller(HeInstructionFrame *frame) {
 
 static bool he_instruction_complete_function_return(HeInstructionFrame *frame,
         const Outcome *source, Atom *result) {
+    if (eval_failure_values() && ai_forward_failure(frame->arena, frame->target,
+            source, NULL, true))
+        return true;
     Atom *value;
     if (atom_head_symbol_id(result) == g_builtin_syms.return_text && result->expr.len == 2u)
         value = result->expr.elems[1];
@@ -1257,6 +1263,11 @@ static bool he_instruction_complete_function_return(HeInstructionFrame *frame,
                 return true;
             }
         }
+    } else if (eval_failure_values()) {
+        ai_publish_error(frame->arena, frame->target,
+            atom_error(frame->arena, frame->syntax, atom_symbol(frame->arena, "NoReturn")),
+            &source->env);
+        return true;
     } else
         value = atom_error(frame->arena, frame->syntax, atom_symbol(frame->arena, "NoReturn"));
     he_instruction_publish_return(frame, source, value);
@@ -1305,6 +1316,8 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
             Outcome *item = &frame->inner.items[frame->index++];
             Atom *result = outcome_atom_materialize(a, item);
             if (!result)
+                continue;
+            if (eval_failure_values() && ai_forward_failure(a, os, item, NULL, true))
                 continue;
             if (frame->phase == HE_INSTRUCTION_RAW_RETURNS) {
                 if (atom_head_symbol_id(result) == g_builtin_syms.function) {
@@ -1425,11 +1438,11 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
                 expr_arg(frame->atom, control.operation == CETTA_CONTROL_FORCE
                     ? control.source : 0u), child_fuel, &frame->env, os, NULL, NULL);
         else
-            outcome_set_add(os, call_signature_error(a, frame->syntax,
+            ai_publish_error(a, os, call_signature_error(a, frame->syntax,
                 "(evalc <atom> <space>)"), &frame->env);
     } else if (control.operation == CETTA_CONTROL_SEQUENCE) {
         if (expr_arg(atom, control.first)->kind != ATOM_VAR) {
-            outcome_set_add(os, atom_error(a, frame->syntax,
+            ai_publish_error(a, os, atom_error(a, frame->syntax,
                 atom_symbol(a, "IncorrectNumberOfArguments")), &frame->env);
         } else {
             frame->phase = HE_INSTRUCTION_CHAIN;
@@ -1442,7 +1455,7 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
             Atom *error = active_profile_uses_rust_he_compat_semantics()
                 ? call_signature_error(a,frame->syntax,"(function (: <body> Expression))")
                 : atom_error(a,frame->syntax,atom_symbol(a,"IncorrectNumberOfArguments"));
-            outcome_set_add(os,error,&frame->env);
+            ai_publish_error(a, os, error, &frame->env);
         } else {
             frame->phase = HE_INSTRUCTION_FUNCTION;
             bool step = active_profile_uses_rust_he_compat_semantics() ||
@@ -1464,7 +1477,7 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
             eval_metta_outcomes(target, a, expr_arg(frame->atom, 1),
                 expr_arg(frame->atom, 0), child_fuel, &frame->env, true, os);
         else
-            outcome_set_add(os, call_signature_error(a, frame->syntax,
+            ai_publish_error(a, os, call_signature_error(a, frame->syntax,
                 "(metta <atom> <type> <space>)"), &frame->env);
         frame->phase = HE_INSTRUCTION_DONE;
     } else if (head == g_builtin_syms.context_space && nargs == 0u) {
@@ -1476,7 +1489,7 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
             &frame->env);
         frame->phase = HE_INSTRUCTION_DONE;
     } else if (head == g_builtin_syms.call_native) {
-        outcome_set_add(os, call_signature_error(a, frame->syntax,
+        ai_publish_error(a, os, call_signature_error(a, frame->syntax,
             "(call-native func args)"), &frame->env);
         frame->phase = HE_INSTRUCTION_DONE;
     } else if (head == g_builtin_syms.unify && nargs == 4u) {
@@ -1519,7 +1532,7 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
             for (CettaExprIndex i = 0u; i < len; i++) result[i + 1u] = elems[i];
             outcome_set_add(os, atom_sequence_like(a, tail, result, len + 1u), &frame->env);
         } else {
-            outcome_set_add(os, call_signature_error(
+            ai_publish_error(a, os, call_signature_error(
                 a, atom, "(cons-atom <head> (: <tail> Expression))"), &frame->env);
         }
     } else if (head == g_builtin_syms.decons_atom && nargs == 1u) {
@@ -1530,7 +1543,7 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
             Atom *tail = atom_sequence_like(a, input, elems + 1u, len - 1u);
             outcome_set_add(os, atom_expr2(a, elems[0], tail), &frame->env);
         } else {
-            outcome_set_add(os, call_signature_error(
+            ai_publish_error(a, os, call_signature_error(
                 a, atom, "(decons-atom (: <expr> Expression))"), &frame->env);
         }
     } else if (head == g_builtin_syms.superpose_bind && nargs == 1u) {
@@ -1547,17 +1560,17 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
                 bindings_free(&restored);
             }
         } else {
-            outcome_set_add(os, call_signature_error(
+            ai_publish_error(a, os, call_signature_error(
                 a, atom, "(superpose-bind (: <alternatives> Expression))"), &frame->env);
         }
     } else if (atom->kind == ATOM_EXPR && head == g_builtin_syms.unify &&
                active_profile_uses_rust_he_compat_semantics()) {
         /* Every arity other than four. The symbol keeps the printer's
          * rendering of this call, fresh variable names included. */
-        outcome_set_add(os, call_signature_error(a, atom,
+        ai_publish_error(a, os, call_signature_error(a, atom,
             "(unify <atom> <pattern> <then> <else>)"), &frame->env);
     } else if (he_minimal_instruction(atom) && head != g_builtin_syms.return_text) {
-        outcome_set_add(os, atom_error(a, frame->syntax, atom_symbol(a, "IncorrectNumberOfArguments")), &frame->env);
+        ai_publish_error(a, os, atom_error(a, frame->syntax, atom_symbol(a, "IncorrectNumberOfArguments")), &frame->env);
     } else {
         outcome_set_add(os, atom, &frame->env);
     }
@@ -1667,6 +1680,9 @@ static bool he_eval_typed_instruction(Space *s, Arena *a, Atom *atom, Atom *codo
         }
     }
     for (CettaCount i = 0u; i < minimal.len && !eval_unwinding(); i++) {
+        if (eval_failure_values() && ai_forward_failure(a, os,
+                &minimal.items[i], NULL, preserve_bindings))
+            continue;
         Atom *result = outcome_atom_materialize(a, &minimal.items[i]);
         HeInstructionCompletion completion = he_instruction_completion(
             a, result, live[1], true, false);
@@ -1723,6 +1739,9 @@ static void he_eval_invocation_delimiter(Space *s, Arena *a, Atom *atom,
     else
         he_minimal_run(s, a, atom, fuel, &env, &returned);
     for (CettaCount i = 0u; i < returned.len && !eval_unwinding(); i++) {
+        if (eval_failure_values() && ai_forward_failure(a, os,
+                &returned.items[i], NULL, preserve_bindings))
+            continue;
         Atom *result = outcome_atom_materialize(a, &returned.items[i]);
         HeInstructionCompletion completion = he_instruction_completion(a,result,live[1],false,false);
         if (completion == HE_INSTRUCTION_OMIT) continue;

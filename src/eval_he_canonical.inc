@@ -601,6 +601,11 @@ static inline __attribute__((always_inline)) void he_canonical_publish_one(
 }
 
 static void he_canonical_publish_raw_return(HeCanonicalFrame *frame, Outcome *out) {
+    if (eval_failure_values() && ai_outcome_raised(out)) {
+        outcome_set_add_prefixed_outcome(frame->arena, frame->target, out,
+            NULL, frame->preserve_bindings);
+        return;
+    }
     if (__builtin_expect(frame->lift_answers, 0) &&
         he_canonical_lifted_marker(frame, out))
         return;
@@ -672,8 +677,11 @@ he_canonical_publish_evaluated(HeCanonicalFrame *frame, Outcome *out) {
     outcome_set_add(frame->target,
         he_canonical_evaluated_answer(frame,value),
         frame->preserve_bindings ? &out->env : &empty);
-    if (frame->target->len > before)
+    if (frame->target->len > before) {
+        if (eval_failure_values())
+            frame->target->items[frame->target->len - 1u].result_form = out->result_form;
         outcome_set_delay_last(frame->target, out->delayed);
+    }
 }
 
 static bool he_canonical_stream_success(Arena *a, Outcome *out) {
@@ -745,8 +753,11 @@ static void he_canonical_evaluate_publish_range(HeCanonicalFrame *frame,
         CettaCount before = frame->target->len;
         outcome_set_add(frame->target, answer,
             frame->preserve_bindings ? &frame->child.items[i].env : &empty);
-        if (frame->target->len > before)
+        if (frame->target->len > before) {
+            if (eval_failure_values())
+                frame->target->items[frame->target->len - 1u].result_form = frame->child.items[i].result_form;
             outcome_set_delay_last(frame->target, frame->child.items[i].delayed);
+        }
     }
 }
 
@@ -755,6 +766,7 @@ static void he_canonical_evaluate_publish_range(HeCanonicalFrame *frame,
  * after a host has observed it. Input frontiers are not consumed here. */
 static void he_canonical_frontier_publish(HeCanonicalFrame *frame, OutcomeSet *source,
         bool invocation, bool normalize, bool complete) {
+    normalize = normalize && !eval_failure_values();
     HeCanonicalFrontier *frontier = source == &frame->child ? &frame->child_frontier
         : source == &frame->paths ? &frame->paths_frontier : NULL;
     assert(frontier && frontier->seen <= source->len);
@@ -1244,7 +1256,11 @@ static void he_canonical_resume_tuple(HeCanonicalFrame *frame) {
     while (tuple->sub_index < tuple->sub.len) {
         Outcome *item = &tuple->sub.items[tuple->sub_index++];
         Atom *value = item->atom;
-        if (atom_is_legacy_empty_sentinel(value) || outcome_atom_is_error(a, item)) {
+        if (eval_failure_values() && ai_forward_failure(a, frame->target,
+                item, tuple->ctx, true))
+            continue;
+        if (atom_is_legacy_empty_sentinel(value) ||
+            (!eval_failure_values() && outcome_atom_is_error(a, item))) {
             Bindings empty;
             bindings_init(&empty);
             outcome_set_add(frame->target, outcome_atom_materialize(a, item), &empty);
@@ -1609,10 +1625,46 @@ static bool he_canonical_control_schedule(Space *s, Arena *a, Atom *atom,
     if (frame) {
         cetta_control_operation_decode(atom_head_symbol_id(atom), expr_nargs(atom),
             &frame->control, &g_builtin_syms);
+        if (eval_failure_values() && frame->control.operation == CETTA_CONTROL_NONE)
+            frame->control = petta_semantics_elaborate_computation(
+                atom_head_symbol_id(atom), petta_semantics_form(atom_head_symbol_id(atom)),
+                expr_nargs(atom)).control;
         frame->live[0] = source;
         frame->query_closed = query_closed;
         frame->selected = direct_source;
     }
+    return true;
+}
+
+/* Admit the experiment's occurrence handler by its catalog operation.
+ * Source definitions retain ownership of their name on every route. */
+static __attribute__((noinline)) bool he_ai_handle_try(
+    Space *space, Arena *arena, Atom *call, Atom *type, int fuel,
+    const Bindings *environment, bool preserve, OutcomeSet *target) {
+    CettaControlOperationPlan control = petta_semantics_elaborate_computation(
+        atom_head_symbol_id(call), petta_semantics_form(atom_head_symbol_id(call)),
+        expr_nargs(call)).control;
+    if (control.operation != CETTA_CONTROL_HANDLE ||
+        eval_space_has_equations(space, atom_head_symbol_id(call)) ||
+        eval_atom_type_demand(arena, call, type ? type : atom_undefined_type(arena)) == HE_TYPE_KEEP)
+        return false;
+    Atom *body = expr_arg(call, control.source);
+    if (he_canonical_control_schedule(space, arena, call, type, body, fuel,
+            environment, preserve, false, false, target))
+        return true;
+    OutcomeSet outcomes;
+    outcome_set_init(&outcomes);
+    eval_for_caller(space, arena, NULL, body, fuel, environment, true, &outcomes);
+    for (CettaCount i = 0u; i < outcomes.len; i++) {
+        if (ai_outcome_raised(&outcomes.items[i])) {
+            Atom *data = ai_completed_data(arena, outcome_atom_materialize(arena, &outcomes.items[i]));
+            if (data)
+                outcome_set_add_prefixed(arena, target, data, &outcomes.items[i].env, environment, preserve);
+        } else {
+            outcome_set_add_prefixed_outcome(arena, target, &outcomes.items[i], environment, preserve);
+        }
+    }
+    outcome_set_free(&outcomes);
     return true;
 }
 
@@ -1643,6 +1695,9 @@ static void he_canonical_resume_state(HeCanonicalFrame *frame) {
                 if (eval_unwinding()) he_canonical_pop();
                 return;
             }
+            if (eval_failure_values() && ai_forward_failure(a, frame->target,
+                    value, &frame->env, frame->preserve_bindings))
+                return;
             BindingsBuilder builder;
             if (!bindings_builder_init(&builder, &reference->env))
                 return;
@@ -1668,6 +1723,11 @@ static void he_canonical_resume_state(HeCanonicalFrame *frame) {
         return;
     }
     Outcome *reference = &frame->child.items[frame->index];
+    if (eval_failure_values() && ai_forward_failure(a, frame->target,
+            reference, &frame->env, frame->preserve_bindings)) {
+        frame->index++;
+        return;
+    }
     Atom *state_ref = resolve_registry_refs(a,
         outcome_atom_materialize(a, reference));
     if (!state_ref) {
@@ -1676,7 +1736,7 @@ static void he_canonical_resume_state(HeCanonicalFrame *frame) {
         return;
     }
     if (state_ref->kind != ATOM_GROUNDED || state_ref->ground.gkind != GV_STATE) {
-        outcome_set_add_prefixed(a, frame->target, state_bad_arg_type_error(
+        ai_publish_prefixed_error(a, frame->target, state_bad_arg_type_error(
             frame->space, a, frame->atom, 1, state_ref), &reference->env,
             &frame->env, frame->preserve_bindings);
         frame->index++;
@@ -1696,7 +1756,7 @@ static void he_canonical_resume_state(HeCanonicalFrame *frame) {
     }
     StateCell *cell = payload_resolve_state_write(a, state_ref->ground.ptr);
     if (!cell) {
-        outcome_set_add_prefixed(a, frame->target, atom_error(a, frame->atom,
+        ai_publish_prefixed_error(a, frame->target, atom_error(a, frame->atom,
             atom_symbol(a, "PayloadIsolationFailed")), &reference->env,
             &frame->env, frame->preserve_bindings);
         frame->index++;
@@ -1770,6 +1830,8 @@ static Atom *he_canonical_if_call(Arena *a, Atom *call, Atom *condition) {
 /* Whether a let's source has shown a value: its rules for errors are then
  * those of a source with a value, whatever else the source produces. */
 static bool he_canonical_let_source_decided(HeCanonicalFrame *frame) {
+    if (eval_failure_values())
+        return frame->child.len > 0u;
     Arena *a = frame->arena;
     for (CettaCount i = 0u; i < frame->child.len; i++) {
         Atom *candidate = outcome_atom_materialize(a, &frame->child.items[i]);
@@ -1782,6 +1844,48 @@ static bool he_canonical_let_source_decided(HeCanonicalFrame *frame) {
 
 /* `source_open`: the control consumes a value while its source still runs
  * (a bounded run); otherwise its source is complete. */
+/* A raised occurrence admits only an explicit resolved Error clause.
+ * Keep this handler outside the ordinary frame's stack extent. A native
+ * Error datum follows the ordinary case matching path below. */
+static __attribute__((noinline)) bool he_ai_case_failure(
+    HeCanonicalFrame *frame, Outcome *source, Atom *value) {
+    if (!ai_outcome_raised(source))
+        return false;
+    frame->index++;
+    Arena *arena = frame->arena;
+    if (atom_head_symbol_id(frame->atom) == g_builtin_syms.switch_text) {
+        outcome_set_add_prefixed_outcome(arena, &frame->paths, source,
+            &frame->env, frame->preserve_bindings);
+        return true;
+    }
+    Atom *branches = expr_arg(frame->atom, 1u);
+    for (CettaExprIndex i = 0u; branches->kind == ATOM_EXPR && i < branches->expr.len; i++) {
+        Atom *branch = branches->expr.elems[i];
+        if (branch->kind != ATOM_EXPR || branch->expr.len != 2u)
+            continue;
+        Atom *pattern = bindings_apply_if_vars(&source->env, arena, branch->expr.elems[0]);
+        if (!atom_is_error(pattern))
+            continue;
+        BindingsBuilder matched;
+        if (!bindings_builder_init(&matched, &source->env)) {
+            eval_mark_incomplete(CETTA_EVAL_INCOMPLETE_CAPACITY);
+            return true;
+        }
+        bool match = eval_case_match_builder(pattern, value, &matched, arena);
+        if (match) {
+            const Bindings *environment = bindings_builder_bindings(&matched);
+            Atom *body = bindings_apply_if_vars(environment, arena, branch->expr.elems[1]);
+            he_canonical_control_body(frame, body, environment, false, NULL);
+        }
+        bindings_builder_free(&matched);
+        if (match || eval_unwinding())
+            return true;
+    }
+    outcome_set_add_prefixed_outcome(arena, &frame->paths, source,
+        &frame->env, frame->preserve_bindings);
+    return true;
+}
+
 static void he_canonical_resume_control_in(HeCanonicalFrame *frame,
                                            bool source_open) {
     Arena *a = frame->arena;
@@ -1822,6 +1926,13 @@ static void he_canonical_resume_control_in(HeCanonicalFrame *frame,
         return;
     }
     if (eval_is_reify_head(head)) {
+        if (eval_failure_values()) {
+            Atom *value = ai_collect_observation(a, frame->live[0], &frame->child);
+            if (value)
+                outcome_set_add(frame->target, value, &frame->env);
+            he_canonical_pop();
+            return;
+        }
         Atom **items = frame->child.len
             ? arena_alloc(a, sizeof(Atom *) * (size_t)frame->child.len) : NULL;
         CettaExprLen len = 0u;
@@ -1841,6 +1952,11 @@ static void he_canonical_resume_control_in(HeCanonicalFrame *frame,
         return;
     }
     if (head == g_builtin_syms.bind_bang) {
+        if (eval_failure_values() && frame->child.len && ai_forward_failure(a,
+                frame->target, &frame->child.items[0], &frame->env, frame->preserve_bindings)) {
+            he_canonical_pop();
+            return;
+        }
         Atom *first = frame->child.len
             ? outcome_atom_materialize(a, &frame->child.items[0]) : NULL;
         if (frame->child.len && !first) {
@@ -1860,6 +1976,12 @@ static void he_canonical_resume_control_in(HeCanonicalFrame *frame,
             Atom *value = outcome_atom_materialize(a, out);
             if (atom_is_legacy_empty_sentinel(value))
                 continue;
+            if (eval_failure_values()) {
+                if (!ai_forward_failure(a, frame->target, out, &frame->env, frame->preserve_bindings))
+                    outcome_set_add_prefixed(a, frame->target, atom_unit(a), &out->env,
+                        &frame->env, frame->preserve_bindings);
+                continue;
+            }
             outcome_set_add_prefixed(a, frame->target,
                 atom_is_error(value) ? value : atom_unit(a), &out->env,
                 &frame->env, frame->preserve_bindings);
@@ -1916,6 +2038,19 @@ static void he_canonical_resume_control_in(HeCanonicalFrame *frame,
         frame->index++;
         return;
     }
+    if (eval_failure_values() && frame->control.operation == CETTA_CONTROL_HANDLE) {
+        frame->index++;
+        if (ai_outcome_raised(source)) {
+            Atom *data = ai_completed_data(a, value);
+            if (data)
+                outcome_set_add_prefixed(a, &frame->paths, data, &source->env,
+                    &frame->env, frame->preserve_bindings);
+        } else {
+            outcome_set_add_prefixed_outcome(a, &frame->paths, source,
+                &frame->env, frame->preserve_bindings);
+        }
+        return;
+    }
     /* While the source runs, no value is known to be its only one. */
     bool single = !source_open && frame->child.len == 1u;
     if (frame->control.operation == CETTA_CONTROL_SEQUENCE && frame->phase == 1u) {
@@ -1940,6 +2075,8 @@ static void he_canonical_resume_control_in(HeCanonicalFrame *frame,
         frame->phase = 2u;
     }
     if (head == g_builtin_syms.case_text || head == g_builtin_syms.switch_text) {
+        if (eval_failure_values() && he_ai_case_failure(frame, source, value))
+            return;
         frame->index++;
         /* switch takes its scrutinee as an evaluated argument
          * (-> %Undefined% Expression %Undefined%): an error there is the
@@ -1981,13 +2118,23 @@ static void he_canonical_resume_control_in(HeCanonicalFrame *frame,
         }
         return;
     }
+    if (eval_failure_values() && ai_outcome_raised(source) &&
+        (frame->control.operation == CETTA_CONTROL_SEQUENCE ||
+         frame->control.operation == CETTA_CONTROL_BRANCH)) {
+        frame->index++;
+        outcome_set_add_prefixed_outcome(a, &frame->paths, source,
+            &frame->env, frame->preserve_bindings);
+        return;
+    }
     if (head == g_builtin_syms.assert_text) {
         frame->index++;
         Bindings empty;
         bindings_init(&empty);
-        outcome_set_add(&frame->paths, is_true_atom(value) ? atom_unit(a)
-            : atom_error(a, frame->atom, atom_expr3(a, frame->live[0],
-                atom_symbol(a, "not"), atom_bool(a, true))), &empty);
+        if (is_true_atom(value))
+            outcome_set_add(&frame->paths, atom_unit(a), &empty);
+        else
+            ai_publish_error(a, &frame->paths, atom_error(a, frame->atom,
+                atom_expr3(a, frame->live[0], atom_symbol(a, "not"), atom_bool(a, true))), &empty);
         return;
     }
     if (frame->control.operation == CETTA_CONTROL_BRANCH) {
@@ -2008,7 +2155,7 @@ static void he_canonical_resume_control_in(HeCanonicalFrame *frame,
             }
         } else if (atom_is_legacy_empty_sentinel(value)) {
             frame->index++;
-        } else if (atom_is_error(value)) {
+        } else if (!eval_failure_values() && atom_is_error(value)) {
             frame->index++;
             outcome_set_add_existing(&frame->paths, source);
         } else if (value->kind == ATOM_VAR) {
@@ -2053,7 +2200,7 @@ static void he_canonical_resume_control_in(HeCanonicalFrame *frame,
     frame->index++;
     if (atom_is_legacy_empty_sentinel(value))
         return;
-    if ((frame->selected && atom_is_error(value)) || frame->has_functions) {
+    if (!eval_failure_values() && ((frame->selected && atom_is_error(value)) || frame->has_functions)) {
         if (frame->selected && frame->has_non_functions)
             return;
         Bindings empty;
@@ -2310,7 +2457,7 @@ static void he_canonical_dispatch_call(HeCanonicalFrame *frame, Outcome *call) {
                 outcome_set_add(sink,
                     legacy_empty_sentinel(a), env);
             } else if (nargs != 1u) {
-                outcome_set_add(sink, atom_error(a, source,
+                ai_publish_error(a, sink, atom_error(a, source,
                     atom_symbol(a, "IncorrectNumberOfArguments")), env);
             } else {
                 CaptureClosure *closure = head->ground.ptr;
@@ -3198,6 +3345,9 @@ static bool he_canonical_complete_instruction_return(HeCanonicalFrame *frame) {
     HeCanonicalConsumedSource consumed = {.set = &frame->work,
         .position = &frame->path_index, .index = frame->path_index, .discard_drained = true};
     Outcome *source = &frame->work.items[frame->path_index++];
+    if (eval_failure_values() && ai_forward_failure(frame->arena, &frame->paths,
+            source, NULL, frame->preserve_bindings))
+        return true;
     Atom *value = outcome_atom_materialize(frame->arena, source);
     HeInstructionCompletion completion = he_instruction_completion(
         frame->arena, value, frame->type, frame->typed, false);
@@ -3349,6 +3499,9 @@ static void he_canonical_resume_instruction(HeCanonicalFrame *frame) {
             frame->phase = 5u;
         } else {
             Outcome *source = &frame->work.items[frame->index++];
+            if (eval_failure_values() && ai_forward_failure(a, &frame->paths,
+                    source, NULL, frame->preserve_bindings))
+                return;
             Atom *value = outcome_atom_materialize(a, source);
             HeInstructionCompletion completion = he_instruction_completion(
                 a, value, frame->type, frame->typed, false);
@@ -3507,8 +3660,27 @@ static void he_canonical_resume_provider(HeCanonicalFrame *frame) {
         he_canonical_pop();
 }
 
+/* The demand entry owns source failures. Completed native values and Atom
+ * operands have already crossed a data boundary and never enter this case. */
+static __attribute__((noinline)) bool he_ai_source_failure(HeCanonicalFrame *frame) {
+    if (frame->phase || (frame->kind != HE_CANONICAL_BIND &&
+            frame->kind != HE_CANONICAL_EVALUATE &&
+            frame->kind != HE_CANONICAL_CALLER && frame->kind != HE_CANONICAL_CALL))
+        return false;
+    Atom *source = bindings_apply_if_vars(&frame->env, frame->arena, frame->atom);
+    if (!atom_is_error(source) || atom_is_he_evaluated(source) ||
+        eval_atom_type_demand(frame->arena, source, frame->type
+            ? frame->type : atom_undefined_type(frame->arena)) == HE_TYPE_KEEP)
+        return false;
+    ai_add_failure(frame->arena, frame->target, source, &frame->env);
+    he_canonical_pop();
+    return true;
+}
+
 static inline __attribute__((always_inline)) void he_canonical_resume(
     HeCanonicalFrame *frame) {
+    if (eval_failure_values() && he_ai_source_failure(frame))
+        return;
     switch (frame->kind) {
     case HE_CANONICAL_BIND: he_canonical_resume_bind(frame); break;
     case HE_CANONICAL_EVALUATE: he_canonical_resume_evaluate(frame); break;
@@ -4290,7 +4462,7 @@ static void he_canonical_run(HeCanonicalKind kind, Space *s, Arena *a,
     if (!eval_c_stack_guard_enter(fuel, &boundary)) {
         Bindings empty;
         bindings_init(&empty);
-        outcome_set_add(target, atom_error(a, atom, atom_symbol(a, "StackOverflow")),
+        ai_publish_error(a, target, atom_error(a, atom, atom_symbol(a, "StackOverflow")),
             env ? env : &empty);
         return;
     }
@@ -4376,7 +4548,7 @@ static void he_canonical_deliver_ready(Space *s, Arena *a, Atom *call,
     if (!env)
         env = &empty;
     if (!eval_c_stack_guard_enter(fuel, &boundary)) {
-        outcome_set_add(target, atom_error(a, call, atom_symbol(a, "StackOverflow")),
+        ai_publish_error(a, target, atom_error(a, call, atom_symbol(a, "StackOverflow")),
             env);
         return;
     }
@@ -4427,7 +4599,7 @@ static bool he_dispatch_apply_ready(Space *space, Arena *arena,
     for (CettaExprIndex i = 1u; i < call->expr.len; i++) {
         Atom *argument = bindings_apply_if_vars(outer, arena,
                                                 call->expr.elems[i]);
-        if (argument && atom_is_error(argument)) {
+        if (!eval_failure_values() && argument && atom_is_error(argument)) {
             outcome_set_add(outcomes, argument, outer);
             return true;
         }
