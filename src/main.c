@@ -2902,19 +2902,23 @@ static int cetta_main(int argc, char **argv) {
     current_endpoint = &source_endpoint;
 
     for (int i = 1; i < argc; i++) {
+        /* An informational exit cannot bypass validation of a preceding
+         * invalid budget. Zero-work execution belongs to an AI host. */
+        if (fuel_override_requested && fuel_override == 0 &&
+            (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h") ||
+             !strcmp(argv[i], "--version") || !strcmp(argv[i], "-v") ||
+             !strcmp(argv[i], "--list-languages") ||
+             !strcmp(argv[i], "--list-space-engines") ||
+             !strcmp(argv[i], "--list-space-match-backends") ||
+             !strcmp(argv[i], "--list-profiles"))) {
+            fputs("error: invalid fuel '0'\n", stderr);
+            return 2;
+        }
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
-            if (fuel_override_requested && fuel_override == 0) {
-                fputs("error: invalid fuel '0'\n", stderr);
-                return 2;
-            }
             print_usage(stdout);
             return 0;
         }
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0) {
-            if (fuel_override_requested && fuel_override == 0) {
-                fputs("error: invalid fuel '0'\n", stderr);
-                return 2;
-            }
             print_version(stdout);
             return 0;
         }

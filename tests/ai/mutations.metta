@@ -61,8 +61,8 @@
  "        if (!cetta_ai_audit_mutant(\"case-wildcard\") && (!pattern || pattern->kind != ATOM_EXPR || !pattern->expr.len ||\n            !atom_is_symbol(pattern->expr.elems[0], \"Error\")))" 1)
 (AMReplace "machine" "        if (marker.kind != PETTA_GOAL_CATCH_READY)"
  "        if (marker.kind != PETTA_GOAL_CATCH_READY || cetta_ai_audit_mutant(\"catch\"))" 1)
-(AMReplace "machine" "            PettaMachineStep step = pull.step;\n            if (step == PETTA_MACHINE_STEP_ANSWER && answer &&"
- "            PettaMachineStep step = pull.step;\n            if (step == PETTA_MACHINE_STEP_ANSWER && answer && ((cetta_ai_audit_mutant(\"collapse\") && choice->as.collapse.machine->impl->last_answer_is_control_error) || (cetta_ai_audit_mutant(\"duplicates\") && choice->as.collapse.item_len && atom_eq(choice->as.collapse.items[choice->as.collapse.item_len - 1u], answer)))) { bindings_free(&environment); continue; }\n            if (step == PETTA_MACHINE_STEP_ANSWER && answer &&" 1)
+(AMReplace "machine" "            PettaMachineStep step = pull.step;\n            if (step == PETTA_MACHINE_STEP_ANSWER && answer &&\n                machine->host.raises_abort_collections &&\n                choice->as.collapse.machine->impl &&"
+ "            PettaMachineStep step = pull.step;\n            if (step == PETTA_MACHINE_STEP_ANSWER && answer && ((cetta_ai_audit_mutant(\"collapse\") && choice->as.collapse.machine->impl->last_answer_is_control_error) || (cetta_ai_audit_mutant(\"duplicates\") && choice->as.collapse.item_len && atom_eq(choice->as.collapse.items[choice->as.collapse.item_len - 1u], answer)))) { bindings_free(&environment); continue; }\n            if (step == PETTA_MACHINE_STEP_ANSWER && answer &&\n                machine->host.raises_abort_collections &&\n                choice->as.collapse.machine->impl &&" 1)
 (AMReplace "machine" "if (raised && (machine->host.failure_values ||"
  "if (raised && ((machine->host.failure_values && !cetta_ai_audit_mutant(\"foldall\")) ||" 1)
 (AMReplace "machine" "    if (machine->host.failure_values)\n        return false; /* The count-only carrier has no failure occurrences. */"
@@ -183,7 +183,7 @@
      (case (am:exec $dir $name "semantic"
             ($binary "--lang" "petta" "--profile" "extended" "-e" $program) $cwd)
        (((proc:exited 0 $out "")
-          (if (or (am:contains $out "(AISuitePass 12 1984 21)") (== $out "true\n6\n")) (MutantSurvived $name)
+          (if (or (am:contains $out "(AISuitePass 12 1984 25)") (== $out "true\n6\n")) (MutantSurvived $name)
             (if (am:contains $out "Mismatch") (MutantKilled $name semantic)
               (am:fail (InvalidMutationRunner $name $out)))))
         ((proc:exited 1 $out $err)

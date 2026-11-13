@@ -548,6 +548,8 @@ void cetta_profile_print_inventory_for_language(FILE *out,
         fprintf(out, "%s\t%s\n",
                 CETTA_PROFILE_HE_EXTENDED_VALUE.name, CETTA_PROFILE_HE_EXTENDED_VALUE.note);
         fprintf(out, "%s\t%s\n",
+                CETTA_PROFILE_HE_AI_VALUE.name, CETTA_PROFILE_HE_AI_VALUE.note);
+        fprintf(out, "%s\t%s\n",
                 CETTA_PROFILE_HE_PRIME_VALUE.name, CETTA_PROFILE_HE_PRIME_VALUE.note);
         return;
     }

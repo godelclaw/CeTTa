@@ -6930,9 +6930,9 @@ test-ai: test-ai-native-returns test-ai-suite
 test-ai-suite: $(BIN) $(wildcard tests/ai/*.metta tests/ai/*.expected)
 	@set -eu; actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
 		"!(import! &self \"./tests/ai/suite.metta\") !(ais:run \"$(abspath $(BIN))\" \"$(CURDIR)\")"); \
-	expected=$$(printf 'true\n(AISuitePass 12 1984 21)'); \
+	expected=$$(printf 'true\n(AISuitePass 12 1984 25)'); \
 	if [ "$$actual" != "$$expected" ]; then printf '%s\n' "$$actual"; exit 1; fi; \
-	printf '%s\n' 'PASS: native PeTTa AI suite: 12 fixture jobs, 1984 composition observations and 21 CLI controls'
+	printf '%s\n' 'PASS: native PeTTa AI suite: 12 fixture jobs, 1984 composition observations and 25 CLI controls'
 test-ai-native-returns: $(SHARED_RETURN_PRODUCER_TEST_BIN)
 	@CETTA_PETTA_SEARCH_MACHINE=1 $(call cetta_exec,./$(SHARED_RETURN_PRODUCER_TEST_BIN)) --ai-native
 
@@ -6952,9 +6952,9 @@ test-ai-failure-values: $(BIN) $(wildcard tests/ai/*.metta tests/ai/*.expected)
 test-ai-hosts: $(BIN) tests/ai/host_controls.metta
 	@set -eu; actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
 		"!(import! &self \"./tests/ai/host_controls.metta\") !(ah:run \"$(abspath $(BIN))\")"); \
-	expected=$$(printf 'true\n(HostControlsPass 21)'); \
+	expected=$$(printf 'true\n(HostControlsPass 25)'); \
 	if [ "$$actual" != "$$expected" ]; then printf '%s\n' "$$actual"; exit 1; fi; \
-	printf '%s\n' 'PASS: 21 AI CLI, composition, activation and budget controls'
+	printf '%s\n' 'PASS: 25 AI CLI, composition, activation and budget controls'
 
 test-ai-matrix: $(BIN) tests/ai/kind_matrix.metta
 	@set -eu; for language in petta; do \
