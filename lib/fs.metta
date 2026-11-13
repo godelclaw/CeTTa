@@ -145,6 +145,14 @@
    (function (chain (eval (__cetta_lib_fs_metadata $path $links)) $result
      (return $result))))
 
+; os.path.getsize: the size in bytes of what PATH names, symbolic links
+; followed, or the failure fs:metadata reports, such as
+; (fs:failed fs:missing ...).
+(= (fs:size $path)
+   (case (fs:metadata $path follow)
+     (((fs:info $kind $size $identity) $size)
+      ($failure $failure))))
+
 (= (fs:open-directory $path)
    (function (chain (eval (__cetta_lib_fs_open_directory $path)) $result
      (return $result))))

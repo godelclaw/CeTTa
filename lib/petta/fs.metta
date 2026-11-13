@@ -22,6 +22,7 @@
 (= (fs:tail-text $path $bytes) (__cetta_lib_fs_tail_text $path $bytes))
 (= (fs:entries $path) (__cetta_lib_fs_entries $path))
 (= (fs:metadata $path $links) (__cetta_lib_fs_metadata $path $links))
+(= (fs:size $path) (case (fs:metadata $path follow) (((fs:info $kind $size $identity) $size) ($failure $failure))))
 (= (fs:open-directory $path) (__cetta_lib_fs_open_directory $path))
 (= (fs:next-entry $owner) (__cetta_lib_fs_next_entry $owner))
 (= (fs:open-read $path) (__cetta_lib_fs_open_read $path))
