@@ -14306,9 +14306,15 @@ uint64_t registry_revision(const Registry *r) {
     return r ? atomic_load_explicit(&r->revision,memory_order_acquire) : 0u;
 }
 
+/* Revisions let a cached Prime scope notice that its registry changed; no
+ * other dialect reads them.  A zeroed registry is an empty registry like an
+ * initialized one (PeTTa's per-worker named state is one, its storage made
+ * on first use), and registry_free leaves an empty registry at revision 0,
+ * so a first write counts from 0.  Only a wrap would let an old revision
+ * read as current again. */
 static void registry_revision_advance(Registry *r) {
     uint64_t prior=atomic_fetch_add_explicit(&r->revision,1u,memory_order_release);
-    if(!prior||prior==UINT64_MAX) {
+    if(prior==UINT64_MAX) {
         fputs("CeTTa: exhausted Registry revisions\n",stderr);abort();
     }
 }
@@ -14729,7 +14735,7 @@ void registry_binding_publication_commit(RegistryBindingPublication *publication
     Registry *prepared = &publication->prepared;
     assert(destination && !prepared->states);
     uint64_t revision=registry_revision(destination);
-    if(!revision||revision==UINT64_MAX) {
+    if(revision==UINT64_MAX) {
         fputs("CeTTa: exhausted Registry revisions\n",stderr);abort();
     }
     struct RegistryStates *states = destination->states;

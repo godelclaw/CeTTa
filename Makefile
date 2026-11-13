@@ -19976,7 +19976,8 @@ NORMAL_TEST_TARGETS := \
 	test-numerical-substrate-smoke \
 	test-application-panel \
 	test-lang-chr \
-	test-provenance
+	test-provenance \
+	test-petta-hyperpose-named-state
 
 .PHONY: test test-all test-test-target-scope
 test: $(NORMAL_TEST_TARGETS)
