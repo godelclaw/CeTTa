@@ -650,6 +650,35 @@ void petta_plan_mark_let_scope(const Atom *root, const Atom *lhs,
 bool petta_program_note_add(
     PettaProgram *program, Space *space, Atom *atom,
     const PettaPlanNode *plan);
+
+/*
+ * Translator rules (add-translator-rule!) run once, where an equation is
+ * installed or a directive is translated, as SWI-PeTTa runs them: the code a
+ * rule answers takes its call's place in the execution syntax, while the
+ * Space keeps the equation as written.  A call whose expansion is not
+ * decided by what is written (petta_translator_expansion.h) keeps the
+ * translation at each call.  The host answers which heads are rules; a
+ * program without one expands nothing.
+ */
+typedef struct {
+    void *context;
+    bool (*is_rule)(void *context, SymbolId head);
+    /* Whether any rule is registered; a program with none reads nothing. */
+    bool (*any_rule)(void *context);
+} PettaTranslatorHost;
+
+void petta_program_set_translator_host(PettaProgram *program,
+                                       const PettaTranslatorHost *host);
+/* A rule was registered or removed (SYMBOL_ID_NONE: any rule): installed
+ * equations that call it, or whose expansion read it, are expanded again.
+ * A call already entered keeps the equation it selected. */
+bool petta_program_translator_rules_changed(PettaProgram *program,
+                                            SymbolId head);
+/* The directive `atom`, planned as `plan`, with its rule calls expanded; NULL
+ * when none expands.  *plan_out is the expansion's plan. */
+Atom *petta_program_expand_translator_directive(
+    PettaProgram *program, Space *space, Atom *atom,
+    const PettaPlanNode *plan, const PettaPlanNode **plan_out);
 void petta_program_note_remove_all(
     PettaProgram *program, Space *space, Atom *atom);
 void petta_program_note_remove_one(

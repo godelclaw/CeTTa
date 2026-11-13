@@ -5,7 +5,9 @@
 #include "grounded.h"
 #include "library_binary.h"
 #include "generated/cetta_execution_contracts.generated.h"
+#include "petta_builtin_registry.h"
 #include "petta_semantics.h"
+#include "petta_translator_expansion.h"
 #include "shared_transition.h"
 #include "stats.h"
 #include <assert.h>
@@ -265,6 +267,9 @@ typedef struct {
     /* Authored occurrence identity is separate from the syntax used to build
      * its plan, which may lower grades or rebind equation variables. */
     Atom *planning_syntax;
+    /* The equation with its translator rule calls expanded, which candidates
+     * execute in place of `equation`; NULL when no call expanded. */
+    Atom *execution_equation;
     uint64_t source_root;
     const PettaPlanNode *plan;
     const PettaEquationTemplateC0 *equation_template_c0;
@@ -551,6 +556,9 @@ struct PettaProgram {
     Arena plans;
     bool graded_equations;
     bool (*is_host_intrinsic)(SymbolId head);
+    /* Which heads are translator rules; no host, no expansion. */
+    PettaTranslatorHost translator;
+    bool translator_trace;
     /* Plans of runtime translations (eval, a computed hyperpose branch),
      * one per distinct content, and the arena each is first built in. */
     PettaPlanInternEntry *interned_plans;
@@ -5786,9 +5794,17 @@ static bool petta_program_space_single_append(
     return true;
 }
 
+static Atom *petta_program_translator_expand(
+    PettaProgram *program, Space *space, Atom *root,
+    const PettaPlanNode *plan, bool equation,
+    const PettaPlanNode **plan_out);
+static void petta_program_translator_observe(
+    PettaProgram *program, Space *space, Atom *atom);
+
 static bool petta_program_note_add_with_execution_plan(
     PettaProgram *program, Space *space, Atom *atom,
-    const PettaPlanNode *plan, bool transferred_execution_plan) {
+    const PettaPlanNode *plan, bool transferred_execution_plan,
+    Atom *transferred_execution) {
     CETTA_SCOPED_SHARED_TRANSITION(program_catalog_add);
     if (!program || !space || !atom)
         return false;
@@ -5859,6 +5875,22 @@ static bool petta_program_note_add_with_execution_plan(
             plan = petta_program_plan_equation(program, execution, NULL, 0u);
         if (!plan) return false;
     }
+    /* The rule calls of an ordinary equation are expanded where it is
+     * installed; a copied catalog keeps the expansion it was copied with. */
+    Atom *expanded = transferred_execution;
+    if (!expanded && atom->expr.len == 3u &&
+        atom_is_symbol_id(atom->expr.elems[0], g_builtin_syms.equals)) {
+        const PettaPlanNode *expanded_plan = NULL;
+        expanded = petta_program_translator_expand(
+            program, space, atom, plan, true, &expanded_plan);
+        if (expanded)
+            plan = expanded_plan;
+    }
+    if (expanded) {
+        execution = expanded;
+        lhs = execution->expr.elems[1];
+        rhs = execution->expr.elems[2];
+    }
     PettaProgramSpace *entry =
         petta_program_ensure_space(program, space);
     SpaceReadToken append_read = {0};
@@ -5898,6 +5930,7 @@ static bool petta_program_note_add_with_execution_plan(
         (PettaProgramEquation){
             .equation = atom,
             .planning_syntax = equation_template ? equation_template->equation : execution,
+            .execution_equation = expanded,
             .source_root = source_root,
             .plan = plan,
             .equation_template_c0 = equation_template_c0,
@@ -5924,7 +5957,11 @@ static bool petta_program_note_add_with_execution_plan(
 
 bool petta_program_note_add(PettaProgram *program, Space *space,
         Atom *atom, const PettaPlanNode *plan) {
-    return petta_program_note_add_with_execution_plan(program, space, atom, plan, false);
+    if (!petta_program_note_add_with_execution_plan(
+            program, space, atom, plan, false, NULL))
+        return false;
+    petta_program_translator_observe(program, space, atom);
+    return true;
 }
 
 /* An unnotified append can use the same certificate when the program's
@@ -6113,7 +6150,7 @@ bool petta_program_observe_addition(
         petta_program_note_add(program, space, recorded, plan);
 }
 
-void petta_program_note_remove_all(
+static void petta_program_note_remove_all_catalog(
     PettaProgram *program, Space *space, Atom *atom) {
     CETTA_SCOPED_SHARED_TRANSITION(program_catalog_remove_all);
     PettaProgramSpace *entry =
@@ -6143,7 +6180,7 @@ void petta_program_note_remove_all(
         entry, atom);
 }
 
-void petta_program_note_remove_one(
+static void petta_program_note_remove_one_catalog(
     PettaProgram *program, Space *space, Atom *atom) {
     CETTA_SCOPED_SHARED_TRANSITION(program_catalog_remove_one);
     PettaProgramSpace *entry =
@@ -6194,6 +6231,18 @@ void petta_program_note_remove_one(
     if (remove == SIZE_MAX)
         return;
     petta_program_space_remove_equation_at(entry, remove);
+}
+
+void petta_program_note_remove_all(
+    PettaProgram *program, Space *space, Atom *atom) {
+    petta_program_note_remove_all_catalog(program, space, atom);
+    petta_program_translator_observe(program, space, atom);
+}
+
+void petta_program_note_remove_one(
+    PettaProgram *program, Space *space, Atom *atom) {
+    petta_program_note_remove_one_catalog(program, space, atom);
+    petta_program_translator_observe(program, space, atom);
 }
 
 bool petta_program_synchronize_space(
@@ -7010,14 +7059,16 @@ bool petta_program_transfer_space_roles(PettaProgram *program,
         }
         if (found == count)
             continue;
-        Atom *execution = target->kind == ATOM_EXPR && target->expr.len != 3u
+        Atom *expanded = records[found].execution_equation;
+        Atom *execution = expanded ? expanded
+            : target->kind == ATOM_EXPR && target->expr.len != 3u
             ? space_equation_execution_view(&program->plans, target) : target;
         const PettaPlanNode *role = records[found].plan;
         const PettaPlanNode *rebound = role && execution
             ? petta_plan_rebind_frame_syntax(program, execution, role) : NULL;
         ok = execution && (!role || rebound) &&
             petta_program_note_add_with_execution_plan(
-                program, destination, target, rebound, true);
+                program, destination, target, rebound, true, expanded);
         used[found] = true;
         copied++;
     }
@@ -7470,7 +7521,10 @@ static bool petta_program_candidate_snapshot_lease_from_entry(
             }
             used[matched] = true;
             items[length++] = (PettaEquationCandidate){
-                .equation = actual[matched].equation,
+                /* An equation whose rule calls were expanded executes
+                 * its expansion; its occurrence stays the authored row. */
+                .equation = record->execution_equation
+                    ? record->execution_equation : actual[matched].equation,
                 .source_root = record->source_root,
                 .rhs_plan = admit_local_execution_payload
                     ? petta_plan_child(record->plan, 2u) : NULL,
@@ -7482,6 +7536,8 @@ static bool petta_program_candidate_snapshot_lease_from_entry(
                     petta_equation_activation_layout(
                         admit_local_execution_payload && record->equation_template
                             ? record->equation_template->equation
+                            : record->execution_equation
+                            ? record->execution_equation
                             : actual[matched].equation,
                         admit_local_execution_payload
                             ? record->static_variable_count : 0u),
@@ -9198,4 +9254,606 @@ void petta_program_storage_census(const PettaProgram *program, CettaStorageCensu
             }
         }
     }
+}
+
+/* ── Translator rules expanded where the program is translated ─────────── */
+
+enum {
+    /* A rule's answer may call a rule again (out:let* expands one binding
+     * per round); each round expands the calls the previous one exposed. */
+    PETTA_TRANSLATOR_ROUND_LIMIT = 64u,
+    PETTA_TRANSLATOR_EXPANSION_LIMIT = 4096u,
+    PETTA_TRANSLATOR_REWRITE_DEPTH = 2048u,
+};
+
+void petta_program_set_translator_host(PettaProgram *program,
+                                       const PettaTranslatorHost *host) {
+    if (!program)
+        return;
+    program->translator = host ? *host : (PettaTranslatorHost){0};
+    const char *trace = getenv("CETTA_PETTA_TRANSLATOR_TRACE");
+    program->translator_trace = trace && trace[0] && strcmp(trace, "0") != 0;
+}
+
+static bool petta_program_translator_active(const PettaProgram *program) {
+    return program && program->translator.is_rule &&
+        (!program->translator.any_rule ||
+         program->translator.any_rule(program->translator.context));
+}
+
+typedef struct {
+    PettaProgram *program;
+    Space *space;
+} PettaTranslatorOracleContext;
+
+/* The rows a call of the rule meets: the live Space's own selection. */
+static bool petta_translator_oracle_rows(void *opaque, Atom *call,
+                                         Atom ***rows_out, size_t *len_out) {
+    PettaTranslatorOracleContext *context = opaque;
+    *rows_out = NULL;
+    *len_out = 0u;
+    /* A graded row is outside the ordinary selection read here. */
+    if (context->program->graded_equations &&
+        space_has_graded_equations(context->space))
+        return false;
+    PettaCandidateSnapshotLease lease = {0};
+    if (!petta_rule_snapshot_lease(context->space,
+            atom_symbol_current_id(call->expr.elems[0]),
+            petta_program_rule_forms(context->program), &lease))
+        return false;
+    Atom **rows = lease.len ? malloc(sizeof(*rows) * lease.len) : NULL;
+    bool ok = !lease.len || rows;
+    for (size_t index = 0u; ok && index < lease.len; index++)
+        rows[index] = lease.items[index].equation;
+    size_t len = lease.len;
+    petta_program_candidate_snapshot_lease_release(&lease);
+    if (!ok)
+        return false;
+    *rows_out = rows;
+    *len_out = len;
+    return true;
+}
+
+/* The call's argument demands, as PeTTa reads them for any call: no
+ * signature evaluates every argument, one signature holds its Atom
+ * parameters and evaluates the others; a guarded parameter or result, or
+ * several signatures, decline. */
+static bool petta_translator_oracle_arguments(
+    void *opaque, Atom *call, PettaTranslatorArgument *modes, size_t arity) {
+    PettaTranslatorOracleContext *context = opaque;
+    Arena arena;
+    arena_init_detached(&arena);
+    PettaTypeCall *calls = NULL;
+    uint32_t count = 0u;
+    bool hold_body = false;
+    bool ok = petta_program_type_calls(NULL, context->space,
+        call->expr.elems[0], (CettaExprLen)arity, &arena, &calls, &count,
+        &hold_body);
+    if (ok && count == 0u) {
+        for (size_t index = 0u; index < arity; index++)
+            modes[index] = PETTA_TRANSLATOR_ARGUMENT_VALUE;
+    } else if (ok && count == 1u && calls[0].arity == arity &&
+               !calls[0].guard_result) {
+        for (size_t index = 0u; ok && index < arity; index++) {
+            PettaTypeArgument argument = petta_type_call_argument(
+                &calls[0], (CettaExprIndex)(index + 1u), false);
+            if (argument.demand == PETTA_TYPE_RAW)
+                modes[index] = PETTA_TRANSLATOR_ARGUMENT_WRITTEN;
+            else if (argument.demand == PETTA_TYPE_TRANSLATE)
+                modes[index] = PETTA_TRANSLATOR_ARGUMENT_VALUE;
+            else
+                ok = false;
+        }
+    } else {
+        ok = false;
+    }
+    free(calls);
+    arena_free(&arena);
+    return ok;
+}
+
+static bool petta_translator_oracle_defines(void *opaque, SymbolId head) {
+    PettaTranslatorOracleContext *context = opaque;
+    return space_equations_may_match_known_head_view(context->space, head);
+}
+
+typedef struct {
+    PettaProgram *program;
+    PettaTranslatorOracle oracle;
+    uint32_t expansions;
+    bool changed;
+    bool failed;
+} PettaTranslatorRewrite;
+
+static void petta_translator_trace(PettaTranslatorOutcome outcome,
+                                   Atom *call) {
+    fprintf(stderr, "[petta-translator] %s ",
+            petta_translator_outcome_name(outcome));
+    atom_print(call->expr.elems[0], stderr);
+    fprintf(stderr, "/%u\n", (unsigned)(call->expr.len - 1u));
+}
+
+static Atom *petta_translator_rewrite(PettaTranslatorRewrite *rewrite,
+                                      Atom *atom, const PettaPlanNode *plan,
+                                      uint32_t depth);
+
+/* Rewrite child `index` of `atom` in place of the copy `*children`. */
+static void petta_translator_rewrite_child(
+    PettaTranslatorRewrite *rewrite, Atom *atom, const PettaPlanNode *plan,
+    CettaExprIndex index, Atom ***children, uint32_t depth) {
+    if (rewrite->failed)
+        return;
+    Atom *child = atom->expr.elems[index];
+    Atom *next = petta_translator_rewrite(
+        rewrite, child, petta_plan_child(plan, index), depth + 1u);
+    if (next == child)
+        return;
+    if (!*children) {
+        *children = malloc(sizeof(**children) * atom->expr.len);
+        if (!*children) {
+            rewrite->failed = true;
+            return;
+        }
+        memcpy(*children, atom->expr.elems,
+               sizeof(**children) * atom->expr.len);
+    }
+    (*children)[index] = next;
+}
+
+static Atom *petta_translator_rebuild(PettaTranslatorRewrite *rewrite,
+                                      Atom *atom, Atom **children) {
+    if (!children)
+        return atom;
+    Atom *rebuilt = rewrite->failed ? NULL : atom_expr_rebuild(
+        &rewrite->program->plans, atom, children, atom->expr.len);
+    free(children);
+    if (!rebuilt) {
+        rewrite->failed = true;
+        return atom;
+    }
+    return rebuilt;
+}
+
+/* A list of pairs (a case's arms, a let*'s bindings) whose second part is
+ * code and whose first is a pattern. */
+static Atom *petta_translator_rewrite_pairs(
+    PettaTranslatorRewrite *rewrite, Atom *list, const PettaPlanNode *plan,
+    uint32_t depth) {
+    if (!list || !plan || list->kind != ATOM_EXPR ||
+        plan->child_count != list->expr.len)
+        return list;
+    Atom **items = NULL;
+    for (CettaExprIndex index = 0u; index < list->expr.len; index++) {
+        Atom *pair = list->expr.elems[index];
+        const PettaPlanNode *pair_plan = petta_plan_child(plan, index);
+        if (!pair || pair->kind != ATOM_EXPR || pair->expr.len != 2u ||
+            !pair_plan || pair_plan->child_count != 2u)
+            continue;
+        Atom **parts = NULL;
+        petta_translator_rewrite_child(rewrite, pair, pair_plan, 1u, &parts,
+                                       depth + 1u);
+        Atom *next = petta_translator_rebuild(rewrite, pair, parts);
+        if (next == pair || rewrite->failed)
+            continue;
+        if (!items) {
+            items = malloc(sizeof(*items) * list->expr.len);
+            if (!items) {
+                rewrite->failed = true;
+                break;
+            }
+            memcpy(items, list->expr.elems, sizeof(*items) * list->expr.len);
+        }
+        items[index] = next;
+    }
+    return petta_translator_rebuild(rewrite, list, items);
+}
+
+/* Whether the program gives `head` equations of its own, which make it a
+ * function call, whatever the engine provides by that name. */
+static bool petta_translator_defined(PettaTranslatorRewrite *rewrite,
+                                     SymbolId head) {
+    PettaTranslatorOracleContext *context = rewrite->oracle.context;
+    return space_equations_may_match_known_head_view(context->space, head);
+}
+
+enum { PETTA_TRANSLATOR_DEMAND_ARITY = 64u };
+
+/* `atom` stands where PeTTa evaluates code.  A call of a translator rule
+ * there is a site; the walk then descends only into the positions PeTTa
+ * evaluates as code: a held argument, a pattern, a quotation and whatever a
+ * form of unknown demand receives stay as they are written. */
+static Atom *petta_translator_rewrite(PettaTranslatorRewrite *rewrite,
+                                      Atom *atom, const PettaPlanNode *plan,
+                                      uint32_t depth) {
+    if (rewrite->failed || !atom || !plan || atom->kind != ATOM_EXPR ||
+        atom->expr.len == 0u || plan->role == PETTA_PLAN_VALUE ||
+        plan->child_count != atom->expr.len ||
+        depth > PETTA_TRANSLATOR_REWRITE_DEPTH ||
+        atom->expr.elems[0]->kind != ATOM_SYMBOL)
+        return atom;
+    CettaExprLen len = atom->expr.len;
+    PettaProgram *program = rewrite->program;
+    SymbolId id = atom_symbol_current_id(atom->expr.elems[0]);
+    if (plan->role == PETTA_PLAN_STATIC_CALL &&
+        rewrite->expansions < PETTA_TRANSLATOR_EXPANSION_LIMIT &&
+        program->translator.is_rule(program->translator.context, id)) {
+        Atom *generated = NULL;
+        PettaTranslatorOutcome outcome = petta_translator_expand_call(
+            &rewrite->oracle, &program->plans, atom, &generated);
+        if (program->translator_trace)
+            petta_translator_trace(outcome, atom);
+        if (outcome == PETTA_TRANSLATOR_EXPANDED) {
+            rewrite->expansions++;
+            rewrite->changed = true;
+            return generated;
+        }
+        if (outcome == PETTA_TRANSLATOR_CAPACITY) {
+            rewrite->failed = true;
+            return atom;
+        }
+    }
+    Atom **children = NULL;
+    if (plan->role == PETTA_PLAN_DATA) {
+        /* An expression whose head names nothing callable is data, and
+         * PeTTa evaluates the calls written inside it. */
+        for (CettaExprIndex index = 1u; index < len; index++)
+            petta_translator_rewrite_child(rewrite, atom, plan, index,
+                                           &children, depth);
+        return petta_translator_rebuild(rewrite, atom, children);
+    }
+    if (plan->role != PETTA_PLAN_STATIC_CALL)
+        return atom;
+    PeTTaForm form = petta_semantics_form(id);
+    if (form == PETTA_FORM_VALUE_LET)
+        form = PETTA_FORM_LET;
+    bool special =
+        form == PETTA_FORM_IF || form == PETTA_FORM_LET ||
+        form == PETTA_FORM_CATCH || form == PETTA_FORM_PROGN ||
+        form == PETTA_FORM_PROG1 || form == PETTA_FORM_TEST ||
+        id == g_builtin_syms.let_star || id == g_builtin_syms.case_text ||
+        id == g_builtin_syms.collapse || id == g_builtin_syms.once ||
+        id == g_builtin_syms.superpose || id == g_builtin_syms.quote;
+    if (special) {
+        if (id == g_builtin_syms.quote || petta_translator_defined(rewrite, id))
+            return atom;
+        if (form == PETTA_FORM_IF && (len == 3u || len == 4u)) {
+            for (CettaExprIndex index = 1u; index < len; index++)
+                petta_translator_rewrite_child(rewrite, atom, plan, index,
+                                               &children, depth);
+        } else if (form == PETTA_FORM_LET && len == 4u) {
+            petta_translator_rewrite_child(rewrite, atom, plan, 2u,
+                                           &children, depth);
+            petta_translator_rewrite_child(rewrite, atom, plan, 3u,
+                                           &children, depth);
+        } else if ((id == g_builtin_syms.let_star ||
+                    id == g_builtin_syms.case_text) && len == 3u) {
+            CettaExprIndex code = id == g_builtin_syms.let_star ? 2u : 1u;
+            CettaExprIndex pairs = id == g_builtin_syms.let_star ? 1u : 2u;
+            petta_translator_rewrite_child(rewrite, atom, plan, code,
+                                           &children, depth);
+            Atom *list = atom->expr.elems[pairs];
+            Atom *next = petta_translator_rewrite_pairs(
+                rewrite, list, petta_plan_child(plan, pairs), depth + 1u);
+            if (next != list && !rewrite->failed) {
+                if (!children) {
+                    children = malloc(sizeof(*children) * len);
+                    if (!children) {
+                        rewrite->failed = true;
+                        return atom;
+                    }
+                    memcpy(children, atom->expr.elems,
+                           sizeof(*children) * len);
+                }
+                children[pairs] = next;
+            }
+        } else if ((form == PETTA_FORM_CATCH || id == g_builtin_syms.collapse ||
+                    id == g_builtin_syms.once) && len == 2u) {
+            petta_translator_rewrite_child(rewrite, atom, plan, 1u,
+                                           &children, depth);
+        } else if (form == PETTA_FORM_PROGN || form == PETTA_FORM_PROG1 ||
+                   (form == PETTA_FORM_TEST && len == 3u)) {
+            for (CettaExprIndex index = 1u; index < len; index++)
+                petta_translator_rewrite_child(rewrite, atom, plan, index,
+                                               &children, depth);
+        } else if (id == g_builtin_syms.superpose && len == 2u &&
+                   atom->expr.elems[1]->kind == ATOM_EXPR) {
+            /* Each written branch is code. */
+            Atom *branches = atom->expr.elems[1];
+            const PettaPlanNode *branch_plan = petta_plan_child(plan, 1u);
+            if (branch_plan && branch_plan->child_count == branches->expr.len) {
+                Atom **items = NULL;
+                for (CettaExprIndex index = 0u;
+                     index < branches->expr.len; index++)
+                    petta_translator_rewrite_child(rewrite, branches,
+                        branch_plan, index, &items, depth + 1u);
+                Atom *next = petta_translator_rebuild(rewrite, branches, items);
+                if (next != branches && !rewrite->failed) {
+                    children = malloc(sizeof(*children) * len);
+                    if (!children) {
+                        rewrite->failed = true;
+                        return atom;
+                    }
+                    memcpy(children, atom->expr.elems,
+                           sizeof(*children) * len);
+                    children[1] = next;
+                }
+            }
+        }
+        return petta_translator_rebuild(rewrite, atom, children);
+    }
+    const PettaBuiltinSpec *spec = petta_builtin_spec_find(
+        symbol_bytes(g_symbols, id), (uint16_t)(len - 1u));
+    if (spec && !petta_translator_defined(rewrite, id)) {
+        if (spec->eager) {
+            for (CettaExprIndex index = 1u; index < len; index++)
+                petta_translator_rewrite_child(rewrite, atom, plan, index,
+                                               &children, depth);
+        }
+        return petta_translator_rebuild(rewrite, atom, children);
+    }
+    /* A function the program defines evaluates every argument without a
+     * signature and its non-Atom ones under one; under several, or for a
+     * name the engine provides with a demand of its own, nothing is read. */
+    PettaTranslatorArgument modes[PETTA_TRANSLATOR_DEMAND_ARITY];
+    if (len - 1u > PETTA_TRANSLATOR_DEMAND_ARITY ||
+        !petta_translator_defined(rewrite, id) ||
+        !petta_translator_oracle_arguments(rewrite->oracle.context, atom,
+                                           modes, len - 1u))
+        return atom;
+    for (CettaExprIndex index = 1u; index < len; index++) {
+        if (modes[index - 1u] == PETTA_TRANSLATOR_ARGUMENT_VALUE)
+            petta_translator_rewrite_child(rewrite, atom, plan, index,
+                                           &children, depth);
+    }
+    return petta_translator_rebuild(rewrite, atom, children);
+}
+
+static bool petta_translator_mentions(const PettaProgram *program,
+                                      Atom *atom, SymbolId head);
+
+/* Whether the right side of `equation` is code: a function whose result is
+ * Atom answers its body as it is written. */
+static bool petta_translator_body_evaluated(Space *space, Atom *equation) {
+    Atom *lhs = equation->expr.elems[1];
+    Atom *rhs = equation->expr.elems[2];
+    if (!lhs || lhs->kind != ATOM_EXPR || lhs->expr.len == 0u ||
+        lhs->expr.elems[0]->kind != ATOM_SYMBOL || !rhs ||
+        rhs->kind != ATOM_EXPR ||
+        (rhs->expr.len > 0u &&
+         atom_is_symbol_id(rhs->expr.elems[0], g_builtin_syms.function)))
+        return false;
+    Arena arena;
+    arena_init_detached(&arena);
+    PettaTypeCall *calls = NULL;
+    uint32_t count = 0u;
+    bool hold_body = false;
+    bool ok = petta_program_type_calls(NULL, space, lhs->expr.elems[0],
+        lhs->expr.len - 1u, &arena, &calls, &count, &hold_body);
+    for (uint32_t index = 0u; ok && index < count; index++)
+        ok = !calls[index].hold_result;
+    free(calls);
+    arena_free(&arena);
+    return ok && !hold_body;
+}
+
+/* `root` (an equation, or a directive) with its rule calls expanded round by
+ * round, each round planned afresh; NULL when no call expands. */
+static Atom *petta_program_translator_expand(
+    PettaProgram *program, Space *space, Atom *root,
+    const PettaPlanNode *plan, bool equation,
+    const PettaPlanNode **plan_out) {
+    if (plan_out)
+        *plan_out = NULL;
+    if (!petta_program_translator_active(program) || !space || !root ||
+        root->kind != ATOM_EXPR || (equation && root->expr.len != 3u))
+        return NULL;
+    /* Code that names no rule has nothing to expand. */
+    if (!petta_translator_mentions(program,
+                                   equation ? root->expr.elems[2] : root,
+                                   SYMBOL_ID_NONE) ||
+        (equation && !petta_translator_body_evaluated(space, root)))
+        return NULL;
+    PettaTranslatorOracleContext context = {
+        .program = program,
+        .space = space,
+    };
+    PettaTranslatorRewrite rewrite = {
+        .program = program,
+        .oracle = {
+            .context = &context,
+            .rows = petta_translator_oracle_rows,
+            .arguments = petta_translator_oracle_arguments,
+            .defines = petta_translator_oracle_defines,
+        },
+    };
+    Atom *current = root;
+    const PettaPlanNode *current_plan = plan ? plan
+        : equation ? petta_program_plan_equation(program, root, NULL, 0u)
+                   : petta_program_plan_current(program, root);
+    bool expanded = false;
+    for (uint32_t round = 0u;
+         current_plan && round < PETTA_TRANSLATOR_ROUND_LIMIT; round++) {
+        rewrite.changed = false;
+        Atom *next = NULL;
+        if (equation) {
+            Atom *rhs = current->expr.elems[2];
+            Atom *rewritten = petta_translator_rewrite(
+                &rewrite, rhs, petta_plan_child(current_plan, 2u), 0u);
+            if (!rewrite.changed || rewrite.failed)
+                break;
+            Atom *parts[3] = {
+                current->expr.elems[0], current->expr.elems[1], rewritten,
+            };
+            next = atom_expr(&program->plans, parts, 3u);
+        } else {
+            next = petta_translator_rewrite(&rewrite, current, current_plan,
+                                            0u);
+            if (!rewrite.changed || rewrite.failed)
+                break;
+        }
+        const PettaPlanNode *next_plan = !next ? NULL : equation
+            ? petta_program_plan_equation(program, next, NULL, 0u)
+            : petta_program_plan_current(program, next);
+        if (!next_plan)
+            break;
+        current = next;
+        current_plan = next_plan;
+        expanded = true;
+    }
+    if (!expanded)
+        return NULL;
+    if (plan_out)
+        *plan_out = current_plan;
+    return current;
+}
+
+Atom *petta_program_expand_translator_directive(
+    PettaProgram *program, Space *space, Atom *atom,
+    const PettaPlanNode *plan, const PettaPlanNode **plan_out) {
+    CETTA_SCOPED_SHARED_TRANSITION(program_translator_directive);
+    return petta_program_translator_expand(program, space, atom, plan, false,
+                                           plan_out);
+}
+
+/* Whether `atom` names `head` (any rule, for SYMBOL_ID_NONE). */
+static bool petta_translator_mentions(const PettaProgram *program,
+                                      Atom *atom, SymbolId head) {
+    Atom **stack = NULL;
+    size_t len = 0u, cap = 0u;
+    bool found = false;
+    if (!petta_program_reserve((void **)&stack, &cap, 1u, sizeof(*stack)))
+        return true;
+    stack[len++] = atom;
+    while (len && !found) {
+        Atom *item = stack[--len];
+        if (!item)
+            continue;
+        if (item->kind == ATOM_SYMBOL) {
+            SymbolId id = atom_symbol_current_id(item);
+            found = head != SYMBOL_ID_NONE ? id == head
+                : program->translator.is_rule(program->translator.context, id);
+            continue;
+        }
+        if (item->kind != ATOM_EXPR)
+            continue;
+        if (!petta_program_reserve((void **)&stack, &cap,
+                                   len + item->expr.len, sizeof(*stack))) {
+            found = true;
+            break;
+        }
+        for (CettaExprIndex index = 0u; index < item->expr.len; index++)
+            stack[len++] = item->expr.elems[index];
+    }
+    free(stack);
+    return found;
+}
+
+/* Install `execution` (with `plan`) as the syntax a record executes, as
+ * note_add derives it. */
+static bool petta_program_record_install_execution(
+    PettaProgram *program, PettaProgramEquation *record, Atom *execution,
+    const PettaPlanNode *plan, Atom *expanded) {
+    Atom *lhs = execution->expr.elems[1];
+    Atom *rhs = execution->expr.elems[2];
+    uint32_t static_variable_count = 0u;
+    bool open_template_admitted = false;
+    const PettaEquationTemplate *equation_template = NULL;
+    PettaEquationTemplateC0 *equation_template_c0 =
+        petta_program_compile_equation_template_c0(
+            program, lhs, rhs, record->head, &static_variable_count,
+            &open_template_admitted, &equation_template);
+    if (equation_template && plan) {
+        plan = petta_plan_rebind_frame_syntax(
+            program, equation_template->equation, plan);
+        if (!plan || !petta_plan_assign_equation_variable_slots(
+                equation_template->equation, plan, equation_template))
+            return false;
+    }
+    if (open_template_admitted &&
+        !petta_plan_mark_open_template_admitted(petta_plan_child(plan, 2u)))
+        return false;
+    record->planning_syntax =
+        equation_template ? equation_template->equation : execution;
+    record->execution_equation = expanded;
+    record->plan = plan;
+    record->equation_template_c0 = equation_template_c0;
+    record->equation_template = equation_template;
+    record->static_variable_count = static_variable_count;
+    record->rhs_binds_variables = petta_program_rhs_binds_variables(lhs, rhs);
+    return true;
+}
+
+/* Expand again every equation of the space that calls `head` (any rule, for
+ * SYMBOL_ID_NONE) or whose expansion read a rule.  Existing leases keep the
+ * plans they captured; new selections see the replacement. */
+static bool petta_program_translator_refresh_space(
+    PettaProgram *program, PettaProgramSpace *entry, SymbolId head) {
+    if (!entry || !petta_program_space_is_live(entry))
+        return true;
+    Space *space = (Space *)entry->space;
+    bool changed = false;
+    bool ok = true;
+    for (size_t index = 0u; ok && index < entry->equation_len; index++) {
+        PettaProgramEquation *record = &entry->equations[index];
+        Atom *authored = record->equation;
+        if (!authored || authored->kind != ATOM_EXPR ||
+            authored->expr.len != 3u ||
+            !atom_is_symbol_id(authored->expr.elems[0], g_builtin_syms.equals))
+            continue;
+        if (!record->execution_equation &&
+            !petta_translator_mentions(program, authored->expr.elems[2], head))
+            continue;
+        const PettaPlanNode *authored_plan =
+            petta_program_plan_equation(program, authored, NULL, 0u);
+        if (!authored_plan) {
+            ok = false;
+            break;
+        }
+        const PettaPlanNode *expanded_plan = NULL;
+        Atom *expanded = petta_program_translator_expand(
+            program, space, authored, authored_plan, true, &expanded_plan);
+        if (!expanded && !record->execution_equation)
+            continue;
+        ok = petta_program_record_install_execution(
+            program, record, expanded ? expanded : authored,
+            expanded ? expanded_plan : authored_plan, expanded);
+        if (ok && index < entry->plan_callability_epoch_len)
+            entry->plan_callability_epochs[index] = 0u;
+        changed = changed || ok;
+    }
+    if (changed)
+        petta_program_space_commit_catalog_mutation(entry);
+    return ok;
+}
+
+bool petta_program_translator_rules_changed(PettaProgram *program,
+                                            SymbolId head) {
+    CETTA_SCOPED_SHARED_TRANSITION(program_translator_rules);
+    if (!program || !program->translator.is_rule)
+        return true;
+    bool ok = true;
+    for (size_t index = 0u; ok && index < program->space_len; index++)
+        ok = petta_program_translator_refresh_space(
+            program, &program->spaces[index], head);
+    return ok;
+}
+
+/* An equation or declaration of a rule changed what the rule answers. */
+static void petta_program_translator_observe(PettaProgram *program,
+                                             Space *space, Atom *atom) {
+    if (!petta_program_translator_active(program) || !atom)
+        return;
+    SymbolId head = SYMBOL_ID_NONE;
+    Atom *subject = NULL;
+    if (petta_program_type_declaration_view(atom, &subject, NULL)) {
+        head = atom_symbol_current_id(subject);
+    } else if (!petta_program_equation_view(program, atom, NULL, NULL,
+                                            &head)) {
+        return;
+    }
+    if (head == SYMBOL_ID_NONE ||
+        !program->translator.is_rule(program->translator.context, head))
+        return;
+    (void)petta_program_translator_refresh_space(
+        program, petta_program_find_space(program, space), head);
 }

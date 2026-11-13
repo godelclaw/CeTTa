@@ -719,6 +719,10 @@ static void library_transform_register_heads(void) {
         (void)symbol_intern_cstr(g_symbols, heads[i]);
 }
 
+static bool cetta_library_petta_translator_rule_host_contains(
+    void *context, SymbolId head);
+static bool cetta_library_petta_translator_rule_host_any(void *context);
+
 static bool library_context_init_services(CettaLibraryContext *ctx,
         CettaLanguageId language_id, const CettaProfile *profile,
         bool foreign_services) {
@@ -892,6 +896,21 @@ static bool library_context_init_services(CettaLibraryContext *ctx,
         (language_id == CETTA_LANGUAGE_HE ||
          language_id == CETTA_LANGUAGE_PETTA))
         (void)petta_program_enable_callability_refresh(ctx->petta_program);
+    /* PeTTa runs a translator rule where the code calling it is installed,
+     * as SWI-PeTTa does; CETTA_PETTA_TRANSLATOR_EXPANSION=0 keeps every rule
+     * running at each call. */
+    if (ctx->petta_program && language_id == CETTA_LANGUAGE_PETTA) {
+        const char *expansion = getenv("CETTA_PETTA_TRANSLATOR_EXPANSION");
+        if (!expansion || strcmp(expansion, "0") != 0) {
+            petta_program_set_translator_host(
+                ctx->petta_program,
+                &(PettaTranslatorHost){
+                    .context = ctx,
+                    .is_rule = cetta_library_petta_translator_rule_host_contains,
+                    .any_rule = cetta_library_petta_translator_rule_host_any,
+                });
+        }
+    }
     if (ctx->petta_program && cetta_profile_uses_petta_typing(profile)) {
         (void)petta_program_enable_analysis(ctx->petta_program);
     }
@@ -1283,7 +1302,8 @@ bool cetta_library_petta_translator_rule_set(
                 (size_t)(ctx->petta_translator_rule_len - index - 1u));
         ctx->petta_translator_rule_len--;
         cetta_library_petta_translator_rule_advance(ctx);
-        return true;
+        return petta_program_translator_rules_changed(ctx->petta_program,
+                                                      head);
     }
     if (ctx->petta_translator_rule_len ==
         ctx->petta_translator_rule_cap) {
@@ -1307,7 +1327,7 @@ bool cetta_library_petta_translator_rule_set(
     ctx->petta_translator_rules[index] = head;
     ctx->petta_translator_rule_len++;
     cetta_library_petta_translator_rule_advance(ctx);
-    return true;
+    return petta_program_translator_rules_changed(ctx->petta_program, head);
 }
 
 uint64_t cetta_library_petta_translator_rule_revision(
@@ -1316,6 +1336,28 @@ uint64_t cetta_library_petta_translator_rule_revision(
         return 0u;
     cetta_library_petta_translator_rule_sync(ctx);
     return ctx->petta_translator_rule_revision;
+}
+
+/* The program's view of the registry.  It reads the registry as it stands
+ * and never resets it: the program asks while it installs an equation. */
+static bool cetta_library_petta_translator_rule_host_contains(
+    void *context, SymbolId head) {
+    CettaLibraryContext *ctx = context;
+    if (!ctx || head == SYMBOL_ID_NONE ||
+        ctx->petta_translator_symbol_table_instance !=
+            symbol_table_instance_id(g_symbols))
+        return false;
+    uint32_t index =
+        cetta_library_petta_translator_rule_lower_bound(ctx, head);
+    return index < ctx->petta_translator_rule_len &&
+           ctx->petta_translator_rules[index] == head;
+}
+
+static bool cetta_library_petta_translator_rule_host_any(void *context) {
+    CettaLibraryContext *ctx = context;
+    return ctx && ctx->petta_translator_rule_len != 0u &&
+           ctx->petta_translator_symbol_table_instance ==
+               symbol_table_instance_id(g_symbols);
 }
 
 static void cetta_library_petta_tabled_relation_sync(

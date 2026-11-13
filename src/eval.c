@@ -110954,6 +110954,17 @@ void eval_top_with_registry_petta_plan_outcome(
     const PettaPlanNode *plan, EvalOutcome *outcome) {
     if (!outcome)
         return;
+    /* A directive runs the translator rules it calls once, where it is
+     * translated, as SWI-PeTTa translates a directive before running it. */
+    if (plan && g_library_context && g_library_context->petta_program) {
+        const PettaPlanNode *expanded_plan = NULL;
+        Atom *expanded = petta_program_expand_translator_directive(
+            g_library_context->petta_program, s, expr, plan, &expanded_plan);
+        if (expanded && expanded_plan) {
+            expr = expanded;
+            plan = expanded_plan;
+        }
+    }
     eval_top_with_registry_core(
         s, a, persistent, r, expr, plan,
         &outcome->results, outcome, NULL, NULL, NULL,NULL);
