@@ -182,8 +182,8 @@
     {
       "source": "io.metta",
       "output": "io.metta",
-      "source_sha256": "23c58dc6c38ba93125eed300ab45c2590ff84ca95d78460b0b3267b7e0e62c33",
-      "output_sha256": "4b38e5adb4d50c18313dfdf625bbff7917ab2eed22206ec08b22fd10f09b79df",
+      "source_sha256": "22aad61505f7fc05998a0f1aa95293107c2043a646c69fc291d3be5a6768008d",
+      "output_sha256": "7e633f8260f26bd73bcdd0532fd55d57a9d8cc2546a715c51283c6f3d5c5f2e2",
       "edits": 16,
       "code_diagnostics": 0
     },
@@ -542,8 +542,8 @@
     {
       "source": "proc.metta",
       "output": "proc.metta",
-      "source_sha256": "c1a6f6461385bceee0be69f6ee29e2d3e2e220c7598b2930ece48cdd073e44bb",
-      "output_sha256": "0eeb55eb7de7ab56b65497b68932eb13036a2600199276aeaf1c52dd7e775ed2",
+      "source_sha256": "0ebf4e9fe9ee5fa3f727bc2b4412c2e174f4ef0824dc44575d1454a29b055abd",
+      "output_sha256": "6160d601ea6747df65b4ba334282d673860e8a469650cd7b048dc12101547901",
       "edits": 2,
       "code_diagnostics": 0
     },

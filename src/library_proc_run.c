@@ -388,8 +388,11 @@ static const char *env_value(char *const *env, const char *name) {
     return NULL;
 }
 
+/* PARENT, when not 0, is the engine's process ID: the child is to die with
+ * the thread that forks it (cetta_proc_child_die_with_parent). */
 static void child_start(const char *program, char **argv, char **envp, const char *cwd,
-                        int out, int err, int report) {
+                        int out, int err, int report, pid_t parent) {
+    if (parent) cetta_proc_child_die_with_parent(parent, report);
     cetta_proc_child_exec(program, argv, envp, cwd, -1, out, err, report);
 }
 
@@ -468,8 +471,15 @@ CettaProcChild *cetta_proc_start(Atom *arguments, const char *cwd, Atom *environ
     sigfillset(&blocked);
     int mask_error = pthread_sigmask(SIG_SETMASK, &blocked, &previous);
     if (mask_error) { errno = mask_error; goto failed; }
+    /* The request outlives this call: its child dies with the engine only
+     * when the main thread, whose end is the engine's, forks it. */
+#ifdef SYS_gettid
+    pid_t parent = (pid_t)syscall(SYS_gettid) == getpid() ? getpid() : 0;
+#else
+    pid_t parent = 0;
+#endif
     child->pid = fork();
-    if (!child->pid) child_start(program, argv, inherit ? environ : envp, cwd, output, errors, report[1]);
+    if (!child->pid) child_start(program, argv, inherit ? environ : envp, cwd, output, errors, report[1], parent);
     int fork_error = errno;
     (void)pthread_sigmask(SIG_SETMASK, &previous, NULL);
     if (child->pid < 0) { child->pid = 0; errno = fork_error; goto failed; }
@@ -663,12 +673,14 @@ static Atom *proc_run(Arena *arena, Atom **args, uint32_t nargs) {
     sigfillset(&blocked);
     int mask_error = pthread_sigmask(SIG_SETMASK, &blocked, &previous);
     if (mask_error) { result = failed_errno(arena, "signals", mask_error); goto done; }
+    /* This thread waits for the child, so the child dies with the engine. */
+    pid_t parent = getpid();
     pid_t pid = fork();
     int fork_error = errno;
     if (pid != 0) (void)pthread_sigmask(SIG_SETMASK, &previous, NULL);
     if (pid < 0) { result = failed_errno(arena, "fork", fork_error); goto done; }
     if (pid == 0) child_start(program, argv, inherit ? environ : envp, cwd,
-                              out[1], merged ? out[1] : err[1], report[1]);
+                              out[1], merged ? out[1] : err[1], report[1], parent);
     setpgid(pid, pid);
     close(out[1]); out[1] = -1;
     if (err[1] >= 0) close(err[1]);

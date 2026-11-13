@@ -12,6 +12,9 @@
 #include <stdint.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 
 enum {
     CETTA_PROC_CHILD_STDIO = 1, CETTA_PROC_CHILD_CWD = 2,
@@ -71,6 +74,22 @@ static inline _Noreturn void cetta_proc_child_stop(int fd, int stage, int error)
     ssize_t count;
     do count = write(fd, report, sizeof report); while (count < 0 && errno == EINTR);
     _exit(127);
+}
+
+/* The kernel kills this child with SIGKILL when the thread that forked it
+ * ends: a caller forks from a thread that outlives the child, or from the
+ * main thread, whose end is the engine's. A parent that ended before the
+ * request took effect is caught by the check after it: the child stops
+ * before exec. Without the request (other systems) nothing changes. */
+static inline void cetta_proc_child_die_with_parent(pid_t parent, int report) {
+#ifdef __linux__
+    if (prctl(PR_SET_PDEATHSIG, SIGKILL))
+        cetta_proc_child_stop(report, CETTA_PROC_CHILD_SIGNALS, errno);
+    if (getppid() != parent)
+        cetta_proc_child_stop(report, CETTA_PROC_CHILD_SIGNALS, ESRCH);
+#else
+    (void)parent; (void)report;
+#endif
 }
 
 /* `new_group` 1 puts the child in a process group of its own, so its owner

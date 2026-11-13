@@ -11,6 +11,9 @@
 ; process group of its own, and the whole group is killed when TIMEOUT-MS
 ; runs out. A zero timeout means no deadline. A zero MAX-BYTES keeps all output;
 ; otherwise excess output is drained and its loss is marked in the result.
+; On Linux the child is killed when the engine ends, however it ends; what
+; the child starts itself is left to the caller's scope, or to an owned job
+; with lifetime owner.
 ;
 ;   (proc:run ("program" "argument" ...) "cwd" (("NAME" "value") ...)
 ;             timeout-ms max-bytes)
