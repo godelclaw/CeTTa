@@ -1,3 +1,4 @@
+!(ai:experiment failure-values)
 ; These controls reach value provenance, receiver matching, held patterns,
 ; strict Boolean/comparison arguments, and each host's empty-case policy.
 (: ai-hold (-> Atom Atom))
@@ -21,6 +22,9 @@
 !(Box (ai-hold (Error held (Forbidden data))))
 !(collapse (superpose ((Error origin (Fault (Error nested (Forbidden inert)))) 7)))
 !(let $description (ai-hold (ai-pattern)) (Box $description))
+; A callable-looking binding pattern is held, even if evaluating it would
+; make an otherwise impossible match succeed.
+!(collapse (let (ai-pattern) computed-pattern wrongly-evaluated))
 ; The observation index is already data; constructing a report never runs it.
 !(let $scope (ai-hold (Query (ai-pattern))) (Empty $scope))
 ; Positive binding must not change the observation policy of its continuation.

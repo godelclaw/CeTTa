@@ -17,20 +17,12 @@
      ((((MatrixPass $language $route 92) (NestedMatrixPass $language $route 900)) ())
       ($bad (let $shown (println! (SuiteMatrixFailed $bad)) (system:exit 1))))))
 (= (ais:run $binary $cwd)
-   (let* (($p (ais:fixtures $binary "petta" "CETTA_PETTA_SEARCH_MACHINE=1"
-              ("failure_values" "positions" "effects" "library_observers") $cwd 0))
-          ($r (ais:fixtures $binary "petta" "CETTA_PETTA_SEARCH_MACHINE=0"
-              ("failure_values" "positions" "effects") $cwd 0))
-          ($h (ais:fixtures $binary "he" "CETTA_PETTA_SEARCH_MACHINE=1"
-              ("failure_values" "positions" "effects" "library_observers") $cwd 0))
+   (let* (($p (ais:fixtures $binary "petta" "CETTA_PETTA_TRANSLATOR_EXPANSION=1"
+              ("failure_values" "positions" "effects" "library_observers" "macro_capture" "review_regressions") $cwd 0))
           ($t (ais:fixtures $binary "petta" "CETTA_PETTA_TRANSLATOR_EXPANSION=0"
-              ("failure_values" "positions" "effects" "library_observers") $cwd 0))
-          ($mc (ais:fixtures $binary "petta" "CETTA_PETTA_SEARCH_MACHINE=1" ("macro_capture") $cwd 0))
-          ($mt (ais:fixtures $binary "petta" "CETTA_PETTA_TRANSLATOR_EXPANSION=0" ("macro_capture") $cwd 0))
-          ($pm (ais:matrix $binary "petta" "CETTA_PETTA_SEARCH_MACHINE=1"))
-          ($rm (ais:matrix $binary "petta" "CETTA_PETTA_SEARCH_MACHINE=0"))
-          ($hm (ais:matrix $binary "he" "CETTA_PETTA_SEARCH_MACHINE=1"))
+              ("failure_values" "positions" "effects" "library_observers" "macro_capture" "review_regressions") $cwd 0))
+          ($pm (ais:matrix $binary "petta" "CETTA_PETTA_TRANSLATOR_EXPANSION=1"))
           ($tm (ais:matrix $binary "petta" "CETTA_PETTA_TRANSLATOR_EXPANSION=0")))
-     (case ($p $r $h $t $mc $mt (ah:run $binary))
-       (((4 3 4 4 1 1 (HostControlsPass 13)) (AISuitePass 17 3968 13))
+     (case ($p $t (ah:run $binary))
+       (((6 6 (HostControlsPass 18)) (AISuitePass 12 1984 18))
         ($bad (let $shown (println! (SuiteCountFailed $bad)) (system:exit 1)))))))

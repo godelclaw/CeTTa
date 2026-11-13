@@ -1,3 +1,4 @@
+()
 (Error demanded (Fault bad))
 (Error demanded (Fault bad))
 (Error demanded (Fault bad))
@@ -15,6 +16,7 @@ inspectable
 (Box (Error held (Forbidden data)))
 ((Error origin (Fault (Error nested (Forbidden inert)))) 7)
 (Box (ai-pattern))
+()
 (Empty (Query (ai-pattern)))
 ((Error branch (Fault bad)) live)
 (Error body (Fault bad))

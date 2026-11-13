@@ -764,10 +764,9 @@ static bool library_context_init_services(CettaLibraryContext *ctx,
     if (mutex_error) { errno = mutex_error; return false; }
     ctx->active_mask = profile &&
         ((language_id == CETTA_LANGUAGE_HE &&
-          (profile->id == CETTA_PROFILE_HE_EXTENDED ||
-           profile->id == CETTA_PROFILE_HE_AI)) ||
+          profile->id == CETTA_PROFILE_HE_EXTENDED) ||
          (language_id == CETTA_LANGUAGE_PETTA &&
-          profile->enable_cetta_extensions))
+          profile->id == CETTA_PROFILE_PETTA_EXTENDED))
         ? CETTA_NATIVE_IMPORT_TRANSFORM : 0u;
     /* Managed source symbols can precede their first execution. Register
      * this finite intrinsic vocabulary before nested-call classification. */

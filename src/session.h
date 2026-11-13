@@ -316,7 +316,13 @@ typedef enum {
 } CettaExperiment;
 
 bool cetta_session_allows_experiments(const CettaEvalSession *session);
-bool cetta_session_enable_experiment(CettaEvalSession *session, const char *name);
+typedef enum {
+    CETTA_EXPERIMENT_ENABLED,
+    CETTA_EXPERIMENT_UNKNOWN,
+    CETTA_EXPERIMENT_UNSUPPORTED_HOST,
+} CettaExperimentAdmission;
+CettaExperimentAdmission cetta_session_enable_experiment(
+    CettaEvalSession *session, const char *name);
 
 typedef struct {
     const char *name;

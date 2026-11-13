@@ -1,3 +1,4 @@
+!(ai:experiment failure-values)
 ; An ordinary library observes through explicit catch, not an engine list
 ; of privileged function names. Direct strict arguments still propagate.
 !(import! &self (library outcome))

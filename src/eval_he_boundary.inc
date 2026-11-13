@@ -1224,10 +1224,6 @@ static Atom *he_function_noreturn_caller(HeInstructionFrame *frame) {
 
 static bool he_instruction_complete_function_return(HeInstructionFrame *frame,
         const Outcome *source, Atom *result) {
-    if (ai_outcome_raised(source)) {
-        outcome_set_add_existing(frame->target, source);
-        return true;
-    }
     Atom *value;
     if (atom_head_symbol_id(result) == g_builtin_syms.return_text && result->expr.len == 2u)
         value = result->expr.elems[1];
@@ -1310,10 +1306,6 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
             Atom *result = outcome_atom_materialize(a, item);
             if (!result)
                 continue;
-            if (ai_outcome_raised(item)) {
-                outcome_set_add_existing(os, item);
-                continue;
-            }
             if (frame->phase == HE_INSTRUCTION_RAW_RETURNS) {
                 if (atom_head_symbol_id(result) == g_builtin_syms.function) {
                     he_instruction_push(stack, HE_INSTRUCTION_RUN, s, a,
@@ -1409,11 +1401,6 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
         he_instruction_pop(stack);
         return;
     }
-    if (eval_failure_values() && atom_is_error(atom) && !atom_is_he_evaluated(atom)) {
-        ai_add_failure(a, os, atom, &frame->env);
-        he_instruction_pop(stack);
-        return;
-    }
     if (frame->kind == HE_INSTRUCTION_RAW) {
         if (control.operation != CETTA_CONTROL_NONE || he_minimal_instruction(atom)) {
             frame->phase = HE_INSTRUCTION_DONE;
@@ -1433,16 +1420,10 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
             target = g_registry ? resolve_single_space_arg(
                 s, a, expr_arg(atom, 1), child_fuel) : NULL;
         frame->phase = HE_INSTRUCTION_DONE;
-        Atom *code = expr_arg(frame->atom, control.operation == CETTA_CONTROL_FORCE
-            ? control.source : 0u);
-        if (eval_failure_values() && atom_is_he_evaluated(code)) {
-            atom_deep_copy_strip_he_marks_enter();
-            code = atom_deep_copy(a, code);
-            atom_deep_copy_strip_he_marks_leave();
-        }
-        if (target && code)
+        if (target)
             he_instruction_push(stack, HE_INSTRUCTION_RAW, target, a,
-                code, child_fuel, &frame->env, os, NULL, NULL);
+                expr_arg(frame->atom, control.operation == CETTA_CONTROL_FORCE
+                    ? control.source : 0u), child_fuel, &frame->env, os, NULL, NULL);
         else
             outcome_set_add(os, call_signature_error(a, frame->syntax,
                 "(evalc <atom> <space>)"), &frame->env);
@@ -1479,10 +1460,9 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
     } else if (head == g_builtin_syms.metta && nargs == 3u && g_registry) {
         Space *target = resolve_single_space_arg(
             s, a, expr_arg(atom, 2), child_fuel);
-        Atom *code = expr_arg(frame->atom, 0);
-        if (target && code)
+        if (target)
             eval_metta_outcomes(target, a, expr_arg(frame->atom, 1),
-                code, child_fuel, &frame->env, true, os);
+                expr_arg(frame->atom, 0), child_fuel, &frame->env, true, os);
         else
             outcome_set_add(os, call_signature_error(a, frame->syntax,
                 "(metta <atom> <type> <space>)"), &frame->env);
@@ -1655,10 +1635,6 @@ static bool he_eval_typed_instruction(Space *s, Arena *a, Atom *atom, Atom *codo
         eval_for_caller(s, a, NULL, expr_arg(live[0], control.source), fuel,
                         &env, true, &sources);
         for (CettaCount i = 0u; i < sources.len && !eval_unwinding(); i++) {
-            if (ai_outcome_raised(&sources.items[i])) {
-                outcome_set_add_existing(&minimal, &sources.items[i]);
-                continue;
-            }
             Atom *result = outcome_atom_materialize(a, &sources.items[i]);
             if (!result) continue;
             Atom *body = instantiate_template_variable_once(
@@ -1675,8 +1651,7 @@ static bool he_eval_typed_instruction(Space *s, Arena *a, Atom *atom, Atom *codo
     /* A single continuation uses the existing evaluator tail carrier after
      * applicability and raw invocation. It keeps deep public instructions
      * off the C stack without giving them a separate execution path. */
-    if (allow_tail && minimal.len == 1u && !eval_unwinding() &&
-        !ai_outcome_raised(&minimal.items[0])) {
+    if (allow_tail && minimal.len == 1u && !eval_unwinding()) {
         Atom *result = outcome_atom_materialize(a, &minimal.items[0]);
         if (he_instruction_completion(a, result, live[1], true, true) ==
                 HE_INSTRUCTION_TAIL) {
@@ -1692,10 +1667,6 @@ static bool he_eval_typed_instruction(Space *s, Arena *a, Atom *atom, Atom *codo
         }
     }
     for (CettaCount i = 0u; i < minimal.len && !eval_unwinding(); i++) {
-        if (ai_outcome_raised(&minimal.items[i])) {
-            outcome_set_add_prefixed_outcome(a, os, &minimal.items[i], NULL, preserve_bindings);
-            continue;
-        }
         Atom *result = outcome_atom_materialize(a, &minimal.items[i]);
         HeInstructionCompletion completion = he_instruction_completion(
             a, result, live[1], true, false);

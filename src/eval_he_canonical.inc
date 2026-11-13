@@ -209,8 +209,6 @@ static void metta_call_impl(Space *s, Arena *a, Atom *atom, Atom *etype,
     OutcomeSet *os);
 
 static bool he_canonical_enabled(void) {
-    if (eval_failure_values())
-        return false;
     static _Thread_local int enabled = -1;
     if (enabled < 0) {
         const char *setting = getenv("CETTA_HE_CANONICAL_EXECUTION");

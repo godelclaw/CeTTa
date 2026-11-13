@@ -3030,12 +3030,14 @@ static void test_ai_native_return_boundary(void) {
         "(Error native datum)", "(Box (Error native datum))", "hidden",
         "(Box (Error native datum))", "((Error native datum) 7)",
     };
-    for (unsigned dialect = 0u; dialect < 2u; dialect++) {
-        CettaLanguageId language = dialect ? CETTA_LANGUAGE_HE : CETTA_LANGUAGE_PETTA;
+    for (unsigned dialect = 0u; dialect < 1u; dialect++) {
+        CettaLanguageId language = CETTA_LANGUAGE_PETTA;
         CettaLibraryContext *context = calloc(1u, sizeof(*context));
         assert(context);
         cetta_library_context_init_for_language_profile(context, language,
             cetta_profile_from_name_for_language(language, "ai"));
+        assert(cetta_session_enable_experiment(&context->session, "failure-values") ==
+            CETTA_EXPERIMENT_ENABLED);
         eval_set_library_context(context);
         Arena arena; arena_init(&arena);
         TermUniverse universe; term_universe_init(&universe);
@@ -3101,11 +3103,9 @@ static void test_ai_native_return_boundary(void) {
             EvalOutcome result; eval_outcome_init(&result);
             eval_top_with_registry_outcome(&space, &arena, &arena, &registry,
                 parse(&arena, "(readln!)"), &result, NULL, NULL);
-            /* The canonical native adapter validates this malformed packet
-             * before publication. The direct observer/HE cursor has already
-             * published its valid prefix when it reaches the bad suffix. */
-            const char *route = getenv("CETTA_PETTA_SEARCH_MACHINE");
-            bool prefix = native_mode == 12u && (dialect || (route && strcmp(route, "0") == 0));
+            /* The canonical native adapter validates the entire packet
+             * before publication, including a malformed suffix. */
+            bool prefix = false;
             bool matches = native_mode == 6u
                 ? result.results.len == 1u && result.completion == CETTA_EVAL_COMPLETE &&
                     atom_eq(result.results.items[0], atom_int(&arena, 9))
@@ -3139,7 +3139,7 @@ static void test_ai_native_return_boundary(void) {
         cetta_library_context_free(context); eval_set_library_context(NULL);
         free(context); arena_free(&arena);
     }
-    puts("PASS: 50 AI native value/failure contexts, 4 duplicate-frontier controls and 20 terminal controls preserve provenance, zero, faults and pending conditions without replay");
+    puts("PASS: 25 PeTTa AI native value/failure contexts, 2 duplicate-frontier controls and 10 terminal controls preserve provenance, zero, faults and pending conditions without replay");
 }
 
 int main(int argc, char **argv) {

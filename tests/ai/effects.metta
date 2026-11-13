@@ -1,3 +1,4 @@
+!(ai:experiment failure-values)
 ; Local state is an effect canary. A failure stops later work on that branch;
 ; inspecting its diagnostic never runs the code named in its fields.
 (= (ae:new)

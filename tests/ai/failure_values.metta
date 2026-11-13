@@ -1,3 +1,4 @@
+!(ai:experiment failure-values)
 ; Each directive is an independent occurrence/observer test. Diagnostic
 ; fields deliberately contain executable-looking syntax: they stay data.
 !(Error origin (Unsolvable ill-posed))

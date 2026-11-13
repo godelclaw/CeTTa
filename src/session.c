@@ -974,10 +974,7 @@ void cetta_eval_session_init(CettaEvalSession *session,
     session->language_id = cetta_language_evaluator_family(language_id);
     if (language_id == CETTA_LANGUAGE_AI && !profile)
         profile = cetta_profile_petta_extended();
-    session->experiments = profile &&
-        (profile->id == CETTA_PROFILE_PETTA_AI ||
-         profile->id == CETTA_PROFILE_HE_AI)
-        ? CETTA_EXPERIMENT_FAILURE_VALUES : 0u;
+    session->experiments = 0u;
     session->speculative = false;
     atomic_init(&session->effect_denials, 0);
     session->profile = cetta_profile_is_valid_for_language(language_id, profile)
@@ -995,13 +992,26 @@ bool cetta_session_allows_experiments(const CettaEvalSession *session) {
                               session->profile->id == CETTA_PROFILE_HE_AI)));
 }
 
-bool cetta_session_enable_experiment(CettaEvalSession *session, const char *name) {
+CettaExperimentAdmission cetta_session_enable_experiment(
+    CettaEvalSession *session, const char *name) {
+    static const struct {
+        const char *name;
+        uint32_t bit;
+        CettaLanguageId host;
+    } experiments[] = {
+        {"failure-values", CETTA_EXPERIMENT_FAILURE_VALUES, CETTA_LANGUAGE_PETTA},
+    };
     if (!cetta_session_allows_experiments(session) || !name)
-        return false;
-    if (strcmp(name, "failure-values") != 0)
-        return false;
-    session->experiments |= CETTA_EXPERIMENT_FAILURE_VALUES;
-    return true;
+        return CETTA_EXPERIMENT_UNKNOWN;
+    for (size_t i = 0u; i < sizeof(experiments) / sizeof(experiments[0]); i++) {
+        if (strcmp(name, experiments[i].name) != 0)
+            continue;
+        if (session->language_id != experiments[i].host)
+            return CETTA_EXPERIMENT_UNSUPPORTED_HOST;
+        session->experiments |= experiments[i].bit;
+        return CETTA_EXPERIMENT_ENABLED;
+    }
+    return CETTA_EXPERIMENT_UNKNOWN;
 }
 
 void cetta_eval_session_init_he_compat(CettaEvalSession *session) {

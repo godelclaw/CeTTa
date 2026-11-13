@@ -3731,8 +3731,6 @@ static bool he_binding_order_holds(Space *space, const Atom *head,
 }
 
 static bool he_shared_execution_enabled(void) {
-    if (eval_failure_values())
-        return false;
     static _Thread_local int enabled = -1;
     if (enabled < 0) {
         const char *setting = getenv("CETTA_HE_SHARED_EXECUTION");

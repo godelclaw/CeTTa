@@ -1,0 +1,11 @@
+()
+(Box (Error a (Fault b)))
+(Error src (Forbidden refused))
+((Error src (Forbidden refused)) (Box 1))
+((Error src (Forbidden refused)))
+(Error predicate (Fault broken))
+true
+((Box (Error src (Forbidden refused))) (Box 1))
+((Error src (Forbidden refused)) (Error src (Forbidden refused)))
+(Error predicate (Fault broken))
+()

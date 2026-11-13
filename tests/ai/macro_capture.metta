@@ -1,3 +1,4 @@
+!(ai:experiment failure-values)
 ; Runtime and expand-once translator routes must open syntax before replacing
 ; its holes with completed values. A captured value never becomes source.
 (: ai:box-syntax (-> Atom %Undefined%))

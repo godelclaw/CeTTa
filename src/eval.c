@@ -3234,7 +3234,7 @@ static void outcome_set_add_prefixed(Arena *, OutcomeSet *, Atom *,
     bool ai_published_raised = eval_failure_values(); \
     if (ai_published_raised && ai_published_error) \
         ai_published_error = cetta_ai_failure_value((arena), ai_published_error); \
-    if (!ai_published_error) { \
+    if (ai_published_raised && !ai_published_error) { \
         eval_mark_incomplete(CETTA_EVAL_INCOMPLETE_CAPACITY); \
         break; \
     } \
@@ -8896,11 +8896,25 @@ static Atom *ai_completed_data(Arena *arena, Atom *value) {
     return completed;
 }
 
+/* Aggregates that consume answers as control must preserve the produced
+ * occurrence, rather than inspect an Error-shaped payload. Explicit
+ * observers use their own data projection instead of this boundary. */
+static bool ai_forward_first_failure(Arena *arena, OutcomeSet *out,
+    const OutcomeSet *source, const Bindings *outer, bool preserve) {
+    for (CettaCount i = 0u; i < source->len; i++) {
+        if (!ai_outcome_raised(&source->items[i]))
+            continue;
+        outcome_set_add_prefixed_outcome(arena, out, &source->items[i], outer, preserve);
+        return true;
+    }
+    return false;
+}
+
 static void ai_publish_prefixed_error(Arena *arena, OutcomeSet *out, Atom *error,
     const Bindings *environment, const Bindings *outer, bool preserve) {
     if (eval_failure_values())
         error = cetta_ai_failure_value(arena, error);
-    if (!error) {
+    if (eval_failure_values() && !error) {
         eval_mark_incomplete(CETTA_EVAL_INCOMPLETE_CAPACITY);
         return;
     }
@@ -21725,6 +21739,11 @@ static bool hyperpose_threaded_execute(
     HyperposeThreadObservation observation,
     bool preserve_bindings, OutcomeSet *os) {
 #define HYPERPOSE_WORKER_STACK_BYTES (16u * 1024u * 1024u)
+    /* The parallel transport carries values, not per-occurrence failure
+     * provenance. Keep the typed experiment on the existing cooperative
+     * scheduler until that transport supports the same outcome contract. */
+    if (eval_failure_values())
+        return false;
     __attribute__((cleanup(
         hyperpose_source_family_capture_receipt_finish)))
     HyperposeSourceFamilyCaptureReceipt capture_receipt = {0};
@@ -73260,7 +73279,7 @@ static bool petta_eval_machine_switch_enabled(void) {
     /* PeTTa's foreign calls, delayed goals and occurrence roles are semantic
      * operations of the relational core. Disabling an execution tier must
      * not send them to the HE fallback, where they become symbolic data. */
-    return (!eval_failure_values() && eval_current_language_id() == CETTA_LANGUAGE_PETTA) ||
+    return eval_current_language_id() == CETTA_LANGUAGE_PETTA ||
         g_active_petta_search_machine;
 }
 
@@ -100342,6 +100361,11 @@ static __attribute__((noinline)) MettaDispatchResult metta_petta_dispatch(
             }
             metta_eval_bind(s, a, generator, fuel, &generated);
 
+            if (eval_failure_values() && ai_forward_first_failure(
+                    a, os, &generated, CURRENT_ENV, preserve_bindings)) {
+                outcome_set_free(&generated);
+                return METTA_DISPATCH_HANDLED;
+            }
             bool all_true = true;
             for (CettaCount index = 0u;
                  index < generated.len && all_true; index++) {
@@ -100362,6 +100386,12 @@ static __attribute__((noinline)) MettaDispatchResult metta_petta_dispatch(
                     s, a, NULL, test_call, fuel,
                     &generated.items[index].env, CURRENT_ENV,
                     preserve_bindings, &tests);
+                if (eval_failure_values() && ai_forward_first_failure(
+                        a, os, &tests, CURRENT_ENV, preserve_bindings)) {
+                    outcome_set_free(&tests);
+                    outcome_set_free(&generated);
+                    return METTA_DISPATCH_HANDLED;
+                }
                 bool witnessed_true = false;
                 for (CettaCount test_index = 0u;
                      test_index < tests.len; test_index++) {
@@ -101572,8 +101602,9 @@ static __attribute__((noinline)) MettaDispatchResult metta_case_dispatch(
                 for (CettaExprIndex i = 0; i < branches->expr.len; i++) {
                     Atom *branch = branches->expr.elems[i];
                     if (branch->kind == ATOM_EXPR && branch->expr.len == 2) {
-                        Atom *pattern = bindings_apply_if_vars(
-                            CURRENT_ENV, a, branch->expr.elems[0]);
+                        Atom *pattern = eval_failure_values()
+                            ? bindings_apply_if_vars(CURRENT_ENV, a, branch->expr.elems[0])
+                            : branch->expr.elems[0];
                         if (ai_empty_case && language_id == CETTA_LANGUAGE_PETTA &&
                             !atom_is_symbol_id(pattern, g_builtin_syms.empty))
                             continue;
@@ -103030,8 +103061,12 @@ static __attribute__((noinline)) MettaDispatchResult metta_conditional_dispatch(
                 continue;
             if (eval_failure_values() ? ai_outcome_raised(&conds.items[i])
                                       : atom_is_error(cond)) {
-                outcome_set_add_prefixed_outcome(a, os, &conds.items[i],
-                    CURRENT_ENV, preserve_bindings);
+                if (eval_failure_values())
+                    outcome_set_add_prefixed_outcome(a, os, &conds.items[i],
+                        CURRENT_ENV, preserve_bindings);
+                else
+                    outcome_set_add_prefixed(a, os, cond, cond_env,
+                        CURRENT_ENV, preserve_bindings);
                 continue;
             }
             bool true_branch = is_true_atom(cond);
@@ -105052,40 +105087,15 @@ tail_call: ;
         outcome_set_add(os, atom, CURRENT_ENV);
         return;
     }
+    CettaControlOperationPlan ai_observer;
     if (eval_failure_values() && language_id == CETTA_LANGUAGE_PETTA &&
-        !g_active_petta_search_machine && atom->kind == ATOM_EXPR &&
-        atom->expr.len == 2u && atom_is_symbol_id(atom->expr.elems[0], g_builtin_syms.eval)) {
-        /* Explicit eval is a dialect primitive, including its translator
-         * roles. The direct pure reference delegates that primitive, then
-         * owns its surrounding binding/choice/observation continuation. */
-        bool previous = g_active_petta_search_machine;
-        g_active_petta_search_machine = true;
-        bool handled = petta_eval_machine_run(s, a, atom, etype, fuel,
-            CURRENT_ENV, preserve_bindings, os, PETTA_RELATION_SAFETY_STATIC,
-            CETTA_SEARCH_CONTROLLER_INLINE_DEPTH_FIRST, false, false);
-        g_active_petta_search_machine = previous;
-        if (!handled)
-            eval_mark_incomplete(CETTA_EVAL_INCOMPLETE_HOST_FAILURE);
-        return;
-    }
-    if (eval_failure_values() && language_id == CETTA_LANGUAGE_HE &&
-        atom->kind == ATOM_EXPR && atom->expr.len == 1u &&
-        atom->expr.elems[0]->kind == ATOM_SYMBOL &&
-        is_grounded_op(atom_symbol_current_id(atom->expr.elems[0])) &&
-        active_builtin_allowed(atom_symbol_bytes(atom->expr.elems[0]))) {
-        CettaCallOutcome native;
-        if (dispatch_native_op(s, a, atom->expr.elems[0], NULL, 0u, &native)) {
-            Atom *next = NULL;
-            if (sequence_native_call(s, a, native, false, etype, CURRENT_ENV, os, &next))
-                return;
-            if (next) TAIL_REENTER(next);
-            return;
-        }
-    }
-    if (eval_failure_values() && atom && atom->kind == ATOM_EXPR && atom->expr.len == 2u &&
-        (atom_is_symbol(atom->expr.elems[0], "catch") ||
-         atom_is_symbol_id(atom->expr.elems[0], g_builtin_syms.collapse))) {
-        bool collection = atom_is_symbol_id(atom->expr.elems[0], g_builtin_syms.collapse);
+        native_control_profile_active() && atom && atom->kind == ATOM_EXPR &&
+        atom->expr.len == 2u &&
+        cetta_control_operation_decode(atom_head_symbol_id(atom), 1u,
+            &ai_observer, &g_builtin_syms) &&
+        (ai_observer.operation == CETTA_CONTROL_HANDLE ||
+         ai_observer.operation == CETTA_CONTROL_COLLECT)) {
+        bool collection = ai_observer.operation == CETTA_CONTROL_COLLECT;
         OutcomeSet inner;
         outcome_set_init(&inner);
         __attribute__((cleanup(eval_gc_outcome_suspension_end)))
@@ -107033,6 +107043,11 @@ prime_need_next_strict_argument: ;
             }
             metta_eval_bind(s, a, generator, fuel, &generated);
 
+            if (eval_failure_values() && ai_forward_first_failure(
+                    a, os, &generated, CURRENT_ENV, preserve_bindings)) {
+                outcome_set_free(&generated);
+                return;
+            }
             bool all_true = true;
             for (CettaCount index = 0u;
                  index < generated.len && all_true; index++) {
@@ -107057,6 +107072,12 @@ prime_need_next_strict_argument: ;
                     s, a, NULL, test_call, fuel,
                     &generated.items[index].env, CURRENT_ENV,
                     preserve_bindings, &tests);
+                if (eval_failure_values() && ai_forward_first_failure(
+                        a, os, &tests, CURRENT_ENV, preserve_bindings)) {
+                    outcome_set_free(&tests);
+                    outcome_set_free(&generated);
+                    return;
+                }
                 bool witnessed_true = false;
                 for (CettaCount test_index = 0u;
                      test_index < tests.len; test_index++) {
@@ -111287,29 +111308,24 @@ static void eval_top_with_registry_core(
         {g_ai_cut_reified, eval_failure_values()};
     if (ai_observation.active)
         g_ai_cut_reified = false;
-    if (eval_failure_values() && s &&
-        !space_head_declares_type(s, g_builtin_syms.empty)) {
-        Arena *owner = persistent ? persistent : a;
-        Atom *arrow[] = {atom_symbol(owner, "->"), atom_symbol(owner, "Atom"),
-                         atom_symbol(owner, "ScopedObservation")};
-        space_add(s, atom_expr3(owner, atom_symbol(owner, ":"),
-            atom_symbol(owner, "Empty"), atom_expr(owner, arrow, 3u)));
-    }
     /* Experiments are declarations at an evaluation root, not callable
      * effects hidden in query data. Both hosts use the same session state. */
     if (cetta_session_allows_experiments(active_eval_session()) && expr &&
         expr->kind == ATOM_EXPR && expr->expr.len &&
         atom_is_symbol(expr->expr.elems[0], "ai:experiment")) {
-        bool enabled = expr->expr.len == 2u &&
-            expr->expr.elems[1]->kind == ATOM_SYMBOL &&
-            cetta_session_enable_experiment(active_eval_session(),
-                                            atom_symbol_bytes(expr->expr.elems[1]));
+        CettaExperimentAdmission admission = expr->expr.len == 2u &&
+            expr->expr.elems[1]->kind == ATOM_SYMBOL
+            ? cetta_session_enable_experiment(active_eval_session(),
+                atom_symbol_bytes(expr->expr.elems[1]))
+            : CETTA_EXPERIMENT_UNKNOWN;
         g_ai_failure_values =
             (active_eval_session()->experiments & CETTA_EXPERIMENT_FAILURE_VALUES) != 0u;
-        result_set_add(rs, enabled ? atom_expr(a, NULL, 0u)
+        bool unavailable = admission == CETTA_EXPERIMENT_UNSUPPORTED_HOST;
+        result_set_add(rs, admission == CETTA_EXPERIMENT_ENABLED ? atom_expr(a, NULL, 0u)
             : atom_expr3(a, atom_symbol(a, "Error"), expr,
-                atom_expr2(a, atom_symbol(a, "Unsolvable"),
-                    atom_symbol(a, "UnknownExperimentOrMalformedDeclaration"))));
+                atom_expr2(a, atom_symbol(a, unavailable ? "Forbidden" : "Unsolvable"),
+                    atom_symbol(a, unavailable ? "ExperimentUnavailableInHost"
+                        : "UnknownExperimentOrMalformedDeclaration"))));
         if (outcome) outcome->petta_raise_known = true;
         return;
     }

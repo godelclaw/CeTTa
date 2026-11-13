@@ -1587,6 +1587,12 @@ static bool endpoint_resolve(CettaCliEndpoint *endpoint, const char *role,
         }
         endpoint->profile_name = "ai";
     }
+    if (endpoint->lang->id == CETTA_LANGUAGE_AI && endpoint->profile_name &&
+        strcmp(endpoint->profile_name, "ai") &&
+        strcmp(endpoint->profile_name, "extended")) {
+        fputs("error: ai currently composes with the default or extended profile\n", stderr);
+        return false;
+    }
     if (endpoint->profile_name) {
         if (!cetta_language_has_named_profiles(endpoint->lang->id)) {
             fprintf(stderr, "error: %s language '%s' has no named profiles\n",
@@ -1975,7 +1981,7 @@ static void print_usage(FILE *out) {
     fputs("       cetta --lang hol-light [--profile <standard|open|sealed>] <proof.holr>\n", out);
     fputs("       note: hol aliases hol-light; HOLR is a checked proof stream, not OCaml source\n", out);
     fputs("       cetta --lang petta <file.metta> # corrected stable PeTTa\n", out);
-    fputs("       cetta --lang petta --profile ai <file.metta> # extended syntax, sealed sorts, failure values\n", out);
+    fputs("       cetta --lang petta --profile ai <file.metta> # extended syntax, sealed sorts; experiments opt in\n", out);
     fputs("       cetta --lang ai <file.metta> # PeTTa extended; enable named experiments with !(ai:experiment failure-values)\n", out);
 #if CETTA_BUILD_WITH_PETTA_TYPECHECK_V2
     fputs("       cetta --lang petta@1.1 [--strict|--strict-det] <file.metta>\n", out);
@@ -3235,7 +3241,17 @@ static int cetta_main(int argc, char **argv) {
                 print_usage(stderr);
                 return 1;
             }
-            current_endpoint->profile_name = argv[++i];
+            const char *requested = argv[++i];
+            const char *previous = current_endpoint->profile_name;
+            if ((current_endpoint->ai_profile && strcmp(requested, "ai") &&
+                    strcmp(requested, "extended")) ||
+                (!strcmp(requested, "ai") && previous &&
+                    strcmp(previous, "ai") && strcmp(previous, "extended"))) {
+                fputs("error: ai currently composes with the default or extended profile\n", stderr);
+                free(inline_buf);
+                return 2;
+            }
+            current_endpoint->profile_name = requested;
             if (!strcmp(current_endpoint->profile_name, "ai"))
                 current_endpoint->ai_profile = true;
             continue;
