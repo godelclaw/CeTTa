@@ -66,9 +66,10 @@
                      (if $ai "provider_request_ai.metta" "provider_request_cetta.metta")))))
      (str:join "" ((if $ai "!(ai:experiment failure-values) " "")
        "!(import! &self (library system)) !(import! &self " (repr $module) ") "
-       "(= (ap:repeat $left $last) (if (== $left 0) $last (let $next "
-       $expression " (ap:repeat (- $left 1) $next)))) "
-       "!(let $warm " $expression " (let $start (system:monotonic-ns) "
+       "(= (ap:step) " $expression ") "
+       "(= (ap:repeat $left $last) (if (== $left 0) $last (let $next (ap:step) "
+       "(ap:repeat (- $left 1) $next)))) "
+       "!(let $warm (ap:step) (let $start (system:monotonic-ns) "
        "(let $last (ap:repeat " (repr $repetitions) " $warm) "
        "(let $elapsed (- (system:monotonic-ns) $start) "
        "(PreparationMeasurement (str:sha256 (repr $last)) $elapsed)))))"))))
