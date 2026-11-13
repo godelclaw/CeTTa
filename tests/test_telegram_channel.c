@@ -124,10 +124,13 @@ static void lane(const char *name,const char *expected) {
         fprintf(stderr,"lane %s: ",name); if (v) atom_print(v,stderr); fprintf(stderr,"\nexpected: %s\n",expected); abort();
     }
 }
-/* Publish an accepted worker.request and check its exact observation text. */
+/* Publish an accepted worker.request as the scheduler does and check its exact
+ * observation text. An operator's command or tap, asked through the channel,
+ * is control work. */
 static void published(const char *request,const char *expected,char task[65]) {
-    admission(request,TELEGRAM_WORKER);
-    assert(cetta_worker_register(store,request,"brain",task)==DURABLE_OK);
+    bool control=!strncmp(expected,"[\"command\",",11) || !strncmp(expected,"[\"callback\",",12);
+    admission(request,control?TELEGRAM_CONTROL_WORKER:TELEGRAM_WORKER);
+    assert((control?cetta_worker_register_control:cetta_worker_register)(store,request,"brain",task)==DURABLE_OK);
     char key[140]; snprintf(key,sizeof(key),"brain/%s",task); Atom *v=record("host.worker-tasks",key);
     if (!v || v->kind!=ATOM_GROUNDED || v->ground.gkind!=GV_STRING || strcmp(v->ground.sval,expected)) {
         fprintf(stderr,"observation: "); if (v) atom_print(v,stderr); fprintf(stderr,"\nexpected: %s\n",expected); abort();
