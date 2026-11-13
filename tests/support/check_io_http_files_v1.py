@@ -273,7 +273,7 @@ def main():
                     f'(io:submit (http:request "POST" "{base}/upload" () '
                     f'(http:multipart (http:field "caption" "a caption") (http:field "chat_id" 123456789) '
                     f'(http:field "blank" "") '
-                    f'(http:file "document" "{upload}" "report.pdf" "application/pdf") '
+                    f'(http:file "document" "{upload}" "report.pdf" "application/vnd.cetta-check") '
                     f'(http:file "notes" "{notes}")) 10000 100000))',
                     "(io:wait 10000)"], env)
                 record = peer.received[before] if len(peer.received) > before else {}
@@ -281,7 +281,7 @@ def main():
                 expected = [("caption", None, None, b"a caption"),
                             ("chat_id", None, None, b"123456789"),
                             ("blank", None, None, b""),
-                            ("document", "report.pdf", "application/pdf", DOCUMENT),
+                            ("document", "report.pdf", "application/vnd.cetta-check", DOCUMENT),
                             ("notes", "notes.txt", "text/plain", b"plain notes\n")]
                 got = [(p["name"], p["filename"], p["type"], p["data"]) for p in parts]
                 check(dialect, "multipart round trip", out[1:2] == ['(http:response 200 "ok")'] and
