@@ -16202,6 +16202,9 @@ static void eval_delayed_outcome_for_caller_answers(Space *s, Arena *a,
     }
 
     if (atom_is_legacy_empty_sentinel(preview) || outcome_atom_is_error(a, seed)) {
+        if (eval_failure_values() && he_inert_result_cast(s, a, declared_type,
+                seed, preserve_bindings, outcomes, NULL))
+            return;
         seed->result_form = CETTA_CALL_RESULT_COMPLETED_VALUE;
         outcome_set_add_prefixed_outcome(a, outcomes, seed, NULL, preserve_bindings);
         return;
@@ -40802,7 +40805,7 @@ static __attribute__((noinline)) void metta_eval_bind_typed_core(
         return;
     }
 
-    if (atom_is_legacy_empty_sentinel(atom) || atom_is_error(atom)) {
+    if (atom_is_legacy_empty_sentinel(atom) || (!eval_failure_values() && atom_is_error(atom))) {
         outcome_set_add(os, atom, env);
         return;
     }
@@ -105323,7 +105326,11 @@ tail_call: ;
         return;
     }
     if (eval_failure_values() && atom_is_he_evaluated(atom)) {
-        outcome_set_add(os, atom, CURRENT_ENV);
+        if (language_id == CETTA_LANGUAGE_HE)
+            he_answer_evaluated_into(s, a, atom, etype, true, preserve_bindings,
+                CURRENT_ENV, os);
+        else
+            outcome_set_add(os, atom, CURRENT_ENV);
         return;
     }
     if (atom_is_error(atom) || atom_is_legacy_empty_sentinel(atom)) {
