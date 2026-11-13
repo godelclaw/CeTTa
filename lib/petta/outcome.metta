@@ -64,12 +64,20 @@
 
 ; A failure reified as inert data, and reflected back.  (Failed WHERE KIND
 ; DETAIL) is no failure: it can be compared, stored and passed in any dialect.
+;
+; The held forms (out:reify, out:with, out:let*, out:let, out:if, out:and,
+; out:or, out:recover, out:or-else, out:catch, out:one, out:first) are
+; translator rules: each use is replaced, where the code using it is
+; translated, by the let, if and case a person would write, so it costs what
+; those cost.  The variables named $out:... are the rules' own, and every use
+; gets fresh ones.
 (: out:reify (-> Atom %Undefined%))
-(= (out:reify $source)
-   (let $value (catch (eval $source))
-     (if (out:failed? $value)
-       (Failed (out:where $value) (out:kind $value) (out:detail $value))
-       $value)))
+(= (out:reify $source) (quote (out:reified (catch $source))))
+!(add-translator-rule! out:reify)
+(= (out:reified $value)
+   (if (out:failed? $value)
+     (Failed (out:where $value) (out:kind $value) (out:detail $value))
+     $value))
 (= (out:reflect $value)
    (case $value
      (((Failed $where $kind $detail) (out:fail $kind $where $detail))
@@ -87,11 +95,18 @@
          (let $tail (cdr-atom $values) (out:first-failure $tail))))))
 
 ; Check computed values, then compute the held body: the first failing value
-; is the result, and the body does not run.
+; is the result, and the body does not run.  Name the values with variables,
+; so each is read once.
 (: out:with (-> Atom Atom %Undefined%))
 (= (out:with $values $body)
-   (let $failure (out:first-failure $values)
-     (if (== $failure ()) (eval $body) $failure)))
+   (if (== $values ()) (quote $body)
+     (let* (($value (car-atom $values)) ($rest (cdr-atom $values)))
+       (quote (let $out:v $value
+                (case $out:v
+                  (((Error $out:w $out:r) $out:v) ((Error $out:e) $out:v)
+                   ((Error $out:a $out:b $out:c) $out:v)
+                   ($out:ok (out:with $rest $body)))))))))
+!(add-translator-rule! out:with)
 
 ; Sequential binding that stops at the first failure.  A pattern that does
 ; not match its value is a failure (no-match VALUE), never a silent zero, so a
@@ -99,26 +114,30 @@
 ; no answers leaves no answers: zero is not a failure.
 (: out:let* (-> Atom Atom %Undefined%))
 (= (out:let* $bindings $body)
-   (if (== $bindings ()) (eval $body)
-     (let* (($binding (car-atom $bindings))
+   (if (== $bindings ()) (quote $body)
+     (let* (($binding (car-atom $bindings)) ($rest (cdr-atom $bindings))
             ($pattern (car-atom $binding))
-            ($source (car-atom (cdr-atom $binding)))
-            ($value (eval $source)))
-       (if (out:failed? $value) $value
-         (let $rest (cdr-atom $bindings)
-           (case $value
-             (($pattern (out:let* $rest $body))
-              ($other (out:unsolvable out:let* (no-match $other))))))))))
+            ($source (car-atom (cdr-atom $binding))))
+       (quote (let $out:v $source
+                (case $out:v
+                  (((Error $out:w $out:r) $out:v) ((Error $out:e) $out:v)
+                   ((Error $out:a $out:b $out:c) $out:v)
+                   ($pattern (out:let* $rest $body))
+                   ($out:o (out:unsolvable out:let* (no-match $out:o))))))))))
+!(add-translator-rule! out:let*)
 (: out:let (-> Atom Atom Atom %Undefined%))
 (= (out:let $pattern $source $body)
-   (let $value (eval $source)
-     (if (out:failed? $value) $value
-       (case $value
-         (($pattern (eval $body))
-          ($other (out:unsolvable out:let (no-match $other))))))))
+   (quote (let $out:v $source
+            (case $out:v
+              (((Error $out:w $out:r) $out:v) ((Error $out:e) $out:v)
+               ((Error $out:a $out:b $out:c) $out:v)
+               ($pattern $body)
+               ($out:o (out:unsolvable out:let (no-match $out:o))))))))
+!(add-translator-rule! out:let)
 
 ; Compute held expressions in order: their values as a list, or the first
-; failure, after which nothing more is computed.
+; failure, after which nothing more is computed.  This one is a function over
+; held expressions, evaluated when it runs.
 (: out:all (-> Atom %Undefined%))
 (= (out:all $sources) (out:all-onto $sources ()))
 (: out:all-onto (-> Atom Atom %Undefined%))
@@ -154,25 +173,31 @@
 ; verdict is unresolved work, never a refutation.
 (: out:if (-> Atom Atom Atom %Undefined%))
 (= (out:if $condition $then $else)
-   (let $verdict (eval $condition)
-     (if (== $verdict True) (eval $then)
-       (if (== $verdict False) (eval $else)
-         (out:no-verdict out:if $verdict)))))
+   (quote (let $out:c $condition
+            (if (== $out:c True) $then
+              (if (== $out:c False) $else (out:no-verdict out:if $out:c))))))
+!(add-translator-rule! out:if)
 (= (out:no-verdict $where $verdict)
    (if (out:failed? $verdict) $verdict
      (out:incomplete $where (NoVerdict $verdict))))
 (: out:and (-> Atom %Undefined%))
 (= (out:and $conditions)
-   (if (== $conditions ()) True
-     (let* (($first (car-atom $conditions)) ($verdict (eval $first)))
-       (if (== $verdict True) (let $rest (cdr-atom $conditions) (out:and $rest))
-         (if (== $verdict False) False (out:no-verdict out:and $verdict))))))
+   (if (== $conditions ()) (quote True)
+     (let* (($first (car-atom $conditions)) ($rest (cdr-atom $conditions)))
+       (quote (let $out:c $first
+                (if (== $out:c True) (out:and $rest)
+                  (if (== $out:c False) False
+                    (out:no-verdict out:and $out:c))))))))
+!(add-translator-rule! out:and)
 (: out:or (-> Atom %Undefined%))
 (= (out:or $conditions)
-   (if (== $conditions ()) False
-     (let* (($first (car-atom $conditions)) ($verdict (eval $first)))
-       (if (== $verdict False) (let $rest (cdr-atom $conditions) (out:or $rest))
-         (if (== $verdict True) True (out:no-verdict out:or $verdict))))))
+   (if (== $conditions ()) (quote False)
+     (let* (($first (car-atom $conditions)) ($rest (cdr-atom $conditions)))
+       (quote (let $out:c $first
+                (if (== $out:c False) (out:or $rest)
+                  (if (== $out:c True) True
+                    (out:no-verdict out:or $out:c))))))))
+!(add-translator-rule! out:or)
 ; A requirement: True, or the failure it names.
 (= (out:require $condition $kind $where $detail)
    (if (== $condition True) True
@@ -183,24 +208,36 @@
 ; and becomes its (Error ...) value first.
 (: out:recover (-> Atom Atom Atom %Undefined%))
 (= (out:recover $source $failure $handler)
-   (let $value (catch (eval $source))
-     (if (out:failed? $value) (let $failure $value (eval $handler)) $value)))
+   (quote (let $out:v (catch $source)
+            (case $out:v
+              (((Error $out:w $out:r) (let $failure $out:v $handler))
+               ((Error $out:e) (let $failure $out:v $handler))
+               ((Error $out:a $out:b $out:c) (let $failure $out:v $handler))
+               ($out:ok $out:ok))))))
+!(add-translator-rule! out:recover)
 (: out:or-else (-> Atom Atom %Undefined%))
 (= (out:or-else $source $default)
-   (let $value (catch (eval $source))
-     (if (out:failed? $value) (eval $default) $value)))
+   (quote (let $out:v (catch $source)
+            (case $out:v
+              (((Error $out:w $out:r) $default) ((Error $out:e) $default)
+               ((Error $out:a $out:b $out:c) $default)
+               ($out:ok $out:ok))))))
+!(add-translator-rule! out:or-else)
 (: out:catch (-> Atom %Undefined%))
-(= (out:catch $source) (catch (eval $source)))
+(= (out:catch $source) (quote (catch $source)))
+!(add-translator-rule! out:catch)
 
 ; Zero observed as data.  out:one requires exactly one answer; out:first
 ; reports a completed empty answer set as (Empty SCOPE).
 (: out:one (-> Atom Atom %Undefined%))
-(= (out:one $source $where)
-   (let $answers (collapse (eval $source))
-     (if (== $answers ()) (out:unsolvable $where no-answer)
-       (if (== (size-atom $answers) 1) (car-atom $answers)
-         (out:unsolvable $where (ambiguous (size-atom $answers)))))))
+(= (out:one $source $where) (quote (out:one-of (collapse $source) $where)))
+!(add-translator-rule! out:one)
+(= (out:one-of $answers $where)
+   (if (== $answers ()) (out:unsolvable $where no-answer)
+     (if (== (size-atom $answers) 1) (car-atom $answers)
+       (out:unsolvable $where (ambiguous (size-atom $answers))))))
 (: out:first (-> Atom Atom %Undefined%))
-(= (out:first $source $scope)
-   (let $answers (collapse (eval $source))
-     (if (== $answers ()) (Empty $scope) (car-atom $answers))))
+(= (out:first $source $scope) (quote (out:first-of (collapse $source) $scope)))
+!(add-translator-rule! out:first)
+(= (out:first-of $answers $scope)
+   (if (== $answers ()) (Empty $scope) (car-atom $answers)))

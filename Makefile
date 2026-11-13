@@ -19980,7 +19980,8 @@ NORMAL_TEST_TARGETS := \
 	test-petta-hyperpose-named-state \
 	test-prepared-pure-refusal-growth \
 	test-python-exit-finalization \
-	test-petta-translator-expansion
+	test-petta-translator-expansion \
+	test-outcome-library
 
 .PHONY: test test-all test-test-target-scope
 test: $(NORMAL_TEST_TARGETS)
@@ -53938,3 +53939,35 @@ test-petta-translator-expansion: $(BIN)
 		exit 1; \
 	fi; \
 	echo "PASS: translator rules expand once and answer as at each call (3 routes x 2 profiles)"
+
+# lib/outcome in PeTTa (its held forms are translator rules, expanded once or
+# run at each call) and in HE.
+.PHONY: test-outcome-library
+test-outcome-library: $(BIN)
+	@for profile in default extended ai; do \
+		flags="--lang petta"; [ $$profile = default ] || flags="$$flags --profile $$profile"; \
+		for mode in 1 0; do \
+			actual=$$(CETTA_PETTA_TRANSLATOR_EXPANSION=$$mode \
+				$(CETTA_BIN_INVOKE) $$flags tests/outcome_library.metta 2>&1); \
+			if [ "$$actual" != "$$(cat tests/outcome_library.petta.expected)" ]; then \
+				echo "FAIL: lib/outcome (petta $$profile, expansion=$$mode)"; \
+				diff -u tests/outcome_library.petta.expected <(printf '%s\n' "$$actual") | head -20; \
+				exit 1; \
+			fi; \
+		done; \
+	done; \
+	declined=$$(CETTA_PETTA_TRANSLATOR_TRACE=1 $(CETTA_BIN_INVOKE) --lang petta \
+		tests/outcome_library.metta 2>&1 >/dev/null | grep -c declined); \
+	if [ "$$declined" != 0 ]; then \
+		echo "FAIL: lib/outcome held forms left to the per-call translation ($$declined)"; \
+		exit 1; \
+	fi; \
+	for profile in he extended; do \
+		actual=$$($(CETTA_BIN_INVOKE) --lang he --profile $$profile tests/outcome_library_he.metta 2>&1); \
+		if [ "$$actual" != "$$(cat tests/outcome_library_he.he.expected)" ]; then \
+			echo "FAIL: lib/outcome (he $$profile)"; \
+			diff -u tests/outcome_library_he.he.expected <(printf '%s\n' "$$actual") | head -20; \
+			exit 1; \
+		fi; \
+	done; \
+	echo "PASS: lib/outcome (petta default, extended and ai, expanded and per call; he, extended)"
