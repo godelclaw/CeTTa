@@ -1,0 +1,5 @@
+[()]
+[registered]
+[3]
+python output buffered before exit
+python atexit handler ran

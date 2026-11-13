@@ -19978,7 +19978,8 @@ NORMAL_TEST_TARGETS := \
 	test-lang-chr \
 	test-provenance \
 	test-petta-hyperpose-named-state \
-	test-prepared-pure-refusal-growth
+	test-prepared-pure-refusal-growth \
+	test-python-exit-finalization
 
 .PHONY: test test-all test-test-target-scope
 test: $(NORMAL_TEST_TARGETS)
@@ -52824,6 +52825,27 @@ ifeq ($(ENABLE_PYTHON),1)
 	@$(CETTA_SCRIPT_RUN_ENV) python3 tests/support/check_python_callback_completion.py ./$(BIN)
 else
 	@echo "SKIP: Python callback completion (Python support disabled)"
+endif
+
+# A run that ends normally finalizes its Python interpreter in every dialect:
+# Python's buffered output is written and its atexit handlers run, after the
+# last answer. An exit path that skipped finalization lost both silently.
+.PHONY: test-python-exit-finalization
+test-python-exit-finalization: $(BIN)
+ifeq ($(ENABLE_PYTHON),1)
+	@for lang in petta he; do \
+		expected=tests/python_exit_finalization.$$lang.expected; \
+		status=0; \
+		actual=$$($(CETTA_BIN_INVOKE) --lang $$lang tests/python_exit_finalization.metta 2>&1) || status=$$?; \
+		if [ $$status -ne 0 ] || [ "$$actual" != "$$(cat $$expected)" ]; then \
+			echo "FAIL: Python exit finalization ($$lang, status $$status)"; \
+			diff -u "$$expected" <(printf '%s\n' "$$actual") | head -20; \
+			exit 1; \
+		fi; \
+	done; \
+	echo "PASS: Python exit finalization (petta, he)"
+else
+	@echo "SKIP: Python exit finalization (Python support disabled)"
 endif
 
 # A prepared-call refusal is recorded once and a request it does not settle
