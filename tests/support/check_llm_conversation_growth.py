@@ -4,14 +4,18 @@
 Each protocol's conversation is built newest first and put in order once,
 so encoding n, 4n and 16n messages takes about 4x per step. An encoder
 that walks or copies the conversation built so far for each message takes
-about 16x per step. Three shapes are timed in PeTTa, the dialect agents
+about 16x per step. Four shapes are timed in PeTTa, the dialect agents
 run: an agent's working conversation (a question, a reply with two tool
 calls, their two results), one reply with n tool calls answered by n
-consecutive tool results (one Anthropic turn), and n leading system
-messages. The negative control appends each message's items to the end of
-the items so far, as the Responses encoder once did; the check must reject
-it. Times are the fastest of three in-process encodes, so process start,
-library import and page faults do not count."""
+consecutive tool results (one Anthropic turn), n leading system messages,
+and a transcript whose user messages come in pairs between replies (each
+pair one Anthropic turn), sent with conversation caching to Anthropic.
+Sizes run to 6,400 messages: a copy per message that is small next to the
+encoding's own work shows only past 1,600. The negative control appends
+each message's items to the end of the items so far, as the Responses
+encoder once did; the check must reject it. Times are the fastest of three
+in-process encodes, so process start, library import and page faults do
+not count."""
 import json
 import os
 import re
@@ -19,7 +23,7 @@ import subprocess
 import sys
 import tempfile
 
-SIZES = (100, 400, 1600)
+SIZES = (400, 1600, 6400)
 CONTROL_SIZES = (100, 400)
 LINEAR_STEP = 8.0   # a 4x step: linear is about 4, quadratic about 16
 REPEATS = 3
@@ -54,7 +58,15 @@ def system(n):
         {"role": "user", "content": "go"}]
 
 
-SHAPES = {"agent": agent, "results": results, "system": system}
+def pairs(n):
+    return [{"role": "system", "content": "S"}] + [
+        {"role": "assistant" if k % 3 == 0 else "user",
+         "content": f"message {k} with some ordinary transcript text, Δ ✓"} for k in range(1, n)]
+
+
+SHAPES = {"agent": agent, "results": results, "system": system, "pairs": pairs}
+# Anthropic marks the conversation for caching in this shape.
+CACHED = {"pairs"}
 
 
 def anthropic_turns(messages):
@@ -104,6 +116,8 @@ def program(library, protocol, text, control):
 def measure(binary, library, directory, protocol, shape, n, control=False):
     request = {"model": "m", "max_tokens": 64, "messages": SHAPES[shape](n),
                "role_policy": "merge-system-developer"}
+    if protocol == "anthropic" and shape in CACHED:
+        request["cache_messages"] = True
     path = os.path.join(directory, f"{protocol}-{shape}-{n}.metta")
     with open(path, "w") as handle:
         handle.write(program(library, protocol, json.dumps(request), control))
