@@ -75,7 +75,7 @@ static bool decode(const CettaTelegramActionPolicy *policy, const Atom *p, Actio
         (policy->methods & ~15u) || !p || p->kind!=ATOM_EXPR || p->expr.len<4) return false;
     Atom **v=p->expr.elems; int64_t version;
     if (!integer(v[1],&version) || version!=1 || !integer(v[2],&a->chat) || !a->chat) return false;
-    bool allowed=false;
+    bool allowed=policy->private_chats && a->chat>0;
     for (size_t i=0;i<policy->chat_count;++i) if (policy->chats[i]==a->chat) allowed=true;
     if (!allowed) return false;
     if (atom_is_symbol(v[0],"telegram:send-text") && (p->expr.len==7 || p->expr.len==8)) {

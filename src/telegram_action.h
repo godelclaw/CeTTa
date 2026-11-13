@@ -7,6 +7,7 @@ typedef struct {
     const int64_t *chats;
     size_t chat_count; /* 1..128 explicit numeric destinations */
     unsigned methods; /* positive permission mask, no administrative methods */
+    bool private_chats; /* also every private chat: a positive chat id is a user */
 } CettaTelegramActionPolicy;
 
 /* Native validation/marshalling for channel telegram.action, handler 1.

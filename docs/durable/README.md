@@ -669,7 +669,10 @@ retries or advances an offset after a hold by itself.
 The MeTTa policy preserves complete canonical JSON updates, classifies known
 message types and callbacks, and retains unknown update types as unsupported.
 Chat authorization and sender role are separate: an operator ID never bypasses
-the chat allowlist. Inline callbacks without a chat remain unsupported. A
+the chat allowlist. The service sets `allow-private` from `--allow-private`:
+it then admits every private chat, not only the listed ones, and the action
+policy lets the agent answer in any private chat (a positive chat id is a
+user's); groups stay as listed. Inline callbacks without a chat remain unsupported. A
 routed message's value is:
 
 ```metta

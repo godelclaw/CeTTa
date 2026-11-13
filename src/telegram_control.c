@@ -34,6 +34,7 @@ bool cetta_telegram_control_lane(const CettaTelegramAgent *a, const char *lane) 
     if (errno || end==part || *end || thread<0) return false;
     char canonical[64]; snprintf(canonical,sizeof(canonical),"%" PRId64 ".%" PRId64,chat,thread);
     if (strcmp(lane,canonical)) return false;
+    if (a->actions->private_chats && chat>0) return true;
     for (size_t i=0;i<a->actions->chat_count;++i) if (a->actions->chats[i]==chat) return true;
     return false;
 }

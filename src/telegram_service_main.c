@@ -35,7 +35,7 @@ typedef struct {
     int64_t operators[16]; size_t operator_count;
     int64_t peers[128]; size_t peer_count;
     int64_t initial_offset;
-    bool run, check, channel, program_seen, offset_seen;
+    bool run, check, channel, program_seen, offset_seen, allow_private;
 } Config;
 static volatile sig_atomic_t stopped;
 static void stop(int sig) { (void)sig; stopped=1; }
@@ -172,6 +172,7 @@ static void identity_step(Identity *d, const CettaTelegramCredential *credential
 static void usage(void) {
     puts("Usage: cetta-telegram-service (--check | --run) --root DIR --state-dir DIR\n"
          "       --worker NAME [--chat ID ...] [--peer ID ...] [--operator ID ...]\n"
+         "       [--allow-private]\n"
          "       [--program agent|channel] [--initial-offset N] [--poll-limit 1..100]\n"
          "       [--commands FILE] [--command-deadline-ms N]\n"
          "       (--credential-file FILE | --credential-fd FD) [--listener-fd FD]\n"
@@ -180,7 +181,9 @@ static void usage(void) {
          "--check loads the fixed policy and validates configuration without opening\n"
          "the journal, consuming the listener or constructing any transport.\n"
          "--run requires a private Unix seqpacket listener: explicit fd or one\n"
-         "systemd activation fd. The supervisor owns the socket's lifetime.");
+         "systemd activation fd. The supervisor owns the socket's lifetime.\n"
+         "--allow-private admits every private chat, not only the listed ones, and\n"
+         "lets the agent answer in them.");
 }
 static bool arguments(int argc, char **argv, Config *c) {
     *c=(Config){.token_fd=-1,.listener=-1,.operator_fd=-1}; unsigned seen=0;
@@ -190,6 +193,7 @@ static bool arguments(int argc, char **argv, Config *c) {
     for (int i=1;i<argc;++i) {
         if (!strcmp(argv[i],"--run")) { if (c->run || c->check) return false; c->run=true; continue; }
         if (!strcmp(argv[i],"--check")) { if (c->run || c->check) return false; c->check=true; continue; }
+        if (!strcmp(argv[i],"--allow-private")) { if (c->allow_private) return false; c->allow_private=true; continue; }
         if (++i==argc) return false;
         const char *option=argv[i-1], *value=argv[i]; int64_t n;
         if (!strcmp(option,"--chat")) {
@@ -397,12 +401,13 @@ int main(int argc,char **argv) {
     Atom *operators[16]; for (size_t i=0;i<c.operator_count;++i) operators[i]=atom_int(&persistent,c.operators[i]);
     Atom *peers[128]; for (size_t i=0;i<c.peer_count;++i) peers[i]=atom_int(&persistent,c.peers[i]);
     Atom *args[]={atom_symbol(&persistent,"telegram:policy"),atom_int(&persistent,1),atom_expr(&persistent,ids,c.count),
-        atom_bool(&persistent,false),atom_expr(&persistent,operators,c.operator_count),atom_expr(&persistent,peers,c.peer_count)};
+        atom_bool(&persistent,c.allow_private),atom_expr(&persistent,operators,c.operator_count),atom_expr(&persistent,peers,c.peer_count)};
     Atom *policy=atom_expr(&persistent,args,6);
     /* The channel client edits and deletes its own messages; ownership is
      * recorded in its receipts. The per-message agent only replies. */
     CettaTelegramActionPolicy actions={c.chats,c.count,
-        c.channel?TELEGRAM_SEND_TEXT|TELEGRAM_EDIT_TEXT|TELEGRAM_DELETE_MESSAGE|TELEGRAM_ANSWER_CALLBACK:TELEGRAM_SEND_TEXT};
+        c.channel?TELEGRAM_SEND_TEXT|TELEGRAM_EDIT_TEXT|TELEGRAM_DELETE_MESSAGE|TELEGRAM_ANSWER_CALLBACK:TELEGRAM_SEND_TEXT,
+        c.allow_private};
     if (c.check) {
         printf("cetta-telegram: configuration and trusted %s policy valid; dispatch disabled\n",trusted.version);
         result=0; goto done;

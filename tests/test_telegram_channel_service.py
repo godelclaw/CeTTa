@@ -29,10 +29,10 @@ class ChannelPeer(Peer):
         self.updates, self.sent, self.message = [], [], 100
         super().__init__(*args)
 
-    def add(self, update, chat, sender):
+    def add(self, update, chat, sender, kind='private'):
         with self.lock:
             self.updates.append({'update_id': update, 'message': {'message_id': update,
-                'chat': {'id': chat, 'type': 'private'}, 'from': {'id': sender}, 'text': f'message {update}'}})
+                'chat': {'id': chat, 'type': kind}, 'from': {'id': sender}, 'text': f'message {update}'}})
 
     def receipt(self, connection, method, path, body):
         assert method == 'POST'
@@ -114,7 +114,10 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-channel-') as temp:
             '--credential-file', str(token), '--program', 'channel']
     p = subprocess.run([BIN, '--check', *base], capture_output=True, text=True, timeout=12)
     assert p.returncode == 0 and 'telegram-channel/1' in p.stdout, (p.stdout, p.stderr)
-    for bad in (['--program', 'channel'], ['--program', 'other'], ['--operator', '0']):
+    p = subprocess.run([BIN, '--check', *base, '--allow-private'], capture_output=True, text=True, timeout=12)
+    assert p.returncode == 0, (p.stdout, p.stderr)
+    for bad in (['--program', 'channel'], ['--program', 'other'], ['--operator', '0'],
+                ['--allow-private', '--allow-private']):
         p = subprocess.run([BIN, '--check', *base, *bad], capture_output=True, text=True, timeout=12)
         assert p.returncode == 64, (bad, p.returncode)
 
@@ -138,6 +141,49 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-channel-') as temp:
     finally:
         proc.send_signal(signal.SIGTERM); proc.communicate(timeout=10); listener.close()
     print('refused connection: reported not-sent and the chat continues')
+
+    # --allow-private admits every private chat, not only the listed ones, and
+    # lets the agent answer there. A group outside the list stays out either way.
+    for allow in (False, True):
+        state = root / f'state-private-{int(allow)}'; state.mkdir(mode=0o700)
+        db = state / 'journal.db'
+        with peer('http/1.1', None, None, ChannelPeer) as (server, origin):
+            path = root / f'private-{int(allow)}.sock'
+            listener = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+            listener.bind(str(path)); listener.listen(16); path.chmod(0o600)
+            args = ['--run', '--root', str(ROOT), '--state-dir', str(state), '--worker', 'fixture',
+                    '--chat', '42', '--program', 'channel', '--credential-file', str(token),
+                    '--mock-origin', origin, '--listener-fd', str(listener.fileno())]
+            proc = subprocess.Popen([BIN, *args, *(['--allow-private'] if allow else [])],
+                                    pass_fds=(listener.fileno(),), stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, text=True)
+            try:
+                server.add(1, 555, 555)
+                server.add(2, -900, 556, 'supergroup')
+                server.add(3, 42, 5)
+                wait(proc, lambda: len(rows(db, 'host.received')) == 3, 'three updates read')
+                lanes = []
+                while True:
+                    code, task, text = rpc(path, NEXT)
+                    if code == IDLE:
+                        break
+                    lanes.append(json.loads(text)[1]); ack(path, task)
+                assert lanes == (['555.0', '42.0'] if allow else ['42.0']), lanes
+                assert submit(path, '555.0.00000000000000000001', [['send', 'welcome', 'plain']]) == STORED
+                task, receipt = next_task(proc, path, 'private reply')
+                if allow:
+                    assert receipt[:4] == ['delivery', '555.0.00000000000000000001', 0, 1] and receipt[4][0] == 'delivered', receipt
+                else:
+                    assert receipt == ['rejected', '555.0.00000000000000000001', 'action-not-permitted'], receipt
+                ack(path, task)
+                assert submit(path, '-900.0.00000000000000000001', [['send', 'group', 'plain']]) == STORED
+                task, receipt = next_task(proc, path, 'group reply')
+                assert receipt == ['rejected', '-900.0.00000000000000000001', 'action-not-permitted'], receipt
+                ack(path, task)
+                assert server.sent == ([(555, 'welcome')] if allow else []), server.sent
+            finally:
+                proc.send_signal(signal.SIGTERM); proc.communicate(timeout=10); listener.close()
+    print('allow-private: every private chat admitted and answerable; unlisted groups still refused')
 
     for i, protocol in enumerate(('http/1.1', 'http/1.1', 'h2')):
         state = root / f'state-{i}'; state.mkdir(mode=0o700)
