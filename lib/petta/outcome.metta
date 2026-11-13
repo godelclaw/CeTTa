@@ -79,8 +79,10 @@
    (let $failure (out:first-failure $values)
      (if (== $failure ()) (eval $body) $failure)))
 
-; Sequential binding that stops at the first failure.  A binding whose value
-; has no answers leaves no answers: zero is not a failure.
+; Sequential binding that stops at the first failure.  A pattern that does
+; not match its value is a failure (no-match VALUE), never a silent zero, so a
+; name bound twice to different values is reported.  A binding whose value has
+; no answers leaves no answers: zero is not a failure.
 (: out:let* (-> Atom Atom %Undefined%))
 (= (out:let* $bindings $body)
    (if (== $bindings ()) (eval $body)
@@ -90,11 +92,16 @@
             ($value (eval $source)))
        (if (out:failed? $value) $value
          (let $rest (cdr-atom $bindings)
-           (let $pattern $value (out:let* $rest $body)))))))
+           (case $value
+             (($pattern (out:let* $rest $body))
+              ($other (out:unsolvable out:let* (no-match $other))))))))))
 (: out:let (-> Atom Atom Atom %Undefined%))
 (= (out:let $pattern $source $body)
    (let $value (eval $source)
-     (if (out:failed? $value) $value (let $pattern $value (eval $body)))))
+     (if (out:failed? $value) $value
+       (case $value
+         (($pattern (eval $body))
+          ($other (out:unsolvable out:let (no-match $other))))))))
 
 ; Compute held expressions in order: their values as a list, or the first
 ; failure, after which nothing more is computed.

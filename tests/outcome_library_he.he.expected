@@ -4,6 +4,7 @@
 (ran 1)
 (ran second)
 (ran second)
+(ran pair)
 [()]
 [(True)]
 [(Forbidden)]
@@ -34,3 +35,7 @@
 [((Error lookup (Unsolvable no-answer)))]
 [((Error lookup (Unsolvable (ambiguous 2))))]
 [((Empty (Region a b)))]
+[((Error out:let* (Unsolvable (no-match 2))))]
+[((Error out:let* (Unsolvable (no-match (Q 1)))))]
+[(6)]
+[((Q P))]

@@ -68,3 +68,8 @@
 !(collapse (out:first (superpose ()) (Region a b)))
 !(collapse (out:first (superpose (5 6)) (Region a b)))
 !(collapse (out:absent? (out:first (superpose ()) here)))
+
+; A binding pattern that does not match is a failure, not a silent zero.
+!(collapse (out:let* (($x 1) ($x 2)) $x))
+!(collapse (out:let* (((P $y) (Q 1))) $y))
+!(collapse (out:let (P $y) (P 5) (+ $y 1)))

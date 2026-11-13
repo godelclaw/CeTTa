@@ -45,3 +45,8 @@
 !(collapse (out:one (superpose ()) lookup))
 !(collapse (out:one (superpose (1 2)) lookup))
 !(collapse (out:first (superpose ()) (Region a b)))
+
+!(collapse (out:let* (($x 1) ($x 2)) $x))
+!(collapse (out:let* (((P $y) (Q 1))) $y))
+!(collapse (out:let (P $y) (P 5) (+ $y 1)))
+!(collapse (out:let* ((($u $v) (seen pair (P Q)))) ($v $u)))

@@ -51,3 +51,6 @@ true
 ((Empty (Region a b)))
 (5)
 (true)
+((Error out:let* (Unsolvable (no-match 2))))
+((Error out:let* (Unsolvable (no-match (Q 1)))))
+(6)

@@ -479,9 +479,9 @@
     {
       "source": "outcome.metta",
       "output": "outcome.metta",
-      "source_sha256": "d3a35fdd08eeca9637506e1fe1272df6db2fe05acac5d53d5c0d62107d77c9b1",
-      "output_sha256": "ae0c320b768079cc997861c0737bbc7c66ef02b024f27da76a46a7bb308e0e88",
-      "edits": 16,
+      "source_sha256": "20de1f18217cc94d17f4ebdd60ed6b6e335064b3232188f77287f30bea008bc7",
+      "output_sha256": "ad7940cb622815f3cfa8bfb8d2af592a843b6f41989cb26febc18c8c6e9cc4f1",
+      "edits": 18,
       "code_diagnostics": 0
     },
     {

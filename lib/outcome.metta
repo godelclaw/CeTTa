@@ -105,10 +105,27 @@
    (chain (eval (out:first-failure $values)) $failure
      (if (== $failure ()) (metta $body %Undefined% (context-space)) $failure)))
 
+; Each binding is spliced into one case that runs in the caller's space, so
+; the caller's variables are the ones bound.  A pattern that does not match its
+; value is a failure (no-match VALUE), never a silent zero.
 (: out:let* (-> Atom Atom %Undefined%))
-(= (out:let* $bindings $body) (metta (let* $bindings $body) %Undefined% (context-space)))
+(= (out:let* $bindings $body)
+   (if-equal $bindings () (metta $body %Undefined% (context-space))
+     (chain (eval (car-atom $bindings)) $binding
+       (chain (eval (cdr-atom $bindings)) $rest
+         (unify $binding ($pattern $source)
+           (metta (out:bind $source $pattern (out:let* $rest $body) out:let*)
+                  %Undefined% (context-space))
+           (Error out:let* (Unsolvable (malformed-binding $binding))))))))
 (: out:let (-> Atom Atom Atom %Undefined%))
-(= (out:let $pattern $source $body) (metta (let $pattern $source $body) %Undefined% (context-space)))
+(= (out:let $pattern $source $body)
+   (metta (out:bind $source $pattern $body out:let) %Undefined% (context-space)))
+(: out:bind (-> Atom Atom Atom Atom %Undefined%))
+(= (out:bind $source $pattern $body $where)
+   (chain (metta $source %Undefined% (context-space)) $value
+     (if (out:is-failure $value) $value
+       (metta (case $value (($pattern $body) ($out-other (Error $where (Unsolvable (no-match $out-other))))))
+              %Undefined% (context-space)))))
 
 (: out:all (-> Atom %Undefined%))
 (= (out:all $sources) (out:all-onto $sources ()))
