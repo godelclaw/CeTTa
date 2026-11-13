@@ -27145,6 +27145,16 @@ else
 endif
 .PHONY: test-lib-prolog-build-config
 
+# PeTTa's != before the embedded engine starts: native answers equal the
+# bridge's, and a first != no longer starts SWI.
+.PHONY: test-petta-libpl-unstarted-not-equal
+test-petta-libpl: test-petta-libpl-unstarted-not-equal
+test-petta-libpl-unstarted-not-equal: $(BIN) tests/support/check_petta_unstarted_not_equal.py
+	@if [ "$(LIB_PROLOG_ENABLED)" != 1 ]; then \
+		echo "SKIP: != before the engine starts requires embedded Prolog"; exit 0; \
+	fi; \
+	python3 tests/support/check_petta_unstarted_not_equal.py ./$(BIN)
+
 .PHONY: test-petta-libpl-read-evidence
 test-petta-libpl: test-petta-libpl-read-evidence
 test-petta-libpl-read-evidence: $(BIN)

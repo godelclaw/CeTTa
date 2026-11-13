@@ -14,12 +14,14 @@
 #include "var_index.h"
 #include "foreign_region.h"
 #include "shared_transition.h"
+#include "utf8.h"
 
 #include <SWI-Prolog.h>
 
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>
+#include <math.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -6691,6 +6693,106 @@ bool petta_libpl_cpu_count(uint32_t *count) {
 
 #include "petta_solver_client.inc"
 
+/* Text that crosses as the characters it spells: strict UTF-8 without NUL,
+ * which a string's conversion would end at. */
+static bool petta_libpl_plain_text(const char *bytes, size_t length) {
+    for (size_t at = 0u; at < length;) {
+        uint32_t scalar = 0u, width = 0u;
+        if (!cetta_utf8_decode_one((const uint8_t *)bytes, length, at,
+                                   &scalar, &width) || scalar == 0u)
+            return false;
+        at += width;
+    }
+    return bytes || !length;
+}
+
+/* Whether VALUE crosses to Prolog as the term it is (petta_libpl_to_term):
+ * a symbol, string, integer or finite float, or an expression of these that
+ * converts to a proper list.  Two such values are the same term for the
+ * bridges' comparison (petta_libpl_values_equal) exactly when atom_value_eq
+ * holds of them.  A grounded boolean is left out: it crosses as the same
+ * atom as PeTTa's truth symbol, which atom_value_eq keeps apart. */
+static bool petta_libpl_plain_value(Atom *value, uint32_t depth) {
+    if (!value || depth > 64u)
+        return false;
+    switch (value->kind) {
+    case ATOM_SYMBOL: {
+        const char *name = atom_symbol_bytes(value);
+        return name && petta_libpl_plain_text(name, atom_symbol_length(value));
+    }
+    case ATOM_GROUNDED:
+        switch (value->ground.gkind) {
+        case GV_INT:
+            return true;
+        case GV_FLOAT:
+            return isfinite(value->ground.fval);
+        case GV_STRING:
+            return value->ground.sval &&
+                petta_libpl_plain_text(value->ground.sval, value->ground.slen);
+        default:
+            return false;
+        }
+    case ATOM_EXPR: {
+        /* The converter's other expression forms, in its order. */
+        Atom *view = NULL;
+        if (petta_semantics_lambda_body(value, NULL) ||
+            petta_semantics_nullary_lambda_body(value, NULL) ||
+            petta_semantics_partial_view(value, NULL, NULL) ||
+            petta_libpl_plref_view(value, NULL) ||
+            atom_is_rational_value(value) ||
+            petta_semantics_is_open_cons_value(value) ||
+            atom_petta_prolog_compound_body(value, &view) ||
+            petta_libpl_predicate_body(value, &view))
+            return false;
+        for (CettaExprIndex index = 0u; index < value->expr.len; index++)
+            if (!petta_libpl_plain_value(value->expr.elems[index], depth + 1u))
+                return false;
+        return true;
+    }
+    case ATOM_VAR:
+        return false;
+    }
+    return false;
+}
+
+/* The reference's != before the engine starts.  A runtime not yet prepared
+ * has run none of the program's Prolog, so != is still the standard bridge
+ * (petta_libpl_standard_not_equal), and starting SWI only to ask it costs
+ * milliseconds and megabytes.  Plain values (petta_libpl_plain_value) are
+ * decided here as the bridge decides them, and the answer is the atom it
+ * binds the result to; it binds nothing else.  Any other call crosses as
+ * before: a variable or another kind of value in an argument, a result
+ * slot that is not a free variable, or goals or equalities the call could
+ * wake. */
+static bool petta_libpl_unstarted_not_equal(
+    CettaLibPrologRuntime *runtime, Arena *arena, Atom *expression,
+    Atom *expected, const Bindings *environment,
+    const CettaDelayView *delay_view, OutcomeSet *outcomes) {
+    if (runtime->prepared || expression->expr.len != 3u ||
+        !atom_is_symbol_id(expression->expr.elems[0], g_builtin_syms.op_neq) ||
+        environment->eq_len != 0u ||
+        (delay_view && delay_view->service &&
+         cetta_delay_holds(delay_view->service)))
+        return false;
+    Atom *result = bindings_apply_if_vars(environment, arena, expected);
+    Atom *left = expression->expr.elems[1];
+    Atom *right = expression->expr.elems[2];
+    if (!result || result->kind != ATOM_VAR ||
+        !petta_libpl_plain_value(left, 0u) ||
+        !petta_libpl_plain_value(right, 0u))
+        return false;
+    bool equal = atom_value_eq(left, right);
+    Atom *answer = equal ? atom_symbol_data_n(arena, "false", 5u)
+                         : atom_symbol_data_n(arena, "true", 4u);
+    if (!answer)
+        return false;
+    Bindings empty;
+    bindings_init(&empty);
+    CettaCount before = outcomes->len;
+    outcome_set_add(outcomes, answer, &empty);
+    return outcomes->len == before + 1u;
+}
+
 static bool petta_libpl_call_raising(
     CettaLibPrologRuntime *runtime, Arena *arena,
     Atom *expression, Atom *expected,
@@ -6743,6 +6845,11 @@ static bool petta_libpl_call_raising(
     if (!resolved_expression)
         return false;
     expression = resolved_expression;
+    if (petta_libpl_unstarted_not_equal(runtime, arena, expression, expected,
+                                        environment, delay_view, outcomes)) {
+        *recognized = true;
+        return true;
+    }
     /* A caller that keeps delayed goals carries those on the call's
      * variables into it and reads back what each answer leaves delayed. */
     PettaLibplDelay delay = {
