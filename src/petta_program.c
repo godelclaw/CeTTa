@@ -270,6 +270,10 @@ typedef struct {
     /* The equation with its translator rule calls expanded, which candidates
      * execute in place of `equation`; NULL when no call expanded. */
     Atom *execution_equation;
+    /* The heads whose equations or declarations the expansion read, sorted:
+     * a change to any of them expands the equation again. */
+    const SymbolId *translator_reads;
+    uint32_t translator_read_len;
     uint64_t source_root;
     const PettaPlanNode *plan;
     const PettaEquationTemplateC0 *equation_template_c0;
@@ -559,6 +563,11 @@ struct PettaProgram {
     /* Which heads are translator rules; no host, no expansion. */
     PettaTranslatorHost translator;
     bool translator_trace;
+    bool translator_trace_code;
+    /* Every head some expansion read: a change to another head's equations
+     * or declarations leaves every expansion as it is. */
+    uint64_t *translator_read_bits;
+    size_t translator_read_words;
     /* Plans of runtime translations (eval, a computed hyperpose branch),
      * one per distinct content, and the arena each is first built in. */
     PettaPlanInternEntry *interned_plans;
@@ -5143,6 +5152,7 @@ static void petta_program_dispose_metadata(PettaProgram *program) {
     free(program->transient_values);
     free(program->transient_plans);
     arena_free(&program->transient_plan_atoms);
+    free(program->translator_read_bits);
 }
 
 bool petta_program_lifetime_retain(PettaProgram *program) {
@@ -5794,17 +5804,24 @@ static bool petta_program_space_single_append(
     return true;
 }
 
+typedef struct {
+    SymbolId *items;
+    size_t len, cap;
+} PettaTranslatorReads;
 static Atom *petta_program_translator_expand(
     PettaProgram *program, Space *space, Atom *root,
     const PettaPlanNode *plan, bool equation,
-    const PettaPlanNode **plan_out);
+    const PettaPlanNode **plan_out, PettaTranslatorReads *reads);
+static bool petta_program_translator_keep_reads(
+    PettaProgram *program, PettaTranslatorReads *reads,
+    const SymbolId **items_out, uint32_t *len_out);
 static void petta_program_translator_observe(
     PettaProgram *program, Space *space, Atom *atom);
 
 static bool petta_program_note_add_with_execution_plan(
     PettaProgram *program, Space *space, Atom *atom,
     const PettaPlanNode *plan, bool transferred_execution_plan,
-    Atom *transferred_execution) {
+    const PettaProgramEquation *transferred) {
     CETTA_SCOPED_SHARED_TRANSITION(program_catalog_add);
     if (!program || !space || !atom)
         return false;
@@ -5877,14 +5894,23 @@ static bool petta_program_note_add_with_execution_plan(
     }
     /* The rule calls of an ordinary equation are expanded where it is
      * installed; a copied catalog keeps the expansion it was copied with. */
-    Atom *expanded = transferred_execution;
-    if (!expanded && atom->expr.len == 3u &&
+    Atom *expanded = transferred ? transferred->execution_equation : NULL;
+    const SymbolId *translator_reads =
+        transferred ? transferred->translator_reads : NULL;
+    uint32_t translator_read_len =
+        transferred ? transferred->translator_read_len : 0u;
+    if (!transferred && atom->expr.len == 3u &&
         atom_is_symbol_id(atom->expr.elems[0], g_builtin_syms.equals)) {
         const PettaPlanNode *expanded_plan = NULL;
+        PettaTranslatorReads reads = {0};
         expanded = petta_program_translator_expand(
-            program, space, atom, plan, true, &expanded_plan);
+            program, space, atom, plan, true, &expanded_plan, &reads);
         if (expanded)
             plan = expanded_plan;
+        bool kept = petta_program_translator_keep_reads(
+            program, &reads, &translator_reads, &translator_read_len);
+        if (!kept)
+            return false;
     }
     if (expanded) {
         execution = expanded;
@@ -5931,6 +5957,8 @@ static bool petta_program_note_add_with_execution_plan(
             .equation = atom,
             .planning_syntax = equation_template ? equation_template->equation : execution,
             .execution_equation = expanded,
+            .translator_reads = translator_reads,
+            .translator_read_len = translator_read_len,
             .source_root = source_root,
             .plan = plan,
             .equation_template_c0 = equation_template_c0,
@@ -7068,7 +7096,7 @@ bool petta_program_transfer_space_roles(PettaProgram *program,
             ? petta_plan_rebind_frame_syntax(program, execution, role) : NULL;
         ok = execution && (!role || rebound) &&
             petta_program_note_add_with_execution_plan(
-                program, destination, target, rebound, true, expanded);
+                program, destination, target, rebound, true, &records[found]);
         used[found] = true;
         copied++;
     }
@@ -7543,6 +7571,7 @@ static bool petta_program_candidate_snapshot_lease_from_entry(
                             ? record->static_variable_count : 0u),
                 .occurrence = actual[matched].occurrence,
                 .rhs_binds_variables = record->rhs_binds_variables,
+                .expanded_execution = record->execution_equation != NULL,
             };
         }
     }
@@ -9273,6 +9302,7 @@ void petta_program_set_translator_host(PettaProgram *program,
     program->translator = host ? *host : (PettaTranslatorHost){0};
     const char *trace = getenv("CETTA_PETTA_TRANSLATOR_TRACE");
     program->translator_trace = trace && trace[0] && strcmp(trace, "0") != 0;
+    program->translator_trace_code = trace && strcmp(trace, "2") == 0;
 }
 
 static bool petta_program_translator_active(const PettaProgram *program) {
@@ -9284,7 +9314,26 @@ static bool petta_program_translator_active(const PettaProgram *program) {
 typedef struct {
     PettaProgram *program;
     Space *space;
+    /* The heads read so far; NULL reads nothing back. */
+    PettaTranslatorReads *reads;
 } PettaTranslatorOracleContext;
+
+static void petta_translator_read(PettaTranslatorOracleContext *context,
+                                  SymbolId head) {
+    PettaTranslatorReads *reads = context->reads;
+    if (!reads || head == SYMBOL_ID_NONE)
+        return;
+    if (reads->len && reads->items[reads->len - 1u] == head)
+        return;
+    if (!petta_program_reserve((void **)&reads->items, &reads->cap,
+                               reads->len + 1u, sizeof(*reads->items))) {
+        /* An unrecorded read would leave a dependency untracked. */
+        context->reads = NULL;
+        reads->len = SIZE_MAX;
+        return;
+    }
+    reads->items[reads->len++] = head;
+}
 
 /* The rows a call of the rule meets: the live Space's own selection. */
 static bool petta_translator_oracle_rows(void *opaque, Atom *call,
@@ -9292,6 +9341,7 @@ static bool petta_translator_oracle_rows(void *opaque, Atom *call,
     PettaTranslatorOracleContext *context = opaque;
     *rows_out = NULL;
     *len_out = 0u;
+    petta_translator_read(context, atom_symbol_current_id(call->expr.elems[0]));
     /* A graded row is outside the ordinary selection read here. */
     if (context->program->graded_equations &&
         space_has_graded_equations(context->space))
@@ -9321,6 +9371,9 @@ static bool petta_translator_oracle_rows(void *opaque, Atom *call,
 static bool petta_translator_oracle_arguments(
     void *opaque, Atom *call, PettaTranslatorArgument *modes, size_t arity) {
     PettaTranslatorOracleContext *context = opaque;
+    if (call->expr.elems[0]->kind == ATOM_SYMBOL)
+        petta_translator_read(context,
+                              atom_symbol_current_id(call->expr.elems[0]));
     Arena arena;
     arena_init_detached(&arena);
     PettaTypeCall *calls = NULL;
@@ -9354,6 +9407,7 @@ static bool petta_translator_oracle_arguments(
 
 static bool petta_translator_oracle_defines(void *opaque, SymbolId head) {
     PettaTranslatorOracleContext *context = opaque;
+    petta_translator_read(context, head);
     return space_equations_may_match_known_head_view(context->space, head);
 }
 
@@ -9474,6 +9528,9 @@ static Atom *petta_translator_rewrite(PettaTranslatorRewrite *rewrite,
     CettaExprLen len = atom->expr.len;
     PettaProgram *program = rewrite->program;
     SymbolId id = atom_symbol_current_id(atom->expr.elems[0]);
+    /* Whether the head is a rule, a form, defined, or held, all decide what
+     * the walk reads here: a change to any of them may change it. */
+    petta_translator_read(rewrite->oracle.context, id);
     if (plan->role == PETTA_PLAN_STATIC_CALL &&
         rewrite->expansions < PETTA_TRANSLATOR_EXPANSION_LIMIT &&
         program->translator.is_rule(program->translator.context, id)) {
@@ -9613,7 +9670,9 @@ static bool petta_translator_mentions(const PettaProgram *program,
 
 /* Whether the right side of `equation` is code: a function whose result is
  * Atom answers its body as it is written. */
-static bool petta_translator_body_evaluated(Space *space, Atom *equation) {
+static bool petta_translator_body_evaluated(
+    PettaTranslatorOracleContext *context, Atom *equation) {
+    Space *space = context->space;
     Atom *lhs = equation->expr.elems[1];
     Atom *rhs = equation->expr.elems[2];
     if (!lhs || lhs->kind != ATOM_EXPR || lhs->expr.len == 0u ||
@@ -9622,6 +9681,7 @@ static bool petta_translator_body_evaluated(Space *space, Atom *equation) {
         (rhs->expr.len > 0u &&
          atom_is_symbol_id(rhs->expr.elems[0], g_builtin_syms.function)))
         return false;
+    petta_translator_read(context, atom_symbol_current_id(lhs->expr.elems[0]));
     Arena arena;
     arena_init_detached(&arena);
     PettaTypeCall *calls = NULL;
@@ -9641,22 +9701,23 @@ static bool petta_translator_body_evaluated(Space *space, Atom *equation) {
 static Atom *petta_program_translator_expand(
     PettaProgram *program, Space *space, Atom *root,
     const PettaPlanNode *plan, bool equation,
-    const PettaPlanNode **plan_out) {
+    const PettaPlanNode **plan_out, PettaTranslatorReads *reads) {
     if (plan_out)
         *plan_out = NULL;
     if (!petta_program_translator_active(program) || !space || !root ||
         root->kind != ATOM_EXPR || (equation && root->expr.len != 3u))
         return NULL;
+    PettaTranslatorOracleContext context = {
+        .program = program,
+        .space = space,
+        .reads = reads,
+    };
     /* Code that names no rule has nothing to expand. */
     if (!petta_translator_mentions(program,
                                    equation ? root->expr.elems[2] : root,
                                    SYMBOL_ID_NONE) ||
-        (equation && !petta_translator_body_evaluated(space, root)))
+        (equation && !petta_translator_body_evaluated(&context, root)))
         return NULL;
-    PettaTranslatorOracleContext context = {
-        .program = program,
-        .space = space,
-    };
     PettaTranslatorRewrite rewrite = {
         .program = program,
         .oracle = {
@@ -9702,6 +9763,11 @@ static Atom *petta_program_translator_expand(
     }
     if (!expanded)
         return NULL;
+    if (program->translator_trace_code) {
+        fputs("[petta-translator] code ", stderr);
+        atom_print(current, stderr);
+        fputc('\n', stderr);
+    }
     if (plan_out)
         *plan_out = current_plan;
     return current;
@@ -9712,7 +9778,79 @@ Atom *petta_program_expand_translator_directive(
     const PettaPlanNode *plan, const PettaPlanNode **plan_out) {
     CETTA_SCOPED_SHARED_TRANSITION(program_translator_directive);
     return petta_program_translator_expand(program, space, atom, plan, false,
-                                           plan_out);
+                                           plan_out, NULL);
+}
+
+static int petta_translator_symbol_compare(const void *left,
+                                           const void *right) {
+    SymbolId a = *(const SymbolId *)left;
+    SymbolId b = *(const SymbolId *)right;
+    return a < b ? -1 : a > b;
+}
+
+static bool petta_program_translator_read_bit(const PettaProgram *program,
+                                              SymbolId head) {
+    size_t word = (size_t)head / 64u;
+    return word < program->translator_read_words &&
+           (program->translator_read_bits[word] >> (head % 64u)) & 1u;
+}
+
+/* Keep the sorted heads an expansion read with its record, and note each in
+ * the program's filter.  Takes and frees reads->items. */
+static bool petta_program_translator_keep_reads(
+    PettaProgram *program, PettaTranslatorReads *reads,
+    const SymbolId **items_out, uint32_t *len_out) {
+    *items_out = NULL;
+    *len_out = 0u;
+    if (reads->len == SIZE_MAX) {
+        free(reads->items);
+        return false;
+    }
+    if (reads->len == 0u) {
+        free(reads->items);
+        return true;
+    }
+    qsort(reads->items, reads->len, sizeof(*reads->items),
+          petta_translator_symbol_compare);
+    size_t unique = 0u;
+    for (size_t index = 0u; index < reads->len; index++) {
+        if (!unique || reads->items[unique - 1u] != reads->items[index])
+            reads->items[unique++] = reads->items[index];
+    }
+    SymbolId *kept = unique <= UINT32_MAX
+        ? arena_alloc(&program->plans, sizeof(*kept) * unique) : NULL;
+    size_t words = (size_t)reads->items[unique - 1u] / 64u + 1u;
+    if (!kept ||
+        (words > program->translator_read_words &&
+         !petta_program_reserve((void **)&program->translator_read_bits,
+                                &program->translator_read_words, words,
+                                sizeof(*program->translator_read_bits)))) {
+        free(reads->items);
+        return false;
+    }
+    memcpy(kept, reads->items, sizeof(*kept) * unique);
+    free(reads->items);
+    reads->items = NULL;
+    for (size_t index = 0u; index < unique; index++)
+        program->translator_read_bits[kept[index] / 64u] |=
+            UINT64_C(1) << (kept[index] % 64u);
+    *items_out = kept;
+    *len_out = (uint32_t)unique;
+    return true;
+}
+
+static bool petta_translator_reads_contain(const PettaProgramEquation *record,
+                                           SymbolId head) {
+    size_t low = 0u, high = record->translator_read_len;
+    while (low < high) {
+        size_t middle = low + (high - low) / 2u;
+        if (record->translator_reads[middle] < head)
+            low = middle + 1u;
+        else
+            high = middle;
+    }
+    return low < record->translator_read_len &&
+           record->translator_reads[low] == head;
 }
 
 /* Whether `atom` names `head` (any rule, for SYMBOL_ID_NONE). */
@@ -9783,14 +9921,18 @@ static bool petta_program_record_install_execution(
     return true;
 }
 
-/* Expand again every equation of the space that calls `head` (any rule, for
- * SYMBOL_ID_NONE) or whose expansion read a rule.  Existing leases keep the
- * plans they captured; new selections see the replacement. */
+/* Expand again every equation of the space whose expansion read `head`, and
+ * every one that calls `head` while it is a rule (SYMBOL_ID_NONE: every
+ * rule).  An expansion that comes out the same keeps its record, so the
+ * catalog changes only where an answer can.  Existing leases keep the plans
+ * they captured; new selections see the replacement. */
 static bool petta_program_translator_refresh_space(
     PettaProgram *program, PettaProgramSpace *entry, SymbolId head) {
     if (!entry || !petta_program_space_is_live(entry))
         return true;
     Space *space = (Space *)entry->space;
+    bool rule = head != SYMBOL_ID_NONE &&
+        program->translator.is_rule(program->translator.context, head);
     bool changed = false;
     bool ok = true;
     for (size_t index = 0u; ok && index < entry->equation_len; index++) {
@@ -9800,8 +9942,13 @@ static bool petta_program_translator_refresh_space(
             authored->expr.len != 3u ||
             !atom_is_symbol_id(authored->expr.elems[0], g_builtin_syms.equals))
             continue;
-        if (!record->execution_equation &&
-            !petta_translator_mentions(program, authored->expr.elems[2], head))
+        bool read = head != SYMBOL_ID_NONE
+            ? petta_translator_reads_contain(record, head)
+            : record->translator_read_len != 0u;
+        if (!read &&
+            !((rule || head == SYMBOL_ID_NONE) &&
+              petta_translator_mentions(program, authored->expr.elems[2],
+                                        head)))
             continue;
         const PettaPlanNode *authored_plan =
             petta_program_plan_equation(program, authored, NULL, 0u);
@@ -9810,9 +9957,23 @@ static bool petta_program_translator_refresh_space(
             break;
         }
         const PettaPlanNode *expanded_plan = NULL;
+        PettaTranslatorReads reads = {0};
         Atom *expanded = petta_program_translator_expand(
-            program, space, authored, authored_plan, true, &expanded_plan);
-        if (!expanded && !record->execution_equation)
+            program, space, authored, authored_plan, true, &expanded_plan,
+            &reads);
+        const SymbolId *kept = NULL;
+        uint32_t kept_len = 0u;
+        if (!petta_program_translator_keep_reads(program, &reads, &kept,
+                                                 &kept_len)) {
+            ok = false;
+            break;
+        }
+        record->translator_reads = kept;
+        record->translator_read_len = kept_len;
+        /* The same code as before: nothing an answer reads has changed. */
+        if (expanded ? record->execution_equation &&
+                           atom_alpha_eq(expanded, record->execution_equation)
+                     : !record->execution_equation)
             continue;
         ok = petta_program_record_install_execution(
             program, record, expanded ? expanded : authored,
@@ -9852,7 +10013,8 @@ static void petta_program_translator_observe(PettaProgram *program,
         return;
     }
     if (head == SYMBOL_ID_NONE ||
-        !program->translator.is_rule(program->translator.context, head))
+        (!petta_program_translator_read_bit(program, head) &&
+         !program->translator.is_rule(program->translator.context, head)))
         return;
     (void)petta_program_translator_refresh_space(
         program, petta_program_find_space(program, space), head);

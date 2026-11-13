@@ -23130,9 +23130,12 @@ static bool petta_prepared_pure_equation_source(
         void *context, Space *space, SymbolId head,
         size_t occurrence_ordinal,
         SpaceEquationOccurrenceId occurrence,
-        const Atom *equation, const void **rhs_view_out) {
+        const Atom *equation, const void **rhs_view_out,
+        Atom **execution_out) {
     if (rhs_view_out)
         *rhs_view_out = NULL;
+    if (execution_out)
+        *execution_out = (Atom *)equation;
     PettaProgram *program = context;
     if (!program || !space || head == SYMBOL_ID_NONE ||
         !equation || !rhs_view_out)
@@ -23154,28 +23157,30 @@ static bool petta_prepared_pure_equation_source(
                    program, space, head, &lease, NULL)) {
         return false;
     }
+    /* The candidate of this occurrence carries its plan.  A candidate whose
+     * translator-rule calls were expanded executes its expansion, which is
+     * then compiled in place of the occurrence's own right side. */
     const PettaPlanNode *rhs_plan = NULL;
-    if (occurrence_ordinal < lease.len) {
-        const PettaEquationCandidate *candidate =
-            &lease.items[occurrence_ordinal];
-        if (candidate->equation == equation &&
-            candidate->occurrence.logical_index ==
-                occurrence.logical_index)
-            rhs_plan = candidate->rhs_plan;
-    }
-    if (!rhs_plan) {
-        for (size_t index = 0u; index < lease.len; index++) {
-            const PettaEquationCandidate *candidate =
-                &lease.items[index];
-            if (candidate->equation == equation &&
+    Atom *execution = (Atom *)equation;
+    for (size_t pass = 0u; !rhs_plan && pass < 2u; pass++) {
+        for (size_t index = pass ? 0u : occurrence_ordinal;
+             index < lease.len; index++) {
+            const PettaEquationCandidate *candidate = &lease.items[index];
+            if ((candidate->equation == equation ||
+                 candidate->expanded_execution) &&
                 candidate->occurrence.logical_index ==
                     occurrence.logical_index) {
                 rhs_plan = candidate->rhs_plan;
+                execution = candidate->equation;
                 break;
             }
+            if (!pass)
+                break;
         }
     }
     petta_program_candidate_snapshot_lease_release(&lease);
+    if (execution_out)
+        *execution_out = execution;
     /* Higher-order specialization creates a new equation and compiles its
      * plan at that creation event, but deliberately keeps the derived
      * artifact in the specialization catalog rather than the authored

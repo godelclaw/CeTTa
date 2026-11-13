@@ -281,6 +281,10 @@ typedef struct {
     /* The right side has a variable the left side lacks: the body binds
      * variables of its own. */
     bool rhs_binds_variables;
+    /* `equation` is the occurrence's translator-rule expansion
+     * (petta_program_set_translator_host), not the row as written: the
+     * occurrence identity below names the row. */
+    bool expanded_execution;
     /* Stable only within the captured Space revision.  The executor treats
      * this as evidence provenance, never as a replacement for the equation
      * or its authoritative matcher. */

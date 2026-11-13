@@ -26,6 +26,29 @@ is (New 3), should (New 3). ✅
 is (New 4), should (New 4). ✅ 
 is (Wrapped 5), should (Wrapped 5). ✅ 
 is (Wrapped 6), should (Wrapped 6). ✅ 
+is (Wrapped 1), should (Wrapped 1). ✅ 
+is (tm:wrap 2), should (tm:wrap 2). ✅ 
+is (Wrapped 3), should (Wrapped 3). ✅ 
+is (Shape 2), should (Shape 2). ✅ 
+is (Shape 3), should (Shape 3). ✅ 
+is (Shape 4), should (Shape 4). ✅ 
+is (), should (). ✅ 
+is (Later 2), should (Later 2). ✅ 
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
 true
 true
 true

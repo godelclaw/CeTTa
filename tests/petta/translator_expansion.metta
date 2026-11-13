@@ -123,3 +123,33 @@
 !(test (tx:late 5) (quote (Wrapped 5)))
 !(add-translator-rule! tx:wrap)
 !(test (tx:late 6) (Wrapped 6))
+
+; What the walk read is a dependency too.  A function that gains a signature
+; holding its argument stops evaluating the rule call written there.
+(: tm:wrap (-> Atom %Undefined%))
+(= (tm:wrap $x) (quote (Wrapped $x)))
+!(add-translator-rule! tm:wrap)
+(= (tm:keep $v) $v)
+(= (tm:user $x) (tm:keep (tm:wrap $x)))
+!(test (tm:user 1) (Wrapped 1))
+!(add-atom &self (: tm:keep (-> Atom Atom)))
+!(test (tm:user 2) (quote (tm:wrap 2)))
+!(remove-atom &self (: tm:keep (-> Atom Atom)))
+!(test (tm:user 3) (Wrapped 3))
+; A rule whose signature changes takes its arguments as written, then as
+; values again.
+(= (tm:shape $x) (quote (Shape $x)))
+!(add-translator-rule! tm:shape)
+(= (tm:shaped $y) (tm:shape (+ $y 1)))
+!(test (tm:shaped 1) (Shape 2))
+!(add-atom &self (: tm:shape (-> Atom %Undefined%)))
+!(test (tm:shaped 2) (Shape 3))
+!(remove-atom &self (: tm:shape (-> Atom %Undefined%)))
+!(test (tm:shaped 3) (Shape 4))
+; A rule registered before it has an equation answers nothing until it has
+; one.
+!(add-translator-rule! tm:later)
+(= (tm:uses-later $x) (tm:later $x))
+!(test (collapse (tm:uses-later 1)) ())
+(= (tm:later $x) (quote (Later $x)))
+!(test (tm:uses-later 2) (Later 2))
