@@ -1,0 +1,90 @@
+is ((odd 3) (even 4) (odd 5)), should ((odd 3) (even 4) (odd 5)). ✅ 
+is (10 20 30), should (10 20 30). ✅ 
+is (8 4), should (8 4). ✅ 
+is (Bad early), should (Bad early). ✅ 
+is (Bad (no-match (Single 7))), should (Bad (no-match (Single 7))). ✅ 
+is (10 11 12 13), should (10 11 12 13). ✅ 
+is (1 4 9), should (1 4 9). ✅ 
+is 25, should 25. ✅ 
+is (Seen (Pair 4 2)), should (Seen (Pair 4 2)). ✅ 
+is (Neg 2), should (Neg 2). ✅ 
+is ((Pair 1 2) 5), should ((Pair 1 2) 5). ✅ 
+is (tx:pair 1 2), should (tx:pair 1 2). ✅ 
+is (tx:let* (($V0 1)) $V0), should (tx:let* (($V0 1)) $V0). ✅ 
+is (tx:pair 1 2), should (tx:pair 1 2). ✅ 
+is (tx:pair 3 4), should (tx:pair 3 4). ✅ 
+is ((tx:pair $V0 0)), should ((tx:pair $V0 0)). ✅ 
+is (Pair 9 0), should (Pair 9 0). ✅ 
+is five, should five. ✅ 
+is other, should other. ✅ 
+is 110, should 110. ✅ 
+is (ok), should (ok). ✅ 
+is done, should done. ✅ 
+is (Old 1), should (Old 1). ✅ 
+is (New 2), should (New 2). ✅ 
+is (New 3), should (New 3). ✅ 
+is (New 4), should (New 4). ✅ 
+is (Wrapped 5), should (Wrapped 5). ✅ 
+is (Wrapped 6), should (Wrapped 6). ✅ 
+is (Wrapped 1), should (Wrapped 1). ✅ 
+is (tm:wrap 2), should (tm:wrap 2). ✅ 
+is (Wrapped 3), should (Wrapped 3). ✅ 
+is (Shape 2), should (Shape 2). ✅ 
+is (Shape 3), should (Shape 3). ✅ 
+is (Shape 4), should (Shape 4). ✅ 
+is (), should (). ✅ 
+is (Later 2), should (Later 2). ✅ 
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true

@@ -8167,15 +8167,30 @@ static bool prepared_pure_compile_head(
                 program, "equation head takes code apart", occurrence.lhs);
 
         const void *rhs_view = NULL;
+        Atom *execution = occurrence.equation;
         if (program->source_view.equation_rhs &&
             !program->source_view.equation_rhs(
                 program->source_view.context, program->space,
                 head->head, occurrence_ordinal, occurrence.id,
-                occurrence.equation, &rhs_view))
+                occurrence.equation, &rhs_view, &execution))
             return prepared_pure_reject(
                 program, "equation has no exact source view",
                 occurrence.rhs);
         occurrence_ordinal++;
+        /* The program may execute the occurrence's translator-rule
+         * expansion; its sides are compiled in place of the row's. */
+        if (execution && execution != occurrence.equation) {
+            if (execution->kind != ATOM_EXPR || execution->expr.len != 3u ||
+                execution->expr.elems[1]->kind != ATOM_EXPR ||
+                execution->expr.elems[1]->expr.len !=
+                    occurrence.lhs->expr.len)
+                return prepared_pure_reject(
+                    program, "equation expansion has another shape",
+                    occurrence.rhs);
+            occurrence.equation = execution;
+            occurrence.lhs = execution->expr.elems[1];
+            occurrence.rhs = execution->expr.elems[2];
+        }
 
         PreparedPureCompileContext context = {0};
         bool pattern_ok = true;

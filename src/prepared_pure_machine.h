@@ -359,11 +359,15 @@ typedef CettaComputationPlan (*CettaPreparedPureSourceComputationFn)(
 typedef const void *(*CettaPreparedPureSourceChildFn)(
     void *context, const void *source_view,
     CettaExprIndex child_index);
+/* The plan of an equation occurrence's right side, and the equation the
+ * program executes for it: the occurrence as written, or the expansion of
+ * its translator-rule calls, which is compiled in its place. */
 typedef bool (*CettaPreparedPureEquationSourceFn)(
     void *context, Space *space, SymbolId head,
     size_t occurrence_ordinal,
     SpaceEquationOccurrenceId occurrence,
-    const Atom *equation, const void **rhs_view_out);
+    const Atom *equation, const void **rhs_view_out,
+    Atom **execution_out);
 
 /* The normalized reading of an existing computation node. Captured slots
  * and completed literals become value places; surviving operations retain

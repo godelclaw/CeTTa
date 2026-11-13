@@ -1,0 +1,17 @@
+[petta-translator] declined-argument tm:shape/1
+[petta-translator] declined-argument tx:pair/2
+[petta-translator] declined-form tx:compiled-fib/1
+[petta-translator] declined-form tx:lane/1
+[petta-translator] declined-selection tm:later/1
+[petta-translator] declined-selection tx:shape/1
+[petta-translator] declined-undecided tx:let*/2
+[petta-translator] declined-undecided tx:peek/1
+[petta-translator] expanded tm:later/1
+[petta-translator] expanded tm:shape/1
+[petta-translator] expanded tm:wrap/1
+[petta-translator] expanded tx:for/3
+[petta-translator] expanded tx:lane/1
+[petta-translator] expanded tx:let*/2
+[petta-translator] expanded tx:pair/2
+[petta-translator] expanded tx:shape/1
+[petta-translator] expanded tx:wrap/1
