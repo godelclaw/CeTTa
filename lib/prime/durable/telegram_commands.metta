@@ -10,6 +10,7 @@
 ;   (tg-cmd:command NAME KIND HELP)
 ;   (tg-cmd:agent NAME)      optional: how replies name the agent
 ;   (tg-cmd:bot USERNAME)    optional: accept /command@USERNAME
+;   (tg-cmd:bare-in-groups)  optional: a bare /command is one in a group too
 ; NAME is "/" and 1..32 of a-z, 0-9 and "_". KIND is one of
 ;   help       the service lists the declared commands;
 ;   stop       the service stops dispatching the agent's sends at once and
@@ -23,7 +24,9 @@
 ; An operator's message whose text is a declared command, optionally with
 ; arguments, is a command. Anything else is ordinary input. In a group every
 ; bot reads the same message, so there only /command@USERNAME is a command;
-; a bare /command is one only in a private chat.
+; a bare /command is one only in a private chat. A deployment whose operators
+; mean a bare /command for every agent in the group declares
+; (tg-cmd:bare-in-groups): each agent that declares it takes the command.
 
 ; The message text as a plain string. A command is printable text without
 ; quotes or backslashes, so the JSON literal of such a text, without its
@@ -60,11 +63,14 @@
           ($other False))){$chat $other})
       ($other False))){$other})
 
-; /name in a private chat, or /name@bot anywhere when bot is the declared
-; username.
+(= (tg-cmd:bare-in-groups?)
+   (== (collapse (match &self (tg-cmd:bare-in-groups) True)) (True)))
+
+; /name in a private chat, or in a group that takes bare commands; /name@bot
+; anywhere when bot is the declared username.
 (= (tg-cmd:addressee $head $private)
    (case (str:split "@" $head)
-     ((($name) (if $private (tg:some $name) tg:none))
+     ((($name) (if (or $private (tg-cmd:bare-in-groups?)) (tg:some $name) tg:none))
       (($name $bot)
        (if (== (collapse (match &self (tg-cmd:bot $bot) True){$bot}) (True)) (tg:some $name) tg:none))
       ($other tg:none))){$name})
