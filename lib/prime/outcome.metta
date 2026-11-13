@@ -91,6 +91,10 @@
 ; A failure reified as inert data, and reflected back.  (Failed WHERE KIND
 ; DETAIL) is no failure: HE compares it, stores it and passes it as an
 ; argument, which it does not do with an Error.
+; A native's failure names the call that failed as its WHERE; HE would run
+; that call again if a constructor's argument held it, so Failed holds its
+; arguments as written.
+(: Failed (-> Atom Atom Atom ReifiedFailure))
 (: out:reify (-> Atom %Undefined%))
 (= (out:reify $source)
    (chain (metta $source %Undefined% (context-space)) $value
@@ -220,7 +224,7 @@
 (= (out:recover $source $failure $handler)
    (chain (metta $source %Undefined% (context-space)) $value
      (if (out:is-failure $value)
-       (metta (let $failure $value $handler){$failure} %Undefined% (context-space))
+       (unify $failure $value (metta $handler %Undefined% (context-space)) $value)
        $value)))
 (: out:or-else (-> Atom Atom %Undefined%))
 (= (out:or-else $source $default)

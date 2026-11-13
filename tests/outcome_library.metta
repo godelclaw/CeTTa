@@ -79,3 +79,8 @@
 !(collapse (out:reify 5))
 !(collapse (== (out:reify (refused)) (Failed policy Forbidden (quota exceeded))))
 !(collapse (out:reflect (Failed policy Forbidden (quota exceeded))))
+
+; A native's failure is observed, and reified without running its call again.
+!(import! &self (library fs))
+!(collapse (out:recover (fs:read-text "/nonexistent/outcome-probe") $f (missing (out:kind $f))))
+!(collapse (out:kind (fs:read-text "/nonexistent/outcome-probe")))

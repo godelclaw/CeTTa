@@ -58,3 +58,6 @@ true
 (5)
 (true)
 ((Error policy (Forbidden (quota exceeded))))
+true
+((missing Fault))
+(Fault)
