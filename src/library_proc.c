@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "library_proc.h"
+#include "library_proc_run.h"
 #include "library.h"
 #include "eval.h"
 #include "../native/process_scope_v1.h"
@@ -669,6 +670,13 @@ static ProcJob *prepare(Atom *argv, Atom *options, const char **kind, const char
         job->env = calloc(count + 1u, sizeof(char *));
         if (!job->env) goto allocation;
         for (size_t i = 0; i < count; i++) if (!(job->env[i] = strdup(environ[i]))) goto allocation;
+    } else if (cetta_proc_env_overrides(env)) {
+        const char *malformed = NULL;
+        job->env = cetta_proc_env_inherit(cetta_proc_env_overrides(env), &malformed);
+        if (!job->env) {
+            if (!malformed) goto allocation;
+            *reason = malformed; goto refuse;
+        }
     } else {
         if (env->kind != ATOM_EXPR) { *reason = "env must be inherit or a complete environment of string pairs"; goto refuse; }
         job->env = calloc((size_t)env->expr.len + 1u, sizeof(char *));

@@ -88,6 +88,7 @@
 ; Native provider data, not a program to evaluate on the worker thread:
 ; (timer:after milliseconds)
 ; (proc:request argv cwd env timeout-ms stdout-file stderr-file)
+; ENV is as for proc:run: an explicit list, inherit, or (inherit OVERRIDES).
 ; Process timeout 0 means no deadline. Output files remain after completion.
 ; Status is (proc:running pid elapsed-ms stdout-file stderr-file), then
 ; (proc:finished pid exited|signaled|timed-out|failed code stdout-file stderr-file).

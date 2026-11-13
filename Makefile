@@ -37125,6 +37125,10 @@ test-proc-stdio-v1: $(BIN) tests/support/check_proc_stdio_v1.py
 	@python3 tests/support/check_proc_stdio_v1.py ./$(BIN)
 test-proc-stdio-fork-v1:
 	@$(MAKE) -s BUILD=core CETTA_PROC_FORK_SPAWN=1 test-proc-stdio-v1
+.PHONY: test-proc-env-v1
+test-all: test-proc-env-v1
+test-proc-env-v1: $(BIN) lib/proc.metta lib/io.metta tests/support/check_proc_env_v1.py
+	@python3 tests/support/check_proc_env_v1.py ./$(BIN)
 .PHONY: test-proc-lifetime-v1 test-proc-lifetime-fork-v1
 test-all: test-proc-lifetime-v1
 test-proc-lifetime-v1: $(BIN) tests/support/check_proc_lifetime_v1.py

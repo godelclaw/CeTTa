@@ -31,6 +31,14 @@ Atom *cetta_proc_information(Arena *arena, CettaProcChild *child);
 Atom *cetta_proc_outcome(Arena *arena, CettaProcChild *child);
 void cetta_proc_free(CettaProcChild *child);
 void cetta_proc_observe_wait(const char *path, uint64_t sequence);
+/* ENV's override list when ENV is (inherit ((NAME VALUE) ...)), else NULL. */
+Atom *cetta_proc_env_overrides(Atom *env);
+/* The caller's environment with OVERRIDES applied: a NAME the caller has is
+ * replaced in its place, any other added after the caller's entries, in
+ * order. NULL with errno ENOMEM, or EINVAL and *reason for a malformed pair
+ * or a name given twice. Free the vector with cetta_proc_env_free. */
+char **cetta_proc_env_inherit(Atom *overrides, const char **reason);
+void cetta_proc_env_free(char **env);
 /* One datagram to $NOTIFY_SOCKET: 1 sent, 0 unset or empty, -1 and errno. */
 int cetta_service_notify(const char *message, size_t length);
 
