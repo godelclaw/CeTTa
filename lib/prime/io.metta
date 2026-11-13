@@ -26,11 +26,28 @@
 (: io:signal (-> Number Number Expression))
 
 
-(: http:request (-> Atom Atom Expression String Number Number Atom))
-(: http:request (-> Atom Atom Expression String Number Number Bool Atom))
-(: http:request (-> Atom Atom Expression String Number Number Bool Atom Atom))
+; The body is text or (http:multipart PART ...), each PART (http:field NAME
+; VALUE), VALUE text or an integer, or (http:file NAME PATH [FILENAME
+; [TYPE]]): a multipart/form-data body, a file read as it is sent.  After
+; follow-redirects come (http:timeouts ...) and (http:save PATH), each at
+; most once, in either order.
+(: http:request (-> Atom Atom Expression %Undefined% Number Number Atom))
+(: http:request (-> Atom Atom Expression %Undefined% Number Number Bool Atom))
+(: http:request (-> Atom Atom Expression %Undefined% Number Number Bool Atom Atom))
+(: http:request (-> Atom Atom Expression %Undefined% Number Number Bool Atom Atom Atom))
 (: http:timeouts (-> Number Number Number Atom))
 (: http:header (-> String String Atom))
+(: http:field (-> String %Undefined% Atom))
+(: http:file (-> String String Atom))
+(: http:file (-> String String String Atom))
+(: http:file (-> String String String String Atom))
+; (http:save PATH) writes a 2xx response's body, any bytes, to a new file
+; beside PATH, which takes PATH only when the transfer completes; the answer
+; is (http:saved STATUS HEADERS PATH BYTES), HEADERS the response's
+; (http:header NAME VALUE) fields.  A response of another status answers as
+; without the option, and leaves PATH as it was.
+(: http:save (-> String Atom))
+(: http:saved (-> Number Expression String Number Atom))
 (: http:response (-> Number String Atom))
 (: http:chunk (-> Number String Atom Atom))
 ; Add retry-after after the three http:timeouts values to request metadata.

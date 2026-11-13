@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE
 #include "http_worker.h"
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +13,11 @@ CettaHttpWorkerLimits cetta_http_worker_default_limits(void) {
 }
 
 void cetta_http_result_free(CettaHttpResult *r) {
-    if (r) { free(r->body); memset(r,0,sizeof(*r)); }
+    if (!r) return;
+    free(r->body);
+    for (size_t i=0;i<r->header_count;++i) free(r->header_lines[i]);
+    free(r->header_lines);
+    memset(r,0,sizeof(*r));
 }
 
 void cetta_http_read_free(CettaHttpRead *r) {
@@ -22,9 +26,12 @@ void cetta_http_read_free(CettaHttpRead *r) {
 
 #if CETTA_BUILD_HTTP_PROVIDER_CURL
 #include <curl/curl.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <pthread.h>
 #include <signal.h>
+#include <sys/random.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -46,7 +53,14 @@ typedef struct Job {
     /* The body, owned as retained fragments, and the read callback's place. */
     CettaByteFragment **fragments;
     size_t fragment_count, body_size, read_fragment, read_offset;
+    /* A saved response: the new file beside save_path being written, and
+     * whether the response's status (read at its first body byte) makes it
+     * the file's body. */
+    int save_fd;
+    char *save_temp;
+    bool save_status_known, save_body;
     CURL *easy;
+    curl_mime *mime;
     struct curl_slist *headers;
     struct Job *next;
     struct CettaHttpWorker *owner;
@@ -109,14 +123,17 @@ static Job *find_job(CettaHttpWorker *w, uint64_t id) {
     return NULL;
 }
 
+/* Volatile stores also work on libc targets without explicit_bzero. */
+static void wipe(const char *text) {
+    if (!text) return;
+    volatile char *p=(volatile char *)text;
+    size_t n=strlen(text);
+    while (n--) *p++=0;
+}
+
 static void free_job(Job *j) {
-    /* URLs may hold bearer credentials. Volatile stores also work on libc
-     * targets without explicit_bzero; this covers our copy, not curl's. */
-    if (j->request.url) {
-        volatile char *url=(volatile char *)j->request.url;
-        size_t n=strlen(j->request.url);
-        while (n--) *url++=0;
-    }
+    /* URLs may hold bearer credentials; this covers our copy, not curl's. */
+    wipe(j->request.url);
     free((char *)j->request.method); free((char *)j->request.url);
     free((char *)j->request.proxy); free((char *)j->request.ca_file);
     for (size_t i=0;i<j->request.header_count;++i) {
@@ -128,6 +145,21 @@ static void free_job(Job *j) {
     free((char **)j->request.headers);
     for (size_t i=0;i<j->fragment_count;++i) cetta_fragment_release(j->fragments[i]);
     free(j->fragments);
+    if (j->request.parts) {
+        for (size_t i=0;i<j->request.part_count;++i) {
+            CettaHttpPart *p=(CettaHttpPart *)&j->request.parts[i];
+            free((char *)p->name); free((void *)p->value); free((char *)p->path);
+            free((char *)p->filename); free((char *)p->content_type);
+        }
+        free((CettaHttpPart *)j->request.parts);
+    }
+    if (j->save_fd>=0) close(j->save_fd);
+    if (j->save_temp) { unlink(j->save_temp); free(j->save_temp); }
+    free((char *)j->request.save_path);
+    for (size_t i=0;i<j->request.save_guard_count;++i) {
+        wipe(j->request.save_guards[i]); free((char *)j->request.save_guards[i]);
+    }
+    free((char **)j->request.save_guards);
     cetta_http_result_free(&j->result); free(j);
 }
 
@@ -142,10 +174,53 @@ static void retire(CettaHttpWorker *w, Job *j) {
     free_job(j); changed(w);
 }
 
+/* A saved body's bytes go to its file, outside the mutex; a short or failed
+ * write stops the transfer. */
+static size_t save_bytes(Job *j, const char *data, size_t n) {
+    CettaHttpWorker *w=j->owner;
+    pthread_mutex_lock(&w->mutex);
+    if (n>j->request.max_response_bytes-j->result.saved_bytes) {
+        j->result.response_too_large=true;
+        pthread_mutex_unlock(&w->mutex); return 0;
+    }
+    pthread_mutex_unlock(&w->mutex);
+    for (size_t done=0;done<n;) {
+        ssize_t wrote=write(j->save_fd,data+done,n-done);
+        if (wrote<0 && errno==EINTR) continue;
+        if (wrote<=0) {
+            int error=wrote<0?errno:EIO;
+            pthread_mutex_lock(&w->mutex);
+            j->result.save_errno=error;
+            pthread_mutex_unlock(&w->mutex); return 0;
+        }
+        done+=(size_t)wrote;
+    }
+    pthread_mutex_lock(&w->mutex);
+    j->result.saved_bytes+=n;
+    if (n) {
+        j->last_byte_at=milliseconds();
+        if (!j->first_byte_at) j->first_byte_at=j->last_byte_at;
+        changed(w);
+    }
+    pthread_mutex_unlock(&w->mutex);
+    return n;
+}
+
 static size_t receive(char *data, size_t size, size_t count, void *context) {
     Job *j=context; CettaHttpWorker *w=j->owner;
     if (size && count>SIZE_MAX/size) return 0;
     size_t n=size*count;
+    if (j->save_fd>=0) {
+        /* The first body byte comes after the final response's headers;
+         * redirects' bodies never reach this callback. */
+        if (!j->save_status_known) {
+            long status=0;
+            curl_easy_getinfo(j->easy,CURLINFO_RESPONSE_CODE,&status);
+            j->save_status_known=true;
+            j->save_body=status>=200 && status<300;
+        }
+        if (j->save_body) return save_bytes(j,data,n);
+    }
     pthread_mutex_lock(&w->mutex);
     if (n>j->request.max_response_bytes-j->result.body_size) {
         j->result.response_too_large=true;
@@ -210,6 +285,122 @@ static int seek_body(void *context, curl_off_t offset, int origin) {
     return CURL_SEEKFUNC_OK;
 }
 
+/* A new file beside the path for a saved body, created as any new file is
+ * (mode 0666 less the umask, or the directory's default ACL), under a name
+ * nobody else holds. */
+static int open_save_file(const char *path, char **temp_out, int *fd_out) {
+    const char *slash=strrchr(path,'/');
+    size_t directory=slash?(size_t)(slash-path)+1u:0u;
+    const char *base=path+directory;
+    if (!*base) return EISDIR;
+    size_t size=directory+strlen(base)+16u;
+    char *temp=malloc(size);
+    if (!temp) return ENOMEM;
+    static const char alphabet[]=
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for (int attempt=0;attempt<100;++attempt) {
+        unsigned char random[6];
+        if (getrandom(random,sizeof(random),0)!=(ssize_t)sizeof(random)) {
+            uint64_t now=milliseconds()+(uint64_t)attempt*2654435761u;
+            memcpy(random,&now,sizeof(random));
+        }
+        char suffix[7];
+        for (size_t i=0;i<6;++i) suffix[i]=alphabet[random[i]%(sizeof(alphabet)-1u)];
+        suffix[6]=0;
+        snprintf(temp,size,"%.*s.%s.%s",(int)directory,path,base,suffix);
+        int fd=open(temp,O_RDWR|O_CREAT|O_EXCL|O_CLOEXEC|O_NOFOLLOW,0666);
+        if (fd>=0) { *temp_out=temp; *fd_out=fd; return 0; }
+        if (errno!=EEXIST) { int error=errno; free(temp); return error; }
+    }
+    free(temp);
+    return EEXIST;
+}
+
+/* Whether the file holds one of the guard strings, scanned in blocks that
+ * overlap by the longest guard less one byte.  A read that fails counts as
+ * holding one. */
+static bool save_holds_guard(int fd, const char *const *guards, size_t count) {
+    size_t longest=0;
+    for (size_t i=0;i<count;++i) if (strlen(guards[i])>longest) longest=strlen(guards[i]);
+    if (!longest) return false;
+    size_t keep=longest-1u, capacity=65536u+keep, held=0;
+    char *buffer=malloc(capacity);
+    if (!buffer) return true;
+    off_t offset=0;
+    for (;;) {
+        ssize_t got=pread(fd,buffer+held,capacity-held,offset);
+        if (got<0 && errno==EINTR) continue;
+        if (got<0) { free(buffer); return true; }
+        if (!got) break;
+        offset+=got; held+=(size_t)got;
+        for (size_t i=0;i<count;++i)
+            if (*guards[i] && memmem(buffer,held,guards[i],strlen(guards[i]))) {
+                free(buffer); return true;
+            }
+        if (held>keep) { memmove(buffer,buffer+held-keep,keep); held=keep; }
+    }
+    free(buffer); return false;
+}
+
+/* Whether a header line holds one of the guard strings. */
+static bool lines_hold_guard(char *const *lines, size_t line_count,
+                             const char *const *guards, size_t count) {
+    for (size_t i=0;i<line_count;++i)
+        for (size_t g=0;g<count;++g)
+            if (*guards[g] && strstr(lines[i],guards[g])) return true;
+    return false;
+}
+
+/* The saved body takes its path when the transfer completed with a 2xx
+ * response and neither it nor the response's header fields hold a guard:
+ * synced, closed and renamed over the path, whose directory is then
+ * synced.  Otherwise the file is removed. */
+static void commit_save(Job *j, bool complete, char *const *lines, size_t line_count,
+                        bool *saved, bool *refused, int *error) {
+    *saved=false; *refused=false; *error=0;
+    bool keep=complete;
+    if (keep && j->request.save_guard_count &&
+        (lines_hold_guard(lines,line_count,j->request.save_guards,j->request.save_guard_count) ||
+         save_holds_guard(j->save_fd,j->request.save_guards,j->request.save_guard_count))) {
+        *refused=true; keep=false;
+    }
+    if (keep && fsync(j->save_fd)) { *error=errno; keep=false; }
+    if (close(j->save_fd) && keep) { *error=errno; keep=false; }
+    j->save_fd=-1;
+    if (keep && rename(j->save_temp,j->request.save_path)) { *error=errno; keep=false; }
+    if (!keep) unlink(j->save_temp);
+    else {
+        const char *slash=strrchr(j->request.save_path,'/');
+        char *directory=slash?strndup(j->request.save_path,
+            (size_t)(slash-j->request.save_path)+1u):strdup(".");
+        int fd=directory?open(directory,O_RDONLY|O_DIRECTORY|O_CLOEXEC):-1;
+        if (fd>=0) { (void)fsync(fd); close(fd); }
+        free(directory);
+        *saved=true;
+    }
+    free(j->save_temp); j->save_temp=NULL;
+}
+
+/* The final response's header fields, "Name: value" each, at most
+ * CETTA_HTTP_RESPONSE_HEADERS_MAX of them. */
+static void collect_headers(CURL *easy, char ***lines_out, size_t *count_out) {
+    *lines_out=NULL; *count_out=0;
+    char **lines=NULL; size_t count=0;
+    struct curl_header *previous=NULL, *header;
+    while (count<CETTA_HTTP_RESPONSE_HEADERS_MAX &&
+           (header=curl_easy_nextheader(easy,CURLH_HEADER,-1,previous))) {
+        previous=header;
+        size_t size=strlen(header->name)+strlen(header->value)+3u;
+        char *line=malloc(size);
+        char **grown=line?realloc(lines,(count+1u)*sizeof(*lines)):NULL;
+        if (!grown) { free(line); break; }
+        lines=grown;
+        snprintf(line,size,"%s: %s",header->name,header->value);
+        lines[count++]=line;
+    }
+    *lines_out=lines; *count_out=count;
+}
+
 /* These functions execute only on the owner thread. */
 static CURLcode configure(Job *j) {
     j->easy=curl_easy_init();
@@ -238,7 +429,24 @@ static CURLcode configure(Job *j) {
     uint32_t connect=j->request.connect_timeout_ms?j->request.connect_timeout_ms:j->request.timeout_ms;
     if (connect) SET(CURLOPT_CONNECTTIMEOUT_MS,(long)connect);
     if (j->headers) SET(CURLOPT_HTTPHEADER,j->headers);
-    if (!strcmp(j->request.method,"GET")) SET(CURLOPT_HTTPGET,1L);
+    if (j->request.part_count) {
+        j->mime=curl_mime_init(j->easy);
+        if (!j->mime) return CURLE_OUT_OF_MEMORY;
+        for (size_t i=0;i<j->request.part_count;++i) {
+            const CettaHttpPart *p=&j->request.parts[i];
+            curl_mimepart *part=curl_mime_addpart(j->mime);
+            if (!part) return CURLE_OUT_OF_MEMORY;
+            CURLcode c=curl_mime_name(part,p->name);
+            if (c==CURLE_OK)
+                c=p->path?curl_mime_filedata(part,p->path)
+                         :curl_mime_data(part,p->value?p->value:"",p->value_size);
+            if (c==CURLE_OK && p->filename) c=curl_mime_filename(part,p->filename);
+            if (c==CURLE_OK && p->content_type) c=curl_mime_type(part,p->content_type);
+            if (c!=CURLE_OK) return c;
+        }
+        SET(CURLOPT_MIMEPOST,j->mime);
+        if (strcmp(j->request.method,"POST")) SET(CURLOPT_CUSTOMREQUEST,j->request.method);
+    } else if (!strcmp(j->request.method,"GET")) SET(CURLOPT_HTTPGET,1L);
     else {
         SET(CURLOPT_CUSTOMREQUEST,j->request.method);
         j->read_fragment=0; j->read_offset=0;
@@ -248,6 +456,10 @@ static CURLcode configure(Job *j) {
         SET(CURLOPT_POSTFIELDSIZE_LARGE,(curl_off_t)j->body_size);
     }
 #undef SET
+    if (j->request.save_path) {
+        int error=open_save_file(j->request.save_path,&j->save_temp,&j->save_fd);
+        if (error) { j->result.save_errno=error; return CURLE_WRITE_ERROR; }
+    }
     return CURLE_OK;
 }
 
@@ -256,6 +468,7 @@ static void clear_easy(CettaHttpWorker *w, Job *j, bool added) {
         if (added) curl_multi_remove_handle(w->multi,j->easy);
         curl_easy_cleanup(j->easy); j->easy=NULL;
     }
+    curl_mime_free(j->mime); j->mime=NULL;
     curl_slist_free_all(j->headers); j->headers=NULL;
 }
 
@@ -263,15 +476,24 @@ static void finish(CettaHttpWorker *w, Job *j, CURLcode code, bool cancelled) {
     long response=0, request_size=0;
     curl_off_t retry_after=-1;
     bool known=false;
+    char **lines=NULL; size_t line_count=0;
     if (j->easy) {
         curl_easy_getinfo(j->easy,CURLINFO_RESPONSE_CODE,&response);
         struct curl_header *retry_header=NULL;
         if (curl_easy_header(j->easy,"Retry-After",0,CURLH_HEADER,-1,&retry_header)==CURLHE_OK)
             curl_easy_getinfo(j->easy,CURLINFO_RETRY_AFTER,&retry_after);
         known=curl_easy_getinfo(j->easy,CURLINFO_REQUEST_SIZE,&request_size)==CURLE_OK && request_size>=0;
+        if (j->request.save_path) collect_headers(j->easy,&lines,&line_count);
     }
     clear_easy(w,j,j->result.started);
+    bool saved=false, refused=false; int save_error=0;
+    if (j->save_fd>=0)
+        commit_save(j,code==CURLE_OK && !cancelled && response>=200 && response<300,
+                    lines,line_count,&saved,&refused,&save_error);
     pthread_mutex_lock(&w->mutex);
+    j->result.header_lines=lines; j->result.header_count=line_count;
+    j->result.saved=saved; j->result.save_refused=refused;
+    if (save_error) j->result.save_errno=save_error;
     j->result.transport_code=code; j->result.status=response; j->result.cancelled=cancelled;
     j->result.retry_after=(int64_t)retry_after;
     j->result.request_size_known=known; j->result.request_size=request_size;
@@ -490,8 +712,47 @@ static size_t body_bytes(const CettaHttpRequest *r) {
     return total;
 }
 
+/* A text field of a part or a saved request: present when required, at most
+ * `limit` bytes, and free of line breaks where it reaches a header. */
+static bool text_ok(const char *text, size_t limit, bool required, bool header) {
+    if (!text) return !required;
+    size_t n=strnlen(text,limit+1u);
+    return n<=limit && (n || !required) && (!header || !strpbrk(text,"\r\n"));
+}
+
+/* The bytes of a request's parts, save path and guards, or SIZE_MAX when
+ * they are not valid. */
+static size_t file_bytes(const CettaHttpRequest *r) {
+    size_t total=0;
+    if (r->part_count) {
+        if (!r->parts || r->part_count>CETTA_HTTP_PARTS_MAX) return SIZE_MAX;
+        for (size_t i=0;i<r->part_count;++i) {
+            const CettaHttpPart *p=&r->parts[i];
+            if (!text_ok(p->name,1024,true,true) || !text_ok(p->filename,1024,false,true) ||
+                !text_ok(p->content_type,1024,false,true) ||
+                (p->path ? !text_ok(p->path,4096,true,false) || p->value || p->value_size
+                         : p->value_size && !p->value) ||
+                p->value_size>INT_MAX-total) return SIZE_MAX;
+            total+=sizeof(*p)+p->value_size+4u+strlen(p->name)+
+                (p->path?strlen(p->path):0)+(p->filename?strlen(p->filename):0)+
+                (p->content_type?strlen(p->content_type):0);
+        }
+    } else if (r->parts) return SIZE_MAX;
+    if (!text_ok(r->save_path,4096,false,false) || (r->save_path && !*r->save_path) ||
+        r->save_guard_count>16 || (r->save_guard_count && (!r->save_guards || !r->save_path)))
+        return SIZE_MAX;
+    if (r->save_path) total+=strlen(r->save_path)+1u;
+    for (size_t i=0;i<r->save_guard_count;++i) {
+        if (!text_ok(r->save_guards[i],8192,true,false)) return SIZE_MAX;
+        total+=strlen(r->save_guards[i])+1u+sizeof(char *);
+    }
+    return total;
+}
+
 static CettaHttpWorkerStatus measure_request(const CettaHttpRequest *r, size_t *bytes) {
     size_t body_size=r?body_bytes(r):SIZE_MAX;
+    size_t extra=r?file_bytes(r):SIZE_MAX;
+    if (extra==SIZE_MAX || (r->part_count && (body_size || r->body_fragments))) return HTTP_WORKER_INVALID;
     if (!r || !r->id || !r->method || !*r->method || !r->url || body_size>INT_MAX ||
         (strncasecmp(r->url,"http://",7) && strncasecmp(r->url,"https://",8)) ||
         r->header_count>256 || (r->header_count && !r->headers) ||
@@ -505,7 +766,7 @@ static CettaHttpWorkerStatus measure_request(const CettaHttpRequest *r, size_t *
         unsigned char c=(unsigned char)r->method[i];
         if (c<=32 || c>=127 || strchr("()<>@,;:\\\"/[]?={}",c)) return HTTP_WORKER_INVALID;
     }
-    size_t total=sizeof(Job)+(r->header_count+1)*sizeof(char *)+method_size+url_size+body_size+3+
+    size_t total=sizeof(Job)+extra+(r->header_count+1)*sizeof(char *)+method_size+url_size+body_size+3+
         (r->body_fragment_count?r->body_fragment_count:1)*(sizeof(CettaByteFragment *)+sizeof(CettaByteFragment));
     const char *options[]={r->proxy,r->ca_file};
     for (size_t i=0;i<2;++i) if (options[i]) {
@@ -528,6 +789,10 @@ static CettaHttpWorkerStatus clone_request(const CettaHttpRequest *r, size_t byt
     j->request=*r; j->request.method=strdup(r->method); j->request.url=strdup(r->url);
     j->request.body=NULL; j->request.body_size=0;
     j->request.body_fragments=NULL; j->request.body_fragment_count=0;
+    /* Owned below, once every field free_job reads is the job's own. */
+    j->save_fd=-1;
+    j->request.parts=NULL; j->request.part_count=0;
+    j->request.save_path=NULL; j->request.save_guards=NULL; j->request.save_guard_count=0;
     j->request.proxy=r->proxy?strdup(r->proxy):NULL;
     j->request.ca_file=r->ca_file?strdup(r->ca_file):NULL;
     char **headers=calloc(r->header_count+1,sizeof(*headers)); j->request.headers=(const char *const *)headers;
@@ -551,6 +816,42 @@ static CettaHttpWorkerStatus clone_request(const CettaHttpRequest *r, size_t byt
         headers[i]=strdup(r->headers[i]);
         if (!headers[i]) { free_job(j); return HTTP_WORKER_NOMEM; }
         ++j->request.header_count;
+    }
+    if (r->part_count) {
+        CettaHttpPart *parts=calloc(r->part_count,sizeof(*parts));
+        j->request.parts=parts;
+        if (!parts) { free_job(j); return HTTP_WORKER_NOMEM; }
+        j->request.part_count=r->part_count;
+        for (size_t i=0;i<r->part_count;++i) {
+            const CettaHttpPart *from=&r->parts[i];
+            CettaHttpPart *to=&parts[i];
+            to->name=strdup(from->name);
+            to->path=from->path?strdup(from->path):NULL;
+            to->filename=from->filename?strdup(from->filename):NULL;
+            to->content_type=from->content_type?strdup(from->content_type):NULL;
+            to->value_size=from->value_size;
+            if (from->value_size) {
+                void *value=malloc(from->value_size);
+                if (value) memcpy(value,from->value,from->value_size);
+                to->value=value;
+            }
+            if (!to->name || (from->path && !to->path) || (from->filename && !to->filename) ||
+                (from->content_type && !to->content_type) || (from->value_size && !to->value)) {
+                free_job(j); return HTTP_WORKER_NOMEM;
+            }
+        }
+    }
+    if (r->save_path && !(j->request.save_path=strdup(r->save_path))) {
+        free_job(j); return HTTP_WORKER_NOMEM;
+    }
+    if (r->save_guard_count) {
+        char **guards=calloc(r->save_guard_count,sizeof(*guards));
+        j->request.save_guards=(const char *const *)guards;
+        if (!guards) { free_job(j); return HTTP_WORKER_NOMEM; }
+        for (size_t i=0;i<r->save_guard_count;++i) {
+            if (!(guards[i]=strdup(r->save_guards[i]))) { free_job(j); return HTTP_WORKER_NOMEM; }
+            j->request.save_guard_count=i+1u;
+        }
     }
     j->result.id=r->id; j->request_bytes=bytes;
     *out=j; return HTTP_WORKER_OK;
@@ -640,6 +941,7 @@ static bool take_matching(CettaHttpWorker *w, uint64_t id, CettaHttpResult *out)
     bool taken=j!=NULL;
     if (j) {
         *out=j->result; j->result.body=NULL; j->result.body_size=0;
+        j->result.header_lines=NULL; j->result.header_count=0;
         retire(w,j);
     }
     pthread_mutex_unlock(&w->mutex); return taken;
@@ -663,7 +965,7 @@ bool cetta_http_worker_progress(CettaHttpWorker *w, uint64_t id, CettaHttpProgre
             .terminal=j->state==OBSERVING || j->state==READY,
             .elapsed_ms=j->started_at?now-j->started_at:0,
             .quiet_ms=j->started_at?now-(j->last_byte_at?j->last_byte_at:j->started_at):0,
-            .response_bytes=j->result.body_size};
+            .response_bytes=j->result.body_size+(size_t)j->result.saved_bytes};
     }
     pthread_mutex_unlock(&w->mutex); return j!=NULL;
 }

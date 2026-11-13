@@ -5540,6 +5540,14 @@ static void ty_ann_index_rebuild(Space *s);
 static bool exact_index_rebuild(Space *s);
 static void recompute_has_non_exact_atoms(Space *s);
 
+/* Whether a row has variables (has_non_exact_atoms) after rows left: no
+ * removal adds such a row, and only removing one can take the last away,
+ * so the record stays as it stood, current or not, unless one left. */
+static inline void space_note_rows_left(Space *s, bool non_exact_left) {
+    if (non_exact_left)
+        s->native.has_non_exact_atoms_dirty = true;
+}
+
 static TermUniverse g_space_default_universe = {0};
 static Arena g_space_default_arena = {0};
 static bool g_space_default_universe_ready = false;
@@ -8655,6 +8663,7 @@ static void space_logical_positions_publish(
         presence_removed++;
     }
     SpaceMatchNativeState *native_state = &s->match_backend.native;
+    bool non_exact_left = false;
     for (CettaCount i = 0u; i < count; i++) {
         space_marks_mark(s, rows[i]);
         /* The row leaves the match trie and the exact index now, so lookups
@@ -8662,6 +8671,7 @@ static void space_logical_positions_publish(
          * settle, and their reader drops marked rows. */
         AtomId atom_id = space_atom_id_storage_load_at(
             s->native.atom_ids, s->native.atom_id_width_bits, rows[i]);
+        non_exact_left = non_exact_left || !atom_id_is_exact_indexable(s, atom_id);
         term_universe_release(s->native.universe, atom_id);
         if (native_state->match_trie && !native_state->match_trie_dirty)
             (void)disc_remove_id(native_state->match_trie,
@@ -8671,7 +8681,7 @@ static void space_logical_positions_publish(
             s->native.exact_idx_dirty = true;
         space_path_indexes_note_mark(s, rows[i], atom_id);
     }
-    s->native.has_non_exact_atoms_dirty = true;
+    space_note_rows_left(s, non_exact_left);
     if (presence_follows) {
         s->native.id_present_synced_len -= presence_removed;
         id_present_keys_compact(&s->native,
@@ -15255,6 +15265,10 @@ static CettaMatchCompletion space_remove_local_index(Space *s, CettaIndex remove
 
     AtomId swap_removed_id = CETTA_ATOM_ID_NONE, swap_moved_id = CETTA_ATOM_ID_NONE;
     CettaIndex swap_moved_from = 0u;
+    bool exactness_dirty = s->native.has_non_exact_atoms_dirty;
+    bool non_exact_left = !atom_id_is_exact_indexable(s,
+        space_atom_id_storage_load_at(s->native.atom_ids,
+                                      s->native.atom_id_width_bits, remove_idx));
     if (space_is_ordered(s)) {
         size_t width = space_atom_id_width_bytes_bits(s->native.atom_id_width_bits);
         AtomId removed_id = space_atom_id_storage_load_at(
@@ -15286,6 +15300,8 @@ static CettaMatchCompletion space_remove_local_index(Space *s, CettaIndex remove
     space_mark_indexes_dirty(s);
     s->native.eq_idx_dirty = !retained.equations;
     s->native.ty_idx_dirty = !retained.declarations;
+    s->native.has_non_exact_atoms_dirty = exactness_dirty;
+    space_note_rows_left(s, non_exact_left);
     if (exact_current && swap_removed_id != CETTA_ATOM_ID_NONE)
         s->native.exact_idx_dirty = !exact_index_note_swap_remove(
             s, remove_idx, swap_removed_id, swap_moved_from, swap_moved_id);
@@ -15665,6 +15681,8 @@ static bool space_remove_atom_id_rows(Space *s, AtomId atom_id) {
         SpaceDispatchRetention retained = space_transport_dispatch_coordinates(
             s, equation_projection, NULL, i);
         space_pinned_occurrences_detach(s);
+        bool exactness_dirty = s->native.has_non_exact_atoms_dirty;
+        bool non_exact_left = !atom_id_is_exact_indexable(s, atom_id);
         if (space_is_ordered(s)) {
             size_t width = space_atom_id_width_bytes_bits(s->native.atom_id_width_bits);
             memmove(s->native.atom_ids + ((size_t)i * width),
@@ -15675,6 +15693,8 @@ static bool space_remove_atom_id_rows(Space *s, AtomId atom_id) {
             space_mark_indexes_dirty(s);
             s->native.eq_idx_dirty = !retained.equations;
             s->native.ty_idx_dirty = !retained.declarations;
+            s->native.has_non_exact_atoms_dirty = exactness_dirty;
+            space_note_rows_left(s, non_exact_left);
             space_match_backend_note_remove(s);
         } else {
             CettaIndex moved_from = s->native.len - 1u;
@@ -15689,6 +15709,8 @@ static bool space_remove_atom_id_rows(Space *s, AtomId atom_id) {
             space_mark_indexes_dirty(s);
             s->native.eq_idx_dirty = !retained.equations;
             s->native.ty_idx_dirty = !retained.declarations;
+            s->native.has_non_exact_atoms_dirty = exactness_dirty;
+            space_note_rows_left(s, non_exact_left);
             if (exact_current)
                 s->native.exact_idx_dirty = !exact_index_note_swap_remove(
                     s, i, atom_id, moved_from, tail_id);
@@ -15916,14 +15938,20 @@ static bool space_contract_occurrence_mask(
                         source_index))
                     exact_current = false;
             }
+            /* Settling drops rows that left when they were marked, and
+             * accounted then for whether they had variables. */
+            bool exactness_dirty = s->native.has_non_exact_atoms_dirty;
+            bool non_exact_left = false;
             for (CettaIndex source_index = 0u;
                  !settling && source_index < logical_len; source_index++) {
-                if (remove_mask[source_index] != 0u)
-                    term_universe_release(
-                        s->native.universe,
-                        space_atom_id_storage_load_at(
-                            s->native.atom_ids, s->native.atom_id_width_bits,
-                            source_index));
+                if (remove_mask[source_index] != 0u) {
+                    AtomId atom_id = space_atom_id_storage_load_at(
+                        s->native.atom_ids, s->native.atom_id_width_bits,
+                        source_index);
+                    non_exact_left = non_exact_left ||
+                        !atom_id_is_exact_indexable(s, atom_id);
+                    term_universe_release(s->native.universe, atom_id);
+                }
             }
             CettaCount moved = 0u;
             for (CettaIndex source_index = 0u;
@@ -15958,6 +15986,8 @@ static bool space_contract_occurrence_mask(
                 s->native.id_present_dirty = presence_dirty;
             s->native.eq_idx_dirty = !retained.equations;
             s->native.ty_idx_dirty = !retained.declarations;
+            s->native.has_non_exact_atoms_dirty = exactness_dirty;
+            space_note_rows_left(s, non_exact_left);
             s->native.exact_idx_dirty =
                 !exact_current ||
                 !exact_index_transport(&s->native.exact_idx,

@@ -210,6 +210,12 @@ bool space_head_index_admits(const Atom *pattern);
  * the Space keeps no such index. */
 bool space_head_index_open(Space *space, const Atom *pattern,
                            CettaSpaceHeadCursor *cursor);
+/* A cursor over the rows any pattern headed by the symbol HEAD over LENGTH
+ * elements may meet, whatever its other elements: HEAD's rows of LENGTH,
+ * those of an open head of LENGTH and the rows every query reads, in row
+ * order.  LENGTH is at least 2.  False when the Space keeps no such index. */
+bool space_head_index_open_key(Space *space, SymbolId head, CettaExprLen length,
+                               CettaSpaceHeadCursor *cursor);
 /* Retain this index only under a pinned occurrence view. No rows are lent
  * here; first construction builds the Space's shared head projection. */
 CettaSpaceHeadIndex *space_head_index_prepare(Space *space);

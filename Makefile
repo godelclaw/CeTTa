@@ -528,7 +528,7 @@ LIB_PROLOG_LIBDIR :=
 LIB_PROLOG_VERSION :=
 LIB_PROLOG_CONFIG_ID := disabled
 LIB_PROLOG_RPATH :=
-LIB_PROLOG_SRC := src/petta_libpl_stub.c
+LIB_PROLOG_SRC := src/petta_libpl_stub.c src/petta_swi_arith.c
 endif
 HTTP_ENABLED := 0
 HTTP_PROVIDER_CURL := 0
@@ -7933,6 +7933,41 @@ test-space-dense-scaling: $(BIN) tests/petta/dense_relations_scaling.metta \
 ifeq ($(ENABLE_SANITIZERS),1)
 	@$(MAKE) -s BUILD=$(BUILD_CANON) ENABLE_SANITIZERS=0 test-space-dense-scaling
 endif
+
+# Lookups grow linearly with the space in PeTTa: a head the space does not
+# hold or one atom holds, the first argument unbound, and a notice scan's
+# ground misses after removals, timed at 500 and 4,000 atoms against a
+# quadratic control the check must reject.  The answers of lookups by head
+# past the size read row by row, with rows of a variable head, removals and
+# rows with variables, stay as they were in PeTTa and HE, and so do those of
+# a lookup by head joined with a pattern of a variable head while removed
+# rows are marked, with relations from a head's first fact and without.
+.PHONY: test-space-growth-v1
+test-all: test-space-growth-v1
+test-space-growth-v1: $(BIN) tests/support/check_space_growth_v1.py \
+		tests/space_head_rows.metta tests/space_head_rows.petta.expected \
+		tests/space_head_rows.he.expected tests/space_head_rows_kept.metta \
+		tests/space_head_rows_kept.petta.expected \
+		tests/space_head_rows_kept.he.expected
+	@for lang in petta he; do \
+		actual=$$($(CETTA_BIN_INVOKE) --lang $$lang tests/space_head_rows.metta 2>&1); \
+		if [ "$$actual" != "$$(cat tests/space_head_rows.$$lang.expected)" ]; then \
+			echo "FAIL: lookups by head ($$lang)"; \
+			diff -u tests/space_head_rows.$$lang.expected <(printf '%s\n' "$$actual") | head -20; \
+			exit 1; \
+		fi; \
+		for route in "" CETTA_SPACE_DENSE=eager; do \
+			actual=$$(env $$route $(CETTA_BIN_INVOKE) --lang $$lang \
+				tests/space_head_rows_kept.metta 2>&1); \
+			if [ "$$actual" != "$$(cat tests/space_head_rows_kept.$$lang.expected)" ]; then \
+				echo "FAIL: a lookup by head over facts kept in relations ($$lang $${route:-native})"; \
+				diff -u tests/space_head_rows_kept.$$lang.expected <(printf '%s\n' "$$actual") | head -20; \
+				exit 1; \
+			fi; \
+		done; \
+	done; \
+	echo "PASS: lookups by head answer as before (PeTTa and HE)"
+	@python3 tests/support/check_space_growth_v1.py ./$(BIN)
 
 # A PeTTa document read a few forms at a time answers as one read whole, an
 # import calling an equation defined after it among them; and reading a
@@ -37350,6 +37385,15 @@ test-all: test-io-tcp-v1
 test-io-tcp-v1: $(BIN) tests/support/check_io_tcp_v1.py
 	@python3 tests/support/check_io_tcp_v1.py ./$(BIN)
 
+# HTTP bodies through files, (http:save PATH) and (http:multipart PART ...),
+# in HE, PeTTa and Prime against a local peer; a build without the HTTP
+# provider reports a skip.
+.PHONY: test-io-http-files-v1
+test-all: test-io-http-files-v1
+test-io-http-files-v1: $(BIN) lib/io.metta lib/petta/io.metta lib/prime/io.metta \
+		tests/support/check_io_http_files_v1.py
+	@python3 tests/support/check_io_http_files_v1.py ./$(BIN)
+
 .PHONY: test-filesystem-core-v1 test-filesystem-core-body-v1
 test-filesystem-core-v1:
 	+$(MAKE) BUILD=core ENABLE_PYTHON=0 ENABLE_LIB_PROLOG=0 ENABLE_HTTP=0 ENABLE_GMP=0 \
@@ -54049,3 +54093,39 @@ test-outcome-library: $(BIN)
 		fi; \
 	done; \
 	echo "PASS: lib/outcome (petta default, extended and ai, expanded and per call; he, extended)"
+
+# PeTTa arithmetic off the native fast path is SWI-Prolog's is/2 and
+# comparison, which a build without Prolog computes natively: the expected
+# answers are SWI 10's, and both builds give them.
+.PHONY: test-petta-swi-arithmetic
+test-all: test-petta-swi-arithmetic
+test-petta-swi-arithmetic: $(BIN) tests/petta/swi_arithmetic.metta \
+		tests/petta/swi_arithmetic.expected
+	@for profile in default extended; do \
+		flags="--lang petta"; [ $$profile = default ] || flags="$$flags --profile $$profile"; \
+		actual=$$($(CETTA_BIN_INVOKE) $$flags tests/petta/swi_arithmetic.metta 2>&1); \
+		if [ "$$actual" != "$$(cat tests/petta/swi_arithmetic.expected)" ]; then \
+			echo "FAIL: PeTTa arithmetic as SWI's is/2 (petta $$profile)"; \
+			diff -u tests/petta/swi_arithmetic.expected <(printf '%s\n' "$$actual") | head -20; \
+			exit 1; \
+		fi; \
+	done; \
+	echo "PASS: PeTTa arithmetic off the fast path answers as SWI's is/2 ($$(wc -l < tests/petta/swi_arithmetic.expected) rows, default and extended)"
+
+# A variable pattern over a space a symbol names, with no native rows and no
+# foreign engine to hold any, has no answer, with and without Prolog.
+.PHONY: test-petta-symbol-space-variable-match
+test-all: test-petta-symbol-space-variable-match
+test-petta-symbol-space-variable-match: $(BIN) \
+		tests/petta/symbol_space_variable_match.metta \
+		tests/petta/symbol_space_variable_match.expected
+	@for profile in default extended; do \
+		flags="--lang petta"; [ $$profile = default ] || flags="$$flags --profile $$profile"; \
+		actual=$$($(CETTA_BIN_INVOKE) $$flags tests/petta/symbol_space_variable_match.metta 2>&1); \
+		if [ "$$actual" != "$$(cat tests/petta/symbol_space_variable_match.expected)" ]; then \
+			echo "FAIL: variable-pattern match over a symbol space (petta $$profile)"; \
+			diff -u tests/petta/symbol_space_variable_match.expected <(printf '%s\n' "$$actual") | head -20; \
+			exit 1; \
+		fi; \
+	done; \
+	echo "PASS: a variable pattern over a symbol space with no rows has no answer (default and extended)"

@@ -85016,8 +85016,9 @@ static PettaMachineHost petta_eval_machine_host(
             petta_eval_machine_foreign_named_arity_resolved,
         .foreign_named_arity_resolving =
             petta_eval_machine_foreign_named_arity_resolving,
-        .foreign_predicate_defined =
-            petta_eval_machine_foreign_predicate_defined,
+        /* A build without an embedded Prolog has no foreign predicates. */
+        .foreign_predicate_defined = CETTA_BUILD_WITH_LIB_PROLOG
+            ? petta_eval_machine_foreign_predicate_defined : NULL,
         .library_function_current =
             petta_eval_machine_library_function_current,
         .extension_call =

@@ -2692,14 +2692,22 @@ bool space_head_index_open(Space *space, const Atom *pattern,
                            CettaSpaceHeadCursor *cursor) {
     space_dense_settle_for_pattern(space, pattern);
     memset(cursor, 0, sizeof(*cursor));
-    if(!space_head_index_admits(pattern))return false;
+    return space_head_index_admits(pattern) &&
+        space_head_index_open_key(space, atom_symbol_current_id(pattern->expr.elems[0]),
+                                  pattern->expr.len, cursor);
+}
+
+bool space_head_index_open_key(Space *space, SymbolId head, CettaExprLen length,
+                               CettaSpaceHeadCursor *cursor) {
+    memset(cursor, 0, sizeof(*cursor));
+    if (head == SYMBOL_ID_NONE || length < 2u || length > UINT32_MAX)
+        return false;
+    space_dense_settle_for_head(space, head, length);
     CettaSpaceHeadIndex *index = space_head_index_prepare(space);
     if (!index)
         return false;
-    CettaExprLen length = pattern->expr.len;
     cursor->index = index;
-    cursor->keyed = head_posting_find(
-        index, head_key(atom_symbol_current_id(pattern->expr.elems[0]), length));
+    cursor->keyed = head_posting_find(index, head_key(head, length));
     cursor->open = head_posting_find(index, head_key(SYMBOL_ID_NONE, length));
     /* A data symbol need not be registered. Its keyed probe then is the
      * same open-head posting, which must still be enumerated only once. */

@@ -120,9 +120,11 @@ bool petta_libpl_call(
  * PeTTa arithmetic off CeTTa's native fast path.  The embedded Prolog
  * evaluates functor(args...) with is/2, or with no functor the single
  * argument, so the value, the float flags in force and any error are
- * exactly SWI-PeTTa's.  *out is the number as a VALUE, or the error is/2
- * raised as (Error Formal Context), RAISED.  False when no embedded Prolog
- * is available.
+ * exactly SWI-PeTTa's; a build without Prolog computes the same natively
+ * under the reference's flags (petta_swi_arith.c).  *out is the number as a
+ * VALUE, or the error is/2 raised as (Error Formal Context), RAISED.  False
+ * where the question is declined: an argument that does not cross to Prolog,
+ * or no embedded Prolog available in that build.
  */
 bool petta_libpl_evaluate_arithmetic(
     Arena *arena, const char *functor, Atom **args, uint32_t nargs,

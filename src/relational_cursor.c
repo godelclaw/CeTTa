@@ -451,8 +451,9 @@ bool cetta_relational_plan_enumerate(const CettaRelationalPlan *plan,
     if (!visit || !count || !cetta_relational_plan_valid_for(plan, space))
         return false;
     if (plan->rows_unsorted) {
-        /* One pattern: each row below scan_rows that matches it is a
-         * solution of weight one, matched again in turn. */
+        /* One pattern: each row below scan_rows (each candidate the head
+         * index gave, where it did) that matches it is a solution of weight
+         * one, matched again in turn. */
         const RelationalFactor *factor = &plan->factors[0];
         const TermUniverse *universe = space->native.universe;
         size_t variables = plan->info.variable_count;
@@ -465,7 +466,10 @@ bool cetta_relational_plan_enumerate(const CettaRelationalPlan *plan,
         }
         bool stopped = false;
         uint64_t total = 0u;
-        for (CettaIndex row = 0u; !stopped && row < plan->scan_rows; row++) {
+        CettaCount rows = plan->scan_candidates ? plan->scan_candidate_count
+                                                : plan->scan_rows;
+        for (CettaCount at = 0u; !stopped && at < rows; at++) {
+            CettaIndex row = plan->scan_candidates ? plan->scan_candidates[at] : at;
             AtomId id = space_get_atom_id_at64(space, row);
             if (tu_kind(universe, id) != ATOM_EXPR ||
                 tu_arity(universe, id) != plan->scan_len)

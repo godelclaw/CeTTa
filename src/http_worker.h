@@ -22,6 +22,20 @@ typedef enum {
     HTTP_WORKER_UNAVAILABLE
 } CettaHttpWorkerStatus;
 
+#define CETTA_HTTP_PARTS_MAX 64u
+#define CETTA_HTTP_RESPONSE_HEADERS_MAX 256u
+
+/* One part of a multipart/form-data body: a field and its bytes, or a file
+ * libcurl reads from `path` as it sends the body. */
+typedef struct {
+    const char *name;
+    const void *value;              /* a field's bytes; NULL for a file */
+    size_t value_size;
+    const char *path;               /* a file part's source */
+    const char *filename;           /* NULL: the path's base name */
+    const char *content_type;       /* NULL: libcurl's choice */
+} CettaHttpPart;
+
 typedef struct {
     uint64_t id;                     /* transport handle, not a durable ID */
     const char *method, *url;
@@ -35,6 +49,21 @@ typedef struct {
     size_t body_size;
     CettaByteFragment *const *body_fragments;
     size_t body_fragment_count;
+    /* A multipart/form-data body, in place of the above: libcurl builds it
+     * and its Content-Type with the boundary; a file is read when sent. */
+    const CettaHttpPart *parts;
+    size_t part_count;
+    /* A 2xx response's body goes to this file instead of memory, so it may
+     * hold any bytes and need not fit the response budget.  It is written to
+     * a new file beside the path, which takes the path only when the
+     * transfer completes, and is removed otherwise.  A response of another
+     * status keeps its body in memory.  The final response's header fields
+     * are reported with it. */
+    const char *save_path;
+    /* Bytes a saved body must not contain, such as a credential the request
+     * carries: a body holding one is removed and never takes the path. */
+    const char *const *save_guards;
+    size_t save_guard_count;
     uint32_t timeout_ms;
     /* Independent connect, first body byte, and subsequent body idle limits.
      * Zero disables first/idle; zero connect preserves the legacy total cap.
@@ -66,6 +95,15 @@ typedef struct {
     long request_size;              /* libcurl diagnostic, not a retry permit */
     unsigned char *body;
     size_t body_size;
+    /* For a request with save_path.  The final response's header fields in
+     * order, each "Name: value"; whether a 2xx body took the path, and its
+     * size; the errno that kept it from the path (creating, writing,
+     * syncing or renaming the file); whether it held a guarded byte string. */
+    char **header_lines;
+    size_t header_count;
+    bool saved, save_refused;
+    uint64_t saved_bytes;
+    int save_errno;
 } CettaHttpResult;
 
 typedef struct {
