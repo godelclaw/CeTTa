@@ -2546,9 +2546,10 @@ static bool he_prepared_completion_admit(Space *space, Arena *arena,
     bool *completed) {
     *completed = false;
     if (eval_current_language_id() != CETTA_LANGUAGE_HE) return true;
-    if (!space || space->overlay_base ||
-        (space_has_dependencies(space) &&
-         !(active_eval_session()->experiments & CETTA_EXPERIMENT_HE_COMPOSED_EXECUTION)))
+    /* A root's imported modules are read through its composed view, and
+     * its program token moves when a module it links changes, so the
+     * analysis and its cached decisions see the modules too. */
+    if (!space || space->overlay_base)
         return false;
     if ((!call || arguments_are_values) && invocation)
         call = cetta_invocation_materialize(arena, invocation);
@@ -2748,8 +2749,6 @@ static bool he_stream_call_admitted(Space *space, Arena *arena, Atom *call) {
  * is decided once per program revision. */
 static bool he_stream_admitted(Space *space, Arena *arena, SymbolId head) {
     if (!space || head == SYMBOL_ID_NONE ||
-        (space_has_dependencies(space) &&
-         !(active_eval_session()->experiments & CETTA_EXPERIMENT_HE_COMPOSED_EXECUTION)) ||
         !eval_space_has_equations(space, head))
         return false;
     const HeClosureDecision *decided =
@@ -2792,8 +2791,6 @@ static bool he_stream_admitted(Space *space, Arena *arena, SymbolId head) {
 static bool he_compiled_admitted(Space *space, Arena *arena, SymbolId head,
                                  bool raises) {
     if (!space || head == SYMBOL_ID_NONE ||
-        (space_has_dependencies(space) &&
-         !(active_eval_session()->experiments & CETTA_EXPERIMENT_HE_COMPOSED_EXECUTION)) ||
         !eval_space_has_equations(space, head))
         return false;
     const HeClosureDecision *decided =
