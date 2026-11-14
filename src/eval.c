@@ -76412,9 +76412,15 @@ static PreparedPureProgramCache *petta_eval_machine_prepared_pure_cache(
         /* An HE call on the shared machine belongs to the invocation that
          * started it: the invocation's cache already holds its programs and
          * delimits its fallback, so a resource decline is not retried. */
+        /* A capture evaluates its chunk in a nested machine. That machine's
+         * own cache would start empty and compile every head the chunk
+         * reaches on each capture; the execution's cache is validated by
+         * the same program token, capability, library, profile and
+         * language checks and keeps the programs across captures. */
         if (eval_current_language_id() == CETTA_LANGUAGE_PRIME ||
             (eval_current_language_id() == CETTA_LANGUAGE_HE &&
-             g_he_shared_execution))
+             g_he_shared_execution) ||
+            g_outcome_kernel_capture_depth)
             program_cache = eval_execution_prepared_cache();
         if (!program_cache &&
             eval_current_language_id() == CETTA_LANGUAGE_PRIME &&
