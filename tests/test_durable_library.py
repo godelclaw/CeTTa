@@ -115,16 +115,23 @@ def main():
             assert lines[-1] == denied and not any("BATCH_EXECUTED" in line for line in lines), lines
             # COMM executes a deferred payload in its own evaluator invocation.
             # It must not gain the CLI's administrative authority.
+            # rhometta:run-canonical takes its state as an Atom, so a literal
+            # state is not reduced before the run: PeTTa would pass a nested
+            # (rhometta:eval ...) on unreduced and the runtime would reject it
+            # as an unknown form, testing nothing.  Spell the payload as the
+            # wrapper rhometta:eval builds, which both languages deliver.
             source = opening + '!(import! &self rhometta)\n'
             source += f'''!(rhometta:run-canonical
               (rho:par
-                (rho:send (rho:quote rho:nil) (rhometta:eval {attempt}))
+                (rho:send (rho:quote rho:nil) (rho:eval-payload (quote {attempt})))
                 (rho:recv (rho:quote rho:nil) $x (rho:drop $x))))
               !(durable:read "outbox")
               !(durable:close)
 '''
             lines = run(binary, language, directory, source)
-            assert any('commit-boundary-required' in line for line in lines), lines
+            # The payload ran (its refusal came back as a value) and was refused.
+            assert any(line.startswith('(rho:val (durable:failure commit-boundary-required)')
+                       for line in lines), lines
             assert lines[-2] == ('(durable:snapshot "EPOCH" 2 ('
                 '(durable:record "outbox" "send:1" (send "test" "reply"))))'), lines
             imported = directory / "attempt.metta"
