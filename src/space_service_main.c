@@ -3817,9 +3817,16 @@ int main(int argc,char **argv) {
     symbol_table_init_builtins(&symbols,&g_builtin_syms);
     int listener=-1, shared=-1, result=1;
     struct stat socket_identity={0}, shared_identity={0};
+    /* Take stop requests before any start-up work. A stop that arrives while
+     * the journal is replayed ends the service once replay is done, before
+     * a socket is bound; none ends it with a socket bound and unserved. */
+    struct sigaction action={.sa_handler=stop,.sa_flags=SA_RESTART}; sigemptyset(&action.sa_mask);
+    sigaction(SIGINT,&action,NULL); sigaction(SIGTERM,&action,NULL);
+    signal(SIGPIPE,SIG_IGN);
     if (!random_id(s->boot) || !directory_open(s,directory) || !recover(s)) {
         fprintf(stderr,"space-service: storage unavailable or corrupt\n"); goto done;
     }
+    if (stopping) { fprintf(stderr,"space-service: stopped during start-up\n"); result=0; goto done; }
     listener=listen_socket(path,0600,(gid_t)-1);
     if (listener<0) { fprintf(stderr,"space-service: socket unavailable\n"); goto done; }
     if (lstat(path,&socket_identity)) goto done;
@@ -3833,9 +3840,6 @@ int main(int argc,char **argv) {
             fprintf(stderr,"space-service: shared socket unavailable\n"); goto done;
         }
     }
-    struct sigaction action={.sa_handler=stop}; sigemptyset(&action.sa_mask);
-    sigaction(SIGINT,&action,NULL); sigaction(SIGTERM,&action,NULL);
-    signal(SIGPIPE,SIG_IGN);
     /* Check the stop flag with these signals blocked, then unblock them
      * atomically in ppoll. A stop between the check and poll must not wait
      * for the ordinary 30-second idle deadline. */

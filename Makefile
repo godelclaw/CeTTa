@@ -53180,6 +53180,12 @@ test-store-write-faults: value-worker space-service tests/support/check_store_wr
 		tests/support/store_write_fault.c tests/support/store_fault_server.metta
 	$(PYTHON) tests/support/check_store_write_faults.py $(VALUE_WORKER_BIN) $(SPACE_SERVICE_BIN)
 
+.PHONY: test-service-start-stop
+test-all: test-service-start-stop
+test-service-start-stop: value-worker space-service tests/support/check_service_start_stop.py \
+		tests/support/service_start_gate.metta
+	$(PYTHON) tests/support/check_service_start_stop.py $(SPACE_SERVICE_BIN) $(VALUE_WORKER_BIN)
+
 .PHONY: test-remote-ranges
 test-all: test-remote-ranges
 test-remote-ranges: $(BIN) value-worker

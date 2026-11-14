@@ -487,8 +487,15 @@ static bool private_parent(const char *path) {
 int cetta_value_service_run(CettaLibraryContext *context,Space *program,Registry *registry,Arena *permanent,const char *configuration) {
     Host host={.context=context,.program=program,.registry=registry,.permanent=permanent,.fuel=1000000,.next_resource=1};
     arena_init_detached(&host.configuration);arena_init_detached(&host.maintenance[0]);arena_init_detached(&host.maintenance[1]);int listener=-1,lock=-1,rc=1;struct stat bound={0};
-    struct sigaction prior_term,prior_int;bool signals=false;
-    if (!configure(&host,configuration)) { fputs("value service: invalid configuration\n",stderr);goto done; }
+    /* Take stop requests before any start-up work: a stop while the
+     * configuration is evaluated ends the service before it binds its socket,
+     * never with the socket bound and unserved. The loop's poll still wakes. */
+    struct sigaction prior_term,prior_int;bool signals=true;
+    struct sigaction action={.sa_handler=stop,.sa_flags=SA_RESTART};sigemptyset(&action.sa_mask);stopping=0;
+    sigaction(SIGTERM,&action,&prior_term);sigaction(SIGINT,&action,&prior_int);
+    bool configured=configure(&host,configuration);
+    if (stopping) { fputs("value service: stopped during start-up\n",stderr);rc=0;goto done; }
+    if (!configured) { fputs("value service: invalid configuration\n",stderr);goto done; }
     if (!private_parent(host.path)) { fputs("value service: socket directory unavailable\n",stderr);goto done; }
     char *lock_path=malloc(strlen(host.path)+6);if (!lock_path) goto done;
     sprintf(lock_path,"%s.lock",host.path);lock=open(lock_path,O_RDWR|O_CREAT|O_CLOEXEC|O_NOFOLLOW,0600);free(lock_path);
@@ -500,8 +507,6 @@ int cetta_value_service_run(CettaLibraryContext *context,Space *program,Registry
     if (host.clients) for (size_t i=0;i<host.client_count;i++) host.clients[i].fd=-1;
     host.resources=calloc(host.resource_count,sizeof(*host.resources));
     struct pollfd *fds=calloc(host.client_count+1,sizeof(*fds));if (!host.clients || !host.resources || !fds) { free(fds);goto done; }
-    struct sigaction action={.sa_handler=stop};sigemptyset(&action.sa_mask);stopping=0;
-    sigaction(SIGTERM,&action,&prior_term);sigaction(SIGINT,&action,&prior_int);signals=true;
     while (!stopping && !closed(&host)) {
         bool reading=!host.closing;
         fds[0]=(struct pollfd){reading ? listener : -1,POLLIN,0};
