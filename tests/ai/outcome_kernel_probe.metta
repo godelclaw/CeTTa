@@ -1,0 +1,23 @@
+!(ai:experiment outcome-kernel)
+!(import! &self "../../lib/outcome_kernel.metta")
+
+!(outcome:kind (outcome:value 3))
+!(outcome:payload (outcome:value 3))
+!(outcome:kind (outcome:value (Error data (Fault ordinary))))
+!(outcome:kind (outcome:raise (Error first (Forbidden detail))))
+!(outcome:kind (outcome:incomplete (Error stopped (Incomplete budget))))
+!(outcome:kind (NativeHandle outcome-kernel-event 1))
+!(outcome:payload (outcome:capture (+ 1 2)))
+!(outcome:kind (outcome:capture (/ 1 0)))
+!(outcome:kind (outcome:budget (+ 1 2) 0))
+!(collapse (outcome:capture (superpose ())))
+!(outcome:payload (outcome:capture ()))
+
+(= (kernel:divide $n $d) (/ (+ $n 1) $d))
+!(outcome:payload (outcome:capture (kernel:divide 5 2)))
+!(outcome:kind (outcome:capture (kernel:divide 5 0)))
+!(let $x 7 (outcome:payload (outcome:capture (+ $x 1))))
+
+!(chain (eval (outcome:payload (outcome:value (Error data (Fault ordinary))))) $x (Box $x))
+!(chain (eval (outcome:payload (outcome:observe (outcome:raise (Error first (Forbidden detail)))))) $x (Box $x))
+!(let $event (outcome:value 8) (outcome:kind (outcome:payload (outcome:value $event))))

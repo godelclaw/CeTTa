@@ -10485,7 +10485,15 @@ static Atom *prepared_pure_execute_intrinsic(
         arguments = petta_semantics_materialize_arguments(arena, arguments, arity);
         if (!arguments)
             return NULL;
-        Atom *result = grounded_dispatch(arena, head, (Atom **)arguments, arity);
+        CettaCallOutcome returned;
+        if (!grounded_call(arena, head, (Atom **)arguments, arity, &returned))
+            return NULL;
+        /* The completed native call, not its internal producer helpers,
+         * crosses the dynamic handler boundary. Ordinary values need no
+         * new role marks and composite native cleanup can finish first. */
+        if (returned.kind == CETTA_CALL_RAISED && eval_outcome_kernel_native_raise)
+            (void)eval_outcome_kernel_native_raise(returned.term);
+        Atom *result = returned.kind == CETTA_CALL_VALUE ? returned.term : NULL;
         return result && !atom_is_empty_or_error(result) ? result : NULL;
     }
     case CETTA_GSLT_PREPARED_PURE_INTRINSIC_BOOLEAN_DISPATCH: {

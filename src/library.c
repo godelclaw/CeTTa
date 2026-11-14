@@ -14383,6 +14383,10 @@ static Atom *cetta_library_dispatch_native_value(
 bool cetta_library_call_native(CettaLibraryContext *ctx, Space *space,
                                Arena *a, Atom *head, Atom **args,
                                uint32_t nargs, CettaCallOutcome *out) {
+    if (head && head->kind == ATOM_SYMBOL &&
+        atom_symbol_current_id(head) >= g_builtin_syms.lib_outcome_capture &&
+        atom_symbol_current_id(head) <= g_builtin_syms.lib_outcome_pack)
+        return cetta_eval_outcome_kernel_call(ctx, space, a, head, args, nargs, out);
     Atom **visible = library_native_arguments(a, args, nargs);
     if (nargs && !visible) {
         eval_native_interrupt(CETTA_EVAL_INCOMPLETE_HOST_FAILURE);

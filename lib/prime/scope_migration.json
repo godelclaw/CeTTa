@@ -776,6 +776,21 @@
       "output_sha256": "b9108990eb3214f9ddd48152d6a2b46918ea2d0fdfe4a6bd1d288097fde7689a"
     },
     {
+      "source": "outcome_compile.metta",
+      "generator": "library_spelling.py",
+      "output_sha256": "a418129b9763ac0120b638f274656e5e3584aa550296dc52507aaf316f31bf40"
+    },
+    {
+      "source": "outcome_kernel.metta",
+      "generator": "library_spelling.py",
+      "output_sha256": "29be3fdc7f9056757fb338ed7244884b6479beff939ecced212d987b8c1d7bfa"
+    },
+    {
+      "source": "outcome_kernel_expansion.metta",
+      "generator": "library_spelling.py",
+      "output_sha256": "8fd957d9add1e2d806f7c897a565490f7f7cac94483d098b62ea1cf9fdf5a198"
+    },
+    {
       "source": "re.metta",
       "generator": "library_spelling.py",
       "output_sha256": "049085eb033f7f7875084e69e0ed49e2dc423afb4402982bdb896c8e79dffc26"

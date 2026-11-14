@@ -20082,9 +20082,21 @@ NORMAL_TEST_TARGETS := \
 	test-petta-translator-expansion \
 	test-outcome-library
 
+NORMAL_TEST_TARGETS += test-outcome-kernel
 .PHONY: test test-all test-test-target-scope
 test: $(NORMAL_TEST_TARGETS)
 test-all: test
+
+.PHONY: test-outcome-kernel-native
+test-outcome-kernel-native: $(BIN) $(FALLBACK_EVAL_TEST_LINK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -g -o runtime/test_outcome_kernel-$(BUILD_OBJ_TAG) tests/support/test_outcome_kernel.c $(FALLBACK_EVAL_TEST_LINK_OBJ) $(BRIDGE_DEPS) $(LDFLAGS) -Wl,--wrap=grounded_call,--wrap=cetta_prepared_pure_program_execute_closed_controlled,--wrap=cetta_prepared_pure_program_execute_closed_optional,--wrap=calloc
+	@runtime/test_outcome_kernel-$(BUILD_OBJ_TAG)
+
+.PHONY: test-outcome-kernel
+test-outcome-kernel: test-outcome-kernel-native $(BIN)
+	@$(BIN) --lang petta --profile extended -e '!(import! &self "./tests/ai/outcome_kernel_suite.metta") !(oksuite:run "$(abspath $(BIN))" "$(CURDIR)")' > $(BOOTSTRAP_TMPDIR)/outcome-kernel-suite.log
+	@cat $(BOOTSTRAP_TMPDIR)/outcome-kernel-suite.log
+	@test "$$(tail -n 1 $(BOOTSTRAP_TMPDIR)/outcome-kernel-suite.log)" = '(OutcomeKernelSuitePass 560 120 24)'
 
 test-test-target-scope:
 	@count=$$(for makefile in $(MAKEFILE_LIST); do \

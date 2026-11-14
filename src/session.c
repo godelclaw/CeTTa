@@ -1008,9 +1008,16 @@ CettaExperimentAdmission cetta_session_enable_experiment(
         const char *name;
         uint32_t bit;
         uint64_t host_mask;
+        uint32_t exclusive;
     } experiments[] = {
         {"failure-values", CETTA_EXPERIMENT_FAILURE_VALUES,
-            (UINT64_C(1) << CETTA_LANGUAGE_PETTA) | (UINT64_C(1) << CETTA_LANGUAGE_HE)},
+            (UINT64_C(1) << CETTA_LANGUAGE_PETTA) | (UINT64_C(1) << CETTA_LANGUAGE_HE),
+            CETTA_EXPERIMENT_OUTCOME_KERNEL},
+        {"outcome-kernel", CETTA_EXPERIMENT_OUTCOME_KERNEL,
+            (UINT64_C(1) << CETTA_LANGUAGE_PETTA) | (UINT64_C(1) << CETTA_LANGUAGE_HE),
+            CETTA_EXPERIMENT_FAILURE_VALUES},
+        {"he-composed-execution", CETTA_EXPERIMENT_HE_COMPOSED_EXECUTION,
+            UINT64_C(1) << CETTA_LANGUAGE_HE, 0u},
     };
     if (!cetta_session_allows_experiments(session) || !name)
         return CETTA_EXPERIMENT_UNKNOWN;
@@ -1020,6 +1027,8 @@ CettaExperimentAdmission cetta_session_enable_experiment(
         if ((unsigned)session->language_id >= 64u ||
             !(experiments[i].host_mask & (UINT64_C(1) << session->language_id)))
             return CETTA_EXPERIMENT_UNSUPPORTED_HOST;
+        if (session->experiments & experiments[i].exclusive)
+            return CETTA_EXPERIMENT_CONFLICT;
         session->experiments |= experiments[i].bit;
         return CETTA_EXPERIMENT_ENABLED;
     }

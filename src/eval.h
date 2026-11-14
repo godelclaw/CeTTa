@@ -410,6 +410,9 @@ void eval_prime_owned_region_storage_census(const EvalOutcome *outcome,
     CettaStorageCensus *census);
 
 void eval_outcome_init(EvalOutcome *outcome);
+/* Explicit experiment boundary. Ordinary evaluation does not install it. */
+bool cetta_eval_outcome_kernel_call(struct CettaLibraryContext *context, Space *space,
+    Arena *arena, Atom *head, Atom **arguments, uint32_t count, CettaCallOutcome *out);
 void eval_outcome_free(EvalOutcome *outcome);
 /* Derived, deliberately lossy projections of the exact occurrence bag.  The
    projected ResultSets borrow their Atom payloads from `outcome`; callers own
@@ -541,6 +544,9 @@ bool eval_current_profile_enables_dependent_telescope(void) __attribute__((weak)
 /* Native call boundaries consult this only after a producer has recorded
  * its own fault. It never classifies an arbitrary Error-shaped value. */
 bool eval_current_uses_failure_values(void) __attribute__((weak));
+/* Called only on a producer's native raised edge, before legacy projection.
+ * An explicit dynamic observer may retain that edge for its own handler. */
+bool eval_outcome_kernel_native_raise(Atom *diagnostic) __attribute__((weak));
 /* The type stamp store (space.c) keeps typings across inferences where the
  * evaluator vouches for an atom's arena.  eval_type_stamp_scope says whether
  * the current evaluation may, and names the language and profile it types

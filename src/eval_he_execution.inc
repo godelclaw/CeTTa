@@ -2546,7 +2546,9 @@ static bool he_prepared_completion_admit(Space *space, Arena *arena,
     bool *completed) {
     *completed = false;
     if (eval_current_language_id() != CETTA_LANGUAGE_HE) return true;
-    if (!space || space->overlay_base || space_has_dependencies(space))
+    if (!space || space->overlay_base ||
+        (space_has_dependencies(space) &&
+         !(active_eval_session()->experiments & CETTA_EXPERIMENT_HE_COMPOSED_EXECUTION)))
         return false;
     if ((!call || arguments_are_values) && invocation)
         call = cetta_invocation_materialize(arena, invocation);
@@ -2745,7 +2747,9 @@ static bool he_stream_call_admitted(Space *space, Arena *arena, Atom *call) {
  * through the relation tier: its closure, walked under the streaming rules,
  * is decided once per program revision. */
 static bool he_stream_admitted(Space *space, Arena *arena, SymbolId head) {
-    if (!space || head == SYMBOL_ID_NONE || space_has_dependencies(space) ||
+    if (!space || head == SYMBOL_ID_NONE ||
+        (space_has_dependencies(space) &&
+         !(active_eval_session()->experiments & CETTA_EXPERIMENT_HE_COMPOSED_EXECUTION)) ||
         !eval_space_has_equations(space, head))
         return false;
     const HeClosureDecision *decided =
@@ -2787,7 +2791,9 @@ static bool he_stream_admitted(Space *space, Arena *arena, SymbolId head) {
  * program revision. */
 static bool he_compiled_admitted(Space *space, Arena *arena, SymbolId head,
                                  bool raises) {
-    if (!space || head == SYMBOL_ID_NONE || space_has_dependencies(space) ||
+    if (!space || head == SYMBOL_ID_NONE ||
+        (space_has_dependencies(space) &&
+         !(active_eval_session()->experiments & CETTA_EXPERIMENT_HE_COMPOSED_EXECUTION)) ||
         !eval_space_has_equations(space, head))
         return false;
     const HeClosureDecision *decided =
