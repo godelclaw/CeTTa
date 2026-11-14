@@ -47,6 +47,13 @@ Returned data is immutable and its nested expressions are not evaluated.
 Records are enumerated by their last mutation's revision and batch position;
 applications needing a different order must store their ordering key.
 
+`attach` opens and recovers a store as `open` does, but answers
+`(durable:attached epoch revision rows)` instead of every record, so a
+maintenance script over a large journal prints only what it reads.
+`!(durable:read-key "state" "worker")` answers the snapshot of one key and
+`!(durable:read-prefix "state" "worker/")` that of the keys with a prefix,
+both within one space and with the global revision a later commit expects.
+
 Each key identifies an occurrence, so identical values under different keys
 remain distinct. Insert requires an absent key; replace and remove require an
 existing key. A batch may name a key once. All preconditions must hold or the

@@ -50415,6 +50415,17 @@ test-durable-library:
 	@exit 1
 endif
 
+.PHONY: test-durable-scoped-read
+ifeq ($(ENABLE_DURABLE),1)
+test-all: test-durable-scoped-read
+test-durable-scoped-read: $(BIN) tests/test_durable_scoped_read.py
+	python3 tests/test_durable_scoped_read.py ./$(BIN)
+else
+test-durable-scoped-read:
+	@echo "test-durable-scoped-read requires ENABLE_DURABLE=1" >&2
+	@exit 1
+endif
+
 .PHONY: test-native-sqlite
 ifeq ($(ENABLE_SQLITE)$(ENABLE_PYTHON),11)
 test-native-sqlite: $(BIN)

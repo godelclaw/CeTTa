@@ -14229,10 +14229,11 @@ Atom *cetta_library_durable_admin(CettaLibraryContext *ctx, Arena *a, Atom *form
         form->expr.elems[0]->kind!=ATOM_SYMBOL) return NULL;
     const char *name=atom_name_cstr(form->expr.elems[0]);
     if (strncmp(name,"durable:",8)) return NULL;
-    const char *operations[]={"open","read","commit","checkpoint","close"};
+    const char *operations[]={"open","read","commit","checkpoint","close","attach","read-key","read-prefix"};
     for (size_t i=0;i<sizeof(operations)/sizeof(*operations);++i) {
         if (strcmp(name+8,operations[i])) continue;
         char native[64]; snprintf(native,sizeof(native),"__cetta_lib_durable_%s",operations[i]);
+        for (char *c=native;*c;++c) if (*c=='-') *c='_';
         return cetta_durable_admin_dispatch(ctx->durable_runtime,a,atom_symbol(a,native),
             form->expr.elems+1,form->expr.len-1);
     }

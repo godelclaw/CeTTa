@@ -11,6 +11,12 @@
 (: durable:commit (-> String Number Atom Expression))
 (: durable:checkpoint (-> Expression))
 (: durable:close (-> Expression))
+; Scoped administration: attach answers (durable:attached EPOCH REVISION ROWS)
+; instead of every row; read-key and read-prefix answer the durable:snapshot
+; of one key, or of the keys with a prefix, in one space.
+(: durable:attach (-> String Expression))
+(: durable:read-key (-> String String Expression))
+(: durable:read-prefix (-> String String Expression))
 
 
 (= (durable:open $path)
@@ -23,3 +29,9 @@
    (__cetta_lib_durable_checkpoint ()))
 (= (durable:close)
    (__cetta_lib_durable_close ()))
+(= (durable:attach $path)
+   (__cetta_lib_durable_attach $path))
+(= (durable:read-key $space $key)
+   (__cetta_lib_durable_read_key $space $key))
+(= (durable:read-prefix $space $prefix)
+   (__cetta_lib_durable_read_prefix $space $prefix))

@@ -731,7 +731,10 @@
     cesta_table_apply_0(lib_provenance_supports, "__cetta_lib_provenance_supports") \
     cesta_table_apply_0(lib_provenance_supports_each, "__cetta_lib_provenance_supports_each") \
     cesta_table_apply_0(prime_eval_value, "__cetta_prime_eval_value") \
-    cesta_table_apply_0(lib_llm_response_body, "__cetta_lib_llm_response_body")
+    cesta_table_apply_0(lib_llm_response_body, "__cetta_lib_llm_response_body") \
+    cesta_table_apply_0(lib_durable_attach, "__cetta_lib_durable_attach") \
+    cesta_table_apply_0(lib_durable_read_key, "__cetta_lib_durable_read_key") \
+    cesta_table_apply_0(lib_durable_read_prefix, "__cetta_lib_durable_read_prefix")
 
 #define CETTA_PETTA_ONLY_BUILTIN_SYMBOL_ROWS(cesta_table_apply_0) \
     cesta_table_apply_0(petta_member) \
