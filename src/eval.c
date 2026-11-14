@@ -96896,7 +96896,10 @@ static bool prepared_pure_closed_invocation_try(
     /* A key in a pause after uncertified refusals takes the path a refused
      * compilation takes, without compiling. */
     SymbolId pause_head = atom_symbol_current_id(invocation->head.skeleton);
-    PreparedPureBackoffSlot *pause = program || !cacheable_program ? NULL :
+    /* An uncacheable key (an eager call whose arguments are not values yet,
+     * as HE's canonical calls pass them) records no decline, so its pause is
+     * what keeps a failing compilation from running on every call. */
+    PreparedPureBackoffSlot *pause = program ? NULL :
         prepared_pure_backoff_slot(program_cache, pause_head, arity,
             language_id, call_mode, false, source_view.root,
             cache_entry_arguments_are_values, total_structural_equality, false);
@@ -96978,7 +96981,7 @@ static bool prepared_pure_closed_invocation_try(
              call_mode == CETTA_GSLT_PURE_CALL_EAGER &&
              !(cetta_prepared_pure_compile_refused(&compilation, space, false) &&
                cetta_prepared_pure_compile_refused(&compilation, space, true)));
-        if (cacheable_program && request_uncertified &&
+        if ((request_uncertified || !cacheable_program) &&
             space_program_token_matches_live_space(compilation.source, space) &&
             prepared_pure_program_cache_refusal_current(program_cache, space,
                 language_id, generation))
@@ -97021,8 +97024,16 @@ static bool prepared_pure_closed_invocation_try(
         !he_prepared_completion_admit(space, destination, &plan.invocation,
             call, cache_entry_arguments_are_values, &he_completed_result)) {
         cetta_prepared_pure_program_clear_closed_entry_call(program);
-        if (!program_is_cached)
+        if (!program_is_cached) {
             cetta_prepared_pure_program_free(program);
+            /* A refused completion would compile the key again on every
+             * call; pause it as a refused native worker pauses it. */
+            if (cacheable_program)
+                prepared_pure_backoff_refused(prepared_pure_backoff_slot(
+                    program_cache, pause_head, arity, language_id, call_mode, false,
+                    source_view.root, cache_entry_arguments_are_values,
+                    total_structural_equality, true));
+        }
         return false;
     }
     /* A program that compiles ends its key's pause. */

@@ -1991,7 +1991,7 @@ static bool he_return_native_answers_as_is(
 /* Check a finite-return invariant for a recursive call family. Recursive
  * uses assume one candidate, while every equation must preserve it. No
  * assumption authorizes a mixed raw/completed return. */
-static HeReturnProvenance he_return_call(HeReturnAnalysis *analysis, SymbolId head,
+static HeReturnProvenance he_return_call_walk(HeReturnAnalysis *analysis, SymbolId head,
     const HeReturnProvenance *arguments, CettaExprLen arity, uint32_t depth) {
     /* A declared range can make an authored RHS data (not interpreted code).
      * That caller-demand boundary retains its canonical source owner, except
@@ -2096,6 +2096,66 @@ static HeReturnProvenance he_return_call(HeReturnAnalysis *analysis, SymbolId he
             return result;
     }
     return HE_RETURN_UNKNOWN;
+}
+/* An analysis root's return provenance is a function of the program, the
+ * head and the arguments' provenance: no assumption is in force at a root.
+ * A closure walk for a head that reads imported modules can take
+ * milliseconds, and a canonical call asks again for every callee it meets,
+ * dozens of heads per request, so the answers are kept per program, as the
+ * cast memo keeps its own. Allocated on first use, so threads that never
+ * analyse an HE call pay nothing. */
+typedef struct {
+    const Space *space;
+    SpaceProgramToken program;
+    SymbolId head;
+    CettaExprLen arity;
+    HeReturnProvenance arguments[8];
+    HeReturnProvenance result;
+    const CettaProfile *profile;
+    unsigned rule_forms;
+    bool ready;
+} HeReturnMemo;
+
+enum { HE_RETURN_MEMO_SLOTS = 4096u };
+static _Thread_local HeReturnMemo *g_he_return_memo;
+
+/* The memo answers only an analysis root: no assumption is in force, so the
+ * answer is the program's, and a definite answer is a candidate that passed
+ * its whole check whatever budget remained. An UNKNOWN only declines. */
+static HeReturnProvenance he_return_call(HeReturnAnalysis *analysis, SymbolId head,
+    const HeReturnProvenance *arguments, CettaExprLen arity, uint32_t depth) {
+    if (arity > 8u || depth > 1u || analysis->assumptions || !analysis->declines_unmatched)
+        return he_return_call_walk(analysis, head, arguments, arity, depth);
+    if (!g_he_return_memo)
+        g_he_return_memo = calloc(HE_RETURN_MEMO_SLOTS, sizeof(*g_he_return_memo));
+    if (!g_he_return_memo)
+        return he_return_call_walk(analysis, head, arguments, arity, depth);
+    size_t hash = (size_t)head * 31u + arity;
+    for (CettaExprIndex i = 0u; i < arity; i++)
+        hash = hash * 131u + (size_t)arguments[i];
+    HeReturnMemo *memo = &g_he_return_memo[hash % HE_RETURN_MEMO_SLOTS];
+    const CettaProfile *profile = active_profile();
+    unsigned rule_forms = eval_admitted_rule_forms();
+    if (memo->ready && memo->space == analysis->space && memo->head == head &&
+        memo->arity == arity && memo->profile == profile &&
+        memo->rule_forms == rule_forms && space_program_token_is_current(memo->program)) {
+        bool same = true;
+        for (CettaExprIndex i = 0u; same && i < arity; i++)
+            same = memo->arguments[i] == arguments[i];
+        if (same) return memo->result;
+    }
+    SpaceProgramToken program = space_program_token(analysis->space);
+    HeReturnProvenance result = he_return_call_walk(analysis, head, arguments, arity, depth);
+    memo->space = analysis->space;
+    memo->program = program;
+    memo->head = head;
+    memo->arity = arity;
+    for (CettaExprIndex i = 0u; i < arity; i++) memo->arguments[i] = arguments[i];
+    memo->result = result;
+    memo->profile = profile;
+    memo->rule_forms = rule_forms;
+    memo->ready = true;
+    return result;
 }
 
 static HeReturnProvenance he_return_body(HeReturnAnalysis *analysis,
@@ -2578,8 +2638,8 @@ static bool he_prepared_completion_admit(Space *space, Arena *arena,
             valid &= arguments[i] != HE_RETURN_UNKNOWN;
         }
         if (valid)
-            provenance = he_return_call(&analysis, atom_symbol_current_id(call->expr.elems[0]),
-                                        arguments, arity, 0u);
+            provenance = he_return_call(&analysis,
+                atom_symbol_current_id(call->expr.elems[0]), arguments, arity, 0u);
         if (arguments != local) free(arguments);
     } else
         provenance = he_return_body(&analysis, call, &env, 0u);
