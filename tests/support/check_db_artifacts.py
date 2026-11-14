@@ -182,7 +182,10 @@ def fault_controls(args, root):
         directory.mkdir(mode=0o700)
         arm, marker = directory/'armed', directory/'injected'
         server = server_for(args.worker.resolve(), directory, directory/'store')
-        server.environment.update(LD_PRELOAD=str(library), CETTA_ARTIFACT_FAULT_DIRECTORY=str(directory),
+        # Uploads are staged beside the service socket, which moves to the
+        # temporary directory when its path under a long checkout would be too
+        # long, so fault the socket's directory rather than the test's.
+        server.environment.update(LD_PRELOAD=str(library), CETTA_ARTIFACT_FAULT_DIRECTORY=str(server.path.parent),
                                   CETTA_ARTIFACT_FAULT_AT=str(point), CETTA_ARTIFACT_FAULT_ARM=str(arm),
                                   CETTA_ARTIFACT_FAULT_MARKER=str(marker))
         client = None
