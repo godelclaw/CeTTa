@@ -46,6 +46,13 @@ def cetta_evaluated_heads(builtin_table: Path) -> set:
     pure_grounded or type_pure_extra (type purity is the pure rows plus the
     type-only extras)."""
     text = builtin_table.read_text(encoding="utf-8")
+    # The file holds several tables; read only the Builtins table, which
+    # ends where the next table begins.
+    start = text.find("(Table Builtins")
+    if start < 0:
+        raise SystemExit(f"{builtin_table}: no Builtins table")
+    following = re.search(r"\(Table \w+", text[start + 1:])
+    text = text[start:start + 1 + following.start()] if following else text[start:]
     columns = re.findall(r"\(Column (\w+) (?:Identifier|Text|Bool)\)", text)
     if columns[:2] != ["field", "spelling"]:
         raise SystemExit(f"{builtin_table}: unexpected columns {columns}")
