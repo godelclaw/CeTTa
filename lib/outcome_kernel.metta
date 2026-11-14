@@ -7,11 +7,7 @@
 (: __cetta_lib_outcome_value (-> Atom %Undefined%))
 (: __cetta_lib_outcome_raised (-> Atom %Undefined%))
 (: __cetta_lib_outcome_incomplete (-> Atom %Undefined%))
-(: __cetta_lib_outcome_kind (-> %Undefined% Symbol))
-(: __cetta_lib_outcome_payload (-> %Undefined% %Undefined%))
 (: __cetta_lib_outcome_rechannel (-> %Undefined% Atom %Undefined%))
-(: __cetta_lib_outcome_equal (-> %Undefined% %Undefined% Bool))
-(: __cetta_lib_outcome_pack (-> %Undefined% %Undefined%))
 (: __cetta_lib_outcome_invoke (-> Atom %Undefined% %Undefined%))
 
 (: outcome:capture (-> Atom %Undefined%))

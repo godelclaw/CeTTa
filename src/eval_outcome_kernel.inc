@@ -286,9 +286,17 @@ bool cetta_eval_outcome_kernel_call(CettaLibraryContext *context, Space *space,
             arguments[0]), out);
     OutcomeKernelEnvelope *envelope = count ? outcome_kernel_get(context, arguments[0]) : NULL;
     if (id == g_builtin_syms.lib_outcome_kind && count == 1u) {
-        *out = cetta_call_completed_value(atom_symbol(arena, !envelope ? "data"
-            : envelope->kind == OUTCOME_KERNEL_VALUE ? "value"
-            : envelope->kind == OUTCOME_KERNEL_RAISED ? "raised" : "incomplete"));
+        /* Interned once: a kind is asked for on every bind. */
+        static SymbolId kinds[4];
+        if (kinds[0] == SYMBOL_ID_NONE) {
+            kinds[1] = symbol_intern_cstr(g_symbols, "value");
+            kinds[2] = symbol_intern_cstr(g_symbols, "raised");
+            kinds[3] = symbol_intern_cstr(g_symbols, "incomplete");
+            kinds[0] = symbol_intern_cstr(g_symbols, "data");
+        }
+        *out = cetta_call_completed_value(atom_symbol_id(arena, !envelope ? kinds[0]
+            : envelope->kind == OUTCOME_KERNEL_VALUE ? kinds[1]
+            : envelope->kind == OUTCOME_KERNEL_RAISED ? kinds[2] : kinds[3]));
         return true;
     }
     if (id == g_builtin_syms.lib_outcome_payload && count == 1u && envelope) {

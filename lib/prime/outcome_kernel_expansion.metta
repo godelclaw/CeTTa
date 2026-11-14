@@ -2,9 +2,9 @@
 ; do not edit.  The Prime spelling of the library: the same program with each
 ; value handoff spelled as a forcing case.
 
-(OutcomeKernelExpansion (outcome:bind $source $binder $body) (chain (metta $source %Undefined% (context-space)) $outcome:event (if (== (outcome:kind $outcome:event) value) (chain (eval (__cetta_lib_outcome_payload $outcome:event)) $binder (metta $body %Undefined% (context-space))) $outcome:event)))
+(OutcomeKernelExpansion (outcome:bind $source $binder $body) (chain (metta $source %Undefined% (context-space)) $outcome:event (if (== (outcome:kind $outcome:event) value) (chain (eval (__cetta_lib_outcome_payload $outcome:event)) $binder (metta $body %Undefined% (context-space))) (outcome-internal:propagate $outcome:event))))
 (OutcomeKernelExpansion (outcome:catch $source) (chain (metta $source %Undefined% (context-space)) $outcome:event (outcome:observe $outcome:event)))
-(OutcomeKernelExpansion (outcome:report $source) (chain (metta $source %Undefined% (context-space)) $outcome:event (metta (outcome-internal:report-event $outcome:event) %Undefined% (context-space))))
+(OutcomeKernelExpansion (outcome:report $source) (outcome:catch $source))
 (OutcomeKernelExpansion (outcome:if $condition $yes $no) (outcome:bind $condition $outcome:condition (if (== $outcome:condition True) $yes (if (== $outcome:condition False) $no (outcome:incomplete (Error if (Incomplete (NoVerdict $outcome:condition))))))))
 (OutcomeKernelExpansion (outcome:choice $branches) (chain (eval (superpose $branches)) $outcome:branch (metta $outcome:branch %Undefined% (context-space))))
 (OutcomeKernelExpansion (outcome:collapse $source) (let $outcome:events (collapse (metta $source %Undefined% (context-space))) (outcome:pack (map-atom $outcome:events $outcome:item (outcome:observe $outcome:item)))))

@@ -783,12 +783,12 @@
     {
       "source": "outcome_kernel.metta",
       "generator": "library_spelling.py",
-      "output_sha256": "29be3fdc7f9056757fb338ed7244884b6479beff939ecced212d987b8c1d7bfa"
+      "output_sha256": "5b796b344667cc3cfc99adf30e76786a71b08c20ac8bdada022041e409e4895f"
     },
     {
       "source": "outcome_kernel_expansion.metta",
       "generator": "library_spelling.py",
-      "output_sha256": "8fd957d9add1e2d806f7c897a565490f7f7cac94483d098b62ea1cf9fdf5a198"
+      "output_sha256": "e83487bef7dfc543f9b1311e1658e8e96283c57119fa5953f05f4bd840d47154"
     },
     {
       "source": "re.metta",
