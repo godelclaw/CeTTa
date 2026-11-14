@@ -1858,6 +1858,8 @@ typedef struct HeReturnAssumption {
     CettaExprLen arity;
     const HeReturnProvenance *arguments;
     HeReturnProvenance expected;
+    /* Its position in the stack of assumptions in force, from 1. */
+    uint32_t level;
 } HeReturnAssumption;
 
 typedef struct {
@@ -1867,6 +1869,11 @@ typedef struct {
     /* The consumer declines a call no equation matches (the prepared
      * machine), so its answers come from equations only. */
     bool declines_unmatched;
+    /* What a walk relied on beyond the program: the lowest level of an
+     * assumption it read (0: none), and whether a depth or step bound cut
+     * any of it short. */
+    uint32_t lowest_read;
+    bool cut;
 } HeReturnAnalysis;
 
 static HeReturnProvenance he_return_join(HeReturnProvenance left,
@@ -2025,7 +2032,11 @@ static HeReturnProvenance he_return_call_walk(HeReturnAnalysis *analysis, Symbol
         bool same = true;
         for (CettaExprIndex i = 0u; same && i < arity; i++)
             same = at->arguments[i] == arguments[i];
-        if (same) return at->expected;
+        if (same) {
+            if (!analysis->lowest_read || at->level < analysis->lowest_read)
+                analysis->lowest_read = at->level;
+            return at->expected;
+        }
     }
     const HeReturnProvenance candidates[] = {
         HE_RETURN_SCALAR, HE_RETURN_SCALAR | HE_RETURN_COMPLETED,
@@ -2036,7 +2047,8 @@ static HeReturnProvenance he_return_call_walk(HeReturnAnalysis *analysis, Symbol
         HE_RETURN_SCALAR | HE_RETURN_VARIABLE | HE_RETURN_COLLECTED};
     for (size_t trial = 0u; trial < sizeof(candidates) / sizeof(candidates[0]); trial++) {
         HeReturnAssumption assumption = {analysis->assumptions, head, arity,
-                                         arguments, candidates[trial]};
+                                         arguments, candidates[trial],
+            (analysis->assumptions ? analysis->assumptions->level : 0u) + 1u};
         analysis->assumptions = &assumption;
         HeReturnProvenance result = HE_RETURN_NONE;
         bool total = false;
@@ -2119,12 +2131,29 @@ typedef struct {
 enum { HE_RETURN_MEMO_SLOTS = 4096u };
 static _Thread_local HeReturnMemo *g_he_return_memo;
 
-/* The memo answers only an analysis root: no assumption is in force, so the
- * answer is the program's, and a definite answer is a candidate that passed
- * its whole check whatever budget remained. An UNKNOWN only declines. */
+/* The memo keeps the program's answers. At an analysis root no assumption
+ * is in force, and a definite answer is a candidate that passed its whole
+ * check whatever budget remained; an UNKNOWN only declines. Inside another
+ * head's walk, a call's answer is the program's too when its walk read no
+ * assumption made outside it and no bound cut it short: the walk then
+ * computed what a root asks. A call whose own assumption is in force reads
+ * that assumption, as the walk does. */
+static bool he_return_assumed(const HeReturnAnalysis *analysis, SymbolId head,
+    const HeReturnProvenance *arguments, CettaExprLen arity) {
+    for (const HeReturnAssumption *at = analysis->assumptions; at; at = at->parent) {
+        if (at->head != head || at->arity != arity) continue;
+        bool same = true;
+        for (CettaExprIndex i = 0u; same && i < arity; i++)
+            same = at->arguments[i] == arguments[i];
+        if (same) return true;
+    }
+    return false;
+}
+
 static HeReturnProvenance he_return_call(HeReturnAnalysis *analysis, SymbolId head,
     const HeReturnProvenance *arguments, CettaExprLen arity, uint32_t depth) {
-    if (arity > 8u || depth > 1u || analysis->assumptions || !analysis->declines_unmatched)
+    if (arity > 8u || !analysis->declines_unmatched ||
+        he_return_assumed(analysis, head, arguments, arity))
         return he_return_call_walk(analysis, head, arguments, arity, depth);
     if (!g_he_return_memo)
         g_he_return_memo = calloc(HE_RETURN_MEMO_SLOTS, sizeof(*g_he_return_memo));
@@ -2144,8 +2173,21 @@ static HeReturnProvenance he_return_call(HeReturnAnalysis *analysis, SymbolId he
             same = memo->arguments[i] == arguments[i];
         if (same) return memo->result;
     }
+    bool root = depth <= 1u && !analysis->assumptions;
+    uint32_t outer = analysis->assumptions ? analysis->assumptions->level : 0u;
+    uint32_t lowest_before = analysis->lowest_read;
+    bool cut_before = analysis->cut;
+    analysis->lowest_read = 0u;
+    analysis->cut = false;
     SpaceProgramToken program = space_program_token(analysis->space);
     HeReturnProvenance result = he_return_call_walk(analysis, head, arguments, arity, depth);
+    bool own = !analysis->lowest_read || analysis->lowest_read > outer;
+    bool exact = !analysis->cut;
+    if (lowest_before && (!analysis->lowest_read || lowest_before < analysis->lowest_read))
+        analysis->lowest_read = lowest_before;
+    analysis->cut |= cut_before;
+    if (!root && !(own && exact))
+        return result;
     memo->space = analysis->space;
     memo->program = program;
     memo->head = head;
@@ -2160,8 +2202,12 @@ static HeReturnProvenance he_return_call(HeReturnAnalysis *analysis, SymbolId he
 
 static HeReturnProvenance he_return_body(HeReturnAnalysis *analysis,
     const Atom *body, HeReturnEnvironment *env, uint32_t depth) {
-    if (!body || depth >= 256u || ++analysis->steps > 32768u)
+    if (!body)
         return HE_RETURN_UNKNOWN;
+    if (depth >= 256u || ++analysis->steps > 32768u) {
+        analysis->cut = true;
+        return HE_RETURN_UNKNOWN;
+    }
     /* The current compiled backends do not carry this input demand marker
      * through every source/slot realization. Preserve its canonical entry. */
     if (atom_is_he_evaluated(body)) return HE_RETURN_UNKNOWN;
