@@ -53172,6 +53172,12 @@ test-all: test-db-maintenance
 test-db-maintenance: $(BIN) value-worker $(ACT_SPACE_TEST_BIN)
 	$(PYTHON) tests/support/check_db_maintenance.py $(BIN) $(VALUE_WORKER_BIN) $(ACT_SPACE_TEST_BIN)
 
+.PHONY: test-store-write-faults
+test-all: test-store-write-faults
+test-store-write-faults: value-worker space-service tests/support/check_store_write_faults.py \
+		tests/support/store_write_fault.c tests/support/store_fault_server.metta
+	$(PYTHON) tests/support/check_store_write_faults.py $(VALUE_WORKER_BIN) $(SPACE_SERVICE_BIN)
+
 .PHONY: test-remote-ranges
 test-all: test-remote-ranges
 test-remote-ranges: $(BIN) value-worker
