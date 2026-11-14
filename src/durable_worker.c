@@ -25,6 +25,10 @@ typedef struct {
     char after_epoch[33];
     int64_t after_revision;
     uint64_t due;
+    /* The store position at which this wait last read no new work. */
+    bool read;
+    char read_epoch[33];
+    int64_t read_revision;
 } Peer;
 struct CettaWorkerEndpoint {
     CettaDurableStore *store;
@@ -261,6 +265,20 @@ static uint64_t monotonic_ms(void);
  * unanswered tasks do not trigger repeated wakes; only new work or a new
  * store epoch does. This is a notification, never a receive or receipt. */
 static CettaDurableStatus watch_task(CettaWorkerEndpoint *e, Peer *p, bool initial) {
+    /* Nothing published since the last read found this wait current: the
+     * same read would find the same, so only its deadline can end it. */
+    if (!initial && p->read) {
+        char epoch[33]; int64_t revision;
+        CettaDurableStatus s=cetta_durable_position(e->store,epoch,&revision);
+        if (s!=DURABLE_OK) return s;
+        if (!strcmp(epoch,p->read_epoch) && revision==p->read_revision) {
+            if (monotonic_ms()<p->due) return DURABLE_OK;
+            char token[64];
+            snprintf(token,sizeof(token),"%s.%" PRId64,epoch,revision);
+            p->waiting=false; p->read=false;
+            return reply(p,WORKER_IDLE,token,NULL,0);
+        }
+    }
     CettaDurableSnapshot snapshot={0},ordinary={0};
     int64_t since=initial?INT64_MAX:p->after_revision;
     CettaDurableStatus s=cetta_durable_next_in_partition(e->store,CONTROL_READY_SPACE,e->prefix,NULL,since,&snapshot);
@@ -277,8 +295,12 @@ static CettaDurableStatus watch_task(CettaWorkerEndpoint *e, Peer *p, bool initi
     char token[64];
     snprintf(token, sizeof(token), "%s.%" PRId64, snapshot.epoch, snapshot.revision);
     if (initial || changed || monotonic_ms() >= p->due) {
-        p->waiting = false;
+        p->waiting = false; p->read = false;
         s = reply(p, changed ? WORKER_PENDING : WORKER_IDLE, token, NULL, 0);
+    } else {
+        /* The earlier read's position, as for the token. */
+        p->read = true; memcpy(p->read_epoch, snapshot.epoch, 33);
+        p->read_revision = snapshot.revision;
     }
     cetta_durable_snapshot_free(&snapshot);cetta_durable_snapshot_free(&ordinary);
     return s;
@@ -306,7 +328,7 @@ static CettaDurableStatus start_watch(CettaWorkerEndpoint *e, Peer *p, const cha
         return reply(p, WORKER_INVALID, "", NULL, 0);
     memcpy(p->after_epoch, token, 32); p->after_epoch[32] = 0;
     p->after_revision = revision; p->due = monotonic_ms() + milliseconds;
-    p->waiting = true;
+    p->waiting = true; p->read = false;
     return watch_task(e, p, false);
 }
 CettaDurableStatus cetta_worker_endpoint_wait(CettaWorkerEndpoint *e,
@@ -415,7 +437,7 @@ static CettaDurableStatus submit(CettaWorkerEndpoint *e, Peer *p, const char *id
 }
 static CettaDurableStatus request(CettaWorkerEndpoint *e, Peer *p, const unsigned char *packet, size_t size) {
     /* A new request replaces this peer's outstanding notification wait. */
-    p->waiting = false;
+    p->waiting = false; p->read = false;
     if (size<6 || size>CETTA_WORKER_PACKET_MAX || memcmp(packet,"CWP1",4) || packet[5]>64 || 6u+packet[5]>size)
         return reply(p,WORKER_INVALID,"",NULL,0);
     char id[65]; size_t n=packet[5]; memcpy(id,packet+6,n); id[n]=0;

@@ -97,6 +97,11 @@ CettaDurableStatus cetta_durable_next_in_partition(CettaDurableStore *store,
     const char *space, const char *partition, const char *after_key, int64_t min_revision,
     CettaDurableSnapshot *out);
 CettaDurableStatus cetta_durable_usage(CettaDurableStore *store, CettaDurableUsage *out);
+/* The store's current epoch and revision. Every publication moves the
+ * revision and a checkpoint keeps both, so an unchanged pair means unchanged
+ * contents: a reader that found nothing new at one position need not read
+ * again until the position moves. */
+CettaDurableStatus cetta_durable_position(CettaDurableStore *store, char epoch[33], int64_t *revision);
 
 /* Read all declared scopes in one snapshot, without retaining a transaction.
  * Observations own immutable views. Empty key/prefix/space views are absence

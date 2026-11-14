@@ -141,6 +141,14 @@ static CettaDurableStatus decode(Arena *a, const CettaDurableRecord *r, Atom **p
     if (!timer((*p)->expr.elems[4],t) || !cetta_timer_validate(NULL,(*p)->expr.elems[4],(*p)->expr.elems[5])) return DURABLE_INVALID;
     return DURABLE_OK;
 }
+/* A timer with an outcome is finished. One key read decides that, where its
+ * advance would also observe its inbox range. */
+static CettaDurableStatus finished(CettaDurableStore *store, const char *key, bool *done) {
+    CettaDurableScope q={DURABLE_KEY,"host.outcomes",key}; CettaDurableObservation *o=NULL;
+    CettaDurableStatus s=cetta_durable_observe(store,&q,1,&o);
+    *done=s==DURABLE_OK && view(o,0)->count;
+    cetta_durable_observation_free(o); return s;
+}
 static int key_order(const void *a, const void *b) {
     return strcmp(((const CettaDurableRecord *)a)->key,((const CettaDurableRecord *)b)->key);
 }
@@ -150,8 +158,16 @@ CettaDurableStatus cetta_timer_tick(CettaDurableStore *store, CettaTimerCursor *
     *out=(CettaTimerTick){.next_deadline_ms=-1};
     if (!store || !cursor || !memchr(cursor->after_key,0,sizeof(cursor->after_key)) || now<0 ||
         !budget || budget>64 || !fault) return DURABLE_INVALID;
+    /* Timers change only by publication and fire only at their deadlines. */
+    char epoch[33]; int64_t revision;
+    CettaDurableStatus s=cetta_durable_position(store,epoch,&revision); if (s!=DURABLE_OK) return s;
+    if (cursor->settled && !strcmp(cursor->epoch,epoch) && cursor->revision==revision &&
+        (cursor->deadline_ms<0 || now<cursor->deadline_ms)) {
+        out->next_deadline_ms=cursor->deadline_ms; return DURABLE_OK;
+    }
+    cursor->settled=false;
     CettaDurableSnapshot snap;
-    CettaDurableStatus s=cetta_durable_snapshot(store,"host.outbox",&snap); if (s!=DURABLE_OK) return s;
+    s=cetta_durable_snapshot(store,"host.outbox",&snap); if (s!=DURABLE_OK) return s;
     if (snap.count>1) qsort(snap.records,snap.count,sizeof(*snap.records),key_order);
     size_t start=0;
     while (start<snap.count && strcmp(snap.records[start].key,cursor->after_key)<=0) ++start;
@@ -162,8 +178,9 @@ CettaDurableStatus cetta_timer_tick(CettaDurableStore *store, CettaTimerCursor *
         const CettaDurableRecord *r=&snap.records[(start+i)%snap.count];
         Arena a; arena_init(&a); Atom *p=NULL; Timer t; bool is_timer;
         s=decode(&a,r,&p,&t,&is_timer);
-        size_t emitted=0; int64_t deadline=-1; bool more=false;
-        if (s==DURABLE_OK && is_timer) s=advance(store,snap.epoch,r,p,t,now,budget-out->emitted,false,&emitted,&deadline,&more);
+        size_t emitted=0; int64_t deadline=-1; bool more=false, done=false;
+        if (s==DURABLE_OK && is_timer) s=finished(store,r->key,&done);
+        if (s==DURABLE_OK && is_timer && !done) s=advance(store,snap.epoch,r,p,t,now,budget-out->emitted,false,&emitted,&deadline,&more);
         arena_free(&a); strcpy(cursor->after_key,r->key);
         if (s==DURABLE_OK) {
             out->emitted+=emitted; out->more_due|=more;
@@ -171,6 +188,12 @@ CettaDurableStatus cetta_timer_tick(CettaDurableStore *store, CettaTimerCursor *
         } else if (s==DURABLE_INVALID || s==DURABLE_VERSION || s==DURABLE_CORRUPT || s==DURABLE_CONFLICT) {
             ++out->faults; fault(context,r->key,s); s=DURABLE_OK;
         } else { fault(context,r->key,s); break; }
+    }
+    /* Settled at the position read before the snapshot: a publication since
+     * then moves the store past it and the next tick reads again. */
+    if (s==DURABLE_OK && !out->emitted && !out->more_due) {
+        cursor->settled=true; memcpy(cursor->epoch,epoch,33);
+        cursor->revision=revision; cursor->deadline_ms=out->next_deadline_ms;
     }
     cetta_durable_snapshot_free(&snap); return s;
 }

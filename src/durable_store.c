@@ -44,6 +44,9 @@ struct CettaDurableStore {
     uint64_t file_bytes;
     bool poisoned, reclaim;
     const void *runtime_owner;
+    /* Whether a row exceeds record_bytes, as of sized_revision. */
+    int64_t sized_revision;
+    bool sized, oversized;
 };
 
 #ifdef CETTA_DURABLE_TEST
@@ -490,9 +493,22 @@ CettaDurableStatus cetta_durable_usage(CettaDurableStore *s,CettaDurableUsage *o
         out->limits_exceeded=over((uint64_t)out->live_bytes,s->limits.live_bytes) ||
             over((uint64_t)out->records,s->limits.records) || over((uint64_t)s->history,s->limits.history_bytes) ||
             over((uint64_t)out->storage_pages,s->limits.storage_pages);
-        for (CettaIndex i=0;i<space_length64(s->image->space);++i)
-            if (over(row(space_get_at64(s->image->space,i)).size,s->limits.record_bytes)) out->limits_exceeded=1;
+        /* Rows change only by publication; check them once per revision. */
+        if (!s->sized || s->sized_revision!=s->revision) {
+            s->oversized=false;
+            for (CettaIndex i=0;!s->oversized && i<space_length64(s->image->space);++i)
+                if (over(row(space_get_at64(s->image->space,i)).size,s->limits.record_bytes)) s->oversized=true;
+            s->sized=true; s->sized_revision=s->revision;
+        }
+        if (s->oversized) out->limits_exceeded=1;
     }
+    pthread_mutex_unlock(&s->mutex); return r;
+}
+CettaDurableStatus cetta_durable_position(CettaDurableStore *s,char epoch[33],int64_t *revision) {
+    if (!s || !epoch || !revision) return DURABLE_INVALID;
+    pthread_mutex_lock(&s->mutex);
+    CettaDurableStatus r=s->poisoned?DURABLE_POISONED:DURABLE_OK;
+    if (r==DURABLE_OK) { memcpy(epoch,s->epoch,33); *revision=s->revision; }
     pthread_mutex_unlock(&s->mutex); return r;
 }
 struct CettaDurableObservation {

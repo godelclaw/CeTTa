@@ -284,6 +284,16 @@ int main(void) {
     unsigned char packet[128];
     assert(recv(fd, packet, sizeof(packet), MSG_DONTWAIT) < 0 &&
            (errno == EAGAIN || errno == EWOULDBLOCK));
+    /* A publication that brings no task moves the journal but keeps the wait. */
+    char epoch[33]; int64_t at, moved;
+    {
+        CettaDurableOp op={DURABLE_INSERT,"test.other","x","1",1};
+        assert(cetta_durable_position(store,epoch,&at)==DURABLE_OK);
+        assert(cetta_durable_commit(store,epoch,at,&op,1,&moved)==DURABLE_OK && moved==at+1);
+        pump(); pump();
+        assert(recv(fd, packet, sizeof(packet), MSG_DONTWAIT) < 0 &&
+               (errno == EAGAIN || errno == EWOULDBLOCK));
+    }
     /* Previously seen but unacknowledged tasks must not make rest spin. */
     assert(cetta_worker_publish(store,"brain","m4","four",4)==DURABLE_OK);
     watch_reply(fd, WORKER_PENDING, changed);
@@ -291,6 +301,13 @@ int main(void) {
     rpc(fd,WORKER_NEXT,"","",WORKER_TASK,"m1","one");
     send_request(fd, WORKER_WAIT, changed, "10", 2);
     watch_reply(fd, WORKER_IDLE, token);
+    /* A wait that ends at its deadline names the journal's current position. */
+    {
+        char expected[64];
+        assert(cetta_durable_position(store,epoch,&at)==DURABLE_OK);
+        snprintf(expected,sizeof(expected),"%s.%lld",epoch,(long long)at);
+        assert(!strcmp(token,expected));
+    }
     rpc(fd,WORKER_RESULT,"m2","[]",WORKER_STORED,"m2","");
     rpc(fd,WORKER_NEXT,"m1","",WORKER_TASK,"m3","three");
     rpc(fd,WORKER_NEXT,"m2","",WORKER_UNKNOWN,"m2","");

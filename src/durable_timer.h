@@ -4,7 +4,15 @@
 #include "atom.h"
 
 typedef struct { int64_t utc_ms; uint64_t monotonic_ms; } CettaClockSample;
-typedef struct { char after_key[256]; } CettaTimerCursor;
+/* after_key is the round-robin position. A tick that found nothing due also
+ * remembers the store position and its next deadline: until one of them
+ * moves, a tick reads nothing. Zero-initialize. */
+typedef struct {
+    char after_key[256];
+    bool settled;
+    char epoch[33];
+    int64_t revision, deadline_ms;
+} CettaTimerCursor;
 typedef struct {
     size_t visited, emitted, faults;
     int64_t next_deadline_ms; /* -1 when no future deadline was found */
@@ -29,7 +37,8 @@ bool cetta_timer_validate(void *unused, const Atom *payload, const Atom *reply);
  * not durable authority. Fault callbacks run outside transactions.
  * visited counts the ordered outbox records actually inspected by this tick;
  * it includes non-timers and faults but excludes a record skipped after the
- * event budget is already exhausted.
+ * event budget is already exhausted. It is zero when nothing was published
+ * since a tick that found nothing due, and that tick's deadline has not come.
  * A forward wall jump makes timers overdue; a backward jump delays firing
  * until the sampled UTC deadline is reached. Used clock samples are recorded.
  * Storage failure stops admission, without advancing the failing timer. */

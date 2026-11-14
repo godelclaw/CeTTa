@@ -124,8 +124,19 @@ int main(int argc, char **argv) {
     assert(!cetta_timer_validate(NULL,parse("(timer:at 1 100 0 FireOnce 0 $x)"),parse("reply")));
     char one[64], periodic[64], skipped[64], caught[64], other[64];
     accept("(durable:timer:after 0 $now 100 wake reply)",one);
-    assert(tick(1099,64,0).next_deadline_ms==1100);
+    out=tick(1099,64,0); assert(out.next_deadline_ms==1100 && out.visited);
     assert(tick(900,64,0).next_deadline_ms==1100); /* Backward wall jump. */
+    /* Nothing published and the deadline not reached: a tick reads nothing.
+     * A publication, even one no timer reads, makes the next tick read. */
+    out=tick(1099,64,0); assert(out.next_deadline_ms==1100 && !out.visited);
+    {
+        CettaDurableOp op={DURABLE_INSERT,"test.other","x","1",1}; char epoch[33]; int64_t at, moved;
+        assert(cetta_durable_position(store,epoch,&at)==DURABLE_OK);
+        assert(cetta_durable_commit(store,epoch,at,&op,1,&moved)==DURABLE_OK && moved==at+1);
+        out=tick(1099,64,0); assert(out.next_deadline_ms==1100 && out.visited);
+        op=(CettaDurableOp){DURABLE_REMOVE,"test.other","x",NULL,0};
+        assert(cetta_durable_commit(store,epoch,moved,&op,1,&moved)==DURABLE_OK);
+    }
     cetta_durable_close(store);
     for (size_t i=0;i<2;++i) {
         pid_t pid=fork(); assert(pid>=0);
