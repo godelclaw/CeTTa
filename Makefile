@@ -50742,7 +50742,7 @@ test-telegram-scheduler:
 	@exit 1
 endif
 
-.PHONY: telegram-service telegram-control test-telegram-service test-telegram-channel-service test-telegram-commands-service test-telegram-control
+.PHONY: telegram-service telegram-control test-telegram-service test-telegram-channel-service test-telegram-commands-service test-telegram-idle-cpu test-telegram-control
 .PHONY: space-service test-space-service test-space-service-commit test-native-journal
 runtime/test-native-journal: tests/test_native_journal.c src/native_journal.c src/native_journal.h src/native_sha256.c src/native_sha256.h
 	@mkdir -p runtime
@@ -50916,13 +50916,15 @@ test-telegram-channel-service: $(TELEGRAM_SERVICE_BIN)
 	python3 tests/test_telegram_channel_service.py $(TELEGRAM_SERVICE_BIN)
 test-telegram-commands-service: $(TELEGRAM_SERVICE_BIN)
 	python3 tests/test_telegram_commands_service.py $(TELEGRAM_SERVICE_BIN)
+test-telegram-idle-cpu: $(TELEGRAM_SERVICE_BIN)
+	python3 tests/test_telegram_idle_cpu.py $(TELEGRAM_SERVICE_BIN)
 # CWP_CETTA: a cetta binary of any build (default ./cetta).
 test-cwp-client: $(TELEGRAM_SERVICE_BIN)
 	python3 tests/test_cwp_client.py $(TELEGRAM_SERVICE_BIN) $(or $(CWP_CETTA),./cetta)
 test-telegram-control: $(TELEGRAM_SERVICE_BIN) runtime/cetta-telegram-control
 	python3 tests/test_telegram_control.py $(TELEGRAM_SERVICE_BIN) runtime/cetta-telegram-control
 else
-telegram-service test-telegram-service test-telegram-channel-service test-telegram-commands-service test-cwp-client test-telegram-control:
+telegram-service test-telegram-service test-telegram-channel-service test-telegram-commands-service test-telegram-idle-cpu test-cwp-client test-telegram-control:
 	@echo "telegram-service requires ENABLE_DURABLE=1, native HTTP and ENABLE_JSON_GSLT=1" >&2
 	@exit 1
 endif

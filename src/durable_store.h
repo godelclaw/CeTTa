@@ -133,7 +133,7 @@ CettaDurableStatus cetta_durable_watch_revision_new(const CettaDurableObservatio
         size_t byte_limit, CettaDurableWatch **out);
 
 CettaDurableStatus cetta_durable_watch_current(CettaDurableStore *store,
-    const CettaDurableWatch *watch);
+    CettaDurableWatch *watch);
 size_t cetta_durable_watch_bytes(const CettaDurableWatch *watch);
 void cetta_durable_watch_free(CettaDurableWatch *watch);
 CettaDurableStatus cetta_durable_commit_observed(CettaDurableStore *store,
