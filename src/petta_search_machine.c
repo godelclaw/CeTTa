@@ -29783,29 +29783,19 @@ static bool petta_machine_integer_add(
         petta_machine_integer_value(expected, &expected_value);
     int64_t solved = 0;
 
+    /* A sum outside 64 bits is the reference's to give, a big integer. */
     if (left_known && right_known) {
-        if (__builtin_add_overflow(
-                left_value, right_value, &solved)) {
-            return false;
-        }
-        return petta_machine_unify(
-            machine, atom_int(&machine->heap, solved), expected);
-    }
-    if (left_known && expected_known) {
-        if (__builtin_sub_overflow(
-                expected_value, left_value, &solved)) {
-            return false;
-        }
-        return petta_machine_unify(
-            machine, right, atom_int(&machine->heap, solved));
-    }
-    if (right_known && expected_known) {
-        if (__builtin_sub_overflow(
-                expected_value, right_value, &solved)) {
-            return false;
-        }
-        return petta_machine_unify(
-            machine, left, atom_int(&machine->heap, solved));
+        if (!__builtin_add_overflow(left_value, right_value, &solved))
+            return petta_machine_unify(
+                machine, atom_int(&machine->heap, solved), expected);
+    } else if (left_known && expected_known) {
+        if (!__builtin_sub_overflow(expected_value, left_value, &solved))
+            return petta_machine_unify(
+                machine, right, atom_int(&machine->heap, solved));
+    } else if (right_known && expected_known) {
+        if (!__builtin_sub_overflow(expected_value, right_value, &solved))
+            return petta_machine_unify(
+                machine, left, atom_int(&machine->heap, solved));
     }
     /* The reference's predicate '#+'/3 as a Prolog goal, its result the
      * expected value. */

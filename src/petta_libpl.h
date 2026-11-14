@@ -135,6 +135,17 @@ bool petta_libpl_evaluate_arithmetic(
 bool petta_libpl_compare_arithmetic(
     Arena *arena, const char *relation, Atom **args, CettaCallOutcome *out);
 
+/* Builds without Prolog only (petta_swi_arith.c): the reference's CLP(FD)
+ * function or relation NAME (#+ ... #\\=), whose arithmetic OPERATION
+ * is + - * min max div // mod, or < > =:= =\\= for a RELATION, on two
+ * arguments. Bound integers decide at once, as library(clpfd)'s propagation
+ * does: an integer, or true/false. Another bound argument raises SWI's
+ * domain_error(clpfd_expression, Arg); a zero divisor has no answer. An
+ * unbound argument would need the solver, which this build does not have:
+ * it raises instantiation_error in context NAME/3. False where declined. */
+bool petta_libpl_clpfd(Arena *arena, const char *name, const char *operation,
+                       bool relation, Atom **args, CettaCallOutcome *out);
+
 /* SWI's prefer_rationals flag in the embedded Prolog: whether PeTTa's /
  * gives a rational for integers that do not divide. */
 bool petta_libpl_prefer_rationals(void);

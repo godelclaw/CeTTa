@@ -54126,6 +54126,33 @@ test-petta-swi-arithmetic: $(BIN) tests/petta/swi_arithmetic.metta \
 	done; \
 	echo "PASS: PeTTa arithmetic off the fast path answers as SWI's is/2 ($$(wc -l < tests/petta/swi_arithmetic.expected) rows, default and extended)"
 
+# The reference prelude's exp, implies, =? and CLP(FD) functions and
+# relations answer as SWI-PeTTa's do, with Prolog and without; without, a
+# CLP(FD) argument left unbound raises instantiation_error (no solver).
+.PHONY: test-petta-reference-functions
+test-all: test-petta-reference-functions
+test-petta-reference-functions: $(BIN) tests/petta/reference_functions.metta \
+		tests/petta/reference_functions.expected tests/petta/clpfd_unbound_core.metta \
+		tests/petta/clpfd_unbound_core.expected
+	@for profile in default extended; do \
+		flags="--lang petta"; [ $$profile = default ] || flags="$$flags --profile $$profile"; \
+		actual=$$($(CETTA_BIN_INVOKE) $$flags tests/petta/reference_functions.metta 2>&1); \
+		if [ "$$actual" != "$$(cat tests/petta/reference_functions.expected)" ]; then \
+			echo "FAIL: reference functions as SWI-PeTTa's prelude (petta $$profile)"; \
+			diff -u tests/petta/reference_functions.expected <(printf '%s\n' "$$actual") | head -20; \
+			exit 1; \
+		fi; \
+	done; \
+	if [ "$(LIB_PROLOG_ENABLED)" != 1 ]; then \
+		actual=$$($(CETTA_BIN_INVOKE) --lang petta tests/petta/clpfd_unbound_core.metta 2>&1); \
+		if [ "$$actual" != "$$(cat tests/petta/clpfd_unbound_core.expected)" ]; then \
+			echo "FAIL: an unbound CLP(FD) argument without a solver"; \
+			diff -u tests/petta/clpfd_unbound_core.expected <(printf '%s\n' "$$actual") | head -20; \
+			exit 1; \
+		fi; \
+	fi; \
+	echo "PASS: exp, implies, =? and CLP(FD) answer as the reference ($$(wc -l < tests/petta/reference_functions.expected) rows, default and extended)"
+
 # A variable pattern over a space a symbol names, with no native rows and no
 # foreign engine to hold any, has no answer, with and without Prolog.
 .PHONY: test-petta-symbol-space-variable-match
