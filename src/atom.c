@@ -5586,7 +5586,10 @@ Atom *atom_tensor(Arena *a, CettaDenseTensorV1 *value) {
 Atom *atom_seal(Arena *a, void *object) {
     const CettaSealHold *hold = cetta_seal_hold_of(object);
     if (!a || !hold || !hold->retain || !hold->release ||
-        !arena_retain_owner(a, object, hold->retain, hold->release))
+        !(hold->footprint
+            ? arena_retain_owner_sized_with_storage(a, object, hold->retain,
+                  hold->release, hold->footprint(object), hold->storage)
+            : arena_retain_owner(a, object, hold->retain, hold->release)))
         return NULL;
     Atom *at = arena_alloc(a, sizeof(Atom));
     if (!at) return NULL;

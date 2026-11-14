@@ -1,6 +1,9 @@
 /* Explicit outcome observation. Base values keep their existing representation.
- * The owned envelope is inspected by registry identity, never printed syntax. */
-#include "native_handle.h"
+ * An event is a seal capsule of one of the context's private channel brands:
+ * an immutable value, inert under evaluation and inspected by brand identity,
+ * never printed syntax, so data is never an event. Being no thread-local
+ * resource, it travels the compiled and prepared paths like other values. */
+#include "seal.h"
 
 typedef enum {
     OUTCOME_KERNEL_VALUE,
@@ -8,24 +11,31 @@ typedef enum {
     OUTCOME_KERNEL_INCOMPLETE,
 } OutcomeKernelKind;
 
+/* An event's channel and its payload, borrowed while its capsule is held. */
 typedef struct {
-    Arena storage;
-    Atom *payload;
     OutcomeKernelKind kind;
+    Atom *payload;
 } OutcomeKernelEnvelope;
 
-static const char outcome_kernel_handle_kind[] = "outcome-kernel-event";
+static const char *const outcome_kernel_brand_names[] = {
+    "outcome-value", "outcome-raised", "outcome-incomplete",
+};
 
-static void outcome_kernel_envelope_free(void *opaque) {
-    OutcomeKernelEnvelope *envelope = opaque;
-    arena_free(&envelope->storage);
-    free(envelope);
-}
-
-static void outcome_kernel_envelope_storage(const void *opaque, CettaStorageCensus *census) {
-    const OutcomeKernelEnvelope *envelope = opaque;
-    if (cetta_storage_object(census, envelope, sizeof(*envelope), CETTA_STORAGE_BLOCK))
-        arena_storage_census(&envelope->storage, census);
+/* The root facet of the context's brand for `kind`, created on first use. */
+static CettaSealObject *outcome_kernel_brand(CettaLibraryContext *context,
+                                             OutcomeKernelKind kind) {
+    CettaSealObject **cell = &context->outcome_brands[kind];
+    CettaSealObject *brand = __atomic_load_n(cell, __ATOMIC_ACQUIRE);
+    if (brand) return brand;
+    CettaSealStatus status;
+    CettaSealObject *fresh = cetta_seal_brand_new(outcome_kernel_brand_names[kind], &status);
+    if (!fresh) return NULL;
+    CettaSealObject *expected = NULL;
+    if (__atomic_compare_exchange_n(cell, &expected, fresh, false,
+                                    __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+        return fresh;
+    cetta_seal_release(fresh);
+    return expected;
 }
 
 static bool outcome_kernel_unsupported_leaf(const Atom *atom, void *context) {
@@ -34,7 +44,7 @@ static bool outcome_kernel_unsupported_leaf(const Atom *atom, void *context) {
     switch (atom->ground.gkind) {
     case GV_SPACE: case GV_STATE: case GV_CAPTURE: case GV_FOREIGN:
     case GV_PRIME_NEED_CAPABILITY: case GV_PRIME_CONTEXT: case GV_BINDINGS:
-    case GV_TERM_GRAPH: case GV_SEAL:
+    case GV_TERM_GRAPH:
         return true;
     default: return false;
     }
@@ -46,37 +56,30 @@ static Atom *outcome_kernel_envelope(CettaLibraryContext *context, Arena *arena,
     if (!payload || atom_graph_any_checked(payload, outcome_kernel_unsupported_leaf,
             NULL, NULL, SIZE_MAX, &complete) || !complete)
         return NULL;
-    OutcomeKernelEnvelope *envelope = calloc(1u, sizeof(*envelope));
-    if (!envelope) return NULL;
-    arena_init_detached(&envelope->storage);
-    arena_set_block_growth(&envelope->storage, 4096u);
-    envelope->kind = kind;
-    envelope->payload = atom_deep_copy(&envelope->storage, payload);
-    size_t storage = envelope->storage.reserved_bytes;
-    if (envelope->storage.external_bytes > SIZE_MAX - storage ||
-        sizeof(*envelope) > SIZE_MAX - storage - envelope->storage.external_bytes) {
-        outcome_kernel_envelope_free(envelope);
+    CettaSealObject *brand = outcome_kernel_brand(context, kind);
+    CettaSealObject *capsule = NULL;
+    if (!brand || cetta_seal_atom(brand, payload, &capsule) != CETTA_SEAL_OK)
         return NULL;
-    }
-    storage += envelope->storage.external_bytes + sizeof(*envelope);
-    uint64_t id;
-    if (!envelope->payload || !cetta_native_handle_alloc_sized(context,
-            outcome_kernel_handle_kind, envelope, outcome_kernel_envelope_free, storage, &id)) {
-        outcome_kernel_envelope_free(envelope);
-        return NULL;
-    }
-    if (!cetta_native_handle_set_storage(context, outcome_kernel_handle_kind, id,
-            outcome_kernel_envelope_storage)) {
-        cetta_native_handle_close(context, outcome_kernel_handle_kind, id);
-        return NULL;
-    }
-    Atom *result = cetta_native_handle_owned_atom(context, arena, outcome_kernel_handle_kind, id);
-    if (!result) cetta_native_handle_close(context, outcome_kernel_handle_kind, id);
+    /* The arena now holds the capsule, or nothing does. */
+    Atom *result = cetta_seal_object_atom(arena, capsule);
+    cetta_seal_release(capsule);
     return result;
 }
 
-static OutcomeKernelEnvelope *outcome_kernel_get(CettaLibraryContext *context, Atom *atom) {
-    return cetta_native_handle_get_owned(context, outcome_kernel_handle_kind, atom);
+/* Whether `atom` is an event of this context; its channel and borrowed payload. */
+static bool outcome_kernel_get(CettaLibraryContext *context, Atom *atom,
+                               OutcomeKernelEnvelope *out) {
+    CettaSealObject *capsule = cetta_seal_atom_object(atom_prime_held_payload(atom));
+    if (!capsule || cetta_seal_object_kind(capsule) != CETTA_SEAL_OBJECT_CAPSULE)
+        return false;
+    for (OutcomeKernelKind kind = OUTCOME_KERNEL_VALUE; kind <= OUTCOME_KERNEL_INCOMPLETE; kind++) {
+        CettaSealObject *brand = __atomic_load_n(&context->outcome_brands[kind], __ATOMIC_ACQUIRE);
+        if (brand && cetta_seal_unseal_atom_borrowed(brand, capsule, &out->payload) == CETTA_SEAL_OK) {
+            out->kind = kind;
+            return true;
+        }
+    }
+    return false;
 }
 
 static Atom *outcome_kernel_diagnostic(Arena *arena, Atom *where,
@@ -191,11 +194,12 @@ static bool outcome_kernel_invoke(CettaLibraryContext *context, Space *space,
     Atom **values = arena_alloc(arena, sizeof(*values) * (length ? length : 1u));
     if (!values) return outcome_kernel_finish(context, arena, NULL, out);
     for (CettaExprIndex index = 0u; index < length; index++) {
-        OutcomeKernelEnvelope *argument = outcome_kernel_get(context, arguments[1]->expr.elems[index]);
-        if (!argument || argument->kind != OUTCOME_KERNEL_VALUE)
+        OutcomeKernelEnvelope argument;
+        if (!outcome_kernel_get(context, arguments[1]->expr.elems[index], &argument) ||
+            argument.kind != OUTCOME_KERNEL_VALUE)
             return outcome_kernel_finish(context, arena, outcome_kernel_refusal(context, arena,
                 atom_symbol(arena, "outcome:invoke"), "Unsolvable", "ExpectedValueEnvelope", false), out);
-        values[index] = argument->payload;
+        values[index] = argument.payload;
     }
     CettaCallOutcome reply;
     CettaInvocation invocation = {.head = binding_value_from_atom(arguments[0]),
@@ -284,7 +288,9 @@ bool cetta_eval_outcome_kernel_call(CettaLibraryContext *context, Space *space,
             id == g_builtin_syms.lib_outcome_value ? OUTCOME_KERNEL_VALUE
                 : id == g_builtin_syms.lib_outcome_raised ? OUTCOME_KERNEL_RAISED : OUTCOME_KERNEL_INCOMPLETE,
             arguments[0]), out);
-    OutcomeKernelEnvelope *envelope = count ? outcome_kernel_get(context, arguments[0]) : NULL;
+    OutcomeKernelEnvelope found;
+    OutcomeKernelEnvelope *envelope =
+        count && outcome_kernel_get(context, arguments[0], &found) ? &found : NULL;
     if (id == g_builtin_syms.lib_outcome_kind && count == 1u) {
         /* Interned once: a kind is asked for on every bind. */
         static SymbolId kinds[4];
@@ -313,7 +319,9 @@ bool cetta_eval_outcome_kernel_call(CettaLibraryContext *context, Space *space,
             outcome_kernel_frame(context, arena, kind, envelope->payload), out);
     }
     if (id == g_builtin_syms.lib_outcome_equal && count == 2u) {
-        OutcomeKernelEnvelope *other = outcome_kernel_get(context, arguments[1]);
+        OutcomeKernelEnvelope found_other;
+        OutcomeKernelEnvelope *other =
+            outcome_kernel_get(context, arguments[1], &found_other) ? &found_other : NULL;
         *out = cetta_call_completed_value(atom_bool(arena, envelope && other &&
             envelope->kind == other->kind && atom_eq(envelope->payload, other->payload)));
         return true;
@@ -323,11 +331,12 @@ bool cetta_eval_outcome_kernel_call(CettaLibraryContext *context, Space *space,
         Atom **values = arena_alloc(arena, sizeof(*values) * (length ? length : 1u));
         if (!values) return outcome_kernel_finish(context, arena, NULL, out);
         for (CettaExprIndex index = 0u; index < length; index++) {
-            OutcomeKernelEnvelope *item = outcome_kernel_get(context, arguments[0]->expr.elems[index]);
-            if (!item || item->kind != OUTCOME_KERNEL_VALUE)
+            OutcomeKernelEnvelope item;
+            if (!outcome_kernel_get(context, arguments[0]->expr.elems[index], &item) ||
+                item.kind != OUTCOME_KERNEL_VALUE)
                 return outcome_kernel_finish(context, arena, outcome_kernel_refusal(context, arena,
                     head, "Unsolvable", "ExpectedObservedValueEnvelopes", false), out);
-            values[index] = item->payload;
+            values[index] = item.payload;
         }
         return outcome_kernel_finish(context, arena,
             outcome_kernel_frame(context, arena, OUTCOME_KERNEL_VALUE, atom_expr(arena, values, length)), out);

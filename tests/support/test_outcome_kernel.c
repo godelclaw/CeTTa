@@ -110,9 +110,9 @@ static void ownership(CettaLibraryContext *ctx, Space *space, Arena *a) {
     kind(ctx, space, a, value, "value"); kind(ctx, space, a, raised, "raised");
     Atom *copy = atom_deep_copy(&receiver, value);
     assert(copy && receiver.external_bytes > 0u);
-    Atom *forged = cetta_native_handle_atom(a, "outcome-kernel-event",
-                                           (uint64_t)copy->expr.elems[2]->ground.ival);
-    assert(atom_eq(copy, forged));
+    /* An event's printed form is data, never the event. */
+    Atom *forged = parse(a, "(Sealed outcome-value)");
+    assert(!atom_eq(copy, forged));
     kind(ctx, space, a, forged, "data");
     arena_free(&producer);
     kind(ctx, space, a, copy, "value");
@@ -127,10 +127,7 @@ static void ownership(CettaLibraryContext *ctx, Space *space, Arena *a) {
     arena_storage_census(&receiver, &census); cetta_storage_finish(&census);
     assert(!census.incomplete && !census.overflow && census.bytes > 0u);
     cetta_storage_census_free(&census);
-    uint64_t id;
-    assert(cetta_native_handle_arg(copy, "outcome-kernel-event", &id));
-    assert(cetta_native_handle_close(ctx, "outcome-kernel-event", id));
-    kind(ctx, space, a, copy, "data");
+    /* Once its last holder retires, the event's storage goes with it. */
     arena_free(&receiver);
     Atom *prior = event(ctx, space, a, g_builtin_syms.lib_outcome_value, atom_int(a, 42));
     fail_calloc = true;
@@ -171,7 +168,7 @@ static void native_packets(CettaLibraryContext *ctx, Space *space, Arena *a) {
         .term = atom_int(a, 1), .delayed = atom_symbol(a, "pending")};
     kind(ctx, space, a, only_frame(call(ctx, space, a, g_builtin_syms.lib_outcome_invoke, args, 2u)), "incomplete");
     Atom *good = event(ctx, space, a, g_builtin_syms.lib_outcome_value, atom_int(a, 1));
-    Atom *forged = cetta_native_handle_atom(a, "outcome-kernel-event", 1u);
+    Atom *forged = parse(a, "(Sealed outcome-value)");
     args[1] = atom_expr(a, (Atom *[]){good, forged}, 2u);
     injected_calls = 0u;
     kind(ctx, space, a, only_frame(call(ctx, space, a, g_builtin_syms.lib_outcome_invoke, args, 2u)), "raised");
@@ -247,11 +244,11 @@ int main(void) {
     Space space; space_init(&space);
     Atom *argument = atom_int(&a, 1);
     CettaCallOutcome refused = call(ctx, &space, &a, g_builtin_syms.lib_outcome_value, &argument, 1u);
-    assert(refused.kind == CETTA_CALL_RAISED && cetta_native_handle_count(ctx) == 0u);
+    assert(refused.kind == CETTA_CALL_RAISED && !ctx->outcome_brands[0]);
     assert(cetta_session_enable_experiment(&ctx->session, "outcome-kernel") == CETTA_EXPERIMENT_ENABLED);
     ctx->session.speculative = true;
     refused = call(ctx, &space, &a, g_builtin_syms.lib_outcome_value, &argument, 1u);
-    assert(refused.kind == CETTA_CALL_RAISED && cetta_native_handle_count(ctx) == 0u);
+    assert(refused.kind == CETTA_CALL_RAISED && !ctx->outcome_brands[0]);
     ctx->session.speculative = false;
     ownership(ctx, &space, &a); phase = "native packets"; native_packets(ctx, &space, &a);
     phase = "compiled native fault"; compiled_fault(ctx, &space, &a); dependencies(&a);
