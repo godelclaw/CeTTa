@@ -1273,6 +1273,15 @@
     __cetta_lib_str 4 strict-all library-value-dispatch)
   (prepared-pure-intrinsic-head
     __cetta_lib_str_value 2 strict-all library-value-dispatch)
+  ; An outcome event is immutable once published, so reading its channel or
+  ; payload, and comparing two events, are functions of the operands.  The
+  ; dispatcher still refuses an undeclared session on every call.
+  (prepared-pure-intrinsic-head
+    __cetta_lib_outcome_kind 1 strict-all library-value-dispatch)
+  (prepared-pure-intrinsic-head
+    __cetta_lib_outcome_payload 1 strict-all library-value-dispatch)
+  (prepared-pure-intrinsic-head
+    __cetta_lib_outcome_equal 2 strict-all library-value-dispatch)
   (owned-local Bindings bindings_init bindings_free))
 
 (fixtures relational-admission
