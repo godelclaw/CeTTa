@@ -788,4 +788,8 @@
             (Row petta_decons)
             (Row index_atom)
             (Row trace_bang)
+            (Row sealed_text)
+            (Row if_equal)
+            (Row lib_list_from_expression)
+            (Row lib_list_to_expression)
         )))

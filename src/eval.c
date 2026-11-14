@@ -770,7 +770,7 @@ static Atom *legacy_empty_sentinel(Arena *a) {
         ? atom_petta_no_result(a) : atom_empty(a);
 }
 
-static bool atom_is_legacy_empty_or_error(Atom *atom) {
+static __attribute__((always_inline)) inline bool atom_is_legacy_empty_or_error(Atom *atom) {
     return atom_is_error(atom) || atom_is_legacy_empty_sentinel(atom);
 }
 
@@ -35744,6 +35744,21 @@ static __attribute__((noinline)) Atom *ai_activation_code(
     return code;
 }
 
+/* A typed code operation activates only a position its host interprets.
+ * Atom/Expression inspection retains the supplied occurrence's origin. */
+static __attribute__((noinline)) Atom *ai_activation_for_demand(
+    Arena *arena, const Bindings *environment, Atom *source, Atom *type) {
+    Atom *value = bindings_apply_if_vars(environment, arena, source);
+    Atom *expected = bindings_apply_if_vars(environment, arena, type);
+    Atom *code = value && expected
+        ? (eval_atom_type_demand(arena, value, expected) == HE_TYPE_INTERPRET
+            ? cetta_ai_code_reading(arena, value) : value)
+        : NULL;
+    if (!code)
+        eval_mark_incomplete(CETTA_EVAL_INCOMPLETE_CAPACITY);
+    return code;
+}
+
 #include "eval_ai_bindings.inc"
 
 /* A quotation is a value whose content is data: the parts a pattern takes
@@ -41389,7 +41404,7 @@ static bool match_visible_presentation_eq(Atom *var,
     return atom_symbol_current_id(var) == spelling;
 }
 
-static bool collect_match_visible_vars_tree(Atom *atom,
+static bool collect_match_visible_vars_rec(Atom *atom,
                                            MatchVisibleVarSet *set) {
     if (!atom || !atom_has_vars(atom))
         return true;
@@ -41398,7 +41413,7 @@ static bool collect_match_visible_vars_tree(Atom *atom,
     if (atom->kind != ATOM_EXPR)
         return true;
     for (CettaExprIndex i = 0; i < atom->expr.len; i++) {
-        if (!collect_match_visible_vars_tree(atom->expr.elems[i], set))
+        if (!collect_match_visible_vars_rec(atom->expr.elems[i], set))
             return false;
     }
     return true;
@@ -41424,16 +41439,16 @@ static __attribute__((noinline)) bool collect_match_visible_vars_graph(
     return complete && !refused;
 }
 
-static bool collect_match_visible_vars_rec(Atom *atom, MatchVisibleVarSet *set) {
+static __attribute__((always_inline)) inline bool collect_match_visible_vars_for_policy(Atom *atom, MatchVisibleVarSet *set) {
     return eval_failure_values() ? collect_match_visible_vars_graph(atom, set)
-        : collect_match_visible_vars_tree(atom, set);
+        : collect_match_visible_vars_rec(atom, set);
 }
 
 static __attribute__((unused)) bool collect_match_visible_vars_many(Atom **atoms,
                                             uint32_t natoms,
                                             MatchVisibleVarSet *set) {
     for (uint32_t i = 0; i < natoms; i++) {
-        if (!collect_match_visible_vars_rec(atoms[i], set))
+        if (!collect_match_visible_vars_for_policy(atoms[i], set))
             return false;
     }
     return true;
@@ -41454,7 +41469,7 @@ static bool atom_refs_only_match_visible_vars(Atom *atom,
     return true;
 }
 
-static Atom *rewrite_match_visible_aliases_tree(Arena *a, Atom *atom,
+static Atom *rewrite_match_visible_aliases(Arena *a, Atom *atom,
                                            const MatchVisibleAliasSet *aliases) {
     if (!atom || !aliases || aliases->len == 0 || !atom_has_vars(atom))
         return atom;
@@ -41474,7 +41489,7 @@ static Atom *rewrite_match_visible_aliases_tree(Arena *a, Atom *atom,
     Atom **rewritten = NULL;
     for (CettaExprIndex i = 0; i < atom->expr.len; i++) {
         Atom *child = atom->expr.elems[i];
-        Atom *next = rewrite_match_visible_aliases_tree(a, child, aliases);
+        Atom *next = rewrite_match_visible_aliases(a, child, aliases);
         if (!rewritten && next != child) {
             rewritten = arena_alloc(a, sizeof(Atom *) * atom->expr.len);
             for (CettaExprIndex j = 0; j < i; j++)
@@ -41494,7 +41509,7 @@ static Atom *match_alias_graph_variable(Arena *arena, Atom *variable, void *cont
         : variable;
 }
 
-static Atom *rewrite_match_visible_aliases(Arena *arena, Atom *atom,
+static __attribute__((always_inline)) inline Atom *rewrite_match_visible_aliases_for_policy(Arena *arena, Atom *atom,
     const MatchVisibleAliasSet *aliases) {
     if (eval_failure_values() && atom && aliases && aliases->len &&
         atom_has_vars(atom) && atom_may_hold_he_mark(atom)) {
@@ -41504,7 +41519,7 @@ static Atom *rewrite_match_visible_aliases(Arena *arena, Atom *atom,
             eval_mark_incomplete(CETTA_EVAL_INCOMPLETE_CAPACITY);
         return result;
     }
-    return rewrite_match_visible_aliases_tree(arena, atom, aliases);
+    return rewrite_match_visible_aliases(arena, atom, aliases);
 }
 
 static __attribute__((unused)) bool project_match_visible_bindings(Arena *a,
@@ -41554,7 +41569,7 @@ static __attribute__((unused)) bool project_match_visible_bindings(Arena *a,
     }
 
     for (CettaExprIndex i = 0; i < visible->len; i++) {
-        Atom *resolved = rewrite_match_visible_aliases(a, resolved_values[i], &aliases);
+        Atom *resolved = rewrite_match_visible_aliases_for_policy(a, resolved_values[i], &aliases);
         if (resolved->kind == ATOM_VAR &&
             var_id_eq(resolved->var_id, visible->items[i].var_id)) {
             continue;
@@ -41582,8 +41597,8 @@ static __attribute__((unused)) bool project_match_visible_bindings(Arena *a,
     for (uint32_t i = 0; i < full->eq_len; i++) {
         Atom *lhs = bindings_apply_value(full, a, full->constraints[i].lhs);
         Atom *rhs = bindings_apply_value(full, a, full->constraints[i].rhs);
-        lhs = rewrite_match_visible_aliases(a, lhs, &aliases);
-        rhs = rewrite_match_visible_aliases(a, rhs, &aliases);
+        lhs = rewrite_match_visible_aliases_for_policy(a, lhs, &aliases);
+        rhs = rewrite_match_visible_aliases_for_policy(a, rhs, &aliases);
         if (!atom_refs_only_match_visible_vars(lhs, visible) ||
             !atom_refs_only_match_visible_vars(rhs, visible)) {
             continue;
@@ -41623,7 +41638,7 @@ static bool collect_goal_instantiation_visible_vars(
         Atom *mapped = goal_instantiation->items[i].mapped_var;
         if (!mapped)
             continue;
-        if (!collect_match_visible_vars_rec(mapped, visible))
+        if (!collect_match_visible_vars_for_policy(mapped, visible))
             return false;
     }
     return true;
@@ -45696,7 +45711,7 @@ handle_match_kernel(Space *s, Arena *a, Atom *atom, Atom *type, int fuel,
         MatchVisibleVarSet visible2;
         match_visible_var_set_init(&visible2);
         for (CettaExprLen li = 0; li < nlegs; li++) {
-            if (!collect_match_visible_vars_rec(pats[li], &visible2)) {
+            if (!collect_match_visible_vars_for_policy(pats[li], &visible2)) {
                 match_visible_var_set_free(&visible2);
                 ai_publish_error(a, os, space_arg_error(
                     a, atom, "sourced conjunct pattern rejected"), &_empty);
@@ -45844,7 +45859,7 @@ handle_match_kernel(Space *s, Arena *a, Atom *atom, Atom *type, int fuel,
         BindingSet matches;
         MatchVisibleVarSet visible;
         match_visible_var_set_init(&visible);
-        if (!collect_match_visible_vars_rec(pattern, &visible)) {
+        if (!collect_match_visible_vars_for_policy(pattern, &visible)) {
             match_visible_var_set_free(&visible);
             return true;
         }
@@ -46057,7 +46072,7 @@ handle_match_kernel(Space *s, Arena *a, Atom *atom, Atom *type, int fuel,
         MatchVisibleVarSet visible;
         match_visible_var_set_init(&visible);
         for (uint32_t i = 0; i < nsteps; i++) {
-            if (!collect_match_visible_vars_rec(steps[i].pattern, &visible)) {
+            if (!collect_match_visible_vars_for_policy(steps[i].pattern, &visible)) {
                 match_visible_var_set_free(&visible);
                 return true;
             }
@@ -46898,7 +46913,7 @@ static bool try_count_generic_match_collapse(Space *s, Arena *a, Atom *match_ato
         return false;
 
     match_visible_var_set_init(&visible);
-    if (!collect_match_visible_vars_rec(pattern, &visible)) {
+    if (!collect_match_visible_vars_for_policy(pattern, &visible)) {
         match_visible_var_set_free(&visible);
         return false;
     }
@@ -51477,9 +51492,9 @@ static __attribute__((noinline)) bool he_contract_head_env(
     const Bindings *path_env, Bindings *out) {
     MatchVisibleVarSet visible;
     match_visible_var_set_init(&visible);
-    collect_match_visible_vars_rec(atom, &visible);
-    collect_match_visible_vars_rec(etype, &visible);
-    collect_match_visible_vars_rec(head_atom, &visible);
+    collect_match_visible_vars_for_policy(atom, &visible);
+    collect_match_visible_vars_for_policy(etype, &visible);
+    collect_match_visible_vars_for_policy(head_atom, &visible);
     BindingsBuilder acquired;
     bool acquired_initialized = bindings_builder_init(&acquired, current_env);
     bool acquired_ok = acquired_initialized &&
@@ -58480,7 +58495,7 @@ static bool prime_eval_stack_schedule_match_rows(Space *space, Space *query_spac
         bindings_init(&rows->pending);
         rows->read=space_read_token(query_space);
         ready=ready && prime_native_control_record_query_read(driver->control,rows->read) &&
-            collect_match_visible_vars_rec(pattern,&rows->visible);
+            collect_match_visible_vars_for_policy(pattern,&rows->visible);
         Bindings coordinates;bindings_init(&coordinates);
         ready=ready && bindings_retain_frame_state(&coordinates,&frame->env);
         if (ready) rows->cursor=space_query_cursor_new_captured(query_space,arena,pattern,&coordinates);
@@ -66818,8 +66833,8 @@ static void prime_weight_licence_match_start(PrimeWeightLicence *licence) {
     }
     if (!prime_weight_licence_admission(licence, view->expr.elems[3]))
         return;
-    if (!collect_match_visible_vars_rec(pattern, &licence->pattern_vars) ||
-        !collect_match_visible_vars_rec(call->expr.elems[3], &licence->body_vars)) {
+    if (!collect_match_visible_vars_for_policy(pattern, &licence->pattern_vars) ||
+        !collect_match_visible_vars_for_policy(call->expr.elems[3], &licence->body_vars)) {
         prime_weight_licence_refuse(licence, "UnreadMatchVariables", call);
         return;
     }
@@ -109531,7 +109546,7 @@ petta_lowered_to_shared_form:
     if (head_id == g_builtin_syms.metta && nargs == 3 && g_registry) {
         Atom *to_eval = expr_arg(atom, 0);
         if (eval_failure_values())
-            to_eval = ai_activation_code(a, CURRENT_ENV, to_eval);
+            to_eval = ai_activation_for_demand(a, CURRENT_ENV, to_eval, expr_arg(atom, 1));
         if (language_id == CETTA_LANGUAGE_PRIME) {
             Atom *code = prime_need_ready_code(a, to_eval, CURRENT_ENV);
             if (code) to_eval = code;

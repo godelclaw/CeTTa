@@ -2336,9 +2336,9 @@ static bool he_canonical_project_contract(HeCanonicalFrame *frame,
     Outcome *head, Outcome *path, Bindings *out) {
     MatchVisibleVarSet visible;
     match_visible_var_set_init(&visible);
-    bool visible_complete = collect_match_visible_vars_rec(frame->atom, &visible);
-    visible_complete = collect_match_visible_vars_rec(frame->type, &visible) && visible_complete;
-    visible_complete = collect_match_visible_vars_rec(
+    bool visible_complete = collect_match_visible_vars_for_policy(frame->atom, &visible);
+    visible_complete = collect_match_visible_vars_for_policy(frame->type, &visible) && visible_complete;
+    visible_complete = collect_match_visible_vars_for_policy(
         outcome_atom_materialize(frame->arena, head), &visible) && visible_complete;
     if (eval_failure_values() && !visible_complete) {
         match_visible_var_set_free(&visible);
@@ -3277,7 +3277,7 @@ static inline __attribute__((always_inline)) void he_canonical_resume_match_kern
         match_visible_var_set_init(&visible);
         bool valid = true;
         for (CettaExprIndex i = 0u; valid && i < registers->len; i++)
-            valid = collect_match_visible_vars_rec(registers->source[i], &visible);
+            valid = collect_match_visible_vars_for_policy(registers->source[i], &visible);
         Bindings projected;
         bindings_init(&projected);
         valid = valid && he_project_match_data(a, &visible, &row->env, &projected);

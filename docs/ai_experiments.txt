@@ -49,7 +49,8 @@ Classify at the producer that knows the cause. Carry failure provenance
 through the ordinary outcome protocol. Propagation and explicit observation
 are evaluator boundaries, rather than conventions based on function names
 or on the appearance of a payload. A native RAISED occurrence is control;
-a native VALUE containing an Error term is data. catch converts a produced
+a fresh native VALUE containing an Error term is data. A PRESERVED_VALUE
+projects existing occurrences without changing their roles. catch converts a produced
 failure to data. Atom-typed holding positions leave source unexecuted;
 holding alone does not complete it. Return, identity, declared Atom/Expression
 outputs, substitution and extraction preserve each occurrence's origin.
@@ -76,7 +77,10 @@ Native PRESERVED_VALUE completes a projection without fresh admission or
 re-evaluating its children. A surfaced source Error root raises; a data root
 stays data. The projection property is declared in builtin_symbols.data:
 car-atom, cdr-atom, decons-atom/decons, index-atom and trace! transport existing
-values. Sequence value constructors likewise preserve existing components.
+values, along with sealed's renaming, if-equal's selected arm and list/tuple
+conversion. A conversion keeps existing components; a newly constructed
+diagnostic root receives its own data mark. Sequence value constructors
+likewise preserve existing components.
 Suspended results cannot claim this finished-projection form. Old native tag
 numbers remain unchanged; the experiment alone produces the added form.
 
@@ -105,7 +109,8 @@ unify branches                  Run only the selected branch.
 computed operator               Propagate before demanding its arguments.
 demanded function/native args   Propagate left to right; no later effect.
 held function/native args       Keep syntax according to the signature.
-constructor fields              Propagate where demanded; held fields stay data.
+constructor fields              Propagate where demanded; held fields retain
+                                 their unexecuted source or admitted data role.
 catch source                    Observe each failure as one ordinary datum.
 forall completed generator      Preserve its first produced failure before
                                  treating its values as Boolean control.
@@ -114,7 +119,8 @@ foldall generator / step        Propagate the original failure instead of
                                  publishing an apparently completed state.
 hyperpose alternatives          Preserve branch occurrences and failure roles.
 directive result                Print failures; continue subsequent directives.
-eval / metta source             Held code, explicitly selected for execution.
+eval / metta source             Activate where the host interprets code;
+                                 typed Atom/Expression inspection stays inert.
 
 The collection operators' internal reify is an explicit observation boundary.
 For example, unique of two identical produced failures emits one intact Error
@@ -127,12 +133,19 @@ value and does not by itself change the process exit status. Command-line,
 reader and explicit process-exit failures retain their separate status rules.
 Programs that use this profile must inspect the returned outcomes.
 
-Explicit eval/metta select a code view of the operand's root. Equation heads
+Explicit evaluation selects a code view of the operand's root. Typed metta
+does so only when its source-demand rule interprets the operand; inspection
+at Atom or Expression preserves the occurrence. Equation heads
 that open a quotation similarly select the captured roots as code. Their
 children retain their own data roles. Ordinary parameters, if, and let/case
 pattern inspection are not quotation activation. No function-name exception
 or standard-library rewrite supplies this policy. PeTTa's quote removes its
 wrapper; HE's quote retains it, so source fixtures account for that difference.
+
+A held container can discard a source child without running it. If the host
+evaluates that container again before matching, its demanded child runs then,
+even when the following pattern would discard it. HE retains that existing
+re-evaluation behavior; inspecting a finished projection is a different path.
 
 A completed absence report (Empty SCOPE) is one ordinary datum, neither
 computational zero nor failure. The engine adds no declaration to the user's

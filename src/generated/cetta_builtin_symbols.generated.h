@@ -1099,7 +1099,11 @@
     cesta_table_apply_0(decons_atom) \
     cesta_table_apply_0(petta_decons) \
     cesta_table_apply_0(index_atom) \
-    cesta_table_apply_0(trace_bang)
+    cesta_table_apply_0(trace_bang) \
+    cesta_table_apply_0(sealed_text) \
+    cesta_table_apply_0(if_equal) \
+    cesta_table_apply_0(lib_list_from_expression) \
+    cesta_table_apply_0(lib_list_to_expression)
 
 
 #endif

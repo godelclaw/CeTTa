@@ -94,6 +94,15 @@ static void native_fixture_outcome(Arena *arena, CettaCallOutcome *outcome) {
     case 17: *outcome = cetta_call_value(error); break;
     case 20: *outcome = cetta_call_completed_value(atom_expr2(arena,
         atom_symbol(arena, "Empty"), atom_symbol(arena, "native-scope"))); break;
+    case 21: *outcome = cetta_call_preserved_value(error); break;
+    case 22: *outcome = cetta_call_preserved_value(
+        atom_he_evaluated_deep_copy(arena, error)); break;
+    case 23:
+        *outcome = cetta_call_suspended(error, atom_expr2(arena,
+            atom_unit(arena), atom_unit(arena)));
+        outcome->result_form = CETTA_CALL_RESULT_PRESERVED_VALUE;
+        break;
+    case 24: *outcome = cetta_call_preserved_value(NULL); break;
     case 18: {
         Atom *waiting = atom_var(arena, "native-waiting");
         Atom *check = atom_expr3(arena, atom_symbol(arena, "="), waiting, atom_int(arena, 9));
@@ -3145,7 +3154,7 @@ static void test_ai_native_return_boundary(CettaLanguageId language) {
         const char *code_data[] = {"(function (return (readln!)))",
             "(Box (function (return (readln!))))", "hidden",
             "(Box (function (return (readln!))))", "((function (return (readln!))) 7)"};
-        const unsigned modes[] = {8u, 9u, 17u, 20u, 1u};
+        const unsigned modes[] = {8u, 9u, 17u, 20u, 1u, 21u, 22u};
         for (unsigned mi = 0u; mi < sizeof(modes) / sizeof(*modes); mi++) {
             unsigned mode = modes[mi];
             for (unsigned i = 0u; i < sizeof(source) / sizeof(*source); i++) {
@@ -3154,7 +3163,7 @@ static void test_ai_native_return_boundary(CettaLanguageId language) {
                 EvalOutcome result; eval_outcome_init(&result);
                 eval_top_with_registry_outcome(&space, &arena, &arena, &registry,
                     ai_native_source(&arena, source[i], language), &result, NULL, NULL);
-                Atom *expected = parse(&arena, mode == 8u ? raised[i]
+                Atom *expected = parse(&arena, mode == 8u || mode == 21u ? raised[i]
                     : mode == 20u ? empty_data[i] : mode == 1u ? code_data[i] : data[i]);
                 bool matches = result.results.len == 1u &&
                     atom_eq(result.results.items[0], expected);
@@ -3190,7 +3199,7 @@ static void test_ai_native_return_boundary(CettaLanguageId language) {
             assert(result.completion == CETTA_EVAL_COMPLETE && native_calls == 1u);
             eval_outcome_free(&result);
         }
-        const unsigned terminal_modes[] = {3u, 4u, 5u, 6u, 7u, 10u, 11u, 12u, 13u, 18u};
+        const unsigned terminal_modes[] = {3u, 4u, 5u, 6u, 7u, 10u, 11u, 12u, 13u, 18u, 23u, 24u};
         for (unsigned i = 0u; i < sizeof(terminal_modes) / sizeof(*terminal_modes); i++) {
             native_mode = terminal_modes[i];
             native_calls = 0u;
@@ -3235,8 +3244,8 @@ static void test_ai_native_return_boundary(CettaLanguageId language) {
         free(context); arena_free(&arena);
     }
     puts(language == CETTA_LANGUAGE_HE
-        ? "PASS: 25 HE AI native value/failure contexts, 2 duplicate-frontier controls and 10 terminal controls preserve provenance, zero, faults and pending conditions without replay"
-        : "PASS: 25 PeTTa AI native value/failure contexts, 2 duplicate-frontier controls and 10 terminal controls preserve provenance, zero, faults and pending conditions without replay");
+        ? "PASS: 35 HE AI native value/failure contexts, 2 duplicate-frontier controls and 12 terminal controls preserve provenance, zero, faults and pending conditions without replay"
+        : "PASS: 35 PeTTa AI native value/failure contexts, 2 duplicate-frontier controls and 12 terminal controls preserve provenance, zero, faults and pending conditions without replay");
 }
 
 int main(int argc, char **argv) {

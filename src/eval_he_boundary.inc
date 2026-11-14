@@ -785,7 +785,7 @@ static void he_raw_collect(Space *s, Arena *a, Atom *atom, int fuel,
             }
             MatchVisibleVarSet visible;
             match_visible_var_set_init(&visible);
-            collect_match_visible_vars_rec(atom, &visible);
+            collect_match_visible_vars_for_policy(atom, &visible);
             for (CettaIndex i = 0u; i < rows.len; i++) {
                 Bindings projected;
                 bindings_init(&projected);
@@ -1512,7 +1512,8 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
         if (target) {
             Atom *source = expr_arg(frame->atom, 0);
             if (eval_failure_values())
-                source = ai_activation_code(a, &frame->env, source);
+                source = ai_activation_for_demand(a, &frame->env, source,
+                    expr_arg(frame->atom, 1));
             if (!source) {
                 frame->phase = HE_INSTRUCTION_DONE;
                 return;

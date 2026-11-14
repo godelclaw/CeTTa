@@ -13941,6 +13941,12 @@ static bool petta_push_equation_result(
     uint32_t barrier, bool evaluate_result,
     bool translate_result, bool count_collection_result,
     const PettaPlanNode *plan, bool result_fully_resolved) {
+    /* Selection may precede the choice's continuation snapshot. Surface a
+     * source diagnostic only when this ordinary goal runs, after the sibling
+     * alternatives and their continuation have been retained. */
+    if (machine->host.failure_values && atom_is_error(result) &&
+        !atom_is_he_evaluated(result))
+        return petta_push_solve_planned(machine, result, expected, barrier, NULL);
     /* A raw `Atom` result keeps an ordinary equation body as data.  An
      * explicit `function` wrapper is the source language's execution marker,
      * however: it runs to produce that raw Atom.  Quoted wrappers never reach
@@ -21600,20 +21606,6 @@ static bool petta_machine_advance_choice(
                     match.result_is_activation = false;
                     match.result_fully_resolved = true;
                     activation_supported = false;
-                }
-                if (machine->host.failure_values && atom_is_error(result) &&
-                    !atom_is_he_evaluated(result)) {
-                    if (match.result_is_activation) {
-                        result = petta_machine_apply_bindings_epoch_then_all(machine,
-                            (Bindings *)search_context_bindings(&machine->search),
-                            &machine->heap, result, match.activation_epoch,
-                            match.activation_first_entry);
-                        if (!result) {
-                            *failure = PETTA_MACHINE_STEP_CAPACITY;
-                            return false;
-                        }
-                    }
-                    return petta_machine_raise_error(machine, result);
                 }
                 bool scheduled = activation_supported
                     ? petta_push_solve_activation_planned(

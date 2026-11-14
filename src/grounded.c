@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "grounded.h"
+#include "ai_failure.h"
 #include "tensor_dense_v1.h"
 #include "effect_policy.h"
 #include "host_services.h"
@@ -3968,8 +3969,10 @@ static Atom *grounded_dispatch_open(Arena *a, Atom *head, Atom **args,
         }
         if (atom_is_list(value) == to_list)
             return value;
-        return to_list ? atom_list(a, elems, len)
-                       : atom_sequence_like(a, NULL, elems, len);
+        Atom *converted = to_list ? atom_list(a, elems, len)
+                                 : atom_sequence_like(a, NULL, elems, len);
+        return eval_current_uses_failure_values && eval_current_uses_failure_values()
+            ? cetta_ai_constructed_value(a, converted) : converted;
     }
 
     if ((head_id == g_builtin_syms.car_atom ||

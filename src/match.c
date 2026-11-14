@@ -6183,7 +6183,7 @@ typedef struct {
     bool heap;
 } BindingsApplyFrames;
 
-static bool bindings_apply_frames_push(BindingsApplyFrames *frames,
+static __attribute__((always_inline)) inline bool bindings_apply_frames_push(BindingsApplyFrames *frames,
                                        BindingsApplyFrame frame) {
     if (frames->len == frames->cap) {
         if (frames->cap > UINT32_MAX / 2u)
