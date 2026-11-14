@@ -1273,15 +1273,28 @@
     __cetta_lib_str 4 strict-all library-value-dispatch)
   (prepared-pure-intrinsic-head
     __cetta_lib_str_value 2 strict-all library-value-dispatch)
-  ; An outcome event is immutable once published, so reading its channel or
-  ; payload, and comparing two events, are functions of the operands.  The
-  ; dispatcher still refuses an undeclared session on every call.
+  ; An outcome event is an immutable capsule, so reading its channel or
+  ; payload, and comparing two events, are functions of the operands.  A
+  ; constructor seals a fresh capsule: equal compares channel and payload,
+  ; never capsule identity, and an abandoned attempt's capsule is
+  ; unreachable.  The dispatcher still refuses an undeclared session on
+  ; every call.  Capture and invoke evaluate code and are not listed.
   (prepared-pure-intrinsic-head
     __cetta_lib_outcome_kind 1 strict-all library-value-dispatch)
   (prepared-pure-intrinsic-head
     __cetta_lib_outcome_payload 1 strict-all library-value-dispatch)
   (prepared-pure-intrinsic-head
     __cetta_lib_outcome_equal 2 strict-all library-value-dispatch)
+  (prepared-pure-intrinsic-head
+    __cetta_lib_outcome_value 1 strict-all library-value-dispatch)
+  (prepared-pure-intrinsic-head
+    __cetta_lib_outcome_raised 1 strict-all library-value-dispatch)
+  (prepared-pure-intrinsic-head
+    __cetta_lib_outcome_incomplete 1 strict-all library-value-dispatch)
+  (prepared-pure-intrinsic-head
+    __cetta_lib_outcome_rechannel 2 strict-all library-value-dispatch)
+  (prepared-pure-intrinsic-head
+    __cetta_lib_outcome_pack 1 strict-all library-value-dispatch)
   (owned-local Bindings bindings_init bindings_free))
 
 (fixtures relational-admission
