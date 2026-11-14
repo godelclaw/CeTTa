@@ -9,7 +9,7 @@
      "(let $outer (cons-atom $box ()) " $body ")))")))
 
 (Projection all new-diagnostic-root "" "(let $v (cons-atom Error (value (Fault datum))) (Box $v))" "(Box (Error value (Fault datum)))")
-(Projection all constructed-source-child "" "(let $box (cons-atom Box ((Error value (Fault datum)))) (let (Box $e) $box $e))" "(Error value (Fault datum))")
+(Projection all constructed-source-child "" "(let (Box $e) (cons-atom Box ((Error value (Fault datum)))) (Box $e))" "(Error value (Fault datum))")
 (Projection all constructed-data-child "" "(let $d (catch (Error value (Fault datum))) (let $box (cons-atom Box ($d)) (let (Box $e) $box (Box $e))))" "(Box (Error value (Fault datum)))")
 (Projection all mixed-let-discard (pr:prefix) (pr:mixed "(let (Box $s $d) (index-atom $outer 0) reached)") "reached")
 (Projection all mixed-let-source (pr:prefix) (pr:mixed "(let (Box $s $d) (index-atom $outer 0) $s)") "(Error value (Fault datum))")

@@ -758,7 +758,7 @@ static bool eval_environment_flag_enabled(
  * never the datum `Empty`.  Route every evaluator-level sentinel test through
  * this predicate, and every sentinel through `legacy_empty_sentinel`, so a
  * value cannot acquire control authority by spelling itself `Empty`. */
-static bool atom_is_legacy_empty_sentinel(Atom *atom) {
+static __attribute__((always_inline)) inline bool atom_is_legacy_empty_sentinel(Atom *atom) {
     CettaLanguageId language = eval_current_language_id();
     return language == CETTA_LANGUAGE_PETTA || language == CETTA_LANGUAGE_PRIME
         ? atom_is_petta_no_result(atom) : atom_is_empty(atom);

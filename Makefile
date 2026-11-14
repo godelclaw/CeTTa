@@ -6930,7 +6930,7 @@ test-ai: test-ai-native-returns test-ai-suite test-ai-he-suite test-ai-boundarie
 test-ai-choices: $(BIN) tests/ai/choice_origins.metta
 	@set -eu; actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
 		"!(import! &self \"./tests/ai/choice_origins.metta\") !(r4:run \"$(abspath $(BIN))\")"); \
-	expected=$$(printf 'true\n(AIReview4Pass 576 66)'); \
+	expected=$$(printf 'true\n(AIReview4Pass 576 72)'); \
 	if [ "$$actual" != "$$expected" ]; then printf '%s\n' "$$actual"; exit 1; fi; \
 	printf '%s\n' 'PASS: AI equation alternatives, typed demand and native transport origins'
 test-ai-boundaries: $(BIN) $(wildcard tests/ai/*.metta)
