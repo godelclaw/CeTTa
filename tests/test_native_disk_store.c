@@ -21,6 +21,7 @@ static unsigned checks;
 } } while (0)
 static ssize_t write_remaining=-1;
 static int sync_failure=-1,sync_fail_at,sync_calls,rename_failure,rename_after_success;
+static int rename_refusal; /* errno of a rename the file system refuses */
 static int pause_ready=-1,pause_resume=-1;
 static bool pause_lock,pause_batch;
 static off_t drop_unsynced_to=-1;
@@ -76,6 +77,7 @@ int __wrap_fsync(int fd) {
 }
 int __wrap_renameat(int a,const char *x,int b,const char *y) {
     if (rename_failure) { errno=EIO; return -1; }
+    if (rename_refusal) { errno=rename_refusal; return -1; }
     int result=__real_renameat(a,x,b,y);
     if (!result && rename_after_success) { errno=EIO; return -1; }
     return result;
@@ -192,6 +194,51 @@ static void unknown(const char *path,bool after) {
     expect(again,"unknown","result");
     cetta_disk_store_view_close(view); cetta_disk_store_view_close(out); cetta_disk_store_view_close(again);
     cetta_disk_store_close(store);
+}
+/* A rename the file system refuses (here: no space for the entry) replaced
+ * nothing: the commit is an ordinary IO failure and the owner stays writable.
+ * Only an uncertain outcome poisons it, until recover or its last close. */
+static void refused_publication(const char *path) {
+    CettaDiskStore *store=open_store(path),*other=open_store(path);
+    CettaDiskStoreView *view=snapshot(store),*out=NULL,*next=NULL;
+    CettaDiskOp op={false,text("refused"),text("later")};
+    check(cetta_disk_store_uncertain_owners()==0);
+    rename_refusal=ENOSPC;
+    check(cetta_disk_store_commit(store,view,&op,1,&out)==CETTA_STORE_IO && !out);
+    rename_refusal=0;
+    check(cetta_disk_store_uncertain_owners()==0);
+    CettaDiskStoreView *current=snapshot(other);expect(current,"refused",NULL);cetta_disk_store_view_close(current);
+    check(cetta_disk_store_commit(store,view,&op,1,&out)==CETTA_STORE_OK);
+    expect(out,"refused","later");
+    rename_failure=1;
+    check(cetta_disk_store_commit(store,out,&op,1,&next)==CETTA_STORE_UNKNOWN && !next);
+    rename_failure=0;
+    check(cetta_disk_store_uncertain_owners()==1);
+    check(cetta_disk_store_commit(store,out,&op,1,&next)==CETTA_STORE_RECOVERY_REQUIRED && !next);
+    check(cetta_disk_store_commit(other,out,&op,1,&next)==CETTA_STORE_OK);
+    cetta_disk_store_view_close(next);next=NULL;
+    check(cetta_disk_store_recover(store,&next)==CETTA_STORE_OK);
+    check(cetta_disk_store_uncertain_owners()==0);
+    rename_failure=1;
+    check(cetta_disk_store_commit(store,next,&op,1,&current)==CETTA_STORE_UNKNOWN && !current);
+    rename_failure=0;
+    check(cetta_disk_store_uncertain_owners()==1);
+    cetta_disk_store_close(store);
+    check(cetta_disk_store_uncertain_owners()==0);
+    /* The ACT conversion's first publication is its rotation. A refused one
+     * leaves the owner writable; its unpublished segment is collected. */
+    CettaDiskCompaction *job=NULL;
+    rename_refusal=ENOSPC;
+    check(cetta_disk_store_compact_act_open(other,256*1024,&job)==CETTA_STORE_IO && !job);
+    rename_refusal=0;
+    check(cetta_disk_store_uncertain_owners()==0);
+    CettaDiskOp more={false,text("after"),text("rotation")};
+    check(cetta_disk_store_commit(other,next,&more,1,&current)==CETTA_STORE_OK);
+    expect(current,"after","rotation");
+    uint64_t removed=0;check(cetta_disk_store_collect(other,&removed)==CETTA_STORE_OK && removed==1);
+    puts("STORE_PUBLICATION rename-refused io");
+    cetta_disk_store_view_close(view);cetta_disk_store_view_close(out);cetta_disk_store_view_close(next);
+    cetta_disk_store_view_close(current);cetta_disk_store_close(other);
 }
 static void partial_writes(const char *path) {
     CettaDiskStore *store=open_store(path); CettaDiskStoreView *view=snapshot(store),*out=NULL;
@@ -806,7 +853,7 @@ static void logical_readers(const char *root) {
 int main(void) {
     char root[]="runtime/disk-store-test.XXXXXX"; check(mkdtemp(root));
     create_directory(root);
-    const char *labels[]={"ordinary","lock","unknown-before","unknown-after","partial","corrupt","sync-data","sync-manifest","sync-directory","scoped","parallel","spenders","collection-confirmation","live-builder","lost-writeback","ownership","old-version","wrong-header","view-domain-a","view-domain-b","backups","stale-compaction"};
+    const char *labels[]={"ordinary","lock","unknown-before","unknown-after","partial","corrupt","sync-data","sync-manifest","sync-directory","scoped","parallel","spenders","collection-confirmation","live-builder","lost-writeback","ownership","old-version","wrong-header","view-domain-a","view-domain-b","backups","stale-compaction","refused"};
     enum { CASES=sizeof(labels)/sizeof(*labels) };char paths[CASES][256];
     for (size_t i=0;i<CASES;++i) {
         check(snprintf(paths[i],sizeof(paths[i]),"%s/%s",root,labels[i])>0);
@@ -822,6 +869,7 @@ int main(void) {
     view_domains(paths[18],paths[19]);
     backup_cases(paths[20]);
     live_builder(paths[21],true);
+    refused_publication(paths[22]);
     logical_readers(root);
     operation_batches(root);
     batch_crash_cases(root);

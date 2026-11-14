@@ -174,9 +174,14 @@ CettaJournalStatus cetta_journal_checkpoint(int directory, const char *name,
     uint64_t size = 0;
     CettaJournalStatus status = CETTA_JOURNAL_IO;
     if (writer(fd, &size, context) && synchronize_file(fd)) {
-        /* Once rename is attempted, a failure needs recovery/readback. */
-        status = CETTA_JOURNAL_UNKNOWN;
-        if (!renameat(directory, temporary, directory, name) && synchronize_file(directory)) {
+        /* A failed rename leaves both names as they were (POSIX), except
+         * after EIO, or EINTR on a file system that may have finished it.
+         * After a rename, a failed directory sync needs recovery/readback. */
+        if (renameat(directory, temporary, directory, name))
+            status = errno == EIO || errno == EINTR ? CETTA_JOURNAL_UNKNOWN : CETTA_JOURNAL_IO;
+        else if (!synchronize_file(directory))
+            status = CETTA_JOURNAL_UNKNOWN;
+        else {
             close(*live_fd);
             *live_fd = fd;
             if (written) *written = size;

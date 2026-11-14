@@ -45,7 +45,7 @@ int __wrap_fsync(int fd) {
     return __real_fsync(fd);
 }
 int __wrap_renameat(int a,const char *x,int b,const char *y) {
-    if (rename_failure) { errno=EIO; return -1; }
+    if (rename_failure) { errno=rename_failure; return -1; }
     return __real_renameat(a,x,b,y);
 }
 
@@ -147,12 +147,26 @@ static void checkpointing(int dir,int *fd) {
     expect(*fd,0,length(*fd),"old",3);
     check(faccessat(dir,"checkpoint.new",F_OK,0)<0 && errno==ENOENT);
 
-    rename_failure=1;
+    rename_failure=EIO;
     check(cetta_journal_checkpoint(dir,"journal.csl","checkpoint.new",replacement,
                                   "new",fd,&bytes)==CETTA_JOURNAL_UNKNOWN);
     rename_failure=0;
     check(*fd==old);
     expect(*fd,0,length(*fd),"old",3);
+
+    /* A refused rename (here: no space for the directory entry) replaced
+     * nothing, so it is an ordinary failure rather than an uncertain one. */
+    rename_failure=ENOSPC;
+    check(cetta_journal_checkpoint(dir,"journal.csl","checkpoint.new",replacement,
+                                  "refused",fd,&bytes)==CETTA_JOURNAL_IO);
+    rename_failure=0;
+    check(*fd==old && bytes==75);
+    expect(*fd,0,length(*fd),"old",3);
+    check(faccessat(dir,"checkpoint.new",F_OK,0)<0 && errno==ENOENT);
+    int named=openat(dir,"journal.csl",O_RDONLY|O_CLOEXEC);
+    check(named>=0);
+    expect(named,0,length(named),"old",3);
+    close(named);
 
     sync_failure_fd=dir;
     check(cetta_journal_checkpoint(dir,"journal.csl","checkpoint.new",replacement,

@@ -60,6 +60,10 @@ void cetta_disk_store_storage(const CettaDiskStore *,struct CettaStorageCensus *
 /* The caller holds its exclusive owner use. A lost post-publication reply
  * resource must use the same write gate as an uncertain filesystem reply. */
 void cetta_disk_store_require_recovery(CettaDiskStore *store);
+/* Owner handles of this process that are write-poisoned now: an uncertain
+ * publication outcome that neither recover nor the last close has cleared.
+ * A service that keeps one owner for its life must not serve past it. */
+size_t cetta_disk_store_uncertain_owners(void);
 CettaDiskStoreStatus cetta_disk_store_snapshot(CettaDiskStore *store, CettaDiskStoreView **out);
 /* Own another descriptor for exactly this captured root, without reopening
  * the publisher or confirming a later revision. The source stays borrowed

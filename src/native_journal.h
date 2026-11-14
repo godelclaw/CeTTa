@@ -58,6 +58,7 @@ typedef bool (*CettaJournalCheckpointWriter)(int fd, uint64_t *bytes, void *cont
 
 /* Write a complete replacement, synchronize it, atomically rename it, then
  * synchronize the directory. The live descriptor changes only on success.
+ * IO replaced nothing, a refused rename included (any errno but EIO/EINTR).
  * UNKNOWN requires reopening the store: the replacement may be durable.
  * Both names are single path components in the already-open private directory. */
 CettaJournalStatus cetta_journal_checkpoint(int directory, const char *name,
