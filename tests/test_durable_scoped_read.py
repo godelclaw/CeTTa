@@ -61,11 +61,17 @@ def main():
                 '(durable:snapshot "EPOCH" 2 ((durable:record "history" "row/01999" (old 1999))))',
                 '(durable:closed)',
             ], (language, lines)
-            # A read before attaching has no store; attach twice is busy.
+            # A read before attaching has no store. While one store is
+            # attached, attaching another is busy and the first stays attached.
             assert run(binary, language, directory, '!(durable:read-key "inbox" "a1")\n') == [
                 '(durable:failure closed)']
-            assert run(binary, language, directory, attach + attach + '!(durable:close)\n')[1] == \
-                '(durable:failure busy)'
+            other = directory / "other.db"
+            lines = run(binary, language, directory, attach + f'!(durable:attach "{other}")\n'
+                        '!(durable:read-key "inbox" "a1")\n!(durable:close)\n')
+            assert lines == ['(durable:attached "EPOCH" 2 2005)', '(durable:failure busy)',
+                             '(durable:snapshot "EPOCH" 2 ((durable:record "inbox" "a1" (message 1))))',
+                             '(durable:closed)'], (language, lines)
+            assert not other.exists(), "a busy attach created a store"
             # Without --durable-admin the directives are refused like the others.
             denied = '(durable:failure commit-boundary-required)'
             assert run(binary, language, directory, attach + '!(durable:read-key "inbox" "a1")\n'
