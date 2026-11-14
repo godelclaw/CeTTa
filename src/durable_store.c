@@ -237,13 +237,41 @@ static bool frame_keys_unique(const unsigned char *p,const unsigned char *end,ui
     }
     return p==end;
 }
+/* Rows replayed so far by (space, key), so loading a journal costs one probe
+ * per operation, not a pass over the rows before it. A slot holds a row and
+ * its atom id; a removed row leaves the tombstone. */
+typedef struct { Atom **rows; AtomId *ids; size_t capacity, filled; } LoadRows;
+static Atom load_tombstone;
+static size_t load_slot(const LoadRows *t, const char *space, const char *key, bool *present) {
+    size_t j=(size_t)row_hash(space,key)&(t->capacity-1),free_slot=t->capacity;
+    *present=false;
+    for (;t->rows[j];j=(j+1)&(t->capacity-1)) {
+        if (t->rows[j]==&load_tombstone) { if (free_slot==t->capacity) free_slot=j; continue; }
+        CettaDurableRecord r=row(t->rows[j]);
+        if (!strcmp(r.space,space) && !strcmp(r.key,key)) { *present=true; return j; }
+    }
+    return free_slot==t->capacity ? j : free_slot;
+}
+static bool load_reserve(LoadRows *t) {
+    if (t->capacity && (t->filled+1)*2<=t->capacity) return true;
+    size_t capacity=t->capacity ? t->capacity*2 : 1024;
+    if (capacity>SIZE_MAX/sizeof(Atom *) || capacity>SIZE_MAX/sizeof(AtomId)) return false;
+    LoadRows grown={calloc(capacity,sizeof(Atom *)),calloc(capacity,sizeof(AtomId)),capacity,0};
+    if (!grown.rows || !grown.ids) { free(grown.rows); free(grown.ids); return false; }
+    for (size_t i=0;i<t->capacity;++i) if (t->rows[i] && t->rows[i]!=&load_tombstone) {
+        CettaDurableRecord r=row(t->rows[i]); bool present;
+        size_t j=load_slot(&grown,r.space,r.key,&present);
+        grown.rows[j]=t->rows[i]; grown.ids[j]=t->ids[i]; ++grown.filled;
+    }
+    free(t->rows); free(t->ids); *t=grown; return true;
+}
 static CettaDurableStatus read_image(int fd,bool trim,Image **out,char epoch[33],
         int64_t *revision,int64_t *history,uint64_t *file_bytes) {
     *out=NULL; Image *im=image_new(); if (!im) return DURABLE_NOMEM;
     struct stat info;
     if (fstat(fd,&info) || info.st_size<0) { image_free(im); return DURABLE_IO; }
     uint64_t length=(uint64_t)info.st_size,position=0; bool first=true; uint64_t remaining=0; *history=0;
-    CettaDurableStatus result=DURABLE_CORRUPT;
+    CettaDurableStatus result=DURABLE_CORRUPT; LoadRows loaded={0};
     for (;;) {
         CettaJournalRecord frame={0};
         CettaJournalStatus st=cetta_journal_read(fd,position,length,SIZE_MAX,&frame);
@@ -251,6 +279,7 @@ static CettaDurableStatus read_image(int fd,bool trim,Image **out,char epoch[33]
             if (first || remaining) break;
             if (st==CETTA_JOURNAL_TORN && trim &&
                 cetta_journal_trim_tail(fd,position)!=CETTA_JOURNAL_OK) { result=DURABLE_IO; break; }
+            free(loaded.rows); free(loaded.ids);
             *out=im; *file_bytes=position; return DURABLE_OK;
         }
         if (st!=CETTA_JOURNAL_OK) { result=journal_status(st); break; }
@@ -283,16 +312,30 @@ static CettaDurableStatus read_image(int fd,bool trim,Image **out,char epoch[33]
                 char *name=strndup((const char *)p,(size_t)ns); p+=ns;
                 char *key=strndup((const char *)p,(size_t)nk); p+=nk;
                 if (!name || !key) { free(name); free(key); result=DURABLE_NOMEM; valid=false; break; }
-                CettaIndex index=0; Atom *found=find_row(im->space,name,key,&index);
+                if (!load_reserve(&loaded)) { free(name); free(key); result=DURABLE_NOMEM; valid=false; break; }
+                bool present; size_t slot=load_slot(&loaded,name,key,&present);
+                Atom *found=present ? loaded.rows[slot] : NULL;
                 if ((op==DURABLE_INSERT)==(found!=NULL)) valid=false;
                 if (valid && found) {
                     CettaDurableRecord old=row(found); im->live_bytes-=(int64_t)(old.size+ns+nk);
-                    if (!space_remove_atom_id(im->space,space_get_atom_id_at64(im->space,index))) valid=false;
+                    if (!space_remove_atom_id(im->space,loaded.ids[slot])) valid=false;
+                    loaded.rows[slot]=&load_tombstone;
                 }
                 if (valid && op!=DURABLE_REMOVE) {
                     CettaDurableRecord r={name,key,(unsigned char *)p,(size_t)nv,(int64_t)rv,(int64_t)pos};
                     if (ns+nk+nv>(uint64_t)(INT64_MAX-im->live_bytes) || !image_add(im,&r)) valid=false;
                     if (valid) im->live_bytes+=(int64_t)(ns+nk+nv);
+                    /* The admitted row is the space's last; else find it. */
+                    CettaIndex last=valid ? space_length64(im->space)-1u : 0u;
+                    Atom *added=valid ? space_get_at64(im->space,last) : NULL;
+                    CettaDurableRecord check=added ? row(added) : (CettaDurableRecord){0};
+                    if (valid && (!added || strcmp(check.space,name) || strcmp(check.key,key)))
+                        added=find_row(im->space,name,key,&last);
+                    if (!added) valid=false;
+                    if (valid) {
+                        if (!loaded.rows[slot]) ++loaded.filled;
+                        loaded.rows[slot]=added; loaded.ids[slot]=space_get_atom_id_at64(im->space,last);
+                    }
                 }
                 free(name); free(key);
                 if (valid && kind==1) {
@@ -306,6 +349,7 @@ static CettaDurableStatus read_image(int fd,bool trim,Image **out,char epoch[33]
         }
         free(bytes); position=next;
     }
+    free(loaded.rows); free(loaded.ids);
     image_free(im); return result;
 }
 static int sync_parent(const char *path) {

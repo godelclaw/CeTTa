@@ -451,6 +451,42 @@ static void idle_reads_at(const char *path, size_t rows, double times[5]) {
     for (size_t i=0;i<IDLE_WATCHES;++i) cetta_durable_watch_free(watches[i]);
     cetta_durable_watch_free(inbox);cetta_durable_close(s);
 }
+/* Opening replays the journal once: the time grows with its rows, not with
+ * their square. 4,000 rows then 32,000, as commits and as a checkpoint. */
+static double open_seconds(const char *path, size_t rows, bool checkpointed) {
+    CettaDurableStore *s=open_store(path,NULL);
+    static char keys[1000][32]; CettaDurableOp ops[1000];
+    for (size_t done=0;done<rows;) {
+        size_t n=rows-done<1000 ? rows-done : 1000;
+        for (size_t i=0;i<n;++i) {
+            snprintf(keys[i],sizeof(keys[i]),"row/%08zu",done+i);ops[i]=put(DURABLE_INSERT,"history",keys[i],"x");
+        }
+        commit(s,ops,n);done+=n;
+    }
+    CettaDurableOp op=put(DURABLE_REMOVE,"history","row/00000001",NULL);commit(s,&op,1);
+    op=put(DURABLE_REMOVE,"history","row/00000003",NULL);commit(s,&op,1);
+    op=put(DURABLE_INSERT,"history","row/00000003","z");commit(s,&op,1);
+    op=put(DURABLE_REPLACE,"history","row/00000002","y");commit(s,&op,1);
+    if (checkpointed) check(cetta_durable_checkpoint(s),DURABLE_OK);
+    cetta_durable_close(s);
+    double start=seconds();s=open_store(path,NULL);double elapsed=seconds()-start;
+    CettaDurableSnapshot v;check(cetta_durable_snapshot(s,"history",&v),DURABLE_OK);
+    assert(v.count==rows-1 && !record(&v,"history","row/00000001"));
+    value(&v,"history","row/00000002","y");value(&v,"history","row/00000003","z");cetta_durable_snapshot_free(&v);
+    cetta_durable_close(s);unlink(path);
+    char sidecar[340];snprintf(sidecar,sizeof(sidecar),"%s.lock",path);unlink(sidecar);
+    snprintf(sidecar,sizeof(sidecar),"%s.checkpoint",path);unlink(sidecar);
+    return elapsed;
+}
+static void linear_open(const char *path) {
+    for (int checkpointed=0;checkpointed<2;++checkpointed) {
+        double small=open_seconds(path,4000,checkpointed),large=open_seconds(path,32000,checkpointed);
+        printf("open %s: %.1f ms at 4000 rows, %.1f ms at 32000\n",checkpointed?"checkpoint":"journal",small*1e3,large*1e3);
+        if (large>20*small+0.05) { fprintf(stderr,"opening a store grows with the square of its rows\n");abort(); }
+    }
+    CettaDurableStore *s=open_store(path,NULL);cetta_durable_close(s);
+}
+
 static void idle_reads(const char *path) {
     static const char *names[]={"key read","space watch","current wait","key watch after a commit","space watch after a commit"};
     char large[300]; snprintf(large,sizeof(large),"%s.large",path);
@@ -642,8 +678,8 @@ static void unlimited_and_binary(const char *path) {
 int main(void) {
     char dir[]="/tmp/cetta-durable-test-XXXXXX"; assert(mkdtemp(dir));
     char path[256];
-    const char *names[]={"basic","crash","limits","full","version","concurrent","ioerr","degraded","mismatch","reserve","dependencies","coherent","coherent_recover","joined","coherent_join","partial","binary","semantic","aliases","idle"};
-    void (*tests[])(const char *)={basic,crashes,limits,disk_full,wrong_version,concurrent,commit_ioerr,degraded,recovery_mismatch,removal_reserve,dependencies,coherent_read,coherent_recover,joined_dependencies,coherent_join,partial_append,unlimited_and_binary,semantic_corruption,physical_owner_aliases,idle_reads};
+    const char *names[]={"basic","crash","limits","full","version","concurrent","ioerr","degraded","mismatch","reserve","dependencies","coherent","coherent_recover","joined","coherent_join","partial","binary","semantic","aliases","idle","open"};
+    void (*tests[])(const char *)={basic,crashes,limits,disk_full,wrong_version,concurrent,commit_ioerr,degraded,recovery_mismatch,removal_reserve,dependencies,coherent_read,coherent_recover,joined_dependencies,coherent_join,partial_append,unlimited_and_binary,semantic_corruption,physical_owner_aliases,idle_reads,linear_open};
     for (size_t i=0;i<sizeof(tests)/sizeof(*tests);++i) {
         snprintf(path,sizeof(path),"%s/%s.db",dir,names[i]); tests[i](path);
         assert(unlink(path)==0);
@@ -651,6 +687,6 @@ int main(void) {
         snprintf(sidecar,sizeof(sidecar),"%s.checkpoint",path); unlink(sidecar);
     }
     assert(rmdir(dir)==0);
-    puts("durable store: atomic transitions, conflicts, checkpoint replay, four crash boundaries, disk full, limits, versions, concurrent decisions, fsync poisoning, degraded recovery, consistency checks, deletion reserve, scoped decisions, 173 partial appends, unlimited binary values/long names checkpoint lock identity, forged-frame/physical-alias rejection and idle reads that do not grow with the store passed");
+    puts("durable store: atomic transitions, conflicts, checkpoint replay, four crash boundaries, disk full, limits, versions, concurrent decisions, fsync poisoning, degraded recovery, consistency checks, deletion reserve, scoped decisions, 173 partial appends, unlimited binary values/long names checkpoint lock identity, forged-frame/physical-alias rejection and idle reads and opening that do not grow with the store passed");
     return 0;
 }
