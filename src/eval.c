@@ -31569,7 +31569,7 @@ static __attribute__((noinline)) Atom *ai_collect_observation(
         g_ai_cut_reified = true;
     }
     Atom *tuple = atom_expr(arena, items, count);
-    return tuple ? ai_completed_data(arena, tuple) : NULL;
+    return tuple ? he_admit_data(arena, tuple) : NULL;
 }
 
 /* A completed packet is one producer receipt. Inspect every member before
