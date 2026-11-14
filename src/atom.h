@@ -1678,6 +1678,10 @@ typedef struct CettaSealHold {
     uint64_t (*identity)(const void *object);
     /* The object's type symbol for get-type: Sealed, SealFacet or Key. */
     const char *(*type_name)(const void *object);
+    /* Optional: the bytes an object owns beyond its handle, charged to the
+     * first arena segment that holds it, and the census of that storage. */
+    size_t (*footprint)(const void *object);
+    CettaStorageVisitor storage;
 } CettaSealHold;
 
 /* The atom of seal object `object`, retained by `a`.  NULL when the object

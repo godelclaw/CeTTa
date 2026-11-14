@@ -778,6 +778,16 @@
             (Row lib_durable_attach "__cetta_lib_durable_attach" false false false false false false false)
             (Row lib_durable_read_key "__cetta_lib_durable_read_key" false false false false false false false)
             (Row lib_durable_read_prefix "__cetta_lib_durable_read_prefix" false false false false false false false)
+            (Row lib_outcome_capture "__cetta_lib_outcome_capture" false false false false false false false)
+            (Row lib_outcome_invoke "__cetta_lib_outcome_invoke" false false false false false false false)
+            (Row lib_outcome_value "__cetta_lib_outcome_value" false false false false false false false)
+            (Row lib_outcome_raised "__cetta_lib_outcome_raised" false false false false false false false)
+            (Row lib_outcome_incomplete "__cetta_lib_outcome_incomplete" false false false false false false false)
+            (Row lib_outcome_kind "__cetta_lib_outcome_kind" false false false false false false false)
+            (Row lib_outcome_payload "__cetta_lib_outcome_payload" false false false false false false false)
+            (Row lib_outcome_rechannel "__cetta_lib_outcome_rechannel" false false false false false false false)
+            (Row lib_outcome_equal "__cetta_lib_outcome_equal" false false false false false false false)
+            (Row lib_outcome_pack "__cetta_lib_outcome_pack" false false false false false false false)
         ))
     ; These operations project or transport existing values. Their result
     ; does not establish a new data origin for any selected component.

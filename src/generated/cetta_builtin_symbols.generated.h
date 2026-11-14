@@ -734,7 +734,17 @@
     cesta_table_apply_0(lib_llm_response_body, "__cetta_lib_llm_response_body") \
     cesta_table_apply_0(lib_durable_attach, "__cetta_lib_durable_attach") \
     cesta_table_apply_0(lib_durable_read_key, "__cetta_lib_durable_read_key") \
-    cesta_table_apply_0(lib_durable_read_prefix, "__cetta_lib_durable_read_prefix")
+    cesta_table_apply_0(lib_durable_read_prefix, "__cetta_lib_durable_read_prefix") \
+    cesta_table_apply_0(lib_outcome_capture, "__cetta_lib_outcome_capture") \
+    cesta_table_apply_0(lib_outcome_invoke, "__cetta_lib_outcome_invoke") \
+    cesta_table_apply_0(lib_outcome_value, "__cetta_lib_outcome_value") \
+    cesta_table_apply_0(lib_outcome_raised, "__cetta_lib_outcome_raised") \
+    cesta_table_apply_0(lib_outcome_incomplete, "__cetta_lib_outcome_incomplete") \
+    cesta_table_apply_0(lib_outcome_kind, "__cetta_lib_outcome_kind") \
+    cesta_table_apply_0(lib_outcome_payload, "__cetta_lib_outcome_payload") \
+    cesta_table_apply_0(lib_outcome_rechannel, "__cetta_lib_outcome_rechannel") \
+    cesta_table_apply_0(lib_outcome_equal, "__cetta_lib_outcome_equal") \
+    cesta_table_apply_0(lib_outcome_pack, "__cetta_lib_outcome_pack")
 
 #define CETTA_PETTA_ONLY_BUILTIN_SYMBOL_ROWS(cesta_table_apply_0) \
     cesta_table_apply_0(petta_member) \

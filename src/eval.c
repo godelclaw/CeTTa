@@ -3255,10 +3255,26 @@ static void outcome_set_add_prefixed(Arena *, OutcomeSet *, Atom *,
  * a dispatch decided at run time, the relational machine's host call, or
  * the directive.  The first error raised is the one that propagates. */
 static __thread Atom *g_petta_pending_raise;
+/* Read only on a native raised edge, never on ordinary value publication. */
+static __thread uint32_t g_outcome_kernel_capture_depth;
+static __thread uint32_t g_outcome_kernel_invoke_depth;
+static __thread Arena *g_outcome_kernel_capture_arena;
 
-static void petta_eval_raise(Atom *error) {
-    if (!g_petta_pending_raise)
+static __attribute__((noinline)) void petta_eval_raise(Atom *error) {
+    if (!g_petta_pending_raise) {
+        /* A compiled native may retire its scratch before the handler
+         * observes this channel. The dynamic handler owns that diagnostic. */
+        if (g_outcome_kernel_capture_depth && g_outcome_kernel_capture_arena) {
+            error = atom_deep_copy(g_outcome_kernel_capture_arena, error);
+            if (!error) { eval_native_interrupt(CETTA_EVAL_INCOMPLETE_CAPACITY); return; }
+        }
         g_petta_pending_raise = error;
+    }
+}
+
+bool __attribute__((noinline)) eval_outcome_kernel_native_raise(Atom *diagnostic) {
+    if (g_outcome_kernel_capture_depth) petta_eval_raise(diagnostic);
+    return g_outcome_kernel_capture_depth || g_outcome_kernel_invoke_depth;
 }
 
 static Atom *petta_eval_take_raise(void) {
@@ -3291,7 +3307,8 @@ static Atom *eval_call_outcome_atom(Arena *a, CettaCallOutcome outcome) {
     case CETTA_CALL_FAILURE:
         return legacy_empty_sentinel(a);
     case CETTA_CALL_RAISED:
-        if (eval_current_language_id() == CETTA_LANGUAGE_PETTA || eval_failure_values())
+        if (eval_current_language_id() == CETTA_LANGUAGE_PETTA || eval_failure_values() ||
+            g_outcome_kernel_capture_depth)
             petta_eval_raise(outcome.term);
         return outcome.term;
     case CETTA_CALL_INTERRUPTED:
@@ -31626,10 +31643,11 @@ static bool sequence_native_call(
             return true;
         outcome.result_form = CETTA_CALL_RESULT_COMPLETED_VALUE;
     }
-    if (eval_current_language_id() == CETTA_LANGUAGE_PETTA &&
-        outcome.kind == CETTA_CALL_RAISED) {
-        petta_eval_raise(outcome.term);
-        return true;
+    if (outcome.kind == CETTA_CALL_RAISED) {
+        if (eval_current_language_id() == CETTA_LANGUAGE_PETTA || g_outcome_kernel_capture_depth) {
+            petta_eval_raise(outcome.term);
+            return true;
+        }
     }
     if (outcome.kind == CETTA_CALL_VALUE &&
         outcome.result_form == CETTA_CALL_RESULT_EXPRESSION_FRONTIER) {
@@ -76394,9 +76412,15 @@ static PreparedPureProgramCache *petta_eval_machine_prepared_pure_cache(
         /* An HE call on the shared machine belongs to the invocation that
          * started it: the invocation's cache already holds its programs and
          * delimits its fallback, so a resource decline is not retried. */
+        /* A capture evaluates its chunk in a nested machine. That machine's
+         * own cache would start empty and compile every head the chunk
+         * reaches on each capture; the execution's cache is validated by
+         * the same program token, capability, library, profile and
+         * language checks and keeps the programs across captures. */
         if (eval_current_language_id() == CETTA_LANGUAGE_PRIME ||
             (eval_current_language_id() == CETTA_LANGUAGE_HE &&
-             g_he_shared_execution))
+             g_he_shared_execution) ||
+            g_outcome_kernel_capture_depth)
             program_cache = eval_execution_prepared_cache();
         if (!program_cache &&
             eval_current_language_id() == CETTA_LANGUAGE_PRIME &&
@@ -96872,7 +96896,10 @@ static bool prepared_pure_closed_invocation_try(
     /* A key in a pause after uncertified refusals takes the path a refused
      * compilation takes, without compiling. */
     SymbolId pause_head = atom_symbol_current_id(invocation->head.skeleton);
-    PreparedPureBackoffSlot *pause = program || !cacheable_program ? NULL :
+    /* An uncacheable key (an eager call whose arguments are not values yet,
+     * as HE's canonical calls pass them) records no decline, so its pause is
+     * what keeps a failing compilation from running on every call. */
+    PreparedPureBackoffSlot *pause = program ? NULL :
         prepared_pure_backoff_slot(program_cache, pause_head, arity,
             language_id, call_mode, false, source_view.root,
             cache_entry_arguments_are_values, total_structural_equality, false);
@@ -96954,7 +96981,7 @@ static bool prepared_pure_closed_invocation_try(
              call_mode == CETTA_GSLT_PURE_CALL_EAGER &&
              !(cetta_prepared_pure_compile_refused(&compilation, space, false) &&
                cetta_prepared_pure_compile_refused(&compilation, space, true)));
-        if (cacheable_program && request_uncertified &&
+        if ((request_uncertified || !cacheable_program) &&
             space_program_token_matches_live_space(compilation.source, space) &&
             prepared_pure_program_cache_refusal_current(program_cache, space,
                 language_id, generation))
@@ -96997,8 +97024,16 @@ static bool prepared_pure_closed_invocation_try(
         !he_prepared_completion_admit(space, destination, &plan.invocation,
             call, cache_entry_arguments_are_values, &he_completed_result)) {
         cetta_prepared_pure_program_clear_closed_entry_call(program);
-        if (!program_is_cached)
+        if (!program_is_cached) {
             cetta_prepared_pure_program_free(program);
+            /* A refused completion would compile the key again on every
+             * call; pause it as a refused native worker pauses it. */
+            if (cacheable_program)
+                prepared_pure_backoff_refused(prepared_pure_backoff_slot(
+                    program_cache, pause_head, arity, language_id, call_mode, false,
+                    source_view.root, cache_entry_arguments_are_values,
+                    total_structural_equality, true));
+        }
         return false;
     }
     /* A program that compiles ends its key's pause. */
@@ -97046,6 +97081,13 @@ static bool prepared_pure_closed_invocation_try(
         handled = cetta_prepared_pure_program_execute_closed_controlled(
             program, machine_arena, machine_nursery_budget,
             eval_prepared_pure_interrupt_poll, NULL, &returned);
+    }
+    /* A native raised during a compiled instruction has already handed its
+     * diagnostic to the explicit owner. Finish this call on that channel;
+     * canonical replay would duplicate the work preceding the failure. */
+    if (!handled && g_outcome_kernel_capture_depth && g_petta_pending_raise) {
+        returned = cetta_call_raised(g_petta_pending_raise);
+        handled = true;
     }
     bool interrupted = (handled && returned.kind == CETTA_CALL_INTERRUPTED) ||
         (!handled && (eval_unwinding() || eval_cancel_check()));
@@ -106362,6 +106404,10 @@ tail_call: ;
                 return;
             }
             if (reply.kind == CETTA_CALL_INTERRUPTED) return;
+            if (reply.kind == CETTA_CALL_RAISED) {
+                petta_eval_raise(reply.term);
+                return;
+            }
             prepared_pure_result = reply.term;
         }
     }
@@ -110093,6 +110139,8 @@ void metta_eval_outcome(Space *s, Arena *a, Atom *type, Atom *atom, int fuel,
 #undef TAIL_REENTER_ENV_WITH_FOLDALL_LOWERING
 #undef CURRENT_ENV
 
+#include "eval_outcome_kernel.inc"
+
 static void metta_eval_one_step(Space *s, Arena *a, Atom *type, Atom *atom,
                                 ResultSet *rs);
 
@@ -111857,10 +111905,12 @@ static void eval_top_with_registry_core(
         bindings_structure_hooks_set(g_ai_failure_values
             ? ai_binding_hooks(eval_current_language_id()) : NULL);
         bool unavailable = admission == CETTA_EXPERIMENT_UNSUPPORTED_HOST;
+        bool conflict = admission == CETTA_EXPERIMENT_CONFLICT;
         result_set_add(rs, admission == CETTA_EXPERIMENT_ENABLED ? atom_expr(a, NULL, 0u)
             : atom_expr3(a, atom_symbol(a, "Error"), expr,
                 atom_expr2(a, atom_symbol(a, unavailable ? "Forbidden" : "Unsolvable"),
                     atom_symbol(a, unavailable ? "ExperimentUnavailableInHost"
+                        : conflict ? "ExperimentsConflict"
                         : "UnknownExperimentOrMalformedDeclaration"))));
         if (outcome) outcome->petta_raise_known = true;
         return;

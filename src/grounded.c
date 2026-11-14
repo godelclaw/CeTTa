@@ -3564,7 +3564,8 @@ bool grounded_call(Arena *a, Atom *head, Atom **args, uint32_t nargs,
         return false;
     if (raised && atom_is_error(result) &&
         (grounded_current_language_is_petta() ||
-         (eval_current_uses_failure_values && eval_current_uses_failure_values())))
+         (eval_current_uses_failure_values && eval_current_uses_failure_values()) ||
+         (eval_outcome_kernel_native_raise && eval_outcome_kernel_native_raise(result))))
         *out = cetta_call_raised(result);
     else if (atom_is_petta_no_result(result))
         *out = cetta_call_failure();

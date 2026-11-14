@@ -313,6 +313,8 @@ typedef struct {
 
 typedef enum {
     CETTA_EXPERIMENT_FAILURE_VALUES = 1u << 0,
+    CETTA_EXPERIMENT_OUTCOME_KERNEL = 1u << 1,
+    CETTA_EXPERIMENT_HE_COMPOSED_EXECUTION = 1u << 2,
 } CettaExperiment;
 
 bool cetta_session_allows_experiments(const CettaEvalSession *session);
@@ -320,6 +322,7 @@ typedef enum {
     CETTA_EXPERIMENT_ENABLED,
     CETTA_EXPERIMENT_UNKNOWN,
     CETTA_EXPERIMENT_UNSUPPORTED_HOST,
+    CETTA_EXPERIMENT_CONFLICT,
 } CettaExperimentAdmission;
 CettaExperimentAdmission cetta_session_enable_experiment(
     CettaEvalSession *session, const char *name);

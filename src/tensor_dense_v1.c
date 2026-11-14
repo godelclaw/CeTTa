@@ -1126,10 +1126,20 @@ typedef enum {
 } DenseTensorNamedOperation;
 
 static DenseTensorNamedOperation dense_tensor_named_operation(const Atom *head) {
+    static const char prefix[] = "__cetta_lib_tensor_";
+    const uint32_t prefix_len = (uint32_t)sizeof(prefix) - 1u;
     if (!head || head->kind != ATOM_SYMBOL)
         return DENSE_TENSOR_OP_NONE;
+    /* Every library native passes through this test; the shared prefix
+     * decides most of them with one comparison. */
+    const char *bytes = atom_symbol_bytes(head);
+    uint32_t len = atom_symbol_length(head);
+    if (!bytes || len <= prefix_len || memcmp(bytes, prefix, prefix_len) != 0)
+        return DENSE_TENSOR_OP_NONE;
+    bytes += prefix_len;
+    len -= prefix_len;
 #define DENSE_TENSOR_SELECT(name) \
-    if (atom_symbol_equals_cstr(head, "__cetta_lib_tensor_" #name)) return DENSE_TENSOR_OP_##name;
+    if (len == sizeof(#name) - 1u && memcmp(bytes, #name, len) == 0) return DENSE_TENSOR_OP_##name;
     DENSE_TENSOR_NAMED_OPERATIONS(DENSE_TENSOR_SELECT)
 #undef DENSE_TENSOR_SELECT
     return DENSE_TENSOR_OP_NONE;

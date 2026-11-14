@@ -166,6 +166,26 @@ static void capsule_release(void *object) {
     atomic_fetch_sub(&g_seal_live_objects, 1u);
 }
 
+/* A capsule owns its payload arena; holders account for it once. */
+static size_t capsule_footprint(const void *object) {
+    const SealCapsule *capsule = object;
+    size_t bytes = sizeof(*capsule);
+    if (capsule->has_arena) {
+        size_t owned = capsule->arena.reserved_bytes;
+        bytes = owned > SIZE_MAX - bytes ? SIZE_MAX : bytes + owned;
+        owned = capsule->arena.external_bytes;
+        bytes = owned > SIZE_MAX - bytes ? SIZE_MAX : bytes + owned;
+    }
+    return bytes;
+}
+
+static void capsule_storage(const void *object, CettaStorageCensus *census) {
+    const SealCapsule *capsule = object;
+    if (cetta_storage_object(census, capsule, sizeof(*capsule), CETTA_STORAGE_BLOCK) &&
+        capsule->has_arena)
+        arena_storage_census(&capsule->arena, census);
+}
+
 static void key_retain(void *object) {
     seal_holder_add(&((SealKey *)object)->holders);
 }
@@ -252,6 +272,7 @@ static const CettaSealHold g_capsule_hold = {
     .retain = capsule_retain, .release = capsule_release,
     .display = capsule_display, .identity = capsule_identity,
     .type_name = capsule_type,
+    .footprint = capsule_footprint, .storage = capsule_storage,
 };
 static const CettaSealHold g_key_hold = {
     .retain = key_retain, .release = key_release,
@@ -508,6 +529,22 @@ CettaSealStatus cetta_seal_unseal_atom(CettaSealObject *facet,
      * holds on whatever the payload retains. */
     *out = atom_deep_copy(dst, capsule->atom);
     return *out ? CETTA_SEAL_OK : CETTA_SEAL_NOMEM;
+}
+
+CettaSealStatus cetta_seal_unseal_atom_borrowed(CettaSealObject *facet,
+                                                CettaSealObject *box,
+                                                Atom **out) {
+    SealCapsule *capsule = NULL;
+    if (!out)
+        return CETTA_SEAL_INVALID;
+    *out = NULL;
+    CettaSealStatus status = seal_open(facet, box, &capsule);
+    if (status != CETTA_SEAL_OK)
+        return status;
+    if (capsule->native)
+        return CETTA_SEAL_MISS;
+    *out = capsule->atom;
+    return CETTA_SEAL_OK;
 }
 
 CettaSealStatus cetta_seal_unseal_native(CettaSealObject *facet,

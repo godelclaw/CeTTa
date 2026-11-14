@@ -1,0 +1,185 @@
+Owned outcomes and library handlers
+==================================
+
+The outcome-kernel experiment gives an explicitly adapted computation three
+channels: value, raised diagnostic, and incomplete work. Ordinary evaluation
+keeps its existing representation and execution paths. Handler policy is in
+lib/outcome_kernel.metta; PeTTa's spelling is generated from that same policy.
+
+Enable it with --lang ai, or --lang petta/he --profile ai, then:
+
+    !(ai:experiment outcome-kernel)
+    !(import! &self (library outcome_kernel))
+
+The declaration is exclusive with failure-values. Default and extended do
+not enable either experiment. A refused declaration or native admission does
+not allocate an event owner.
+
+An event is an owned, context-local handle. Its printed NativeHandle form is
+an inspection description, not a serialization format. Parsing that text,
+inventing an identifier, or moving a handle to another context grants no
+event identity. Copying a real owning reference retains its payload; closing
+the owner invalidates aliases. Ordinary Error-shaped data never supplies a
+raised channel by its shape alone.
+
+Entering and inspecting a channel
+--------------------------------
+
+    outcome:capture SOURCE
+        Run a held source chunk with its normal evaluator. Return a stream
+        of value events, an actual native raised event, and/or an incomplete
+        event. This is a boundary around the chunk, not an implicit change
+        to every construct inside it.
+
+    outcome:budget SOURCE STEPS
+        Capture with a local step allowance borrowed from the existing
+        budget owner. Keep earned partial results and the incomplete cause.
+        Consuming a local completion report does not refund spent work.
+
+    outcome:value DATA
+        Admit held data, including Error-shaped or executable-looking data.
+        The argument is not run. Use capture to execute source instead.
+
+    outcome:raise DIAGNOSTIC
+    outcome:incomplete DIAGNOSTIC
+        Construct an explicitly labelled event. These are library-channel
+        events; constructing one does not throw through unadapted code.
+
+    outcome:kind EVENT
+        value, raised, or incomplete for an admitted event; data otherwise.
+
+    outcome:payload EVENT
+        Project the original payload. This deliberately leaves the envelope;
+        subsequent processing follows the host's ordinary value/code rules.
+
+    outcome:failure-kind EVENT
+        Unsolvable, Forbidden, Incomplete, or Fault on a failure channel.
+        Unclassified native diagnostics read as Fault. A value event,
+        including an Error-shaped value, reads as NotFailure.
+
+The transport owns immutable term data and real owned native-handle
+references. Bare mutable resources and evaluator-private carriers without an
+export contract refuse as Incomplete rather than publish a dangling value.
+Allocation/resource refusal never certifies an empty completed result.
+
+Library sequencing and observation
+----------------------------------
+
+    outcome:bind SOURCE VARIABLE BODY
+        Continue each value event with its payload bound as data. A raised
+        or incomplete event passes through unchanged; BODY does not run on
+        that branch. An unframed source result is an Unsolvable admission
+        error. Use nested binds for sequential argument positions.
+
+    outcome:if CONDITION YES NO
+        Consume a Boolean value event and execute only its selected branch.
+        A non-Boolean verdict is Incomplete. A condition's failure stays on
+        its own channel.
+
+    outcome:choice (BRANCH ...)
+        Execute explicit event-producing alternatives in source order.
+        Protect fallible ordinary chunks with capture inside each branch.
+
+    outcome:catch SOURCE
+    outcome:report SOURCE
+        Observe each event as data. Native raised diagnostics normalize here
+        to (Error WHERE (KIND DETAIL)); already classified kinds are kept.
+        Error-shaped value payloads are unchanged. report is the same
+        observation policy under a diagnostic-oriented name.
+
+    outcome:collapse SOURCE
+        Return one value event containing every observed payload, in order
+        and with multiplicity. Zero events gives one empty tuple; it is not
+        one failure, one unit event, or a scoped absence certificate.
+
+    outcome:unique SOURCE
+    outcome:intersection LEFT RIGHT
+    outcome:subtraction LEFT RIGHT
+        Observe before the set operation. Equal diagnostic descriptions are
+        data at these boundaries. unique keeps first occurrence order;
+        intersection/subtraction retain left occurrence order/multiplicity.
+
+    outcome:invoke NATIVE (VALUE-EVENT ...)
+        Pass admitted ready values to one existing native invocation. Actual
+        VALUE and RAISED packets remain distinct, including when their
+        payloads print identically. Validate the whole input before entry and
+        a completed result packet before publication. A native reply still
+        requiring language completion is Incomplete NativeCompletionRequired,
+        not an invented completed value. Existing effect admission remains
+        in force. This operation does not retry an uncertain external effect.
+
+    outcome:pack (OBSERVED-VALUE-EVENT ...)
+    outcome:equal FIRST SECOND
+        Generic value packing and whole-payload equality for the handlers.
+        Printed handle equality does not validate ownership; it is not
+        payload equality.
+
+For example, this preserves one failure and the successful sibling:
+
+    !(outcome:payload
+        (outcome:collapse
+          (outcome:choice
+            ((outcome:capture (/ 1 0))
+             (outcome:value 7)))))
+
+Computational zero remains zero. Unit, containers, inert syntax and the
+existing Empty constructor retain their meanings. A written (Empty SCOPE)
+is data; it gains no authority to establish source coverage or authorize a
+write. No observation here manufactures a closed-world assumption.
+
+Expand once
+------------
+
+    !(import! &self (library outcome_compile))
+    !(outcome:define (next $n)
+        (outcome:bind (outcome:capture (+ $n 1)) $value
+          (outcome:value (Box $value))))
+    !(outcome:payload (next 5))
+
+PeTTa uses its existing translator installation path. HE expands the same
+generated handler templates as held syntax. decons-atom, if-equal, and unify
+inspect that syntax; ordinary selectors or == can execute it. Quote and data
+admission forms delimit data. Expansion never runs the described program.
+Source variables and the untouched context travel together through the HE
+walk. The template snapshot is captured when the compiler module loads.
+Newly installed code is activated according to the host dialect's existing
+rules; eval is available for code constructed within an ongoing directive.
+
+Generate the PeTTa presentation/templates using the PeTTa entries in
+tools/generate_outcome_kernel.metta. Generate HE templates with
+okgen:write-he-templates under HE, using its own reader and writer. Truth
+symbols are not interchangeable with another reader's Boolean literals.
+
+Scope of the experiment
+-----------------------
+
+This library supplies explicit handlers, not universal implicit failure
+visibility. An unadapted user function returning an Error term keeps the
+base dialect's meaning; use outcome:raise where control is intended.
+An unadapted nondeterministic chunk can still have the base evaluator's
+branch-abort/filtering behavior. Explicitly protected choice branches avoid
+that boundary. Interpreter-private resources and cross-context event
+transport remain outside this immutable-data pilot.
+
+Existing memo observation is another such boundary: PeTTa's memo can catch
+and cache an unadapted native diagnostic as ordinary Error-shaped data.
+An outer capture keeps that admitted value role. Adapt the producer before
+an observation when its failure channel is needed. Pure numeric memo entries
+still cache behind capture, and tabled queries retain their activation
+policy; there is no blanket memo/table decline for this experiment.
+
+HE's existing blanket source-import execution fence is a separate issue.
+The independently selectable he-composed-execution experiment admits the
+existing composed readers at three execution entrances. It uses the existing
+importer revision propagation and leaves overlay refusal in place. It is not
+enabled by outcome-kernel. Benchmark it separately, with the same switch on
+the reference and kernel paths; its gains are not outcome-channel gains.
+
+The accompanying Lean model proves handler laws from the kernel interface,
+including earliest failure, independent alternatives, observation, and
+failure-free base-work conservation. Boundary setup is counted separately.
+These are interface laws, not a proof that the C evaluator refines the model
+or a claim that native dispatch uses zero processor instructions.
+
+Run make test-outcome-kernel for the native ownership/provenance fixture and
+the two-host execution, translation, compiler and imported-source controls.

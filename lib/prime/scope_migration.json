@@ -86,8 +86,8 @@
     {
       "source": "gslt_execution_contracts.metta",
       "output": "gslt_execution_contracts.metta",
-      "source_sha256": "ad6e631de793cb758d50f017708589a902690bb6d7c02aac25229e254b7953e6",
-      "output_sha256": "1a01e3edd61c56c3b29e690fae0a7f5beb02abb40f5fe9ad9cbfe8d74d876a79",
+      "source_sha256": "dcaf85d77f29a6bb3f4c9abe95a27ae296e6484a9567032761cc5299a880ba4e",
+      "output_sha256": "4a55ab4f763e8a7ba4a8bf4740a2abe653d21cc9051b0b4952e88c57a2a1cdf3",
       "edits": 4,
       "code_diagnostics": 0
     },
@@ -774,6 +774,21 @@
       "source": "mm0kernel.metta",
       "generator": "library_spelling.py",
       "output_sha256": "b9108990eb3214f9ddd48152d6a2b46918ea2d0fdfe4a6bd1d288097fde7689a"
+    },
+    {
+      "source": "outcome_compile.metta",
+      "generator": "library_spelling.py",
+      "output_sha256": "a418129b9763ac0120b638f274656e5e3584aa550296dc52507aaf316f31bf40"
+    },
+    {
+      "source": "outcome_kernel.metta",
+      "generator": "library_spelling.py",
+      "output_sha256": "5b796b344667cc3cfc99adf30e76786a71b08c20ac8bdada022041e409e4895f"
+    },
+    {
+      "source": "outcome_kernel_expansion.metta",
+      "generator": "library_spelling.py",
+      "output_sha256": "e83487bef7dfc543f9b1311e1658e8e96283c57119fa5953f05f4bd840d47154"
     },
     {
       "source": "re.metta",

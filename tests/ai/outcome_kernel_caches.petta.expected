@@ -1,0 +1,18 @@
+()
+true
+true
+true
+81
+81
+((cache_hit 1) (cache_miss 1))
+true
+value
+value
+((cache_hit 2) (cache_miss 2))
+true
+true
+(same)
+(same)
+true
+raised
+raised

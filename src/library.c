@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "library.h"
+#include "seal.h"
 #include "atom_wire.h"
 #include "expand_user.h"
 #include "errno_names.h"
@@ -806,6 +807,7 @@ static bool library_context_init_services(CettaLibraryContext *ctx,
     ctx->retired_module_cap = 0u;
     ctx->native_handle_registry = NULL;
     ctx->native_handle_next_id = 1;
+    memset(ctx->outcome_brands, 0, sizeof(ctx->outcome_brands));
     ctx->petta_translator_rules = NULL;
     ctx->petta_translator_rule_len = 0u;
     ctx->petta_translator_rule_cap = 0u;
@@ -1004,6 +1006,10 @@ void cetta_library_context_free(CettaLibraryContext *ctx) {
     /* Captured native work may borrow session resources and program views.
      * Retire it before any of those dependencies, including loaded spaces. */
     cetta_native_handle_cleanup_all(ctx);
+    for (size_t i = 0u; i < sizeof(ctx->outcome_brands) / sizeof(ctx->outcome_brands[0]); i++) {
+        cetta_seal_release(ctx->outcome_brands[i]);
+        ctx->outcome_brands[i] = NULL;
+    }
     prime_interpretation_selection_free(ctx->prime_interpretation);
     ctx->prime_interpretation = NULL;
     eval_named_mutex_registry_free(ctx);
@@ -14384,6 +14390,10 @@ static Atom *cetta_library_dispatch_native_value(
 bool cetta_library_call_native(CettaLibraryContext *ctx, Space *space,
                                Arena *a, Atom *head, Atom **args,
                                uint32_t nargs, CettaCallOutcome *out) {
+    if (head && head->kind == ATOM_SYMBOL &&
+        atom_symbol_current_id(head) >= g_builtin_syms.lib_outcome_capture &&
+        atom_symbol_current_id(head) <= g_builtin_syms.lib_outcome_pack)
+        return cetta_eval_outcome_kernel_call(ctx, space, a, head, args, nargs, out);
     Atom **visible = library_native_arguments(a, args, nargs);
     if (nargs && !visible) {
         eval_native_interrupt(CETTA_EVAL_INCOMPLETE_HOST_FAILURE);

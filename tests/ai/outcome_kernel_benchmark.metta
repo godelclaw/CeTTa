@@ -1,0 +1,95 @@
+; Same-source, rotating off / built-in / library-on-kernel measurements.
+; Each sample checks the complete process result before accepting time/RSS.
+!(import! &self "./benchmark.metta")
+!(import! &self (library math))
+
+(= (okb:last $lines)
+   (if (== (cdr-atom $lines) ()) (car-atom $lines) (okb:last (cdr-atom $lines))))
+(= (okb:repeat $count $text)
+   (if (== $count 0) "" (str:concat $text (okb:repeat (- $count 1) $text))))
+(= (okb:family $mode)
+   (case $mode ((kernel-composed kernel) (off-composed off) ($other $other))))
+(= (okb:definitions $shape $size $consumer $mode)
+   (if (== $shape sum)
+     "(= (bf $n $sum) (if (== $n 0) $sum (bf (- $n 1) (+ $sum $n))))\n(= (br $runs $n $sum) (if (== $runs 0) $sum (let $v (bf $n $sum) (br (- $runs 1) $n $v))))\n"
+     (if (== $shape list)
+       "(= (build $n) (if (== $n 0) Nil (Cons (Box $n) (build (- $n 1)))))\n(= (total Nil) 0) (= (total (Cons (Box $v) $t)) (+ $v (total $t)))\n"
+       (str:join "" ("!(import! &self " (repr (str:concat $consumer
+          (if (== $mode kernel) "/src/provider_request_kernel.metta"
+            (if (== $mode builtin) "/src/provider_request_ai.metta" "/src/provider_request_cetta.metta")))) ")\n")))))
+(= (okb:provider-call $mode $size)
+   (let* (($prefix (if (== $mode kernel) "kpr" (if (== $mode builtin) "aipr" "preq")))
+          ($prompt (if (== $size 0) "hello" (okb:repeat $size "x")))
+          ($tokens (if (== $size 0) "100" "\"bad\"")))
+     (str:join "" ("(" $prefix ":prepare-command \"responses\" \"fixture-model\" " $tokens
+                    " \"default\" " (repr $prompt) " JsonNull \"5m\")"))))
+(= (okb:work $shape $size $mode)
+   (if (== $shape sum) (str:join "" ("(bf " (repr $size) " 0)"))
+     (str:join "" ("(total (build " (repr $size) "))"))))
+(= (okb:expression $shape $size $mode $heavy)
+   (if (== $shape provider)
+     (if (== $mode kernel) "(outcome:payload (bench:work))" "(bench:work)")
+     (let $work (if $heavy (okb:work $shape $size $mode)
+                  (if (== $shape sum) (str:join "" ("(br 64 " (repr $size) " 0)"))
+                    (okb:work $shape $size $mode)))
+       (if (== $mode kernel) (str:join "" ("(outcome:payload (outcome:capture " $work "))")) $work))))
+(= (okb:expected $shape $size $heavy)
+   (if $heavy 16
+     (if (== $shape sum) (* 32 (* $size (+ $size 1)))
+       (if (== $shape list) (math:floor (/ (* $size (+ $size 1)) 2)) 1))))
+(= (okb:program $root $consumer $shape $size $path $heavy)
+   (let* (($mode (okb:family $path))
+          ($header (str:join "" (
+             (if (or (== $path kernel-composed) (== $path off-composed))
+               "!(ai:experiment he-composed-execution)\n" "")
+             (if (== $mode kernel) "!(ai:experiment outcome-kernel)\n"
+               (if (== $mode builtin) "!(ai:experiment failure-values)\n" ""))
+             (if (or (== $mode kernel) (== $path off-composed))
+               "!(import! &self (library outcome_kernel))\n" ""))))
+          ($definitions (okb:definitions $shape $size $consumer $mode))
+          ($work (if (== $shape provider) (okb:provider-call $mode $size)
+                   (str:join "" ("(let $finished " (okb:work $shape $size $mode) " (/ 1 0))"))))
+          ($body (if $heavy
+            (if (== $mode kernel)
+              (str:join "" ("!(let $event (outcome:collapse (outcome:choice ("
+                (okb:repeat 16 (if (== $shape provider) "(bench:work) " "(outcome:capture (bench:work)) "))
+                "))) (let $rows (outcome:payload $event) (size-atom $rows)))\n"))
+              (str:join "" ("!(let $rows (collapse (superpose ("
+                (okb:repeat 16 "(catch (bench:work)) ") "))) (size-atom $rows))\n")))
+            (if (== $shape provider)
+              (if (== $mode kernel)
+                "!(let $event (outcome:catch (bench:work)) (outcome:payload (outcome:bind $event $result (outcome:value 1))))\n"
+                "!(chain (eval (catch (bench:work))) $result 1)\n")
+              (str:join "" ("!" (okb:expression $shape $size $mode False) "\n"))))))
+     (str:join "" ($header $definitions "(= (bench:work) " $work ")\n" $body))))
+(= (okb:one $binary $root $consumer $language $shape $size $mode $heavy $rss)
+   (let* (($program (okb:program $root $consumer $shape $size $mode $heavy))
+          ($wanted (repr (okb:expected $shape $size $heavy)))
+          ($expected (if (== $language "he") (str:join "" ("[" $wanted "]")) $wanted))
+          ($start (system:monotonic-ns))
+          ($reply (proc:run ("/usr/bin/time" "-f" "%M" "-o" $rss $binary
+                       "--lang" $language "--profile" "ai" "-e" $program)
+                     $root (bp:environment) 120000 1048576))
+          ($elapsed (- (system:monotonic-ns) $start)))
+     (case $reply
+       (((proc:exited 0 $output "")
+          (let $actual (okb:last (str:split "\n" (str:trim $output)))
+            (if (== $actual $expected)
+              (Measurement $elapsed (str:string->number (str:trim (fs:read-text $rss))))
+              (BenchmarkInvalidResult $language $shape $size $mode $heavy $expected $output))))
+        ($bad (BenchmarkExecutionFailed $language $shape $size $mode $heavy $bad))))))
+(= (okb:sample $binary $root $consumer $language $shape $size $heavy $dir $order)
+   (if (== $order ()) ()
+     (let* (($mode (car-atom $order))
+            ($sample (okb:one $binary $root $consumer $language $shape $size $mode $heavy
+                        (str:join "" ($dir "/" (repr $mode) ".rss"))))
+            ($printed (println! (KernelBenchmarkSample $language $shape $size $heavy $mode $sample))))
+       (okb:sample $binary $root $consumer $language $shape $size $heavy $dir (cdr-atom $order)))))
+(= (okb:walk $binary $root $consumer $language $shape $size $heavy $dir $left $phase)
+   (if (== $left 0) (KernelBenchmarkComplete $language $shape $size $heavy)
+     (let* (($order (if (== $phase 0) (off builtin kernel)
+                      (if (== $phase 1) (builtin kernel off) (kernel off builtin))))
+            ($effective-order $order)
+            ($ran (okb:sample $binary $root $consumer $language $shape $size $heavy $dir $effective-order)))
+       (okb:walk $binary $root $consumer $language $shape $size $heavy $dir (- $left 1)
+         (if (== $phase 2) 0 (+ $phase 1))))))

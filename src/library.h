@@ -253,6 +253,10 @@ typedef struct CettaLibraryContext {
     uint32_t retired_module_len, retired_module_cap;
     CettaNativeHandleRegistry *native_handle_registry;
     uint64_t native_handle_next_id;
+    /* The outcome kernel's private brand per channel (value, raised,
+     * incomplete): root facets, created on first use, released with the
+     * context.  Another context's events are its data. */
+    struct CettaSealObject *outcome_brands[3];
     SymbolId *petta_translator_rules;
     uint32_t petta_translator_rule_len;
     uint32_t petta_translator_rule_cap;

@@ -144,6 +144,12 @@ CettaSealStatus cetta_seal_native_with_view(
 CettaSealStatus cetta_seal_unseal_atom(CettaSealObject *facet,
                                        CettaSealObject *capsule, Arena *dst,
                                        Atom **out);
+/* The same payload, borrowed rather than copied: valid for as long as the
+ * caller holds `capsule`.  Copy it before an arena that does not hold the
+ * capsule keeps it. */
+CettaSealStatus cetta_seal_unseal_atom_borrowed(CettaSealObject *facet,
+                                                CettaSealObject *capsule,
+                                                Atom **out);
 /* Unseal a native payload of `kind`.  *resource_out is borrowed: valid for
  * as long as the caller holds `capsule`. */
 CettaSealStatus cetta_seal_unseal_native(CettaSealObject *facet,
