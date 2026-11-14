@@ -645,6 +645,23 @@ static bool he_raw_query_result(Atom *result, const Bindings *bindings,
     return !eval_unwinding();
 }
 
+/* Ordinary query publication stays unchanged. This output continuation is
+ * selected only for the captured declaration's data result interface. */
+static __attribute__((noinline)) bool he_raw_query_data_result(
+    Atom *result, const Bindings *bindings, void *context) {
+    HeRawQuery *query = context;
+    CettaCount start = query->outcomes->len;
+    bool more = he_raw_query_result(result, bindings, context);
+    for (CettaCount i = start; i < query->outcomes->len; i++) {
+        if (!he_admit_equation_value(query->arena, &query->outcomes->items[i])) {
+            while (query->outcomes->len > start)
+                outcome_free_fields(&query->outcomes->items[--query->outcomes->len]);
+            return false;
+        }
+    }
+    return more;
+}
+
 static void he_raw_collect(Space *s, Arena *a, Atom *atom, int fuel,
                           const Bindings *prefix, OutcomeSet *os) {
     __attribute__((cleanup(bindings_free))) Bindings env;
@@ -654,6 +671,10 @@ static void he_raw_collect(Space *s, Arena *a, Atom *atom, int fuel,
         return;
     }
     atom = resolve_registry_refs(a, bindings_apply_if_vars(&env, a, atom));
+    if (eval_failure_values() && atom_is_error(atom) && !atom_is_he_evaluated(atom)) {
+        ai_add_failure(a, os, atom, &env);
+        return;
+    }
     __attribute__((cleanup(eval_gc_root_frame_leave)))
     EvalGcRootFrame lexical = {0};
     Atom *unused_type = NULL;
@@ -1231,8 +1252,12 @@ static bool he_instruction_complete_function_return(HeInstructionFrame *frame,
             source, NULL, true))
         return true;
     Atom *value;
-    if (atom_head_symbol_id(result) == g_builtin_syms.return_text && result->expr.len == 2u)
+    if (atom_head_symbol_id(result) == g_builtin_syms.return_text && result->expr.len == 2u) {
         value = result->expr.elems[1];
+        if (eval_failure_values() && he_publish_data_output(frame->arena,
+                atom_atom_type(frame->arena), source, value, NULL, true, frame->target))
+            return true;
+    }
     else if (he_minimal_instruction(result))
         return false;
     else if (active_profile_uses_rust_he_compat_semantics()) {
@@ -1415,6 +1440,14 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
         return;
     }
     if (frame->kind == HE_INSTRUCTION_RAW) {
+        if (eval_failure_values()) {
+            frame->atom = ai_activation_code(a, &frame->env, frame->atom);
+            if (!frame->atom) {
+                he_instruction_pop(stack);
+                return;
+            }
+            atom = frame->atom;
+        }
         if (control.operation != CETTA_CONTROL_NONE || he_minimal_instruction(atom)) {
             frame->phase = HE_INSTRUCTION_DONE;
             he_instruction_push(stack, HE_INSTRUCTION_RUN, s, a,
@@ -1473,10 +1506,17 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
     } else if (head == g_builtin_syms.metta && nargs == 3u && g_registry) {
         Space *target = resolve_single_space_arg(
             s, a, expr_arg(atom, 2), child_fuel);
-        if (target)
+        if (target) {
+            Atom *source = expr_arg(frame->atom, 0);
+            if (eval_failure_values())
+                source = ai_activation_code(a, &frame->env, source);
+            if (!source) {
+                frame->phase = HE_INSTRUCTION_DONE;
+                return;
+            }
             eval_metta_outcomes(target, a, expr_arg(frame->atom, 1),
-                expr_arg(frame->atom, 0), child_fuel, &frame->env, true, os);
-        else
+                source, child_fuel, &frame->env, true, os);
+        } else
             ai_publish_error(a, os, call_signature_error(a, frame->syntax,
                 "(metta <atom> <type> <space>)"), &frame->env);
         frame->phase = HE_INSTRUCTION_DONE;

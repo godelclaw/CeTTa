@@ -6375,13 +6375,19 @@ static void bindings_apply_walk_release(BindingsApplyWalk *walk) {
     bindings_structure_hooks_release(&walk->owned_hooks);
 }
 
-Atom *bindings_retain_rebuilt_role(
+static __attribute__((noinline, cold)) Atom *bindings_retain_rebuilt_role_owned(
         Arena *arena, Atom *source, Atom *rebuilt) {
     /* Keep the source occurrence's barrier; surrounding code inherits none.
      * Stable HE keeps its existing code-substitution policy. */
-    return rebuilt && atom_is_he_evaluated(source) && atom_is_error(source) &&
+    return atom_is_error(source) &&
             eval_current_uses_failure_values && eval_current_uses_failure_values()
         ? atom_he_evaluated_copy(arena, rebuilt) : rebuilt;
+}
+
+Atom *bindings_retain_rebuilt_role(Arena *arena, Atom *source, Atom *rebuilt) {
+    if (!rebuilt || !atom_is_he_evaluated(source))
+        return rebuilt;
+    return bindings_retain_rebuilt_role_owned(arena, source, rebuilt);
 }
 
 /* One traversal serves synchronous and retained callers. Synchronous entry

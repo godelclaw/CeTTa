@@ -6924,9 +6924,15 @@ test-shared-return-producer: $(SHARED_RETURN_PRODUCER_TEST_BIN)
 	@$(call cetta_exec,./$(SHARED_RETURN_PRODUCER_TEST_BIN))
 	@$(call cetta_exec,./$(SHARED_RETURN_PRODUCER_TEST_BIN)) --prime-native
 
-.PHONY: test-ai test-ai-suite test-ai-he-suite test-ai-native-returns test-ai-failure-values test-ai-hosts test-ai-matrix
+.PHONY: test-ai test-ai-suite test-ai-he-suite test-ai-boundaries test-ai-native-returns test-ai-failure-values test-ai-hosts test-ai-matrix
 test-all: test-ai
-test-ai: test-ai-native-returns test-ai-suite test-ai-he-suite
+test-ai: test-ai-native-returns test-ai-suite test-ai-he-suite test-ai-boundaries
+test-ai-boundaries: $(BIN) $(wildcard tests/ai/*.metta)
+	@set -eu; actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
+		"!(import! &self \"./tests/ai/boundaries.metta\") !(ab:run \"$(abspath $(BIN))\")"); \
+	expected=$$(printf 'true\n(AIBoundariesPass 68 184 12 12 2)'); \
+	if [ "$$actual" != "$$expected" ]; then printf '%s\n' "$$actual"; exit 1; fi; \
+	printf '%s\n' 'PASS: AI value, activation, substitution and sharing boundaries'
 test-ai-suite: $(BIN) $(wildcard tests/ai/*.metta tests/ai/*.expected)
 	@set -eu; actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
 		"!(import! &self \"./tests/ai/suite.metta\") !(ais:run \"$(abspath $(BIN))\" \"$(CURDIR)\")"); \

@@ -50,9 +50,11 @@ through the ordinary outcome protocol. Propagation and explicit observation
 are evaluator boundaries, rather than conventions based on function names
 or on the appearance of a payload. A native RAISED occurrence is control;
 a native VALUE containing an Error term is data. catch converts a produced
-failure to data. Quotation and Atom-typed holding positions preserve syntax
-as data. Binding and inspecting values do not reactivate them. Explicit eval
-selects code deliberately.
+failure to data. Quotation and Atom-typed holding positions leave source
+unexecuted; holding alone does not complete it. Binding and inspecting an
+admitted value do not reactivate it. Declared Atom/Expression value outputs
+and explicit function/return delimiters admit their returned diagnostic data.
+They never catch a prior raised occurrence.
 
 HE data admission protects diagnostic occurrences, recursively, using private
 value copies. It does not complete arbitrary constructed code: such code can
@@ -108,9 +110,12 @@ value and does not by itself change the process exit status. Command-line,
 reader and explicit process-exit failures retain their separate status rules.
 Programs that use this profile must inspect the returned outcomes.
 
-PeTTa eval runs selected code once. metta respects an already completed input
-as a value; eval deliberately activates the selected code value. Captured
-data arguments inside an unmarked source call keep their completed role.
+Explicit eval/metta select a code view of the operand's root. Equation heads
+that open a quotation similarly select the captured roots as code. Their
+children retain their own data roles. Ordinary parameters, if, and let/case
+pattern inspection are not quotation activation. No function-name exception
+or standard-library rewrite supplies this policy. PeTTa's quote removes its
+wrapper; HE's quote retains it, so source fixtures account for that difference.
 
 A completed absence report (Empty SCOPE) is one ordinary datum, neither
 computational zero nor failure. The engine adds no declaration to the user's
@@ -138,6 +143,18 @@ Disabling an acceleration tier does not select an incomplete legacy PeTTa
 evaluator. Tests compare translator expansion and its per-call fallback,
 including multiple matching translator rules. They do not claim two full
 independent C implementations of PeTTa.
+
+AI_UNTABLED: native table/memo admission and reuse are declined while
+failure-values is active. Declared functions run by ordinary, untabled
+evaluation, with its answer order, multiplicity and budget/cancellation rules.
+This includes the first would-be cache miss: the old generator protocol loses
+the raised channel before storing answers. Cache counters do not advance;
+memo aggregation and tabled fixpoint termination are not provided by this
+experiment. Default/extended retain their existing two-field records, keys
+and cache hit/miss behavior. Re-enabling tables requires captured input roles,
+semantic-mode identity and stored VALUE/RAISED outcomes through replay,
+lattice, aggregation, counting and forwarding. Atom equality alone is not
+sufficient to certify reuse.
 
 Prepared accelerators and query answer banks without per-occurrence failure provenance are declined
 when this experiment is active. In particular, hyperpose uses the existing

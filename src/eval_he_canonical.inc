@@ -82,6 +82,7 @@ typedef struct HeCanonicalFrame {
     bool preserve_bindings;
     bool typed;
     bool selected;
+    bool data_output;
     bool has_functions;
     bool has_non_functions;
     bool query_closed;
@@ -552,6 +553,12 @@ static inline __attribute__((always_inline)) void he_canonical_publish_one(
     HeCanonicalFrame *frame, Outcome *out, bool invocation) {
     if (__builtin_expect(frame->lift_answers, 0) &&
         he_canonical_lifted_marker(frame, out))
+        return;
+    if (eval_failure_values() && frame->lift_answers && frame->type &&
+        !atom_is_symbol_id(frame->type, g_builtin_syms.undefined_type) &&
+        he_publish_data_output(frame->arena, frame->type, out,
+            outcome_atom_materialize(frame->arena, out),
+            invocation ? &frame->env : NULL, frame->preserve_bindings, frame->target))
         return;
     /* A closed publication reads no bindings through the call or its types
      * (he_last_call): what it keeps is what the answer and its goals reach. */
@@ -1383,6 +1390,11 @@ static void he_canonical_resume_result(HeCanonicalFrame *frame) {
         frame->selected = true;
         he_canonical_instruction_push(frame, candidate,
             frame->type, &seed->env, false, false, &frame->child);
+        return;
+    }
+    if (eval_failure_values() && he_publish_data_output(a, frame->type, seed,
+            candidate, NULL, frame->preserve_bindings, frame->target)) {
+        he_canonical_pop();
         return;
     }
     if (atom_is_he_evaluated(candidate)) {
@@ -2320,9 +2332,14 @@ static bool he_canonical_project_contract(HeCanonicalFrame *frame,
     Outcome *head, Outcome *path, Bindings *out) {
     MatchVisibleVarSet visible;
     match_visible_var_set_init(&visible);
-    collect_match_visible_vars_rec(frame->atom, &visible);
-    collect_match_visible_vars_rec(frame->type, &visible);
-    collect_match_visible_vars_rec(outcome_atom_materialize(frame->arena, head), &visible);
+    bool visible_complete = collect_match_visible_vars_rec(frame->atom, &visible);
+    visible_complete = collect_match_visible_vars_rec(frame->type, &visible) && visible_complete;
+    visible_complete = collect_match_visible_vars_rec(
+        outcome_atom_materialize(frame->arena, head), &visible) && visible_complete;
+    if (eval_failure_values() && !visible_complete) {
+        match_visible_var_set_free(&visible);
+        return false;
+    }
     BindingsBuilder acquired;
     bool initialized = bindings_builder_init(&acquired, &frame->env);
     bool ok = initialized && bindings_builder_merge_commit(&acquired, &head->env) &&
@@ -2526,7 +2543,8 @@ static void he_canonical_dispatch_call(HeCanonicalFrame *frame, Outcome *call) {
         .arena = a, .query = source, .prefix = env, .outcomes = &pending
     };
     CettaCount matched = eval_query_equations_visit(frame->space, source, a,
-        he_raw_query_result, &query);
+        eval_failure_values() && frame->data_output
+                ? he_raw_query_data_result : he_raw_query_result, &query);
     if (!matched) {
         /* Its own value, answered with the bindings it was asked under: no
          * argument check or argument added one. */
@@ -2792,6 +2810,8 @@ static void he_canonical_resume_dispatch(HeCanonicalFrame *frame) {
             &frame->env, frame->preserve_bindings, frame->target);
         if (delivery) {
             delivery->selected = true;
+            delivery->data_output = eval_failure_values() &&
+                he_declared_data_result(a, &frame->work.items[frame->path_index], &call->env);
             delivery->query_closed = frame->query_closed;
             delivery->typed = frame->type_count == 1u &&
                 frame->work.len == 1u && frame->child.len == 1u &&
@@ -3671,11 +3691,20 @@ static __attribute__((noinline)) bool he_ai_source_failure(HeCanonicalFrame *fra
     /* Looking for an intrinsic is a root observation, not substitution of
      * an entire (possibly shared) value graph. Bound values keep their role. */
     Atom *source = frame->atom;
+    if (!source) {
+        eval_mark_interrupted(CETTA_EVAL_INCOMPLETE_HOST_FAILURE);
+        he_canonical_pop();
+        return true;
+    }
     if (!atom_is_error(source) || atom_is_he_evaluated(source))
         return false;
     source = bindings_apply_if_vars(&frame->env, frame->arena, source);
-    if (!source ||
-        eval_atom_type_demand(frame->arena, source, frame->type
+    if (!source) {
+        eval_mark_interrupted(CETTA_EVAL_INCOMPLETE_HOST_FAILURE);
+        he_canonical_pop();
+        return true;
+    }
+    if (eval_atom_type_demand(frame->arena, source, frame->type
             ? frame->type : atom_undefined_type(frame->arena)) == HE_TYPE_KEEP)
         return false;
     ai_add_failure(frame->arena, frame->target, source, &frame->env);
@@ -4574,6 +4603,10 @@ static void he_canonical_deliver_ready(Space *s, Arena *a, Atom *call,
     if (frame) {
         frame->selected = true;
         frame->typed = true;
+        frame->data_output = eval_failure_values() &&
+            (atom_is_symbol_id(range, g_builtin_syms.atom) ||
+             atom_is_symbol_id(range, g_builtin_syms.expression) ||
+             atom_is_symbol_id(range, g_builtin_syms.list_type));
         frame->live[1] = demand;
         outcome_set_add(&frame->child, call, env);
         frame->phase = 6u;
