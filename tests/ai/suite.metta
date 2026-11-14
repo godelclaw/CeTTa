@@ -24,5 +24,5 @@
           ($pm (ais:matrix $binary "petta" "CETTA_PETTA_TRANSLATOR_EXPANSION=1"))
           ($tm (ais:matrix $binary "petta" "CETTA_PETTA_TRANSLATOR_EXPANSION=0")))
      (case ($p $t (ah:run $binary))
-       (((6 6 (HostControlsPass 25)) (AISuitePass 12 1984 25))
+       (((6 6 (HostControlsPass 27)) (AISuitePass 12 1984 27))
         ($bad (let $shown (println! (SuiteCountFailed $bad)) (system:exit 1)))))))

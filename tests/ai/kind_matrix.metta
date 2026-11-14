@@ -19,7 +19,7 @@
 (KMCase case-explicit "!(case " " (((Error $w $reason) caught) ($other hidden)))" (Literal "caught"))
 (KMCase catch-data "!(let $v (catch " ") (Box $v))" (View "(Box " ")"))
 (KMCase collected "!(collapse (superpose (" " 7)))" (View "(" " 7)"))
-(KMCase holding "(: hold (-> Atom Atom)) (= (hold $v) $v) !(Box (hold " "))" (View "(Box " ")"))
+(KMCase holding "(: hold (-> Atom Atom)) (= (hold $v) $v) !(Box (hold " "))" (View "" ""))
 (KMCase unification "!(unify " " (Error first $reason) yes no)" (Literal "yes"))
 (KMCase receiver-refutation "!(let (Other $x) (Box " ") never)" (View "" ""))
 (KMCase type-preflight "!(+ " " \"bad\")" (View "" ""))

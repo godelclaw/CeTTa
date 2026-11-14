@@ -1,10 +1,10 @@
 AI experiments
 ==============
 
-Status: experimental, declaration-only, canonical PeTTa implementation.
+Status: experimental, declaration-only, PeTTa and HE implementations.
 Default and extended profiles retain their existing semantics. Selecting
 PeTTa's existing AI preset retains its sealed-sort behavior and does not
-activate failure-values. HE activation is explicitly refused in this cut.
+activate failure-values. Both PeTTa and HE admit the declaration.
 The AI preset now includes extended infrastructure, so it is not byte-equivalent
 to the earlier base-only AI preset on extension-specific programs.
 
@@ -26,11 +26,11 @@ Enable a named experiment at an evaluation root:
 
 Declarations are session-local and idempotent. A quoted declaration is data.
 Unknown names and malformed declarations report Unsolvable. The experiment
-registry admits only qualified hosts. HE --profile ai retains extended
-behavior; a failure-values declaration returns Forbidden with
-ExperimentUnavailableInHost. HE propagation remains future work.
-HE retains its stop-after-Error policy, so a refused declaration ends that
-program. A diagnostic printed as data does not imply a nonzero process exit.
+registry admits only its declared hosts. HE --profile ai retains extended
+behavior until the declaration is evaluated. With the experiment active,
+both hosts publish failures and continue later directives. A diagnostic
+printed as data does not imply a nonzero process exit. The inactive HE
+stop-after-Error policy is unchanged.
 
 Experiment: failure-values
 --------------------------
@@ -49,10 +49,40 @@ Classify at the producer that knows the cause. Carry failure provenance
 through the ordinary outcome protocol. Propagation and explicit observation
 are evaluator boundaries, rather than conventions based on function names
 or on the appearance of a payload. A native RAISED occurrence is control;
-a native VALUE containing an Error term is data. catch converts a produced
-failure to data. Quotation and Atom-typed holding positions preserve syntax
-as data. Binding and inspecting values do not reactivate them. Explicit eval
-selects code deliberately.
+a fresh native VALUE containing an Error term is data. A PRESERVED_VALUE
+projects existing occurrences without changing their roles. catch converts a produced
+failure to data. Atom-typed holding positions leave source unexecuted;
+holding alone does not complete it. Return, identity, declared Atom/Expression
+outputs, substitution and extraction preserve each occurrence's origin.
+They never catch an authored failure merely by returning it. A source Error
+that surfaces as an authored result raises even if its declared type is Atom.
+An admitted Error datum passed through the same function remains data.
+
+HE data admission protects diagnostic occurrences, recursively, using private
+value copies. It does not complete arbitrary constructed code: such code can
+still reduce under equations added after its construction. Substitution keeps
+a protected diagnostic's own barrier; surrounding templates inherit none.
+Match and direct space readers share this admission. Equality and hashing
+still ignore value marks, and a stored term is admitted anew on readback.
+Variable-alias renaming preserves a diagnostic's own data barrier too.
+
+Constructors admit only a new diagnostic root. A new Box around written
+Error syntax keeps its source child; extracting that child surfaces a failure.
+The same Box around a caught Error keeps its data child. Constructing a new
+Error root from parts produces diagnostic data, with existing child roles
+preserved. This differs from observers, storage readback and fresh native
+VALUE receipts, which admit their observed data as a whole.
+
+Native PRESERVED_VALUE completes a projection without fresh admission or
+re-evaluating its children. A surfaced source Error root raises; a data root
+stays data. The projection property is declared in builtin_symbols.data:
+car-atom, cdr-atom, decons-atom/decons, index-atom and trace! transport existing
+values, along with sealed's renaming, if-equal's selected arm and list/tuple
+conversion. A conversion keeps existing components; a newly constructed
+diagnostic root receives its own data mark. Sequence value constructors
+likewise preserve existing components.
+Suspended results cannot claim this finished-projection form. Old native tag
+numbers remain unchanged; the experiment alone produces the added form.
 
 Position                         Rule
 --------                         ----
@@ -79,7 +109,8 @@ unify branches                  Run only the selected branch.
 computed operator               Propagate before demanding its arguments.
 demanded function/native args   Propagate left to right; no later effect.
 held function/native args       Keep syntax according to the signature.
-constructor fields              Propagate where demanded; held fields stay data.
+constructor fields              Propagate where demanded; held fields retain
+                                 their unexecuted source or admitted data role.
 catch source                    Observe each failure as one ordinary datum.
 forall completed generator      Preserve its first produced failure before
                                  treating its values as Boolean control.
@@ -88,7 +119,8 @@ foldall generator / step        Propagate the original failure instead of
                                  publishing an apparently completed state.
 hyperpose alternatives          Preserve branch occurrences and failure roles.
 directive result                Print failures; continue subsequent directives.
-eval / metta source             Held code, explicitly selected for execution.
+eval / metta source             Activate where the host interprets code;
+                                 typed Atom/Expression inspection stays inert.
 
 The collection operators' internal reify is an explicit observation boundary.
 For example, unique of two identical produced failures emits one intact Error
@@ -101,9 +133,19 @@ value and does not by itself change the process exit status. Command-line,
 reader and explicit process-exit failures retain their separate status rules.
 Programs that use this profile must inspect the returned outcomes.
 
-PeTTa eval runs selected code once. metta respects an already completed input
-as a value; eval deliberately activates the selected code value. Captured
-data arguments inside an unmarked source call keep their completed role.
+Explicit evaluation selects a code view of the operand's root. Typed metta
+does so only when its source-demand rule interprets the operand; inspection
+at Atom or Expression preserves the occurrence. Equation heads
+that open a quotation similarly select the captured roots as code. Their
+children retain their own data roles. Ordinary parameters, if, and let/case
+pattern inspection are not quotation activation. No function-name exception
+or standard-library rewrite supplies this policy. PeTTa's quote removes its
+wrapper; HE's quote retains it, so source fixtures account for that difference.
+
+A held container can discard a source child without running it. If the host
+evaluates that container again before matching, its demanded child runs then,
+even when the following pattern would discard it. HE retains that existing
+re-evaluation behavior; inspecting a finished projection is a different path.
 
 A completed absence report (Empty SCOPE) is one ordinary datum, neither
 computational zero nor failure. The engine adds no declaration to the user's
@@ -132,10 +174,29 @@ evaluator. Tests compare translator expansion and its per-call fallback,
 including multiple matching translator rules. They do not claim two full
 independent C implementations of PeTTa.
 
-Prepared accelerators without per-occurrence failure provenance are declined
+AI_UNTABLED: native table/memo admission and reuse are declined while
+failure-values is active. Declared functions run by ordinary, untabled
+evaluation, with its answer order, multiplicity and budget/cancellation rules.
+This includes the first would-be cache miss: the old generator protocol loses
+the raised channel before storing answers. Cache counters do not advance;
+memo aggregation and tabled fixpoint termination are not provided by this
+experiment. Tabling's deduplication is also absent: equal-valued equation
+occurrences remain separate in ordinary untabled evaluation.
+Default/extended retain their existing two-field records, keys
+and cache hit/miss behavior. Re-enabling tables requires captured input roles,
+semantic-mode identity and stored VALUE/RAISED outcomes through replay,
+lattice, aggregation, counting and forwarding. Atom equality alone is not
+sufficient to certify reuse.
+
+Prepared accelerators and query answer banks without per-occurrence failure provenance are declined
 when this experiment is active. In particular, hyperpose uses the existing
 cooperative scheduler until parallel transport carries typed outcomes. This
-may cost parallel performance under the experiment. The inactive paths keep
+may cost parallel performance and changes which answer once/select sees
+first when the inactive host would run a worker race. A bounded work request
+is refused if its required resumable route is unavailable. Derived
+specialization equations are absent when their accelerator is declined;
+optimizer-record introspection is not promised by the active experiment.
+The inactive paths keep
 their existing acceleration and scheduling.
 
 FailurePropagation.lean specifies pure/read-only observation. Its independent
@@ -153,5 +214,17 @@ contracts. Graduation into a stable host requires a stronger review.
 Repeatable controls live in tests/ai/. test-ai runs their CeTTa driver and
 native protocol fixture and is included in test-all. Qualification records
 must name the revision, Lean hash, changed golden programs, mutations,
-performance and limitations. HE evidence from earlier prototypes does not
-qualify HE activation in this release.
+performance and limitations. HE controls exercise canonical and reference
+execution, including nested strict contexts and native producer provenance.
+
+HE instruction returns retain their result channel through metta, chain and
+function. These boundaries forward an existing raised occurrence and retain
+the origin of returned values. A type signature grants no data admission.
+The same handler operation
+implements catch in either host, while user equations retain ownership of
+their head. Ordinary HE quotation and minimal-step eval keep HE's syntax
+policy; unquote activates quoted code. Explicit collectors retain a partial
+prefix together with its terminal diagnostic without replaying effects.
+Completed native packets are validated as a whole before their first
+publication. A malformed suffix is a fault, not a partially admitted packet.
+Valid empty packets remain zero, and valid duplicates remain distinct.

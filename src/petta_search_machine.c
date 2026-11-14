@@ -13941,6 +13941,12 @@ static bool petta_push_equation_result(
     uint32_t barrier, bool evaluate_result,
     bool translate_result, bool count_collection_result,
     const PettaPlanNode *plan, bool result_fully_resolved) {
+    /* Selection may precede the choice's continuation snapshot. Surface a
+     * source diagnostic only when this ordinary goal runs, after the sibling
+     * alternatives and their continuation have been retained. */
+    if (machine->host.failure_values && atom_is_error(result) &&
+        !atom_is_he_evaluated(result))
+        return petta_push_solve_planned(machine, result, expected, barrier, NULL);
     /* A raw `Atom` result keeps an ordinary equation body as data.  An
      * explicit `function` wrapper is the source language's execution marker,
      * however: it runs to produce that raw Atom.  Quoted wrappers never reach
@@ -21094,7 +21100,7 @@ static bool petta_machine_advance_choice(
              * slot path too, except where execution is externally observed:
              * there a resumed run must pay what the whole run pays, and the
              * captured residual no longer holds the call's open frames. */
-            const bool candidate_slot_match = !directional &&
+            bool candidate_slot_match = !directional &&
                 (slot_match ||
                  (slot_frames && !candidate.equation_template_c0 &&
                   candidate.rhs_binds_variables &&
@@ -21114,6 +21120,16 @@ static bool petta_machine_advance_choice(
                 execution_equation->expr.len == 3u
                     ? execution_equation->expr.elems[1]
                     : NULL;
+            const BindingsStructureHooks *structure = machine->host.failure_values
+                ? bindings_structure_hooks() : NULL;
+            bool code_pattern = structure && structure->code_pattern &&
+                structure->code_match &&
+                structure->code_pattern(structure->context, lhs_shape);
+            /* Compiled slot/template matching does not implement the host's
+             * code-binding policy. Such heads use the existing owned query
+             * matcher, before any search-frame writes have occurred. */
+            if (code_pattern)
+                candidate_slot_match = false;
             CettaExprLen query_arity = choice->as.equation.query
                 ? choice->as.equation.query->expr.len - 1u
                 : choice_fields ? choice_fields->operands.count
@@ -21137,7 +21153,7 @@ static bool petta_machine_advance_choice(
                 petta_specializer_pattern_root(
                     machine->space, equation);
             bool relational_head =
-                !directional && !machine->host.structural_equation_heads &&
+                !code_pattern && !directional && !machine->host.structural_equation_heads &&
                 equation->kind == ATOM_EXPR &&
                 equation->expr.len == 3u &&
                 petta_equation_lhs_contains_callable(
@@ -21220,6 +21236,7 @@ static bool petta_machine_advance_choice(
             /* A closed template decides match or mismatch exactly, so the
              * shape proof can only anticipate its rejection. */
             bool template_decides =
+                !code_pattern &&
                 choice->as.equation.equation_template_c0_closed_query &&
                 machine->equation_template_c0_enabled &&
                 candidate.equation_template_c0 &&
@@ -21322,7 +21339,7 @@ static bool petta_machine_advance_choice(
                 choice->as.equation.equation_template_c0_closed_query ||
                 (choice->as.equation.query_closed && match_query &&
                  !atom_has_vars(match_query));
-            if (closed_ground_query &&
+            if (!code_pattern && closed_ground_query &&
                 machine->equation_template_c0_enabled &&
                 candidate.equation_template_c0 &&
                 !choice->as.equation.list_query &&
@@ -21889,12 +21906,9 @@ static bool petta_machine_advance_choice(
             if (machine->host.failure_values &&
                 outcome->result_form == CETTA_CALL_RESULT_RAISED)
                 return petta_machine_raise_error(machine, value);
-            if (machine->host.failure_values &&
-                (outcome->result_form == CETTA_CALL_RESULT_COMPLETED_VALUE || atom_is_error(value))) {
-                value = petta_machine_completed_data(machine, value, failure);
-                if (!value)
-                    return false;
-            }
+            if (machine->host.failure_values && atom_is_error(value) &&
+                !atom_is_he_evaluated(value))
+                return petta_machine_raise_error(machine, value);
             /* A conditional answer holds while its delayed goals do. */
             if (outcome->delayed &&
                 !petta_machine_delay_install(machine, outcome->delayed, failure)) {
@@ -25378,7 +25392,6 @@ static Atom *petta_memo_quantized_ground_key(
     }
     if (source->kind != ATOM_EXPR)
         return source;
-
     PettaMemoQuantizeFrame *frames = NULL;
     size_t frame_len = 0u;
     size_t frame_cap = 0u;
@@ -25828,6 +25841,11 @@ static bool petta_machine_start_tabled_call(
     PettaMachineStep *failure) {
     if (handled)
         *handled = false;
+    /* AI_UNTABLED: the atom-only table protocol cannot retain the raised
+     * channel. The experiment uses ordinary evaluation instead of admitting
+     * either a cache hit or a generator. See docs/ai_experiments.txt. */
+    if (machine && machine->host.failure_values)
+        return false;
     if (!machine || !query || !expected || !handled ||
         !failure || query->kind != ATOM_EXPR ||
         query->expr.len == 0u ||
@@ -29105,6 +29123,8 @@ static bool petta_machine_cons(
      */
     Atom *constraint =
         petta_semantics_cons_value(&machine->heap, head, tail);
+    if (machine->host.failure_values && constraint)
+        constraint = cetta_ai_constructed_value(&machine->heap, constraint);
     return constraint &&
            petta_machine_unify(
                machine, constraint, expected);
@@ -31341,7 +31361,11 @@ static inline bool petta_machine_deliver_native_return(
             machine, outcome, expected, barrier, failure);
     Atom *value = outcome.term;
     if (machine->host.failure_values &&
-        (outcome.result_form == CETTA_CALL_RESULT_COMPLETED_VALUE || atom_is_error(value))) {
+        outcome.result_form == CETTA_CALL_RESULT_PRESERVED_VALUE &&
+        atom_is_error(value) && !atom_is_he_evaluated(value))
+        return petta_machine_raise_error(machine, value);
+    if (machine->host.failure_values &&
+        outcome.result_form != CETTA_CALL_RESULT_PRESERVED_VALUE) {
         value = petta_machine_completed_data(machine, value, failure);
         if (!value) {
             *failure = PETTA_MACHINE_STEP_CAPACITY;
@@ -36758,7 +36782,6 @@ static bool petta_machine_dispatch_activation_solve(
     }
 
     if (machine->host.failure_values && atom_is_error(goal->first) &&
-        (!goal->plan || goal->plan->role != PETTA_PLAN_VALUE) &&
         !atom_is_he_evaluated(goal->first)) {
         Atom *error = petta_machine_materialize_activation_source(
             machine, goal, goal->first);
@@ -38102,10 +38125,9 @@ static bool petta_machine_dispatch_solve(
     PettaMachineStep *failure) {
     if (machine->host.failure_values && atom_is_he_evaluated(goal->first))
         return petta_machine_unify_resolved(machine, goal->first, goal->second);
-    /* A written Error is the failure producer. A variable or native VALUE
-     * returning the same syntax is already data, not a second raise. */
+    /* An admitted value carries its own completion mark. A template's
+     * VALUE plan alone cannot turn held source into completed data. */
     if (machine->host.failure_values && atom_is_error(goal->first) &&
-        (!goal->plan || goal->plan->role != PETTA_PLAN_VALUE) &&
         !atom_is_he_evaluated(goal->first) &&
         !(goal->kind == PETTA_GOAL_HE_INTERPRET &&
           atom_is_symbol_id(goal->third, g_builtin_syms.atom))) {
@@ -43044,9 +43066,7 @@ static bool petta_machine_dispatch_goal(
         Atom *value = first->expr.elems[1];
         bool reduces = goal.kind == PETTA_GOAL_REDUCE_READY;
         if (machine->host.failure_values && atom_is_he_evaluated(value)) {
-            atom_deep_copy_strip_he_marks_enter();
-            value = atom_deep_copy(&machine->heap, value);
-            atom_deep_copy_strip_he_marks_leave();
+            value = cetta_ai_code_reading(&machine->heap, value);
             if (!value) {
                 *failure = PETTA_MACHINE_STEP_CAPACITY;
                 return false;

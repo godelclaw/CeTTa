@@ -740,11 +740,7 @@ static bool library_context_init_services(CettaLibraryContext *ctx,
     memset(ctx, 0, sizeof(*ctx));
     cetta_eval_session_init(&ctx->session, language_id, profile);
     language_id = ctx->session.language_id;
-    profile = ctx->session.profile;
-    if (profile && profile->id == CETTA_PROFILE_PETTA_AI)
-        profile = cetta_profile_petta_extended();
-    else if (profile && profile->id == CETTA_PROFILE_HE_AI)
-        profile = cetta_profile_he_extended();
+    profile = cetta_profile_base(ctx->session.profile);
     ctx->prime_interpretation = prime_interpretation_selection_new(language_id,
         cetta_language_uses_rust_he_compat_semantics(language_id, profile),
         language_id == CETTA_LANGUAGE_PRIME && !(profile && profile->quote_as_written));

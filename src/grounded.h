@@ -106,6 +106,7 @@ bool is_grounded_op(SymbolId id);
 /* Source-declared sequence constructors return completed data, and may hold
  * individual operands. Unlisted heads keep their existing call contract. */
 bool grounded_op_is_sequence_constructor(SymbolId id);
+bool grounded_op_preserves_result_origin(SymbolId id);
 bool grounded_op_sequence_accepts_arity(SymbolId id, uint32_t arity);
 bool grounded_op_sequence_data_arg(SymbolId id, uint32_t argument_index);
 

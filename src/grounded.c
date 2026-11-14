@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "grounded.h"
+#include "ai_failure.h"
 #include "tensor_dense_v1.h"
 #include "effect_policy.h"
 #include "host_services.h"
@@ -3513,6 +3514,13 @@ bool grounded_op_is_sequence_constructor(SymbolId id) {
     return false;
 }
 
+bool grounded_op_preserves_result_origin(SymbolId id) {
+#define PRESERVED_RESULT(field) if (id == g_builtin_syms.field) return true;
+    CETTA_NATIVE_PRESERVED_RESULT_ROWS(PRESERVED_RESULT)
+#undef PRESERVED_RESULT
+    return false;
+}
+
 bool grounded_op_sequence_accepts_arity(SymbolId id, uint32_t arity) {
     if (arity > 16u)
         return false;
@@ -3555,10 +3563,16 @@ bool grounded_call(Arena *a, Atom *head, Atom **args, uint32_t nargs,
     if (!result)
         return false;
     if (raised && atom_is_error(result) &&
-        grounded_current_language_is_petta())
+        (grounded_current_language_is_petta() ||
+         (eval_current_uses_failure_values && eval_current_uses_failure_values())))
         *out = cetta_call_raised(result);
     else if (atom_is_petta_no_result(result))
         *out = cetta_call_failure();
+    else if (!raised && eval_current_uses_failure_values && eval_current_uses_failure_values() &&
+             head->kind == ATOM_SYMBOL &&
+             (grounded_op_preserves_result_origin(atom_symbol_current_id(head)) ||
+              grounded_op_is_sequence_constructor(atom_symbol_current_id(head))))
+        *out = cetta_call_preserved_value(result);
     else if ((!raised && head->kind == ATOM_SYMBOL &&
               grounded_op_is_sequence_constructor(atom_symbol_current_id(head))) ||
              (eval_current_language_id &&
@@ -3971,14 +3985,20 @@ static Atom *grounded_dispatch_open(Arena *a, Atom *head, Atom **args,
         if (grounded_current_language_is_petta() &&
             petta_semantics_is_open_cons_value(value))
             value = petta_semantics_materialize_closed_logical_list(a, value);
-        if (!atom_sequence_view(value, &elems, &len))
+        if (!atom_sequence_view(value, &elems, &len)) {
+            if (eval_current_uses_failure_values && eval_current_uses_failure_values())
+                return grounded_raise(a, head, args, nargs,
+                    atom_symbol(a, "ExpectedListOrExpression"));
             return atom_error(
                 a, grounded_call_expr(a, head, args, nargs),
                 atom_symbol(a, "ExpectedListOrExpression"));
+        }
         if (atom_is_list(value) == to_list)
             return value;
-        return to_list ? atom_list(a, elems, len)
-                       : atom_sequence_like(a, NULL, elems, len);
+        Atom *converted = to_list ? atom_list(a, elems, len)
+                                 : atom_sequence_like(a, NULL, elems, len);
+        return eval_current_uses_failure_values && eval_current_uses_failure_values()
+            ? cetta_ai_constructed_value(a, converted) : converted;
     }
 
     if ((head_id == g_builtin_syms.car_atom ||

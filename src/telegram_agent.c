@@ -70,7 +70,7 @@ bool cetta_telegram_agent_valid(const CettaTelegramAgent *c) {
         c->actions && c->actions->chats && c->actions->chat_count && c->actions->chat_count<=128 &&
         !(c->actions->methods&~15u) && c->fuel>0 && c->fuel<=2000000 &&
         c->program->context->session.language_id==CETTA_LANGUAGE_HE && c->program->context->session.profile &&
-        c->program->context->session.profile->id==CETTA_PROFILE_HE_EXTENDED;
+        cetta_profile_base(c->program->context->session.profile)->id==CETTA_PROFILE_HE_EXTENDED;
 }
 static bool channel_mode(const CettaTelegramAgent *c) {
     return !strcmp(c->program->version,"telegram-channel/1");

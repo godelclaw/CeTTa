@@ -6,4 +6,5 @@
   (table-rows "builtin_symbols.data" Builtins (macro CETTA_STATIC_GROUNDED_SYMBOL_ROWS) (columns field) (where static_grounded true))
   (table-rows "builtin_symbols.data" Builtins (macro CETTA_PURE_GROUNDED_SYMBOL_ROWS) (columns field) (where pure_grounded true))
   (table-rows "builtin_symbols.data" Builtins (macro CETTA_TYPE_PURE_EXTRA_GROUNDED_SYMBOL_ROWS) (columns field) (where type_pure_extra true))
-  (table-rows "builtin_symbols.data" Builtins (macro CETTA_SPECULATIVE_SYMBOL_ROWS) (columns field) (where speculative true)))
+  (table-rows "builtin_symbols.data" Builtins (macro CETTA_SPECULATIVE_SYMBOL_ROWS) (columns field) (where speculative true))
+  (table-rows "builtin_symbols.data" PreservedResults (macro CETTA_NATIVE_PRESERVED_RESULT_ROWS) (columns field)))

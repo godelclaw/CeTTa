@@ -1,7 +1,7 @@
 /* Directional controls use HE's existing owned source/body continuations.
  * A completed retrieval publishes bindings before the ordinary body runs. */
 static void he_pattern_error(HeCanonicalFrame *frame, const char *reason) {
-    outcome_set_add(&frame->paths, atom_error(frame->arena, frame->atom,
+    ai_publish_error(frame->arena, &frame->paths, atom_error(frame->arena, frame->atom,
         atom_symbol(frame->arena, reason)), &frame->env);
     frame->phase = 2u;
 }
@@ -29,7 +29,7 @@ static void he_canonical_resume_pattern_retrieval(HeCanonicalFrame *frame, Symbo
         }
         Outcome *source = &frame->child.items[frame->index++];
         Atom *space = outcome_atom_materialize(a, source);
-        if (atom_is_error(space)) {
+        if (eval_failure_values() ? ai_outcome_raised(source) : atom_is_error(space)) {
             outcome_set_add_existing(&frame->paths, source);
             return;
         }
@@ -41,7 +41,7 @@ static void he_canonical_resume_pattern_retrieval(HeCanonicalFrame *frame, Symbo
         eval_pattern_query_ready(frame->space, a, atom_symbol_id(a, g_builtin_syms.pat_query),
             args, 3u, &result);
         if (result.kind == CETTA_CALL_RAISED) {
-            outcome_set_add(&frame->paths, result.term, &source->env);
+            ai_publish_error(a, &frame->paths, result.term, &source->env);
             return;
         }
         if (result.kind != CETTA_CALL_VALUE) return;
@@ -113,7 +113,8 @@ static void he_canonical_resume_pattern(HeCanonicalFrame *frame) {
     Outcome *source = &frame->child.items[frame->index++];
     Atom *value = outcome_atom_materialize(a, source);
     if (atom_is_legacy_empty_sentinel(value)) return;
-    if (!raw && !branching && atom_is_error(value)) {
+    if (!raw && !branching &&
+        (eval_failure_values() ? ai_outcome_raised(source) : atom_is_error(value))) {
         outcome_set_add_existing(&frame->paths, source);
         return;
     }

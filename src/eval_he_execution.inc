@@ -3789,7 +3789,9 @@ typedef struct {
  * evaluation's context, and the source's head. */
 static inline __attribute__((always_inline)) bool he_shared_execution_candidate(
     Space *space, Atom *source, Atom *type, int fuel, bool observe_boundaries) {
-    if (he_retained_execution_active()) return false;
+    /* This realization currently transports visible values, not the
+     * experiment's raised-occurrence channel. Keep its canonical adapter. */
+    if (eval_failure_values() || he_retained_execution_active()) return false;
     if (eval_current_language_id() != CETTA_LANGUAGE_HE)
         return false;
     /* A completed scalar is interpreted by HE's value/cast boundary. Only

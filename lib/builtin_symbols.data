@@ -775,4 +775,21 @@
             (Row lib_provenance_supports_each "__cetta_lib_provenance_supports_each" false false false false false false false)
             (Row prime_eval_value "__cetta_prime_eval_value" false false false false false false false)
             (Row lib_llm_response_body "__cetta_lib_llm_response_body" false false false false false false true)
+        ))
+    ; These operations project or transport existing values. Their result
+    ; does not establish a new data origin for any selected component.
+    (Table PreservedResults
+        (Columns (Column field Identifier))
+        (Key field)
+        (Rows
+            (Row car_atom)
+            (Row cdr_atom)
+            (Row decons_atom)
+            (Row petta_decons)
+            (Row index_atom)
+            (Row trace_bang)
+            (Row sealed_text)
+            (Row if_equal)
+            (Row lib_list_from_expression)
+            (Row lib_list_to_expression)
         )))

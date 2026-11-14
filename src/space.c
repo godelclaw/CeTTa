@@ -14,6 +14,7 @@
 #include "stats.h"
 #include "allocator_info.h"
 #include "eval.h"
+#pragma weak eval_mark_interrupted
 #include "state_cell.h"
 #pragma weak state_cell_snapshot_acquire
 #pragma weak state_cell_snapshot_release
@@ -14203,7 +14204,7 @@ static const QueryVisibleVar *query_visible_alias_for_var(
     return found;
 }
 
-static Atom *rewrite_query_visible_aliases(Arena *a, Atom *atom,
+static Atom *rewrite_query_visible_aliases_tree(Arena *a, Atom *atom,
                                            const QueryVisibleVarSet *visible,
                                            const Bindings *full) {
     if (!atom || !visible || visible->len == 0 || !atom_has_vars(atom))
@@ -14222,7 +14223,7 @@ static Atom *rewrite_query_visible_aliases(Arena *a, Atom *atom,
     Atom **rewritten = NULL;
     for (CettaExprIndex i = 0; i < atom->expr.len; i++) {
         Atom *child = atom->expr.elems[i];
-        Atom *next = rewrite_query_visible_aliases(a, child, visible, full);
+        Atom *next = rewrite_query_visible_aliases_tree(a, child, visible, full);
         if (!rewritten && next != child) {
             rewritten = arena_alloc(a, sizeof(Atom *) * atom->expr.len);
             for (CettaExprIndex j = 0; j < i; j++)
@@ -14231,7 +14232,36 @@ static Atom *rewrite_query_visible_aliases(Arena *a, Atom *atom,
         if (rewritten)
             rewritten[i] = next;
     }
-    return rewritten ? atom_expr(a, rewritten, atom->expr.len) : atom;
+    return rewritten ? bindings_retain_rebuilt_role(a, atom,
+        atom_expr(a, rewritten, atom->expr.len)) : atom;
+}
+
+typedef struct {
+    const QueryVisibleVarSet *visible;
+    const Bindings *bindings;
+} QueryAliasGraph;
+
+static Atom *query_alias_graph_variable(Arena *arena, Atom *variable, void *context) {
+    QueryAliasGraph *graph = context;
+    const QueryVisibleVar *alias = query_visible_alias_for_var(
+        variable, graph->visible, graph->bindings);
+    return alias ? atom_var_with_presentation(arena,
+        alias->spelling, alias->name_key, alias->var_id) : variable;
+}
+
+static Atom *rewrite_query_visible_aliases(Arena *arena, Atom *atom,
+    const QueryVisibleVarSet *visible, const Bindings *bindings) {
+    if (atom && visible && visible->len && atom_has_vars(atom) &&
+        atom_may_hold_he_mark(atom) && eval_current_uses_failure_values &&
+        eval_current_uses_failure_values()) {
+        QueryAliasGraph graph = {visible, bindings};
+        Atom *result = cetta_atom_rewrite_vars(arena, atom,
+            query_alias_graph_variable, &graph, false);
+        if (!result && eval_mark_interrupted)
+            eval_mark_interrupted(CETTA_EVAL_INCOMPLETE_CAPACITY);
+        return result;
+    }
+    return rewrite_query_visible_aliases_tree(arena, atom, visible, bindings);
 }
 
 static Atom *bindings_resolve_query_visible_var(Arena *a, const Bindings *full,

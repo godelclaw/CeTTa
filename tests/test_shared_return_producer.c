@@ -2,6 +2,7 @@
 #include "shared_return_producer.h"
 #include "owned_return_image.h"
 #include "grounded.h"
+#include "he_typing.h"
 #include "foreign.h"
 #include "library.h"
 #include "parser.h"
@@ -22,6 +23,37 @@
 
 static unsigned fail_malloc, fail_calloc;
 static unsigned native_mode, native_calls;
+static SymbolId nested_native_data = SYMBOL_ID_NONE;
+static SymbolId nested_native_raise = SYMBOL_ID_NONE;
+
+Atom *__real_he_typing_dispatch(Arena *, Atom *, Atom **, uint32_t) __attribute__((weak));
+
+/* Test-only native callbacks exercise a nested grounded_call. One catches
+ * the inner fault and returns Error data; the other must retain its own
+ * fault while an inner successful call returns. */
+Atom *__wrap_he_typing_dispatch(Arena *arena, Atom *head, Atom **arguments, uint32_t count) {
+    SymbolId id = head && head->kind == ATOM_SYMBOL
+        ? atom_symbol_current_id(head) : SYMBOL_ID_NONE;
+    if (id != nested_native_data && id != nested_native_raise)
+        return __real_he_typing_dispatch
+            ? __real_he_typing_dispatch(arena, head, arguments, count) : NULL;
+    Atom *datum = atom_error(arena, atom_symbol(arena, "nested-data"), atom_symbol(arena, "payload"));
+    Atom *items = atom_expr(arena, &datum, 1u);
+    Atom *operation = atom_symbol_id(arena, g_builtin_syms.index_atom);
+    Atom *bad_args[] = {items, atom_int(arena, 9)};
+    Atom *good_args[] = {items, atom_int(arena, 0)};
+    CettaCallOutcome inner;
+    if (id == nested_native_data) {
+        assert(grounded_call(arena, operation, bad_args, 2u, &inner));
+        assert(inner.kind == CETTA_CALL_RAISED);
+        return datum;
+    }
+    Atom *raised = grounded_dispatch(arena, operation, bad_args, 2u);
+    assert(raised && atom_is_error(raised));
+    assert(grounded_call(arena, operation, good_args, 2u, &inner));
+    assert(inner.kind == CETTA_CALL_VALUE && atom_eq(inner.term, datum));
+    return raised;
+}
 static SymbolId projection_head = SYMBOL_ID_NONE;
 static unsigned projection_calls;
 static Atom *malformed_frontier(Arena *arena, Atom *value) {
@@ -62,6 +94,15 @@ static void native_fixture_outcome(Arena *arena, CettaCallOutcome *outcome) {
     case 17: *outcome = cetta_call_value(error); break;
     case 20: *outcome = cetta_call_completed_value(atom_expr2(arena,
         atom_symbol(arena, "Empty"), atom_symbol(arena, "native-scope"))); break;
+    case 21: *outcome = cetta_call_preserved_value(error); break;
+    case 22: *outcome = cetta_call_preserved_value(
+        atom_he_evaluated_deep_copy(arena, error)); break;
+    case 23:
+        *outcome = cetta_call_suspended(error, atom_expr2(arena,
+            atom_unit(arena), atom_unit(arena)));
+        outcome->result_form = CETTA_CALL_RESULT_PRESERVED_VALUE;
+        break;
+    case 24: *outcome = cetta_call_preserved_value(NULL); break;
     case 18: {
         Atom *waiting = atom_var(arena, "native-waiting");
         Atom *check = atom_expr3(arena, atom_symbol(arena, "="), waiting, atom_int(arena, 9));
@@ -3013,7 +3054,64 @@ static void test_declined_packet_ownership(void) {
     puts("PASS: declined native storage acquires no value or delayed owner");
 }
 
-static void test_ai_native_return_boundary(void) {
+static void test_he_grounded_failure_provenance(void) {
+    CettaLibraryContext *context = calloc(1u, sizeof(*context));
+    assert(context);
+    cetta_library_context_init_for_language_profile(context, CETTA_LANGUAGE_HE,
+        cetta_profile_from_name_for_language(CETTA_LANGUAGE_HE, "ai"));
+    eval_set_library_context(context);
+    Arena arena; arena_init(&arena);
+    Atom *datum = atom_error(&arena, atom_symbol(&arena, "data"), atom_symbol(&arena, "payload"));
+    Atom *items = atom_expr(&arena, &datum, 1u);
+    Atom *head = atom_symbol_id(&arena, g_builtin_syms.index_atom);
+    Atom *bad[] = {items, atom_int(&arena, 9)};
+    Atom *good[] = {items, atom_int(&arena, 0)};
+    CettaCallOutcome result;
+    assert(grounded_call(&arena, head, bad, 2u, &result) && result.kind == CETTA_CALL_VALUE);
+    context->session.experiments = CETTA_EXPERIMENT_FAILURE_VALUES;
+    eval_set_library_context(context);
+    for (unsigned i = 0u; i < 4u; i++) {
+        assert(grounded_call(&arena, head, bad, 2u, &result) && result.kind == CETTA_CALL_RAISED);
+        assert(grounded_call(&arena, head, good, 2u, &result) && result.kind == CETTA_CALL_VALUE && atom_eq(result.term, datum));
+    }
+    nested_native_data = symbol_intern_cstr(g_symbols, "__test_ai_nested_data");
+    nested_native_raise = symbol_intern_cstr(g_symbols, "__test_ai_nested_raise");
+    assert(grounded_call(&arena, atom_symbol_id(&arena, nested_native_data), NULL, 0u, &result) &&
+        result.kind == CETTA_CALL_VALUE && atom_is_error(result.term));
+    assert(grounded_call(&arena, atom_symbol_id(&arena, nested_native_raise), NULL, 0u, &result) &&
+        result.kind == CETTA_CALL_RAISED);
+    assert(grounded_call(&arena, head, good, 2u, &result) && result.kind == CETTA_CALL_VALUE);
+    context->session.experiments = 0u;
+    eval_set_library_context(context);
+    assert(grounded_call(&arena, head, bad, 2u, &result) && result.kind == CETTA_CALL_VALUE);
+    eval_set_library_context(NULL);
+    cetta_library_context_free(context);
+    free(context);
+    arena_free(&arena);
+    puts("PASS: HE native fault provenance survives nested calls and interleaving; Error data and legacy mode remain values");
+}
+
+/* Use an imported capability on HE: bare readln! was already unentered on
+ * its legacy reference route. The packet being returned stays unchanged. */
+static Atom *ai_native_rebind_source(Arena *arena, Atom *source) {
+    if (!source || source->kind != ATOM_EXPR)
+        return source;
+    if (source->expr.len == 1u &&
+        atom_head_symbol_id(source) == g_builtin_syms.readln_bang)
+        return atom_expr2(arena, atom_symbol_id(arena, g_builtin_syms.lib_json_parse),
+            atom_string(arena, "fixture"));
+    Atom **parts = arena_alloc(arena, sizeof(*parts) * source->expr.len);
+    for (CettaExprIndex i = 0u; i < source->expr.len; i++)
+        parts[i] = ai_native_rebind_source(arena, source->expr.elems[i]);
+    return atom_expr(arena, parts, source->expr.len);
+}
+
+static Atom *ai_native_source(Arena *arena, const char *source, CettaLanguageId language) {
+    Atom *syntax = parse(arena, source);
+    return language == CETTA_LANGUAGE_HE ? ai_native_rebind_source(arena, syntax) : syntax;
+}
+
+static void test_ai_native_return_boundary(CettaLanguageId language) {
     const char *source[] = {
         "(readln!)",
         "(let $x (readln!) (Box $x))",
@@ -3031,7 +3129,6 @@ static void test_ai_native_return_boundary(void) {
         "(Box (Error native datum))", "((Error native datum) 7)",
     };
     for (unsigned dialect = 0u; dialect < 1u; dialect++) {
-        CettaLanguageId language = CETTA_LANGUAGE_PETTA;
         CettaLibraryContext *context = calloc(1u, sizeof(*context));
         assert(context);
         cetta_library_context_init_for_language_profile(context, language,
@@ -3046,12 +3143,18 @@ static void test_ai_native_return_boundary(void) {
         Registry registry; registry_init(&registry);
         registry_bind_id(&registry, g_builtin_syms.self, atom_space(&arena, &space));
         assert(cetta_runtime_load_prelude(&space, &arena, language, context->session.profile));
+        if (language == CETTA_LANGUAGE_HE) {
+            Atom *error = NULL;
+            assert(cetta_library_import(context, "json", &space, &arena, &arena,
+                &registry, -1, &error) && !error);
+            projection_head = g_builtin_syms.lib_json_parse;
+        }
         const char *empty_data[] = {"(Empty native-scope)", "(Box (Empty native-scope))",
             "hidden", "(Box (Empty native-scope))", "((Empty native-scope) 7)"};
         const char *code_data[] = {"(function (return (readln!)))",
             "(Box (function (return (readln!))))", "hidden",
             "(Box (function (return (readln!))))", "((function (return (readln!))) 7)"};
-        const unsigned modes[] = {8u, 9u, 17u, 20u, 1u};
+        const unsigned modes[] = {8u, 9u, 17u, 20u, 1u, 21u, 22u};
         for (unsigned mi = 0u; mi < sizeof(modes) / sizeof(*modes); mi++) {
             unsigned mode = modes[mi];
             for (unsigned i = 0u; i < sizeof(source) / sizeof(*source); i++) {
@@ -3059,8 +3162,8 @@ static void test_ai_native_return_boundary(void) {
                 native_calls = 0u;
                 EvalOutcome result; eval_outcome_init(&result);
                 eval_top_with_registry_outcome(&space, &arena, &arena, &registry,
-                    parse(&arena, source[i]), &result, NULL, NULL);
-                Atom *expected = parse(&arena, mode == 8u ? raised[i]
+                    ai_native_source(&arena, source[i], language), &result, NULL, NULL);
+                Atom *expected = parse(&arena, mode == 8u || mode == 21u ? raised[i]
                     : mode == 20u ? empty_data[i] : mode == 1u ? code_data[i] : data[i]);
                 bool matches = result.results.len == 1u &&
                     atom_eq(result.results.items[0], expected);
@@ -3081,7 +3184,7 @@ static void test_ai_native_return_boundary(void) {
             native_mode = 2u; native_calls = 0u;
             EvalOutcome result; eval_outcome_init(&result);
             eval_top_with_registry_outcome(&space, &arena, &arena, &registry,
-                parse(&arena, collected ? "(collapse (readln!))" : "(readln!)"),
+                ai_native_source(&arena, collected ? "(collapse (readln!))" : "(readln!)", language),
                 &result, NULL, NULL);
             Atom *code = parse(&arena, "(function (return (readln!)))");
             Atom *data_error = parse(&arena, "(Error native datum)");
@@ -3096,13 +3199,13 @@ static void test_ai_native_return_boundary(void) {
             assert(result.completion == CETTA_EVAL_COMPLETE && native_calls == 1u);
             eval_outcome_free(&result);
         }
-        const unsigned terminal_modes[] = {3u, 4u, 5u, 6u, 7u, 10u, 11u, 12u, 13u, 18u};
+        const unsigned terminal_modes[] = {3u, 4u, 5u, 6u, 7u, 10u, 11u, 12u, 13u, 18u, 23u, 24u};
         for (unsigned i = 0u; i < sizeof(terminal_modes) / sizeof(*terminal_modes); i++) {
             native_mode = terminal_modes[i];
             native_calls = 0u;
             EvalOutcome result; eval_outcome_init(&result);
             eval_top_with_registry_outcome(&space, &arena, &arena, &registry,
-                parse(&arena, "(readln!)"), &result, NULL, NULL);
+                ai_native_source(&arena, "(readln!)", language), &result, NULL, NULL);
             /* The canonical native adapter validates the entire packet
              * before publication, including a malformed suffix. */
             bool prefix = false;
@@ -3135,15 +3238,19 @@ static void test_ai_native_return_boundary(void) {
             eval_outcome_free(&result);
         }
         native_mode = 0u;
+        projection_head = SYMBOL_ID_NONE;
         registry_free(&registry); space_free(&space); term_universe_free(&universe);
         cetta_library_context_free(context); eval_set_library_context(NULL);
         free(context); arena_free(&arena);
     }
-    puts("PASS: 25 PeTTa AI native value/failure contexts, 2 duplicate-frontier controls and 10 terminal controls preserve provenance, zero, faults and pending conditions without replay");
+    puts(language == CETTA_LANGUAGE_HE
+        ? "PASS: 35 HE AI native value/failure contexts, 2 duplicate-frontier controls and 12 terminal controls preserve provenance, zero, faults and pending conditions without replay"
+        : "PASS: 35 PeTTa AI native value/failure contexts, 2 duplicate-frontier controls and 12 terminal controls preserve provenance, zero, faults and pending conditions without replay");
 }
 
 int main(int argc, char **argv) {
-    bool ai_native = argc == 2 && strcmp(argv[1], "--ai-native") == 0;
+    bool he_ai_native = argc == 2 && strcmp(argv[1], "--ai-native-he") == 0;
+    bool ai_native = he_ai_native || (argc == 2 && strcmp(argv[1], "--ai-native") == 0);
     bool disposition_only = argc == 2 && strcmp(argv[1], "--disposition") == 0;
     bool reference_native = argc == 2 && strcmp(argv[1], "--native-reference") == 0;
     bool prime_native = argc == 2 && strcmp(argv[1], "--prime-native") == 0;
@@ -3163,7 +3270,9 @@ int main(int argc, char **argv) {
     var_intern_init(&variables);
     g_var_intern = &variables;
     if (ai_native) {
-        test_ai_native_return_boundary();
+        if (he_ai_native)
+            test_he_grounded_failure_provenance();
+        test_ai_native_return_boundary(he_ai_native ? CETTA_LANGUAGE_HE : CETTA_LANGUAGE_PETTA);
     } else if (disposition_only) {
         test_declined_packet_ownership();
         test_native_disposition();

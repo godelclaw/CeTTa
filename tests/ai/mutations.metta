@@ -37,8 +37,8 @@
  "    if (eval_failure_values() && outcome && outcome->completion != CETTA_EVAL_COMPLETE &&\n        !g_ai_cut_reified && !cetta_ai_audit_mutant(\"budget\")) {" 1)
 (AMReplace "machine" "                outcome->result_form == CETTA_CALL_RESULT_RAISED)"
  "                outcome->result_form == CETTA_CALL_RESULT_RAISED && !cetta_ai_audit_mutant(\"return\"))" 1)
-(AMReplace "eval" "if (!ai_outcome_raised(&source->items[i]))"
- "if (cetta_ai_audit_mutant(\"aggregate\") || !ai_outcome_raised(&source->items[i]))" 1)
+(AMReplace "eval" "if (!ai_outcome_raised(source))"
+ "if (cetta_ai_audit_mutant(\"aggregate\") || !ai_outcome_raised(source))" 1)
 (AMReplace "machine" "        Atom *quoted = machine->host.quote_is_inert_data\n            ? expression : expression->expr.elems[1];"
  "        Atom *quoted = machine->host.quote_is_inert_data\n            ? expression : expression->expr.elems[1];\n        if (machine->host.failure_values && cetta_ai_audit_mutant(\"quote\")) { Atom *code = petta_machine_apply_bindings(machine, environment, &machine->heap, quoted); const PettaPlanNode *translated = code && machine->host.translate_source ? petta_machine_translate_source(machine, code) : NULL; if (!code || (machine->host.translate_source && !translated)) { *failure = PETTA_MACHINE_STEP_CAPACITY; return false; } return petta_push_solve_planned(machine, code, expected, goal->barrier, translated); }" 1)
 (AMReplace "machine" "    if (machine->host.failure_values) {\n        error = cetta_ai_failure_value(&machine->heap, error);"
@@ -83,8 +83,8 @@
  "    Atom *raised = petta_eval_take_raise();\n    if (eval_failure_values() && cetta_ai_audit_mutant(\"native-raise\") && (raised || native_outcome.kind == CETTA_CALL_RAISED)) { native_outcome = cetta_call_completed_value(raised ? raised : native_outcome.term); raised = NULL; }\n    if (eval_failure_values() && cetta_ai_audit_mutant(\"native-value\") && native_outcome.kind == CETTA_CALL_VALUE && atom_is_error(native_outcome.term)) raised = native_outcome.term;\n    if (!raised && native_outcome.kind == CETTA_CALL_RAISED)" 1)
 (AMReplace "machine" "    if (machine->host.failure_values && atom_is_he_evaluated(goal->first))"
  "    if (machine->host.failure_values && !cetta_ai_audit_mutant(\"holding\") && atom_is_he_evaluated(goal->first))" 1)
-(AMReplace "machine" "        (!goal->plan || goal->plan->role != PETTA_PLAN_VALUE) &&\n        !atom_is_he_evaluated(goal->first)"
- "        (cetta_ai_audit_mutant(\"holding\") || !goal->plan || goal->plan->role != PETTA_PLAN_VALUE) &&\n        (cetta_ai_audit_mutant(\"holding\") || !atom_is_he_evaluated(goal->first))" 2)
+(AMReplace "machine" "        !atom_is_he_evaluated(goal->first)"
+ "        (cetta_ai_audit_mutant(\"holding\") || !atom_is_he_evaluated(goal->first))" 2)
 (AMReplace "machine" "    Atom *materialized = petta_machine_materialize_answer(\n        machine, error);"
  "    if (machine->host.failure_values && cetta_ai_audit_mutant(\"fields\") && error->kind == ATOM_EXPR && error->expr.len == 3u && machine->host.evaluate) {\n        Atom *field = error->expr.elems[1]; atom_deep_copy_strip_he_marks_enter(); field = atom_deep_copy(&machine->heap, field); atom_deep_copy_strip_he_marks_leave();\n        OutcomeSet forced; outcome_set_init(&forced); CettaCallOutcome end = cetta_call_failure();\n        if (machine->host.evaluate(machine->host.context, machine->space, &machine->heap, field, search_context_bindings(&machine->search), &forced, &end, NULL) && forced.len) error = atom_expr3(&machine->heap, error->expr.elems[0], bindings_apply_if_vars(&forced.items[0].env, &machine->heap, forced.items[0].materialized_atom ? forced.items[0].materialized_atom : forced.items[0].atom), error->expr.elems[2]);\n        outcome_set_free(&forced);\n    }\n    Atom *materialized = petta_machine_materialize_answer(\n        machine, error);" 1)
 
@@ -185,7 +185,7 @@
      (case (am:exec $dir $name "semantic"
             ($binary "--lang" "petta" "--profile" "extended" "-e" $program) $cwd)
        (((proc:exited 0 $out "")
-          (if (or (am:contains $out "(AISuitePass 12 1984 25)") (== $out "true\n6\n")) (MutantSurvived $name)
+          (if (or (am:contains $out "(AISuitePass 12 1984 27)") (== $out "true\n6\n")) (MutantSurvived $name)
             (if (am:contains $out "Mismatch") (MutantKilled $name semantic)
               (am:fail (InvalidMutationRunner $name $out)))))
         ((proc:exited 1 $out $err)
@@ -203,7 +203,7 @@
 (= (am:exercise $dir $name $cwd)
    (case (am:exec $dir $name "native" ((str:concat $dir "/native") "--ai-native") $cwd)
      (((proc:exited 0 $out "")
-        (if (am:contains $out "PASS: 25 PeTTa AI native") (am:budget $dir $name $cwd)
+        (if (am:contains $out "PASS: 35 PeTTa AI native") (am:budget $dir $name $cwd)
           (am:fail (InvalidNativeMutationRunner $name $out))))
       ((proc:signaled 6 $out $err)
         (if (am:contains $err "Assertion") (MutantKilled $name native)

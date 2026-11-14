@@ -992,6 +992,10 @@ static inline bool bindings_structure_quotes_children(const Atom *atom) {
 }
 
 Atom     *bindings_apply(Bindings *b, Arena *a, Atom *atom);
+/* Finish a substitution's changed node, retaining only the experimental
+ * diagnostic datum's own role. Parents inherit no role from their fields;
+ * ordinary HE's code-substitution policy is unchanged. */
+Atom     *bindings_retain_rebuilt_role(Arena *arena, Atom *source, Atom *rebuilt);
 /* Same substitution and borrowed-result contract, retaining shared open
  * syntax under each lexical reading for acyclic binding environments.
  * Cyclic environments keep the ordinary active-path interpretation. */

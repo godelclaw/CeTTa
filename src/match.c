@@ -6183,7 +6183,7 @@ typedef struct {
     bool heap;
 } BindingsApplyFrames;
 
-static bool bindings_apply_frames_push(BindingsApplyFrames *frames,
+static __attribute__((always_inline)) inline bool bindings_apply_frames_push(BindingsApplyFrames *frames,
                                        BindingsApplyFrame frame) {
     if (frames->len == frames->cap) {
         if (frames->cap > UINT32_MAX / 2u)
@@ -6375,6 +6375,21 @@ static void bindings_apply_walk_release(BindingsApplyWalk *walk) {
     bindings_structure_hooks_release(&walk->owned_hooks);
 }
 
+static __attribute__((noinline, cold)) Atom *bindings_retain_rebuilt_role_owned(
+        Arena *arena, Atom *source, Atom *rebuilt) {
+    /* Keep the source occurrence's barrier; surrounding code inherits none.
+     * Stable HE keeps its existing code-substitution policy. */
+    return atom_is_error(source) &&
+            eval_current_uses_failure_values && eval_current_uses_failure_values()
+        ? atom_he_evaluated_copy(arena, rebuilt) : rebuilt;
+}
+
+Atom *bindings_retain_rebuilt_role(Arena *arena, Atom *source, Atom *rebuilt) {
+    if (!rebuilt || !atom_is_he_evaluated(source))
+        return rebuilt;
+    return bindings_retain_rebuilt_role_owned(arena, source, rebuilt);
+}
+
 /* One traversal serves synchronous and retained callers. Synchronous entry
  * points specialize away the yield boundaries and keep their ordinary atom
  * constructor. Retained private construction folds each child's summary on
@@ -6523,6 +6538,8 @@ ascend:
         walk->result = top->assembly ? atom_expr_assembly_finish_splicing(top->assembly)
             : top->draft ? atom_expr_builder_finish(fold->a, top->draft) : top->atom;
         atom_expr_assembly_free(top->assembly);top->assembly = NULL;
+        if (changed)
+            walk->result = bindings_retain_rebuilt_role(fold->a, top->atom, walk->result);
         if (walk->result && changed && hooks && hooks->formed_node &&
             len > 0u && elems[0]->kind == ATOM_VAR &&
             walk->result->expr.elems[0] && walk->result->expr.elems[0]->kind == ATOM_SYMBOL)
@@ -6689,8 +6706,20 @@ static Atom *bindings_apply_shared_fold(BindingsApplyFold *fold,
     return bindings_apply_fold_impl(fold, atom, scope, seen_len, false, graph);
 }
 
+static __attribute__((noinline)) Atom *bindings_apply_epoch_graph(
+    BindingsApplyFold *fold, Atom *atom, BindingsApplyScope scope, uint32_t seen_len) {
+    BindingApplyGraph active = {0};
+    BindingApplyGraph graph = {.active_path = &active};
+    Atom *result = bindings_apply_fold_impl(fold, atom, scope, seen_len, true, &graph);
+    free(graph.entries);
+    free(active.entries);
+    return result;
+}
+
 static Atom *bindings_apply_epoch_fold(BindingsApplyFold *fold, Atom *atom,
         BindingsApplyScope scope, uint32_t seen_len) {
+    if (eval_current_uses_failure_values && eval_current_uses_failure_values())
+        return bindings_apply_epoch_graph(fold, atom, scope, seen_len);
     return bindings_apply_fold_impl(fold, atom, scope, seen_len, true, NULL);
 }
 
@@ -9980,7 +10009,8 @@ static Atom *binding_value_instantiate_ground_node(
             return NULL;
         draft->expr.elems[index] = child;
     }
-    return atom_expr_builder_finish(arena, draft);
+    return bindings_retain_rebuilt_role(
+        arena, skeleton, atom_expr_builder_finish(arena, draft));
 }
 
 static BindingValue binding_value_ground_or_self(
@@ -12637,7 +12667,7 @@ static void decoded_match_worklist_free(DecodedMatchWorklist *work) {
     if (work->items != work->inline_items) free(work->items);
 }
 
-static bool decoded_match_push(DecodedMatchWorklist *work,
+static inline __attribute__((always_inline)) bool decoded_match_push(DecodedMatchWorklist *work,
                                MatchTerm left, MatchTerm right) {
     if (work->len == work->cap) {
         size_t next_cap = work->cap * 2u;

@@ -48,6 +48,9 @@ typedef enum {
     /* Evaluator OutcomeSet only: a branch-local diagnostic, not VALUE.
      * A native/owned-call adapter must export it using CETTA_CALL_RAISED. */
     CETTA_CALL_RESULT_RAISED,
+    /* A completed projection: transport existing occurrence roles, without
+     * fresh data admission or interpretation of its children. */
+    CETTA_CALL_RESULT_PRESERVED_VALUE,
 } CettaCallResultForm;
 
 static inline bool cetta_call_result_is_frontier(CettaCallResultForm form) {
@@ -81,8 +84,9 @@ static inline bool cetta_call_outcome_shape_valid(CettaCallOutcome outcome) {
     case CETTA_CALL_INTERRUPTED:
         return true;
     case CETTA_CALL_RAISED:
-    case CETTA_CALL_SUSPENDED:
         return outcome.term != NULL;
+    case CETTA_CALL_SUSPENDED:
+        return outcome.term != NULL && outcome.result_form != CETTA_CALL_RESULT_PRESERVED_VALUE;
     case CETTA_CALL_VALUE:
         if (!outcome.term)
             return false;
@@ -90,7 +94,8 @@ static inline bool cetta_call_outcome_shape_valid(CettaCallOutcome outcome) {
             return outcome.term->kind == ATOM_EXPR &&
                 (!outcome.term->expr.len || outcome.term->expr.elems != NULL);
         return outcome.result_form == CETTA_CALL_RESULT_EXPRESSION ||
-               outcome.result_form == CETTA_CALL_RESULT_COMPLETED_VALUE;
+               outcome.result_form == CETTA_CALL_RESULT_COMPLETED_VALUE ||
+               outcome.result_form == CETTA_CALL_RESULT_PRESERVED_VALUE;
     }
     return false;
 }
@@ -102,6 +107,11 @@ static inline CettaCallOutcome cetta_call_value(Atom *value) {
 static inline CettaCallOutcome cetta_call_completed_value(Atom *value) {
     return (CettaCallOutcome){.kind = CETTA_CALL_VALUE, .term = value,
                               .result_form = CETTA_CALL_RESULT_COMPLETED_VALUE};
+}
+
+static inline CettaCallOutcome cetta_call_preserved_value(Atom *value) {
+    return (CettaCallOutcome){.kind = CETTA_CALL_VALUE, .term = value,
+                              .result_form = CETTA_CALL_RESULT_PRESERVED_VALUE};
 }
 
 static inline CettaCallOutcome cetta_call_completed_frontier(Atom *values) {

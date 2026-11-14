@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 
-#if defined(CETTA_BUILTIN_SYMBOL_ROWS) || defined(CETTA_PETTA_ONLY_BUILTIN_SYMBOL_ROWS) || defined(CETTA_BUILTIN_CONSTRUCTOR_SYMBOL_ROWS) || defined(CETTA_PUBLIC_LIBRARY_NATIVE_SYMBOL_ROWS) || defined(CETTA_STATIC_GROUNDED_SYMBOL_ROWS) || defined(CETTA_PURE_GROUNDED_SYMBOL_ROWS) || defined(CETTA_TYPE_PURE_EXTRA_GROUNDED_SYMBOL_ROWS) || defined(CETTA_SPECULATIVE_SYMBOL_ROWS)
+#if defined(CETTA_BUILTIN_SYMBOL_ROWS) || defined(CETTA_PETTA_ONLY_BUILTIN_SYMBOL_ROWS) || defined(CETTA_BUILTIN_CONSTRUCTOR_SYMBOL_ROWS) || defined(CETTA_PUBLIC_LIBRARY_NATIVE_SYMBOL_ROWS) || defined(CETTA_STATIC_GROUNDED_SYMBOL_ROWS) || defined(CETTA_PURE_GROUNDED_SYMBOL_ROWS) || defined(CETTA_TYPE_PURE_EXTRA_GROUNDED_SYMBOL_ROWS) || defined(CETTA_SPECULATIVE_SYMBOL_ROWS) || defined(CETTA_NATIVE_PRESERVED_RESULT_ROWS)
 #error an exported name is defined as a preprocessor macro
 #endif
 #define CETTA_BUILTIN_SYMBOL_ROWS(cesta_table_apply_0) \
@@ -1092,6 +1092,18 @@
     cesta_table_apply_0(lib_rhometta_values) \
     cesta_table_apply_0(if_text) \
     cesta_table_apply_0(lib_llm_response_body)
+
+#define CETTA_NATIVE_PRESERVED_RESULT_ROWS(cesta_table_apply_0) \
+    cesta_table_apply_0(car_atom) \
+    cesta_table_apply_0(cdr_atom) \
+    cesta_table_apply_0(decons_atom) \
+    cesta_table_apply_0(petta_decons) \
+    cesta_table_apply_0(index_atom) \
+    cesta_table_apply_0(trace_bang) \
+    cesta_table_apply_0(sealed_text) \
+    cesta_table_apply_0(if_equal) \
+    cesta_table_apply_0(lib_list_from_expression) \
+    cesta_table_apply_0(lib_list_to_expression)
 
 
 #endif

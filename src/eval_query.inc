@@ -59,7 +59,7 @@ static void eval_query_leave(EvalQueryScope *scope) {
 Atom *eval_query_pattern_variables(Arena *arena, Atom *pattern) {
     MatchVisibleVarSet visible;
     match_visible_var_set_init(&visible);
-    bool ok = collect_match_visible_vars_rec(pattern, &visible);
+    bool ok = collect_match_visible_vars_for_policy(pattern, &visible);
     Atom **variables = visible.len
         ? arena_alloc(arena, sizeof(*variables) * (size_t)visible.len) : NULL;
     if (visible.len && !variables) ok = false;

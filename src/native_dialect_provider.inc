@@ -989,8 +989,8 @@ static bool native_dialect_prepare_he_type(
             ok = ok && *calls != NULL;
             MatchVisibleVarSet visible;
             match_visible_var_set_init(&visible);
-            collect_match_visible_vars_rec(source, &visible);
-            collect_match_visible_vars_rec(type, &visible);
+            collect_match_visible_vars_for_policy(source, &visible);
+            collect_match_visible_vars_for_policy(type, &visible);
             for (uint32_t j = 0u; ok && j < contracts.len; ++j) {
                 Outcome *contract = &contracts.items[j];
                 size_t length = signature->expr.len;

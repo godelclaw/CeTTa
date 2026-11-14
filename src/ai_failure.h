@@ -3,6 +3,21 @@
 
 #include "atom.h"
 
+/* Activation changes the selected occurrence's root from value to code.
+ * Its children retain their own roles; source syntax is never mutated. */
+static inline Atom *cetta_ai_code_reading(Arena *arena, Atom *value) {
+    return value && value->kind == ATOM_EXPR && value->expr.len &&
+            atom_is_he_evaluated(value)
+        ? atom_expr(arena, value->expr.elems, value->expr.len) : value;
+}
+
+/* A strict constructor receives value children. Only a newly constructed
+ * diagnostic root needs protection; walking every prefix would make cons
+ * quadratic and would change the roles of already-admitted children. */
+static inline Atom *cetta_ai_constructed_value(Arena *arena, Atom *value) {
+    return value && atom_is_error(value) ? atom_he_evaluated_copy(arena, value) : value;
+}
+
 /* Only a producer's RAISED channel calls this projection. Error-shaped
  * completed values do not become control by passing through this helper. */
 static inline Atom *cetta_ai_failure_value(Arena *arena, Atom *error) {
