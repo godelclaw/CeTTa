@@ -180,7 +180,9 @@ evaluation, with its answer order, multiplicity and budget/cancellation rules.
 This includes the first would-be cache miss: the old generator protocol loses
 the raised channel before storing answers. Cache counters do not advance;
 memo aggregation and tabled fixpoint termination are not provided by this
-experiment. Default/extended retain their existing two-field records, keys
+experiment. Tabling's deduplication is also absent: equal-valued equation
+occurrences remain separate in ordinary untabled evaluation.
+Default/extended retain their existing two-field records, keys
 and cache hit/miss behavior. Re-enabling tables requires captured input roles,
 semantic-mode identity and stored VALUE/RAISED outcomes through replay,
 lattice, aggregation, counting and forwarding. Atom equality alone is not
@@ -189,7 +191,12 @@ sufficient to certify reuse.
 Prepared accelerators and query answer banks without per-occurrence failure provenance are declined
 when this experiment is active. In particular, hyperpose uses the existing
 cooperative scheduler until parallel transport carries typed outcomes. This
-may cost parallel performance under the experiment. The inactive paths keep
+may cost parallel performance and changes which answer once/select sees
+first when the inactive host would run a worker race. A bounded work request
+is refused if its required resumable route is unavailable. Derived
+specialization equations are absent when their accelerator is declined;
+optimizer-record introspection is not promised by the active experiment.
+The inactive paths keep
 their existing acceleration and scheduling.
 
 FailurePropagation.lean specifies pure/read-only observation. Its independent
