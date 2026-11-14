@@ -22,14 +22,34 @@
  "        !g_ai_cut_reified && !cetta_ai_audit_mutant(\"budget\")) {\n        Atom *diagnostic = ai_completion_diagnostic(a, expr, outcome->completion);" 1)
 (HMReplace "canonical" "    if (!atom_is_error(source) || atom_is_he_evaluated(source))"
  "    if (cetta_ai_audit_mutant(\"source\") || !atom_is_error(source) || atom_is_he_evaluated(source))" 1)
-(HMReplace "eval" "    if (!eval_failure_values() || eval_current_language_id() != CETTA_LANGUAGE_HE)\n        return value;"
- "    if (cetta_ai_audit_mutant(\"data-admission\") || !eval_failure_values() || eval_current_language_id() != CETTA_LANGUAGE_HE)\n        return value;" 1)
+(HMReplace "eval" "    if (!eval_failure_values())\n        return value;"
+ "    if (cetta_ai_audit_mutant(\"data-admission\") || !eval_failure_values())\n        return value;" 1)
 (HMReplace "eval" "    Atom *data = atom_graph_image(NULL, arena, value, he_data_descends, he_data_build);"
  "    Atom *data = cetta_ai_audit_mutant(\"data-freeze\") ? atom_he_evaluated_deep_copy(arena, value) : atom_graph_image(NULL, arena, value, he_data_descends, he_data_build);" 1)
 (HMReplace "eval" "        !atom_is_he_evaluated_throughout(value);"
  "        !atom_is_he_evaluated_throughout(value) && (!cetta_ai_audit_mutant(\"data-nesting\") || atom_is_error(value));" 1)
 (HMReplace "eval" "    if (new_elems && eval_failure_values())\n        result = bindings_retain_rebuilt_role(a, body, result);"
  "    if (new_elems && eval_failure_values() && !cetta_ai_audit_mutant(\"data-substitution\"))\n        result = bindings_retain_rebuilt_role(a, body, result);" 1)
+(HMReplace "header" "static inline Atom *cetta_ai_code_reading(Arena *arena, Atom *value) {"
+ "static inline Atom *cetta_ai_code_reading(Arena *arena, Atom *value) {\n    if (cetta_ai_audit_mutant(\"activation-root\")) return value;\n    if (cetta_ai_audit_mutant(\"activation-deep\")) { atom_deep_copy_strip_he_marks_enter(); Atom *copy = atom_deep_copy(arena, value); atom_deep_copy_strip_he_marks_leave(); return copy; }" 1)
+(HMReplace "bindings" "        !ai_binding_activate_quotations(arena, pattern, &candidate)) {"
+ "        (!cetta_ai_audit_mutant(\"quote-activation\") && !ai_binding_activate_quotations(arena, pattern, &candidate))) {" 1)
+(HMReplace "eval" "    if (eval_current_language_id() != CETTA_LANGUAGE_HE || !type ||"
+ "    if (cetta_ai_audit_mutant(\"return-output\")) return false;\n    if (eval_current_language_id() != CETTA_LANGUAGE_HE || !type ||" 1)
+(HMReplace "eval" "static __attribute__((noinline)) bool he_admit_equation_value(\n    Arena *arena, Outcome *source) {"
+ "static __attribute__((noinline)) bool he_admit_equation_value(\n    Arena *arena, Outcome *source) {\n    if (cetta_ai_audit_mutant(\"declared-output\")) return true;" 1)
+(HMReplace "eval" "    return bindings_retain_rebuilt_role(arena, source,\n        atom_expr(arena, children, source->expr.len));"
+ "    if (cetta_ai_audit_mutant(\"once-role\")) return atom_expr(arena, children, source->expr.len);\n    return bindings_retain_rebuilt_role(arena, source,\n        atom_expr(arena, children, source->expr.len));" 1)
+(HMReplace "eval" "    return eval_failure_values()\n        ? instantiate_template_variable_once_ai(arena, source, variable, value)"
+ "    return eval_failure_values() && !cetta_ai_audit_mutant(\"once-sharing\")\n        ? instantiate_template_variable_once_ai(arena, source, variable, value)" 1)
+(HMReplace "machine" "    if (machine && machine->host.failure_values)\n        return false;"
+ "    if (machine && machine->host.failure_values && !cetta_ai_audit_mutant(\"memo-decline\"))\n        return false;" 1)
+(HMReplace "machine" "            bool code_pattern = structure && structure->code_pattern &&"
+ "            bool code_pattern = !cetta_ai_audit_mutant(\"quote-machine\") && structure && structure->code_pattern &&" 1)
+(HMReplace "header" "static inline Atom *cetta_ai_constructed_value(Arena *arena, Atom *value) {"
+ "static inline Atom *cetta_ai_constructed_value(Arena *arena, Atom *value) {\n    if (cetta_ai_audit_mutant(\"constructed-root\")) return value;" 1)
+(HMReplace "machine" "    if (machine->host.failure_values && atom_is_error(goal->first) &&\n        !atom_is_he_evaluated(goal->first)"
+ "    if (machine->host.failure_values && atom_is_error(goal->first) &&\n        (!cetta_ai_audit_mutant(\"source-plan\") || !goal->plan || goal->plan->role != PETTA_PLAN_VALUE) &&\n        !atom_is_he_evaluated(goal->first)" 2)
 (HMReplace "canonical" "if (eval_failure_values() && ai_forward_failure(a, frame->target,\n                item, tuple->ctx, true))"
  "if (eval_failure_values() && !cetta_ai_audit_mutant(\"tuple\") && ai_forward_failure(a, frame->target,\n                item, tuple->ctx, true))" 1)
 (HMReplace "canonical" "        if (!atom_is_error(pattern))"
@@ -69,9 +89,20 @@
 (HMWitness "data-type" () "(: only-number (-> Number Number)) (= (only-number $x) $x) !(case (catch (only-number (index-atom ((Error native datum)) 0))) (((Error $w (Unsolvable $d)) rejected) ($x missed)))" "[rejected]\n")
 (HMWitness "budget" ("--fuel" "0") "!(+ 1 2)" "[(Error (+ 1 2) (Incomplete fuel-exhausted))]\n")
 (HMWitness "data-admission" () "(Item (Error stored s)) !(match &self (Item $x) (Box $x))" "[(Box (Error stored s))]\n")
-(HMWitness "data-freeze" () "(= (one-of $x) NotReducible) !(let $l (one-of y) (let $t (cdr-atom $l) (let $c (cons-atom g $t) (let $added (add-atom &self (= (g y) done)) $c))))" "[done]\n")
+(HMWitness "data-freeze" () "(= (one-of $x) NotReducible) !(let $l (one-of y) (let ($h $t) (decons-atom $l) (let $c (cons-atom g $t) (let $added (add-atom &self (= (g y) done)) $c))))" "[done]\n")
 (HMWitness "data-nesting" () "!(let $d (cons-atom Holder ((Error stored (Fault b)))) (let (Holder $x) $d (Box $x)))" "[(Box (Error stored (Fault b)))]\n")
 (HMWitness "data-substitution" () "!(let $d (catch (Error $w (Fault b))) (let $w 5 (Box $d)))" "[(Box (Error 5 (Fault b)))]\n")
+(HMWitness "activation-root" () "!(let $d (catch (Error a (Forbidden b))) (let $r (eval $d) reached))" "[(Error a (Forbidden b))]\n")
+(HMWitness "activation-deep" () "!(let $d (catch (Error a (Forbidden b))) (let $r (unquote (quote (Box $d))) (Nested $r)))" "[(Nested (Box (Error a (Forbidden b))))]\n")
+(HMWitness "quote-activation" () "(= (qopen (quote $x)) $x) !(let $d (catch (Error a (Forbidden b))) (let $r (qopen (quote $d)) reached))" "[(Error a (Forbidden b))]\n")
+(HMWitness "return-output" () "!(let $d (function (return (Error a (Fault b)))) (Box $d))" "[(Box (Error a (Fault b)))]\n")
+(HMWitness "declared-output" () "(: held (-> Expression Expression)) (= (held $x) $x) !(let $d (held (Error a (Fault b))) (Box $d))" "[(Box (Error a (Fault b)))]\n")
+(HMWitness "once-role" () "!(let $e (catch (Error $x (Fault b))) (let $r (chain 5 $x $e) (Box $r)))" "[(Box (Error 5 (Fault b)))]\n")
+(HMWitness "once-sharing" () "(= (dag $n $leaf) (if (== $n 0) $leaf (let $t (dag (- $n 1) $leaf) (pair $t $t)))) !(let $leaf (catch (Error $x (Fault b))) (let $d (dag 60 $leaf) (let $r (chain 5 $x $d) ok)))" "[ok]\n")
+(HMWitness "memo-decline" () "!(import! &self (library lib_memo)) (: memo-hold (-> Atom %Undefined%)) (= (memo-hold $x) $x) !(memoize memo-hold) !(let $r (memo-hold (Error a (Forbidden b))) reached)" "true\ntrue\n(Error a (Forbidden b))\n")
+(HMWitness "quote-machine" () "(= (qopen (quote $x)) $x) !(let $d (catch (Error a (Forbidden b))) (let $r (qopen (quote (quote $d))) reached))" "(Error a (Forbidden b))\n")
+(HMWitness "constructed-root" () "!(let $v (cons-atom Error (a (Fault b))) (let $u $v (Box $u)))" "(Box (Error a (Fault b)))\n")
+(HMWitness "source-plan" () "(: plain (-> Atom %Undefined%)) (= (plain $x) $x) !(let $r (plain (Error a (Forbidden b))) reached)" "(Error a (Forbidden b))\n")
 
 (= (hm:file $root $dir $name $filename)
    (let* (($source (am:read (str:join "" ($root "/src/" $filename))))
@@ -83,7 +114,8 @@
    (let* (($source (am:read (str:join "" ($dev "/" $name ".rsp"))))
           ($a (am:replace $source (str:concat $dev "/eval.o") (str:concat $dir "/eval.o") 1))
           ($b (am:replace $a (str:concat $dev "/grounded.o") (str:concat $dir "/grounded.o") 1))
-          ($c (am:replace $b (str:join "" ($dev "/" $binary)) (str:join "" ($dir "/" $binary)) 1)))
+          ($m (am:replace $b (str:concat $dev "/petta_search_machine.o") (str:concat $dir "/petta_search_machine.o") 1))
+          ($c (am:replace $m (str:join "" ($dev "/" $binary)) (str:join "" ($dir "/" $binary)) 1)))
      (am:write (str:join "" ($dir "/" $name ".rsp")) $c)))
 (= (hm:prepare $root $dev $dir)
    (let* (($made (fs:make-directories $dir 511))
@@ -92,23 +124,47 @@
           ($g (hm:file $root $dir "grounded" "grounded.c"))
           ($c (hm:file $root $dir "canonical" "eval_he_canonical.inc"))
           ($b (hm:file $root $dir "boundary" "eval_he_boundary.inc"))
+          ($q (hm:file $root $dir "bindings" "eval_ai_bindings.inc"))
+          ($m (hm:file $root $dir "machine" "petta_search_machine.c"))
           ($er (am:compile-response $dev $dir "eval" "eval.c" "eval.o"))
           ($gr (am:compile-response $dev $dir "grounded" "grounded.c" "grounded.o"))
+          ($mr (am:compile-response $dev $dir "petta_search_machine" "petta_search_machine.c" "petta_search_machine.o"))
           ($lr (hm:link $dev $dir "link" "cetta"))
           ($nr (hm:link $dev $dir "native-link" "native")))
-     (HEMutationSourcesPrepared $h $e $g $c $b)))
+     (HEMutationSourcesPrepared $h $e $g $c $b $q $m)))
+(HMLanguage "memo-decline" "petta")
+(HMLanguage "quote-machine" "petta")
+(HMLanguage "constructed-root" "petta")
+(HMLanguage "source-plan" "petta")
+(= (hm:language $name)
+   (let $matches (collapse (match &self (HMLanguage $name $language) $language))
+     (if (== $matches ()) "he" (index-atom $matches 0))))
 (= (hm:witness $dir $cwd $active (Witness $name $arguments $source $expected))
    (let* (($binary (str:concat $dir "/cetta"))
+          ($language (hm:language $name))
           ($program (str:concat "!(ai:experiment failure-values) " $source))
-          ($wanted (str:concat "[()]\n" $expected))
-          ($argv (union-atom ($binary "--lang" "he" "--profile" "ai")
+          ($wanted (str:concat (if (== $language "he") "[()]\n" "()\n") $expected))
+          ($base-argv (union-atom ($binary "--lang" $language "--profile" "ai")
                    (union-atom $arguments ("-e" $program))))
+          ($cap (system:getenv-or-default "CETTA_AI_TEST_ADDRESS_LIMIT" ""))
+          ($argv (if (and (== $name "once-sharing") (not (== $cap "")))
+                   (union-atom ("/usr/bin/prlimit" (str:concat "--as=" $cap) "--") $base-argv)
+                   $base-argv))
           ($result (proc:run $argv $cwd (am:environment $active) 15000 1048576))
           ($saved (am:write (str:join "" ($dir "/" $active "." $name ".log")) (repr $result))))
      (case $result
        (((proc:exited 0 $actual "")
           (if (== $actual $wanted) (MutantSurvived $name)
             (MutantKilled $name semantic)))
+        ((proc:timed-out $out $err)
+          (if (and (== $active "once-sharing") (== $name "once-sharing"))
+              (MutantKilled $name resource)
+              (am:fail (UnexpectedHEMutationTimeout $active $name $out $err))))
+        ((proc:signaled $signal $out $err)
+          (if (and (and (== $active "once-sharing") (== $name "once-sharing"))
+                   (not (== $cap "")))
+              (MutantKilled $name resource-signal)
+              (am:fail (UnexpectedHEMutationSignal $active $name $signal $out $err))))
         ($other (am:fail (UnexpectedHEMutationExecution $active $name $other)))))))
 (= (hm:native-one $dir $cwd $active $route)
    (let* (($environment (cons-atom ("CETTA_HE_CANONICAL_EXECUTION" $route) (am:environment $active)))
