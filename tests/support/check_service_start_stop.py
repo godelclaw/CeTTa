@@ -22,6 +22,22 @@ import space_service_client as space  # noqa: E402
 from space_service_client import E, S  # noqa: E402
 
 ROWS, BATCH = int(os.environ.get('CETTA_START_STOP_ROWS', '120000')), 2000
+STARTED = []
+
+
+def spawn(command, **options):
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **options)
+    STARTED.append(process)
+    return process
+
+
+def reap():
+    """Kill whatever this check started and did not see end."""
+    for process in STARTED:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=30)
+    STARTED.clear()
 
 
 def holds(pid, target):
@@ -57,7 +73,7 @@ def space_service(binary, root):
                '--max-journal-bytes', str(1 << 30)]
 
     def start():
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = spawn(command)
         deadline = time.monotonic() + 120
         while time.monotonic() < deadline:
             assert process.poll() is None, process.communicate()
@@ -81,7 +97,7 @@ def space_service(binary, root):
             for first in range(0, ROWS, BATCH):
                 rows.batch(*[E('add', E('row', n)) for n in range(first, first + BATCH)])
         stop(process)
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = spawn(command)
         stopped_while(process, lambda: holds(process.pid, data / 'journal.csl'), path, 'space service')
         finish(process, 'space service')
         assert not path.exists(), 'a space service stopped during start-up left its socket'
@@ -90,6 +106,7 @@ def space_service(binary, root):
             assert client.open('start-stop').match_count(E('row', space.Var(0))) == ROWS
         stop(process)
     finally:
+        reap()
         if path.exists():
             path.unlink()
 
@@ -102,7 +119,7 @@ def value_service(worker, root):
                'start-gate:configuration']
     try:
         writer = os.open(gate, os.O_RDWR)
-        process = subprocess.Popen(command, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = spawn(command, env=environment)
         stopped_while(process, lambda: holds(process.pid, gate), path, 'value service')
         time.sleep(.1)
         os.write(writer, b'opened')
@@ -110,7 +127,7 @@ def value_service(worker, root):
         finish(process, 'value service')
         assert not path.exists(), 'a value service stopped during start-up left its socket'
         writer = os.open(gate, os.O_RDWR)
-        process = subprocess.Popen(command, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = spawn(command, env=environment)
         deadline = time.monotonic() + 30
         while not holds(process.pid, gate) and process.poll() is None and time.monotonic() < deadline:
             time.sleep(.001)
@@ -124,6 +141,7 @@ def value_service(worker, root):
         process.communicate(timeout=30)
         assert process.returncode == 0, process.returncode
     finally:
+        reap()
         for leftover in (path, path.with_name(path.name + '.lock')):
             if leftover.exists():
                 leftover.unlink()

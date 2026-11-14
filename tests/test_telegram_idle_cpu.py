@@ -79,7 +79,8 @@ def waiting_agent(path, stop, replies):
                 name = token.encode()
                 s.sendall(b'CWP1' + bytes([5, len(name)]) + name + (b'2000' if token else b''))
                 reply = s.recv(65606)
-            if reply[4] in (64, 67):
+            # A service that is stopping closes the WAIT without a reply.
+            if len(reply) > 5 and reply[4] in (64, 67):
                 token = reply[6:6 + reply[5]].decode()
                 replies.append(reply[4])
         except OSError:
@@ -126,7 +127,11 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-idle-') as temp:
             stop.set()
             if proc.poll() is None:
                 proc.send_signal(signal.SIGTERM)
-            out, err = proc.communicate(timeout=20)
+            try:
+                out, err = proc.communicate(timeout=20)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                out, err = proc.communicate()
             for listener in sockets:
                 listener.close()
         assert TOKEN.split(':')[1] not in out + err
