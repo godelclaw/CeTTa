@@ -36,10 +36,10 @@ static Atom *failure(Arena *a, CettaDurableStatus s) {
     return result(a,"durable:failure",cetta_durable_status_name(s));
 }
 
-static Atom *view(Arena *a, CettaDurableSnapshot *v) {
+static Atom *view(Arena *a, const CettaDurableSnapshot *v) {
     Atom **records=arena_alloc(a,v->count*sizeof(*records));
     for (size_t i=0;i<v->count;++i) {
-        CettaDurableRecord *r=&v->records[i]; Atom *value=NULL;
+        const CettaDurableRecord *r=&v->records[i]; Atom *value=NULL;
         CettaDurableStatus s=cetta_durable_value_decode(a,r->data,r->size,&value);
         if (s!=DURABLE_OK) {
             Atom *error[]={atom_symbol(a,"durable:failure"),atom_symbol(a,cetta_durable_status_name(s)),
@@ -106,7 +106,33 @@ static Atom *dispatch(CettaDurableRuntime *r, Arena *a, const char *name, Atom *
         if (s!=DURABLE_OK) { cetta_durable_close(r->store); r->store=NULL; return failure(a,s); }
         Atom *answer=view(a,&v); cetta_durable_snapshot_free(&v); return answer;
     }
+    /* attach opens and recovers as open does, answering the coordinates and
+     * the row count instead of every row. */
+    if (!strcmp(name,"attach") && n==1) {
+        const char *path=text(args[0]);
+        if (!path) return failure(a,DURABLE_INVALID);
+        if (r->store) return failure(a,DURABLE_BUSY);
+        CettaDurableStatus s=cetta_durable_open(path,NULL,&r->store);
+        if (s!=DURABLE_OK) return failure(a,s);
+        CettaDurableSnapshot v;
+        s=cetta_durable_recover(r->store,&v);
+        if (s!=DURABLE_OK) { cetta_durable_close(r->store); r->store=NULL; return failure(a,s); }
+        Atom *items[]={atom_symbol(a,"durable:attached"),atom_string(a,v.epoch),
+            atom_int(a,v.revision),atom_int(a,(int64_t)v.count)};
+        cetta_durable_snapshot_free(&v); return atom_expr(a,items,4);
+    }
     if (!r->store) return result(a,"durable:failure","closed");
+    /* The rows of one key, or of the keys with a prefix, in one space. */
+    if ((!strcmp(name,"read_key") || !strcmp(name,"read_prefix")) && n==2) {
+        const char *space=text(args[0]),*key=text(args[1]);
+        if (!space || !key) return failure(a,DURABLE_INVALID);
+        CettaDurableScope scope={!strcmp(name,"read_key") ? DURABLE_KEY : DURABLE_PREFIX,space,key};
+        CettaDurableObservation *o=NULL;
+        CettaDurableStatus s=cetta_durable_observe(r->store,&scope,1,&o);
+        if (s!=DURABLE_OK) return failure(a,s);
+        Atom *answer=view(a,cetta_durable_observation_view(o,0));
+        cetta_durable_observation_free(o); return answer;
+    }
     if (!strcmp(name,"read") && n==1) {
         const char *space=text(args[0]);
         if (!space) return failure(a,DURABLE_INVALID);

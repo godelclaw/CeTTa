@@ -6,6 +6,7 @@
 #include "tests/test_runtime_stats_stubs.h"
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 static bool lookup_frame_value(const Bindings *bindings, VarId id, BindingValue *value) {
     bool known = false;
@@ -2101,6 +2102,94 @@ static void interned_ground_identity(void) {
 
 /* A stored candidate and a decoded query retain independent lexical contexts,
  * including contexts obtained after following a binding. */
+/* A pattern and a stored atom that share subterms (DAGs) meet in time that
+ * grows with their distinct pairs of subterms, not with their paths: open
+ * pairs are remembered under their binding context, as closed ones are. */
+static Atom *dag_of(Arena *a, Atom *pair, Atom *bottom, unsigned depth) {
+    for (unsigned i = 0u; i < depth; i++) bottom = atom_expr3(a, pair, bottom, bottom);
+    return bottom;
+}
+static double dag_seconds(void) {
+    struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t);
+    return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
+}
+static double stored_dag_round(Arena *a, unsigned depth, unsigned rounds) {
+    Atom *pair = atom_symbol(a, "dag-pair"), *leaf = atom_symbol(a, "dag-leaf");
+    Atom *x = atom_var_with_id(a, "dag-x", var_id_from_base(UINT64_C(57001)));
+    Atom *y = atom_var_with_id(a, "dag-y", var_id_from_base(UINT64_C(57002)));
+    Atom *pattern = dag_of(a, pair, atom_expr2(a, leaf, x), depth);
+    Atom *shared = dag_of(a, pair, atom_expr2(a, leaf, y), depth);
+    Atom *apart = dag_of(a, pair, atom_expr3(a, pair, atom_expr2(a, leaf, atom_symbol(a, "dag-a")),
+                                             atom_expr2(a, leaf, atom_symbol(a, "dag-b"))), depth - 1u);
+    Atom *twin = dag_of(a, pair, atom_expr3(a, pair, atom_expr2(a, leaf, x), atom_expr2(a, leaf, x)), depth - 1u);
+    TermUniverse universe; Arena persistent; arena_init(&persistent);
+    CHECK(term_universe_init_with_store_format(&universe, TERM_UNIVERSE_STORE_FORMAT_COMPACT32_V1),
+          "initialize stored DAG universe");
+    term_universe_set_persistent_arena(&universe, &persistent);
+    AtomId shared_id = term_universe_store_atom_id(&universe, &persistent, shared);
+    AtomId apart_id = term_universe_store_atom_id(&universe, &persistent, apart);
+    bool matched = true, refused = true;
+    double started = dag_seconds();
+    for (unsigned i = 0u; i < rounds; i++) {
+        Bindings b; bindings_init(&b);
+        matched = matched && match_atoms_atom_id_epoch(pattern, &universe, shared_id, &b, a,
+                                                       (CettaFrameIdentity){490u + i});
+        bindings_free(&b); bindings_init(&b);
+        refused = refused && !match_atoms_atom_id_epoch(twin, &universe, apart_id, &b, a,
+                                                        (CettaFrameIdentity){490u + i});
+        bindings_free(&b);
+    }
+    double elapsed = dag_seconds() - started;
+    CHECK(matched, "a shared pattern DAG meets the same stored DAG");
+    CHECK(refused, "a repeated pair of a DAG keeps its conflicting variable binding");
+    term_universe_free(&universe); arena_free(&persistent);
+    return elapsed;
+}
+/* After the memo is warm, one skeleton bound under two contexts is two
+ * terms: (box $z) with $z=7 meets (box 7), and with $z=8 must not. */
+static void stored_pairs_keep_context(Arena *a) {
+    Atom *pair = atom_symbol(a, "ctx-pair"), *box = atom_symbol(a, "ctx-box"), *k = atom_symbol(a, "ctx-k");
+    Atom *va = atom_var_with_id(a, "ctx-a", var_id_from_base(UINT64_C(57101)));
+    Atom *vb = atom_var_with_id(a, "ctx-b", var_id_from_base(UINT64_C(57102)));
+    Atom *vz = atom_var_with_id(a, "ctx-z", var_id_from_base(UINT64_C(57103)));
+    Atom *seven = atom_int(a, 7), *eight = atom_int(a, 8), *skeleton = atom_expr2(a, box, vz);
+    Atom *chain = atom_symbol(a, "ctx-end");
+    for (unsigned i = 0u; i < 48u; i++) chain = atom_expr2(a, k, chain);
+    Atom *pattern = atom_expr3(a, pair, chain, atom_expr3(a, pair, va, vb));
+    TermUniverse universe; Arena persistent; arena_init(&persistent);
+    CHECK(term_universe_init_with_store_format(&universe, TERM_UNIVERSE_STORE_FORMAT_COMPACT32_V1),
+          "initialize stored context universe");
+    term_universe_set_persistent_arena(&universe, &persistent);
+    AtomId same = term_universe_store_atom_id(&universe, &persistent,
+        atom_expr3(a, pair, chain, atom_expr3(a, pair, atom_expr2(a, box, seven), atom_expr2(a, box, seven))));
+    AtomId differ = term_universe_store_atom_id(&universe, &persistent,
+        atom_expr3(a, pair, chain, atom_expr3(a, pair, atom_expr2(a, box, seven), atom_expr2(a, box, eight))));
+    for (unsigned stored = 0u; stored < 2u; stored++) {
+        Bindings b; bindings_init(&b);
+        CHECK(bindings_add_var(&b, va, seven) && bindings_add_var(&b, vb, seven) &&
+              bindings_add_id(&b, var_epoch_id(vz->var_id, (CettaFrameIdentity){501u}), atom_symbol_current_id(vz), seven) &&
+              bindings_add_id(&b, var_epoch_id(vz->var_id, (CettaFrameIdentity){502u}), atom_symbol_current_id(vz), eight) &&
+              bindings_prepare_logical_write(&b), "bind one skeleton under two contexts");
+        CHECK(bindings_rewrite_value_id(&b, va->var_id, binding_value_from_context(skeleton, (CettaFrameIdentity){501u})) &&
+              bindings_rewrite_value_id(&b, vb->var_id, binding_value_from_context(skeleton, (CettaFrameIdentity){502u})),
+              "write the two contextual values");
+        bindings_invalidate_after_key_rewrite(&b);
+        bool matched = match_atoms_atom_id_epoch(pattern, &universe, stored ? differ : same, &b, a,
+                                                 (CettaFrameIdentity){503u});
+        CHECK(stored ? matched : !matched, stored
+              ? "the same skeleton under its second context meets the term that context gives it"
+              : "a repeated skeleton under another context is not taken for the first");
+        bindings_free(&b);
+    }
+    term_universe_free(&universe); arena_free(&persistent);
+}
+static void stored_dag_matching(Arena *a) {
+    stored_pairs_keep_context(a);
+    double small = stored_dag_round(a, 10u, 50u), large = stored_dag_round(a, 16u, 50u);
+    fprintf(stderr, "stored DAG match: %.2f ms at depth 10, %.2f ms at depth 16\n", small * 1e3, large * 1e3);
+    CHECK(large < 8.0 * small + 0.01, "matching a stored DAG grows with its depth, not its paths");
+}
+
 static void contextual_stored_matching(Arena *a) {
     Atom *p = atom_var_with_id(a, "stored-p", var_id_from_base(UINT64_C(56001)));
     Atom *x = atom_var_with_id(a, "stored-x", var_id_from_base(UINT64_C(56002)));
@@ -3266,6 +3355,7 @@ int main(int argc, char **argv) {
     contextual_constraints(&arena);
     contextual_deep_equality(&arena);
     contextual_stored_matching(&arena);
+    stored_dag_matching(&arena);
     contextual_root_preview(&arena);
     contextual_exact_root_policy(&arena);
     contextual_observation_without_binding(&arena);

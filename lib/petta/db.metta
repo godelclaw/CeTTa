@@ -147,7 +147,7 @@
   (case $result
     (((KnowledgeCommittedV1 (DbTransactionValuesV1 $values) $_ $_) (db:committed $request $values))
      ((KnowledgeReplayedV1 (DbTransactionValuesV1 $values)) (db:replayed $request $values))
-     ((StoreRefused unknown) (db:uncertain-command $request $command))
+     ((StoreUncertain) (db:uncertain-command $request $command))
      ((StoreRefused recovery-required) (db:uncertain-command $request $command))
      ($failure (db:error db:transaction $failure)))))
 
@@ -395,7 +395,7 @@
      ((KnowledgeReplayedV1 (DbTransactionValuesV1 $values)) (db:replayed $request $values))
      (StoreRemoteUncertain (db:uncertain $request $collection $operation))
      ((ServiceFailedV1 $reason) (db:uncertain $request $collection $operation))
-     ((StoreRefused unknown) (db:uncertain $request $collection $operation))
+     ((StoreUncertain) (db:uncertain $request $collection $operation))
      ((StoreRefused recovery-required) (db:uncertain $request $collection $operation))
      (StoreRemoteUnavailable (Error db:transaction (db:unavailable $request $collection $operation)))
      ($failure (db:error db:transaction $failure)))))

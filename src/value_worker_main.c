@@ -7,6 +7,7 @@
 #include "petta_compiled_reader.h"
 #include "symbol.h"
 #include "value_service.h"
+#include "native_disk_store.h"
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -225,6 +226,12 @@ int main(int argc, char **argv) {
         free(bytes); eval_outcome_free(&outcome);
         eval_release_temporary_spaces(); eval_reset_form_gc_survivor();
         if (!valid) break;
+        /* As the service host does: an owner kept past this request with an
+         * uncertain publication cannot be written until the store reopens. */
+        if (cetta_disk_store_uncertain_owners()) {
+            fputs("worker: a store publication outcome is uncertain; stopping so the store reopens\n",stderr);
+            rc = 75; break;
+        }
     }
 done:
     parser_clear_document_ids_backend(source_reader);

@@ -29,7 +29,7 @@ struct CettaDiskStore {
     int directory;
     dev_t device;
     ino_t inode;
-    bool uncertain, confirmed;
+    bool uncertain, confirmed, counted;
     Meta durable;
     CettaActBase *base;
 };
@@ -47,6 +47,23 @@ struct CettaDiskStoreBatch {
     bool failed;
 };
 
+/* Owners of this process that are write-poisoned: their last publication
+ * outcome is uncertain and they have not been recovered or closed since.
+ * A backup's private destination owner is not counted. */
+static atomic_size_t uncertain_owners;
+static void mark_uncertain(CettaDiskStore *store) {
+    if (store && !store->uncertain) {
+        store->uncertain=true;
+        if (store->counted) atomic_fetch_add(&uncertain_owners,1);
+    }
+}
+static void clear_uncertain(CettaDiskStore *store) {
+    if (store && store->uncertain) {
+        store->uncertain=false;
+        if (store->counted) atomic_fetch_sub(&uncertain_owners,1);
+    }
+}
+size_t cetta_disk_store_uncertain_owners(void) { return atomic_load(&uncertain_owners); }
 static uint64_t get_number(const unsigned char *p) {
     uint64_t value=0;
     for (size_t i=0;i<8;++i) value=(value<<8)|p[i];
@@ -303,7 +320,7 @@ static CettaDiskStoreStatus publish(CettaDiskStore *store,int *manifest,const Me
     if (status==CETTA_JOURNAL_OK) {
         store->durable=*meta; store->confirmed=true; return CETTA_STORE_OK;
     }
-    if (status==CETTA_JOURNAL_UNKNOWN) { store->uncertain=true; return CETTA_STORE_UNKNOWN; }
+    if (status==CETTA_JOURNAL_UNKNOWN) { mark_uncertain(store); return CETTA_STORE_UNKNOWN; }
     return status==CETTA_JOURNAL_NOMEM ? CETTA_STORE_NOMEM : CETTA_STORE_IO;
 }
 CettaDiskStoreLimits cetta_disk_store_limits(void) {
@@ -315,7 +332,7 @@ static CettaDiskStoreStatus store_open_directory(int directory,bool create,bool 
     if (fstat(directory,&st)) { close(directory);return CETTA_STORE_IO; }
     CettaDiskStore *store=calloc(1,sizeof(*store));
     if (!store) { close(directory); return CETTA_STORE_NOMEM; }
-    *store=(CettaDiskStore){.directory=directory,.device=st.st_dev,.inode=st.st_ino};
+    *store=(CettaDiskStore){.directory=directory,.device=st.st_dev,.inode=st.st_ino,.counted=true};
     atomic_init(&store->references,1);
     if (create) {
         int fd=file_open(directory,"writer.lock",O_RDWR|O_CREAT);
@@ -430,7 +447,9 @@ bool cetta_disk_store_has_domain(const CettaDiskStore *store,const CettaDiskStor
     return store && view && store->device==view->device && store->inode==view->inode;
 }
 void cetta_disk_store_close(CettaDiskStore *store) {
-    if (store && atomic_fetch_sub(&store->references,1)==1) {cetta_act_base_release(store->base);close(store->directory);free(store);}
+    if (store && atomic_fetch_sub(&store->references,1)==1) {
+        clear_uncertain(store);cetta_act_base_release(store->base);close(store->directory);free(store);
+    }
 }
 CettaDiskStoreStatus cetta_disk_store_clone_owner(const CettaDiskStore *origin,CettaDiskStore **out) {
     if (!out) return CETTA_STORE_INVALID;
@@ -438,11 +457,11 @@ CettaDiskStoreStatus cetta_disk_store_clone_owner(const CettaDiskStore *origin,C
     CettaDiskStore *copy=calloc(1,sizeof(*copy));if (!copy) return CETTA_STORE_NOMEM;
     copy->directory=fcntl(origin->directory,F_DUPFD_CLOEXEC,0);
     if (copy->directory<0) {free(copy);return CETTA_STORE_IO;}
-    atomic_init(&copy->references,1);copy->device=origin->device;copy->inode=origin->inode;
+    atomic_init(&copy->references,1);copy->device=origin->device;copy->inode=origin->inode;copy->counted=true;
     *out=copy;return CETTA_STORE_OK;
 }
 void cetta_disk_store_require_recovery(CettaDiskStore *store) {
-    if (store) store->uncertain=true;
+    mark_uncertain(store);
 }
 void cetta_disk_store_view_close(CettaDiskStoreView *view) {
     if (view) {close(view->root.fd);if (view->frozen_puts.fd>=0) close(view->frozen_puts.fd);cetta_act_base_release(view->base);free(view);}
@@ -1069,7 +1088,7 @@ static CettaDiskStoreStatus commit(CettaDiskStore *store,
     if (status==CETTA_STORE_OK) {
         current->root=candidate;if (layered) current->removes=candidate_removes;current->meta=next;
         if (readonly_view(store,current)!=CETTA_STORE_OK) {
-            store->uncertain=true; status=CETTA_STORE_UNKNOWN;
+            mark_uncertain(store); status=CETTA_STORE_UNKNOWN;
         } else { *committed=current; current=NULL; }
     }
 done:
@@ -1107,7 +1126,7 @@ CettaDiskStoreStatus cetta_disk_store_recover(CettaDiskStore *store,CettaDiskSto
     if (status==CETTA_STORE_OK) {
         status=confirm(store,&view->meta);
         if (status!=CETTA_STORE_OK) { /* The handle remains write-poisoned. */ }
-        else { store->uncertain=false; *out=view; view=NULL; }
+        else { clear_uncertain(store); *out=view; view=NULL; }
     }
     cetta_disk_store_view_close(view);
     if (manifest>=0) close(manifest);
@@ -1148,7 +1167,7 @@ CettaDiskStoreStatus cetta_disk_store_compact(CettaDiskStore *store,CettaDiskSto
          * file lock after the operation, including through its returned view. */
         char name[45]; segment_name(id,name);
         int reader=file_open(store->directory,name,O_RDONLY);
-        if (reader<0) { store->uncertain=true; status=CETTA_STORE_UNKNOWN; }
+        if (reader<0) { mark_uncertain(store); status=CETTA_STORE_UNKNOWN; }
         else {
             close(current->root.fd); current->root=candidate; current->root.fd=reader; current->meta=next;
             *out=current; current=NULL;
@@ -1358,7 +1377,7 @@ void cetta_disk_store_compact_act_close(CettaDiskCompaction *job) {
     cetta_disk_store_close(job->owner);free(job);
 }
 static CettaDiskStoreStatus compaction_fail(CettaDiskCompaction *job,CettaDiskStoreStatus status) {
-    if (status==CETTA_STORE_UNKNOWN) job->owner->uncertain=true;
+    if (status==CETTA_STORE_UNKNOWN) mark_uncertain(job->owner);
     job->failure=status;return status;
 }
 CettaDiskStoreStatus cetta_disk_store_compact_act_open(CettaDiskStore *store,
@@ -1374,7 +1393,7 @@ CettaDiskStoreStatus cetta_disk_store_compact_act_open(CettaDiskStore *store,
     job->maintenance=file_open(store->directory,"compact.lock",O_RDWR|O_CREAT);
     if (job->maintenance<0) status=open_error();
     else if (flock(job->maintenance,LOCK_EX|LOCK_NB)) status=errno==EWOULDBLOCK || errno==EAGAIN ? CETTA_STORE_BUSY : CETTA_STORE_IO;
-    int lock=-1,manifest=-1,segment=-1;CettaDiskStoreView *current=NULL;bool rotation_attempted=false;
+    int lock=-1,manifest=-1,segment=-1;CettaDiskStoreView *current=NULL;
     if (status==CETTA_STORE_OK) status=acquire(store,true,&lock);
     if (status==CETTA_STORE_OK) status=view_load(store,false,&current,&manifest);
     if (status==CETTA_STORE_OK) status=confirm(store,&current->meta);
@@ -1387,7 +1406,7 @@ CettaDiskStoreStatus cetta_disk_store_compact_act_open(CettaDiskStore *store,
             next.frozen_removes=current->meta.format==3 ? current->meta.removes : 0;
             next.frozen_end=current->meta.end;next.frozen_revision=current->meta.revision;
             memcpy(next.segment,identity,16);next.root=next.removes=0;next.end=CETTA_DISK_SEGMENT_HEADER_BYTES;
-            rotation_attempted=true;status=publish(store,&manifest,&next);
+            status=publish(store,&manifest,&next);
         }
         if (segment>=0) {close(segment);segment=-1;}
         if (status==CETTA_STORE_OK) {
@@ -1420,10 +1439,10 @@ CettaDiskStoreStatus cetta_disk_store_compact_act_open(CettaDiskStore *store,
             (CettaActBaseLimits){limits.key_bytes,limits.value_bytes},&job->builder)));
     }
     if (status==CETTA_STORE_OK) status=disk_status(cetta_disk_store_cursor_open_range(job->source,NULL,false,NULL,&job->cursor));
-    if (status!=CETTA_STORE_OK) {
-        if (rotation_attempted) {store->uncertain=true;status=CETTA_STORE_UNKNOWN;}
-        cetta_disk_store_compact_act_close(job);return status;
-    }
+    /* publish already poisoned an uncertain rotation. A refused one changed
+     * nothing, and after a completed one the frozen cut is published and
+     * synchronized, so a later failure leaves the owner writable. */
+    if (status!=CETTA_STORE_OK) { cetta_disk_store_compact_act_close(job);return status; }
     *out=job;return CETTA_STORE_OK;
 }
 static CettaDiskStoreStatus install_compaction(CettaDiskCompaction *job) {

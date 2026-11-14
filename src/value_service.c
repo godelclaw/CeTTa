@@ -4,6 +4,7 @@
 #include "eval.h"
 #include "ipc_client.h"
 #include "native_handle.h"
+#include "native_disk_store.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -37,8 +38,8 @@ typedef struct {
     Arena maintenance[2];unsigned maintenance_arena;
     Atom *maintenance_state,*maintenance_initial,*maintenance_status;
     const char *maintenance_entry,*maintenance_failure;
-    uint64_t maintenance_work,maintenance_steps;
-    bool maintenance_dirty,maintenance_more,maintenance_cancelled;
+    uint64_t maintenance_work,maintenance_steps,closing_deadline;
+    bool maintenance_dirty,maintenance_more,maintenance_cancelled,closing;
 } Host;
 static volatile sig_atomic_t stopping;
 static void stop(int signal_number) { (void)signal_number;stopping=1; }
@@ -188,6 +189,24 @@ static Atom *maintenance_info(Host *host,Arena *a) {
         atom_int(a,host->maintenance_steps>INT64_MAX ? INT64_MAX : (int64_t)host->maintenance_steps),
         host->maintenance_status ? atom_deep_copy(a,host->maintenance_status)
             : host->maintenance_failure ? atom_symbol(a,host->maintenance_failure) : atom_symbol(a,"NoMaintenanceStatusV1")},4);
+}
+/* An owner whose last publication outcome is uncertain is write-poisoned
+ * until the store is reopened. A service keeps its owners for its whole life
+ * and its clients cannot recover them, so it fails closed: it reads nothing
+ * more, sends the replies already queued (an uncertain answer among them),
+ * and ends with EX_TEMPFAIL for its supervisor to start it on the store as
+ * published on disk. Clients retry by request id, which a receipt answers. */
+enum { UNCERTAIN_EXIT=75, CLOSING_MS=2000 };
+static void check_publication(Host *host) {
+    if (host->closing || !cetta_disk_store_uncertain_owners()) return;
+    host->closing=true;host->closing_deadline=deadline_after(CLOSING_MS);
+    fputs("value service: a store publication outcome is uncertain; stopping so the store reopens\n",stderr);
+}
+static bool closed(Host *host) {
+    if (!host->closing) return false;
+    if (now_ms()>=host->closing_deadline) return true;
+    for (size_t i=0;i<host->client_count;i++) if (host->clients[i].fd>=0 && host->clients[i].output.data) return false;
+    return true;
 }
 static void maintenance_step(Host *host) {
     if (!host->maintenance_entry || (!host->maintenance_dirty && !host->maintenance_more)) return;
@@ -375,6 +394,7 @@ static bool respond(Host *host,size_t index) {
         valid=queue(host,c,encoded);goto done;
     }
     Atom *body=dispatch(host,index,&arena,request->expr.elems[2],&added,&ran);
+    check_publication(host);
     bool ok=!tagged(body,"ServiceFailedV1",2) && !tagged(body,"ServiceRefusedV1",2);
     if (!encode(limit,reply(&arena,id,ok,body),&encoded) || encoded.size>limit) {
         if (added) { resource_close(host,added);added=NULL; }
@@ -467,8 +487,15 @@ static bool private_parent(const char *path) {
 int cetta_value_service_run(CettaLibraryContext *context,Space *program,Registry *registry,Arena *permanent,const char *configuration) {
     Host host={.context=context,.program=program,.registry=registry,.permanent=permanent,.fuel=1000000,.next_resource=1};
     arena_init_detached(&host.configuration);arena_init_detached(&host.maintenance[0]);arena_init_detached(&host.maintenance[1]);int listener=-1,lock=-1,rc=1;struct stat bound={0};
-    struct sigaction prior_term,prior_int;bool signals=false;
-    if (!configure(&host,configuration)) { fputs("value service: invalid configuration\n",stderr);goto done; }
+    /* Take stop requests before any start-up work: a stop while the
+     * configuration is evaluated ends the service before it binds its socket,
+     * never with the socket bound and unserved. The loop's poll still wakes. */
+    struct sigaction prior_term,prior_int;bool signals=true;
+    struct sigaction action={.sa_handler=stop,.sa_flags=SA_RESTART};sigemptyset(&action.sa_mask);stopping=0;
+    sigaction(SIGTERM,&action,&prior_term);sigaction(SIGINT,&action,&prior_int);
+    bool configured=configure(&host,configuration);
+    if (stopping) { fputs("value service: stopped during start-up\n",stderr);rc=0;goto done; }
+    if (!configured) { fputs("value service: invalid configuration\n",stderr);goto done; }
     if (!private_parent(host.path)) { fputs("value service: socket directory unavailable\n",stderr);goto done; }
     char *lock_path=malloc(strlen(host.path)+6);if (!lock_path) goto done;
     sprintf(lock_path,"%s.lock",host.path);lock=open(lock_path,O_RDWR|O_CREAT|O_CLOEXEC|O_NOFOLLOW,0600);free(lock_path);
@@ -480,14 +507,15 @@ int cetta_value_service_run(CettaLibraryContext *context,Space *program,Registry
     if (host.clients) for (size_t i=0;i<host.client_count;i++) host.clients[i].fd=-1;
     host.resources=calloc(host.resource_count,sizeof(*host.resources));
     struct pollfd *fds=calloc(host.client_count+1,sizeof(*fds));if (!host.clients || !host.resources || !fds) { free(fds);goto done; }
-    struct sigaction action={.sa_handler=stop};sigemptyset(&action.sa_mask);stopping=0;
-    sigaction(SIGTERM,&action,&prior_term);sigaction(SIGINT,&action,&prior_int);signals=true;
-    while (!stopping) {
-        fds[0]=(struct pollfd){listener,POLLIN,0};uint64_t now=now_ms(),due=now+(host.maintenance_dirty || host.maintenance_more ? 0u : 1000u);
+    while (!stopping && !closed(&host)) {
+        bool reading=!host.closing;
+        fds[0]=(struct pollfd){reading ? listener : -1,POLLIN,0};
+        uint64_t now=now_ms(),due=now+(reading && (host.maintenance_dirty || host.maintenance_more) ? 0u : 1000u);
+        if (!reading && host.closing_deadline<due) due=host.closing_deadline>now ? host.closing_deadline : now;
         for (size_t i=0;i<host.client_count;i++) {
             Connection *c=&host.clients[i];
             if (c->fd>=0 && now>=c->deadline) connection_close(&host,i);
-            fds[i+1]=(struct pollfd){c->fd,c->output.data ? POLLOUT : POLLIN,0};
+            fds[i+1]=(struct pollfd){c->fd,c->output.data ? POLLOUT : reading ? POLLIN : 0,0};
             if (c->fd>=0 && c->deadline<due) due=c->deadline;
         }
         int result=poll(fds,host.client_count+1,(int)(due-now));if (result<0) { if (errno==EINTR) continue;rc=2;break; }
@@ -502,12 +530,12 @@ int cetta_value_service_run(CettaLibraryContext *context,Space *program,Registry
         for (size_t i=0;i<host.client_count;i++) {
             Connection *c=&host.clients[i];short events=fds[i+1].revents;if (c->fd<0 || !events) continue;
             if ((events&(POLLERR|POLLNVAL)) || ((events&POLLHUP) && !(events&POLLIN)) ||
-                ((events&POLLIN) && !c->output.data && !read_client(&host,i)) ||
+                ((events&POLLIN) && !c->output.data && !host.closing && !read_client(&host,i)) ||
                 ((events&POLLOUT) && c->output.data && !write_client(&host,c))) connection_close(&host,i);
         }
-        maintenance_step(&host);
+        if (!host.closing) { maintenance_step(&host);check_publication(&host); }
     }
-    free(fds);if (rc!=2) rc=0;
+    free(fds);if (rc!=2) rc=host.closing ? UNCERTAIN_EXIT : 0;
 done:
     if (host.clients) for (size_t i=0;i<host.client_count;i++) connection_close(&host,i);
     free(host.clients);free(host.resources);free(host.routes);

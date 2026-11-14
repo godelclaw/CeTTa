@@ -20,11 +20,17 @@
 #define ROW_BASE 29u
 #define FRAME_OVERHEAD 72u
 
+/* rows holds (space,key) -> row for one generation of space: generation
+ * counts replacements of space, and rows is rebuilt on the first point read
+ * after one. Lookups by key then cost one probe, not a pass over every row. */
 typedef struct {
     Arena arena;
     TermUniverse universe;
     Space *space;
     int64_t live_bytes;
+    Atom **rows;
+    size_t capacity;
+    uint64_t generation, indexed;
 } Image;
 
 struct CettaDurableStore {
@@ -66,12 +72,13 @@ CettaDurableLimits cetta_durable_bounded_limits(void) {
 }
 static void image_free(Image *im) {
     if (!im) return;
+    free(im->rows);
     if (im->space) { space_free(im->space); free(im->space); }
     term_universe_free(&im->universe); arena_free(&im->arena); free(im);
 }
 static Image *image_new(void) {
     Image *im=calloc(1,sizeof(*im)); if (!im) return NULL;
-    arena_init_detached(&im->arena); term_universe_init(&im->universe);
+    arena_init_detached(&im->arena); term_universe_init(&im->universe); im->generation=1;
     term_universe_set_persistent_arena(&im->universe,&im->arena);
     im->space=calloc(1,sizeof(*im->space));
     if (!im->space) { image_free(im); return NULL; }
@@ -88,6 +95,35 @@ static Atom *find_row(const Space *space, const char *name, const char *key, Cet
     for (CettaIndex i=0;i<space_length64(space);++i) {
         Atom *a=space_get_at64(space,i); CettaDurableRecord r=row(a);
         if (!strcmp(r.space,name) && !strcmp(r.key,key)) { if (index) *index=i; return a; }
+    }
+    return NULL;
+}
+static uint64_t row_hash(const char *space, const char *key) {
+    uint64_t h=UINT64_C(1469598103934665603);
+    for (const unsigned char *p=(const unsigned char *)space;*p;++p) h=(h^*p)*UINT64_C(1099511628211);
+    h=(h^0xffu)*UINT64_C(1099511628211);
+    for (const unsigned char *p=(const unsigned char *)key;*p;++p) h=(h^*p)*UINT64_C(1099511628211);
+    return h;
+}
+static bool image_index(Image *im) {
+    if (im->rows && im->indexed==im->generation) return true;
+    CettaIndex count=space_length64(im->space); size_t capacity=16;
+    while (capacity/2<count+1) { if (capacity>SIZE_MAX/2/sizeof(Atom *)) return false; capacity*=2; }
+    Atom **rows=calloc(capacity,sizeof(*rows)); if (!rows) return false;
+    for (CettaIndex i=0;i<count;++i) {
+        Atom *a=space_get_at64(im->space,i); CettaDurableRecord r=row(a);
+        size_t j=(size_t)row_hash(r.space,r.key)&(capacity-1);
+        while (rows[j]) j=(j+1)&(capacity-1);
+        rows[j]=a;
+    }
+    free(im->rows); im->rows=rows; im->capacity=capacity; im->indexed=im->generation; return true;
+}
+/* Keys are unique within a space. Without memory for the index, scan. */
+static Atom *image_find(Image *im, const char *space, const char *key) {
+    if (!image_index(im)) return find_row(im->space,space,key,NULL);
+    for (size_t j=(size_t)row_hash(space,key)&(im->capacity-1);im->rows[j];j=(j+1)&(im->capacity-1)) {
+        CettaDurableRecord r=row(im->rows[j]);
+        if (!strcmp(r.space,space) && !strcmp(r.key,key)) return im->rows[j];
     }
     return NULL;
 }
@@ -118,8 +154,10 @@ static CettaDurableStatus snapshot_locked(CettaDurableStore *s, Image *im,
     memset(out,0,sizeof(*out)); memcpy(out->epoch,s->epoch,33); out->revision=s->revision;
     BOUNDARY("read_meta");
     size_t capacity=0;
-    for (CettaIndex i=0;i<space_length64(im->space);++i) {
-        CettaDurableRecord src=row(space_get_at64(im->space,i));
+    Atom *point=space && scope && scope->kind==DURABLE_KEY ? image_find(im,space,scope->key) : NULL;
+    if (space && scope && scope->kind==DURABLE_KEY && !point) return DURABLE_OK;
+    for (CettaIndex i=0;point ? i<1 : i<space_length64(im->space);++i) {
+        CettaDurableRecord src=row(point ? point : space_get_at64(im->space,i));
         if (!matches(&src,space,scope)) continue;
         if (out->count==capacity) {
             size_t next=capacity?capacity*2:16;
@@ -199,13 +237,41 @@ static bool frame_keys_unique(const unsigned char *p,const unsigned char *end,ui
     }
     return p==end;
 }
+/* Rows replayed so far by (space, key), so loading a journal costs one probe
+ * per operation, not a pass over the rows before it. A slot holds a row and
+ * its atom id; a removed row leaves the tombstone. */
+typedef struct { Atom **rows; AtomId *ids; size_t capacity, filled; } LoadRows;
+static Atom load_tombstone;
+static size_t load_slot(const LoadRows *t, const char *space, const char *key, bool *present) {
+    size_t j=(size_t)row_hash(space,key)&(t->capacity-1),free_slot=t->capacity;
+    *present=false;
+    for (;t->rows[j];j=(j+1)&(t->capacity-1)) {
+        if (t->rows[j]==&load_tombstone) { if (free_slot==t->capacity) free_slot=j; continue; }
+        CettaDurableRecord r=row(t->rows[j]);
+        if (!strcmp(r.space,space) && !strcmp(r.key,key)) { *present=true; return j; }
+    }
+    return free_slot==t->capacity ? j : free_slot;
+}
+static bool load_reserve(LoadRows *t) {
+    if (t->capacity && (t->filled+1)*2<=t->capacity) return true;
+    size_t capacity=t->capacity ? t->capacity*2 : 1024;
+    if (capacity>SIZE_MAX/sizeof(Atom *) || capacity>SIZE_MAX/sizeof(AtomId)) return false;
+    LoadRows grown={calloc(capacity,sizeof(Atom *)),calloc(capacity,sizeof(AtomId)),capacity,0};
+    if (!grown.rows || !grown.ids) { free(grown.rows); free(grown.ids); return false; }
+    for (size_t i=0;i<t->capacity;++i) if (t->rows[i] && t->rows[i]!=&load_tombstone) {
+        CettaDurableRecord r=row(t->rows[i]); bool present;
+        size_t j=load_slot(&grown,r.space,r.key,&present);
+        grown.rows[j]=t->rows[i]; grown.ids[j]=t->ids[i]; ++grown.filled;
+    }
+    free(t->rows); free(t->ids); *t=grown; return true;
+}
 static CettaDurableStatus read_image(int fd,bool trim,Image **out,char epoch[33],
         int64_t *revision,int64_t *history,uint64_t *file_bytes) {
     *out=NULL; Image *im=image_new(); if (!im) return DURABLE_NOMEM;
     struct stat info;
     if (fstat(fd,&info) || info.st_size<0) { image_free(im); return DURABLE_IO; }
     uint64_t length=(uint64_t)info.st_size,position=0; bool first=true; uint64_t remaining=0; *history=0;
-    CettaDurableStatus result=DURABLE_CORRUPT;
+    CettaDurableStatus result=DURABLE_CORRUPT; LoadRows loaded={0};
     for (;;) {
         CettaJournalRecord frame={0};
         CettaJournalStatus st=cetta_journal_read(fd,position,length,SIZE_MAX,&frame);
@@ -213,6 +279,7 @@ static CettaDurableStatus read_image(int fd,bool trim,Image **out,char epoch[33]
             if (first || remaining) break;
             if (st==CETTA_JOURNAL_TORN && trim &&
                 cetta_journal_trim_tail(fd,position)!=CETTA_JOURNAL_OK) { result=DURABLE_IO; break; }
+            free(loaded.rows); free(loaded.ids);
             *out=im; *file_bytes=position; return DURABLE_OK;
         }
         if (st!=CETTA_JOURNAL_OK) { result=journal_status(st); break; }
@@ -245,16 +312,30 @@ static CettaDurableStatus read_image(int fd,bool trim,Image **out,char epoch[33]
                 char *name=strndup((const char *)p,(size_t)ns); p+=ns;
                 char *key=strndup((const char *)p,(size_t)nk); p+=nk;
                 if (!name || !key) { free(name); free(key); result=DURABLE_NOMEM; valid=false; break; }
-                CettaIndex index=0; Atom *found=find_row(im->space,name,key,&index);
+                if (!load_reserve(&loaded)) { free(name); free(key); result=DURABLE_NOMEM; valid=false; break; }
+                bool present; size_t slot=load_slot(&loaded,name,key,&present);
+                Atom *found=present ? loaded.rows[slot] : NULL;
                 if ((op==DURABLE_INSERT)==(found!=NULL)) valid=false;
                 if (valid && found) {
                     CettaDurableRecord old=row(found); im->live_bytes-=(int64_t)(old.size+ns+nk);
-                    if (!space_remove_atom_id(im->space,space_get_atom_id_at64(im->space,index))) valid=false;
+                    if (!space_remove_atom_id(im->space,loaded.ids[slot])) valid=false;
+                    loaded.rows[slot]=&load_tombstone;
                 }
                 if (valid && op!=DURABLE_REMOVE) {
                     CettaDurableRecord r={name,key,(unsigned char *)p,(size_t)nv,(int64_t)rv,(int64_t)pos};
                     if (ns+nk+nv>(uint64_t)(INT64_MAX-im->live_bytes) || !image_add(im,&r)) valid=false;
                     if (valid) im->live_bytes+=(int64_t)(ns+nk+nv);
+                    /* The admitted row is the space's last; else find it. */
+                    CettaIndex last=valid ? space_length64(im->space)-1u : 0u;
+                    Atom *added=valid ? space_get_at64(im->space,last) : NULL;
+                    CettaDurableRecord check=added ? row(added) : (CettaDurableRecord){0};
+                    if (valid && (!added || strcmp(check.space,name) || strcmp(check.key,key)))
+                        added=find_row(im->space,name,key,&last);
+                    if (!added) valid=false;
+                    if (valid) {
+                        if (!loaded.rows[slot]) ++loaded.filled;
+                        loaded.rows[slot]=added; loaded.ids[slot]=space_get_atom_id_at64(im->space,last);
+                    }
                 }
                 free(name); free(key);
                 if (valid && kind==1) {
@@ -268,6 +349,7 @@ static CettaDurableStatus read_image(int fd,bool trim,Image **out,char epoch[33]
         }
         free(bytes); position=next;
     }
+    free(loaded.rows); free(loaded.ids);
     image_free(im); return result;
 }
 static int sync_parent(const char *path) {
@@ -366,7 +448,9 @@ CettaDurableStatus cetta_durable_next_in_partition(CettaDurableStore *s,
         else {CettaDurableRecord r=row(a);revision=r.revision;position=r.position;}
     }
     CettaDurableRecord best={0};bool found=false;
-    for (CettaIndex i=0;status==DURABLE_OK && i<space_length64(s->image->space);++i) {
+    /* No row is newer than the store: a wait whose token is current reads none. */
+    bool newer=minimum<s->revision;
+    for (CettaIndex i=0;status==DURABLE_OK && newer && i<space_length64(s->image->space);++i) {
         CettaDurableRecord r=row(space_get_at64(s->image->space,i));
         if (strcmp(r.space,space) || strncmp(r.key,partition,length) || r.revision<=minimum ||
             r.revision<revision || (r.revision==revision && r.position<=position)) continue;
@@ -517,8 +601,10 @@ static CettaDurableStatus validate_observation(CettaDurableStore *s, const Cetta
     return DURABLE_OK;
 }
 
+/* A scoped watch was last found current at (epoch, verified); the image
+ * changes only by publication, so it stays current until the revision moves. */
 struct CettaDurableWatch { CettaDurableObservation *observation; size_t bytes;
-    bool revision_only; char epoch[33]; int64_t revision; size_t *counts; };
+    bool revision_only; char epoch[33]; int64_t revision, verified; size_t *counts; };
 void cetta_durable_watch_free(CettaDurableWatch *w) {
     if (w) { cetta_durable_observation_free(w->observation); free(w->counts); free(w); }
 }
@@ -552,6 +638,7 @@ CettaDurableStatus cetta_durable_watch_new(const CettaDurableObservation *o,
         memcpy(v->epoch,src->epoch,sizeof(v->epoch)); v->revision=src->revision;
         w->counts[i]=src->count;
     }
+    memcpy(w->epoch,o->views[0].epoch,sizeof(w->epoch)); w->verified=o->views[0].revision;
     *out=w; return DURABLE_OK;
 nomem:
     cetta_durable_watch_free(w); return DURABLE_NOMEM;
@@ -566,25 +653,27 @@ CettaDurableStatus cetta_durable_watch_revision_new(const CettaDurableObservatio
     w->revision_only=true;w->bytes=sizeof(*w);w->revision=o->views[0].revision;
     memcpy(w->epoch,o->views[0].epoch,sizeof(w->epoch));*out=w;return DURABLE_OK;
 }
-CettaDurableStatus cetta_durable_watch_current(CettaDurableStore *s,const CettaDurableWatch *w) {
+CettaDurableStatus cetta_durable_watch_current(CettaDurableStore *s,CettaDurableWatch *w) {
     if (!s || !w) return DURABLE_INVALID;
     pthread_mutex_lock(&s->mutex);
     CettaDurableStatus result=s->poisoned?DURABLE_POISONED:DURABLE_OK;
     if (result==DURABLE_OK && w->revision_only) {
         if (strcmp(s->epoch,w->epoch) || s->revision!=w->revision) result=DURABLE_CONFLICT;
-    } else if (result==DURABLE_OK) {
+    } else if (result==DURABLE_OK && (strcmp(s->epoch,w->epoch) || s->revision!=w->verified)) {
         for (size_t i=0;i<w->observation->count && result==DURABLE_OK;++i) {
             const CettaDurableSnapshot *v=&w->observation->views[i];
             const CettaDurableScope *scope=&w->observation->scopes[i];size_t count=0;
             if (strcmp(s->epoch,v->epoch)) {result=DURABLE_CONFLICT;break;}
-            for (CettaIndex j=0;j<space_length64(s->image->space);++j) {
-                CettaDurableRecord r=row(space_get_at64(s->image->space,j));
+            Atom *point=scope->kind==DURABLE_KEY ? image_find(s->image,scope->space,scope->key) : NULL;
+            for (CettaIndex j=0;scope->kind==DURABLE_KEY ? j<(point?1u:0u) : j<space_length64(s->image->space);++j) {
+                CettaDurableRecord r=row(point ? point : space_get_at64(s->image->space,j));
                 if (!matches(&r,scope->space,scope)) continue;
                 ++count;
                 if (r.revision>v->revision) {result=DURABLE_CONFLICT;break;}
             }
             if (count!=w->counts[i]) result=DURABLE_CONFLICT;
         }
+        if (result==DURABLE_OK) { memcpy(w->epoch,s->epoch,sizeof(w->epoch)); w->verified=s->revision; }
     }
     pthread_mutex_unlock(&s->mutex);return result;
 }
@@ -708,7 +797,7 @@ static CettaDurableStatus commit_internal(CettaDurableStore *s,
     result=journal_status(cetta_journal_append(s->fd,frame,frame_bytes,true,&s->file_bytes));
     if (result!=DURABLE_OK) { s->poisoned=true; result=DURABLE_UNKNOWN; goto done; }
     /* No allocation or semantic check remains after the irreversible write. */
-    Space *old=s->image->space; s->image->space=prepared; prepared=NULL;
+    Space *old=s->image->space; s->image->space=prepared; prepared=NULL; ++s->image->generation;
     s->image->live_bytes=bytes; ++s->revision; s->history+=(int64_t)batch; s->reclaim=false;
     space_free(old); free(old); BOUNDARY("after_commit"); *published=s->revision;
 done:

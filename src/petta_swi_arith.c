@@ -682,6 +682,41 @@ static bool swi_mod(SwiEval *eval, SwiNum *n1, SwiNum *n2, SwiNum *r) {
     return true;
 }
 
+/* ar_tdiv and ar_div: // truncates (integer_rounding_function is
+ * toward_zero), div floors. Integers only; the one overflow, the most
+ * negative small integer over -1, becomes a big integer. */
+static bool swi_integer_division(SwiEval *eval, SwiNum *n1, SwiNum *n2,
+                                 SwiNum *r, const char *function) {
+    bool floor = strcmp(function, "div") == 0, raised = false;
+    if (!swi_to_integer(eval, n1, &raised))
+        return raised ? false : swi_raise_type_integer(eval, n1, function);
+    if (!swi_to_integer(eval, n2, &raised))
+        return raised ? false : swi_raise_type_integer(eval, n2, function);
+    if (n1->type == SWI_INTEGER && n2->type == SWI_INTEGER &&
+        !(n1->value.i == INT64_MIN && n2->value.i == -1)) {
+        if (n2->value.i == 0)
+            return swi_zero_div(eval, function, 2);
+        int64_t q = n1->value.i / n2->value.i;
+        if (floor && n1->value.i % n2->value.i != 0 &&
+            (n1->value.i < 0) != (n2->value.i < 0))
+            q--;
+        r->type = SWI_INTEGER;
+        r->value.i = q;
+        return true;
+    }
+    swi_promote_to_mpz(n1);
+    swi_promote_to_mpz(n2);
+    if (mpz_sgn(n2->value.mpz) == 0)
+        return swi_zero_div(eval, function, 2);
+    r->type = SWI_MPZ;
+    mpz_init(r->value.mpz);
+    if (floor)
+        mpz_fdiv_q(r->value.mpz, n1->value.mpz, n2->value.mpz);
+    else
+        mpz_tdiv_q(r->value.mpz, n1->value.mpz, n2->value.mpz);
+    return true;
+}
+
 static bool swi_is_integer(const SwiNum *n) {
     return n->type == SWI_INTEGER || n->type == SWI_MPZ;
 }
@@ -1114,6 +1149,8 @@ static bool swi_round(SwiNum *n1, SwiNum *r) {
 
 /* FUNCTOR applied to its evaluated arguments; NULL with a name this port
  * does not know, which declines. */
+static SwiOrder swi_compare(SwiNum *n1, SwiNum *n2);
+
 static bool swi_apply(SwiEval *eval, const char *functor, SwiNum *args,
                       uint32_t nargs, SwiNum *r) {
     if (nargs == 2u) {
@@ -1129,6 +1166,16 @@ static bool swi_apply(SwiEval *eval, const char *functor, SwiNum *args,
             return swi_mod(eval, &args[0], &args[1], r);
         if (strcmp(functor, "**") == 0)
             return swi_pow(eval, &args[0], &args[1], r);
+        if (strcmp(functor, "//") == 0 || strcmp(functor, "div") == 0)
+            return swi_integer_division(eval, &args[0], &args[1], r, functor);
+        if (strcmp(functor, "min") == 0 || strcmp(functor, "max") == 0) {
+            /* ar_min, ar_max: the first unless the second is strictly beyond. */
+            SwiOrder order = swi_compare(&args[0], &args[1]);
+            bool second = strcmp(functor, "min") == 0 ? order == SWI_CMP_GREATER
+                                                     : order == SWI_CMP_LESS;
+            swi_copy(r, second ? &args[1] : &args[0]);
+            return true;
+        }
     } else if (nargs == 1u) {
         static const struct {
             const char *name;
@@ -1136,6 +1183,7 @@ static bool swi_apply(SwiEval *eval, const char *functor, SwiNum *args,
         } floats[] = {
             {"sqrt", sqrt}, {"sin", sin}, {"cos", cos}, {"tan", tan},
             {"asin", asin}, {"acos", acos}, {"atan", atan}, {"log", log},
+            {"exp", exp},
         };
         for (size_t index = 0u; index < sizeof(floats) / sizeof(floats[0]);
              index++) {
@@ -1305,6 +1353,10 @@ bool petta_libpl_compare_arithmetic(
         which = 2;
     else if (strcmp(relation, ">=") == 0)
         which = 3;
+    else if (strcmp(relation, "=:=") == 0)
+        which = 4;
+    else if (strcmp(relation, "=\\=") == 0)
+        which = 5;
     else
         return false;
     if (swi_refused_operand(arena, args, 2u, out))
@@ -1322,13 +1374,85 @@ bool petta_libpl_compare_arithmetic(
         bool holds = which == 0 ? order == SWI_CMP_LESS
             : which == 1 ? order == SWI_CMP_GREATER
             : which == 2 ? order == SWI_CMP_LESS || order == SWI_CMP_EQUAL
-            : order == SWI_CMP_GREATER || order == SWI_CMP_EQUAL;
+            : which == 3 ? order == SWI_CMP_GREATER || order == SWI_CMP_EQUAL
+            : which == 4 ? order == SWI_CMP_EQUAL : order != SWI_CMP_EQUAL;
         *out = cetta_call_value(atom_symbol(arena, holds ? "true" : "false"));
     } else if (!eval.declined) {
         *out = cetta_call_raised(eval.raised);
     }
     swi_clear(&left);
     swi_clear(&right);
+    return !eval.declined && out->term != NULL;
+}
+
+static Atom *swi_error_atom(Arena *arena, Atom *formal, Atom *context) {
+    Atom *head = atom_symbol(arena, "Error");
+    return head && formal && context ? atom_expr3(arena, head, formal, context) : NULL;
+}
+
+bool petta_libpl_clpfd(Arena *arena, const char *name, const char *operation,
+                       bool relation, Atom **args, CettaCallOutcome *out) {
+    if (out)
+        *out = cetta_call_failure();
+    if (!arena || !name || !operation || !args || !args[0] || !args[1] || !out)
+        return false;
+    bool unbound = false;
+    for (unsigned index = 0u; index < 2u; index++) {
+        Atom *arg = args[index];
+        if (arg->kind == ATOM_VAR) {
+            unbound = true;
+            continue;
+        }
+        if (arg->kind == ATOM_GROUNDED &&
+            (arg->ground.gkind == GV_INT || arg->ground.gkind == GV_BIGINT))
+            continue;
+        Atom *error = swi_error_atom(arena, swi_compound(arena, (Atom *[]){
+            atom_symbol(arena, "domain_error"), swi_data(arena, "clpfd_expression"), arg}, 3u),
+            atom_var_with_id(arena, "$clpfd", fresh_var_id()));
+        if (!error)
+            return false;
+        *out = cetta_call_raised(error);
+        return true;
+    }
+    if ((strcmp(operation, "div") == 0 || strcmp(operation, "//") == 0 ||
+         strcmp(operation, "mod") == 0) &&
+        args[1]->kind == ATOM_GROUNDED && args[1]->ground.gkind == GV_INT &&
+        args[1]->ground.ival == 0)
+        return true;
+    if (unbound) {
+        Atom *error = swi_error_atom(arena, swi_data(arena, "instantiation_error"),
+            swi_compound(arena, (Atom *[]){
+                atom_symbol(arena, "context"), swi_indicator(arena, swi_data(arena, name), 3),
+                atom_string(arena, "no constraint solver in this build: the arguments must be bound")}, 3u));
+        if (!error)
+            return false;
+        *out = cetta_call_raised(error);
+        return true;
+    }
+    SwiEval eval = {.arena = arena, .predicate = "is"};
+    SwiNum values[2] = {{0}, {0}};
+    SwiNum result = {0};
+    bool ok = swi_operand(&eval, args[0], &values[0]) &&
+              swi_operand(&eval, args[1], &values[1]);
+    if (ok && relation) {
+        SwiOrder order = swi_compare(&values[0], &values[1]);
+        bool holds = strcmp(operation, "<") == 0 ? order == SWI_CMP_LESS
+            : strcmp(operation, ">") == 0 ? order == SWI_CMP_GREATER
+            : strcmp(operation, "=:=") == 0 ? order == SWI_CMP_EQUAL
+            : order != SWI_CMP_EQUAL;
+        *out = cetta_call_value(swi_data(arena, holds ? "true" : "false"));
+    } else if (ok) {
+        ok = swi_apply(&eval, operation, values, 2u, &result);
+        if (ok) {
+            swi_normalize(&result);
+            *out = cetta_call_value(swi_number_atom(arena, &result));
+        }
+    }
+    if (!ok && !eval.declined)
+        *out = cetta_call_raised(eval.raised);
+    swi_clear(&result);
+    swi_clear(&values[0]);
+    swi_clear(&values[1]);
     return !eval.declined && out->term != NULL;
 }
 
@@ -1350,6 +1474,18 @@ bool petta_libpl_evaluate_arithmetic(
 bool petta_libpl_compare_arithmetic(
     Arena *arena, const char *relation, Atom **args, CettaCallOutcome *out) {
     (void)arena;
+    (void)relation;
+    (void)args;
+    if (out)
+        *out = cetta_call_failure();
+    return false;
+}
+
+bool petta_libpl_clpfd(Arena *arena, const char *name, const char *operation,
+                       bool relation, Atom **args, CettaCallOutcome *out) {
+    (void)arena;
+    (void)name;
+    (void)operation;
     (void)relation;
     (void)args;
     if (out)

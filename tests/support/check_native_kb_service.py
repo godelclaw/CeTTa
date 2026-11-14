@@ -129,8 +129,10 @@ class Server:
         self.logs.append((out, err))
         assert self.process.returncode == (-9 if crash else 0), (self.process.returncode, out, err)
         assert b"ACCIDENTAL_EXECUTION" not in out, out
-        if self.path.parent != self.directory and self.path.exists():
-            self.path.unlink()
+        if self.path.parent != self.directory:
+            for leftover in (self.path, self.path.with_name(self.path.name + ".lock")):
+                if leftover.exists():
+                    leftover.unlink()
         self.process = None
 
     def sample(self, client, round_number):

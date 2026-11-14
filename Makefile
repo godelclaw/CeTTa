@@ -50436,6 +50436,17 @@ test-durable-library:
 	@exit 1
 endif
 
+.PHONY: test-durable-scoped-read
+ifeq ($(ENABLE_DURABLE),1)
+test-all: test-durable-scoped-read
+test-durable-scoped-read: $(BIN) tests/test_durable_scoped_read.py
+	python3 tests/test_durable_scoped_read.py ./$(BIN)
+else
+test-durable-scoped-read:
+	@echo "test-durable-scoped-read requires ENABLE_DURABLE=1" >&2
+	@exit 1
+endif
+
 .PHONY: test-native-sqlite
 ifeq ($(ENABLE_SQLITE)$(ENABLE_PYTHON),11)
 test-native-sqlite: $(BIN)
@@ -50763,7 +50774,7 @@ test-telegram-scheduler:
 	@exit 1
 endif
 
-.PHONY: telegram-service telegram-control test-telegram-service test-telegram-channel-service test-telegram-commands-service test-telegram-control
+.PHONY: telegram-service telegram-control test-telegram-service test-telegram-channel-service test-telegram-commands-service test-telegram-idle-cpu test-telegram-control
 .PHONY: space-service test-space-service test-space-service-commit test-native-journal
 runtime/test-native-journal: tests/test_native_journal.c src/native_journal.c src/native_journal.h src/native_sha256.c src/native_sha256.h
 	@mkdir -p runtime
@@ -50937,13 +50948,15 @@ test-telegram-channel-service: $(TELEGRAM_SERVICE_BIN)
 	python3 tests/test_telegram_channel_service.py $(TELEGRAM_SERVICE_BIN)
 test-telegram-commands-service: $(TELEGRAM_SERVICE_BIN)
 	python3 tests/test_telegram_commands_service.py $(TELEGRAM_SERVICE_BIN)
+test-telegram-idle-cpu: $(TELEGRAM_SERVICE_BIN)
+	python3 tests/test_telegram_idle_cpu.py $(TELEGRAM_SERVICE_BIN)
 # CWP_CETTA: a cetta binary of any build (default ./cetta).
 test-cwp-client: $(TELEGRAM_SERVICE_BIN)
 	python3 tests/test_cwp_client.py $(TELEGRAM_SERVICE_BIN) $(or $(CWP_CETTA),./cetta)
 test-telegram-control: $(TELEGRAM_SERVICE_BIN) runtime/cetta-telegram-control
 	python3 tests/test_telegram_control.py $(TELEGRAM_SERVICE_BIN) runtime/cetta-telegram-control
 else
-telegram-service test-telegram-service test-telegram-channel-service test-telegram-commands-service test-cwp-client test-telegram-control:
+telegram-service test-telegram-service test-telegram-channel-service test-telegram-commands-service test-telegram-idle-cpu test-cwp-client test-telegram-control:
 	@echo "telegram-service requires ENABLE_DURABLE=1, native HTTP and ENABLE_JSON_GSLT=1" >&2
 	@exit 1
 endif
@@ -53193,6 +53206,18 @@ test-all: test-db-maintenance
 test-db-maintenance: $(BIN) value-worker $(ACT_SPACE_TEST_BIN)
 	$(PYTHON) tests/support/check_db_maintenance.py $(BIN) $(VALUE_WORKER_BIN) $(ACT_SPACE_TEST_BIN)
 
+.PHONY: test-store-write-faults
+test-all: test-store-write-faults
+test-store-write-faults: value-worker space-service tests/support/check_store_write_faults.py \
+		tests/support/store_write_fault.c tests/support/store_fault_server.metta
+	$(PYTHON) tests/support/check_store_write_faults.py $(VALUE_WORKER_BIN) $(SPACE_SERVICE_BIN)
+
+.PHONY: test-service-start-stop
+test-all: test-service-start-stop
+test-service-start-stop: value-worker space-service tests/support/check_service_start_stop.py \
+		tests/support/service_start_gate.metta
+	$(PYTHON) tests/support/check_service_start_stop.py $(SPACE_SERVICE_BIN) $(VALUE_WORKER_BIN)
+
 .PHONY: test-remote-ranges
 test-all: test-remote-ranges
 test-remote-ranges: $(BIN) value-worker
@@ -54132,6 +54157,33 @@ test-petta-swi-arithmetic: $(BIN) tests/petta/swi_arithmetic.metta \
 		fi; \
 	done; \
 	echo "PASS: PeTTa arithmetic off the fast path answers as SWI's is/2 ($$(wc -l < tests/petta/swi_arithmetic.expected) rows, default and extended)"
+
+# The reference prelude's exp, implies, =? and CLP(FD) functions and
+# relations answer as SWI-PeTTa's do, with Prolog and without; without, a
+# CLP(FD) argument left unbound raises instantiation_error (no solver).
+.PHONY: test-petta-reference-functions
+test-all: test-petta-reference-functions
+test-petta-reference-functions: $(BIN) tests/petta/reference_functions.metta \
+		tests/petta/reference_functions.expected tests/petta/clpfd_unbound_core.metta \
+		tests/petta/clpfd_unbound_core.expected
+	@for profile in default extended; do \
+		flags="--lang petta"; [ $$profile = default ] || flags="$$flags --profile $$profile"; \
+		actual=$$($(CETTA_BIN_INVOKE) $$flags tests/petta/reference_functions.metta 2>&1); \
+		if [ "$$actual" != "$$(cat tests/petta/reference_functions.expected)" ]; then \
+			echo "FAIL: reference functions as SWI-PeTTa's prelude (petta $$profile)"; \
+			diff -u tests/petta/reference_functions.expected <(printf '%s\n' "$$actual") | head -20; \
+			exit 1; \
+		fi; \
+	done; \
+	if [ "$(LIB_PROLOG_ENABLED)" != 1 ]; then \
+		actual=$$($(CETTA_BIN_INVOKE) --lang petta tests/petta/clpfd_unbound_core.metta 2>&1); \
+		if [ "$$actual" != "$$(cat tests/petta/clpfd_unbound_core.expected)" ]; then \
+			echo "FAIL: an unbound CLP(FD) argument without a solver"; \
+			diff -u tests/petta/clpfd_unbound_core.expected <(printf '%s\n' "$$actual") | head -20; \
+			exit 1; \
+		fi; \
+	fi; \
+	echo "PASS: exp, implies, =? and CLP(FD) answer as the reference ($$(wc -l < tests/petta/reference_functions.expected) rows, default and extended)"
 
 # A variable pattern over a space a symbol names, with no native rows and no
 # foreign engine to hold any, has no answer, with and without Prolog.
