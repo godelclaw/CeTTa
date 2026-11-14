@@ -242,36 +242,46 @@ def uncertain(store, mode, mark, route, landed):
 
 def closing(store):
     """Once a publication is uncertain the service evaluates nothing more: of
-    two writes that arrive together, one is answered and the other never runs;
-    the restarted service replays the first and applies the second once."""
+    two writes in the same poll, one runs and is answered, the other never
+    runs; the restarted service replays the first and applies the second once."""
     client = store.client()
     assert put(client, 'r1', 'k1') == committed('r1', 'k1')
     client.socket.close()
+    writers = []
+    for request, key in (('r2', 'k2'), ('r3', 'k3')):
+        writer = Client(store.service.path)
+        assert rows(writer) == ['k1']
+        writers.append((writer, request, key))
     gate = store.directory / 'gate'
     os.mkfifo(gate)
     slow = Client(store.service.path)
     waiting = slow.send(E('CallV1', S('FaultWait'), E('FaultWaitV1', str(gate))))
-    time.sleep(.2)
-    writers = [(Client(store.service.path), request, key) for request, key in (('r2', 'k2'), ('r3', 'k3'))]
+    deadline = time.monotonic() + 10
+    while True:
+        try:
+            descriptor = os.open(gate, os.O_WRONLY | os.O_NONBLOCK)
+            break
+        except OSError:
+            assert time.monotonic() < deadline, 'the service did not open the gate'
+            time.sleep(.005)
     store.fault.set('dirsync')
-    sent = [(client, client.send(E('CallV1', S('FaultPut'), E('FaultPutV1', request, key))), request, key)
-            for client, request, key in writers]
+    sent = [(writer, writer.send(E('CallV1', S('FaultPut'), E('FaultPutV1', request, key))), request, key)
+            for writer, request, key in writers]
     time.sleep(.2)
-    descriptor = os.open(gate, os.O_WRONLY | os.O_NONBLOCK)
     os.write(descriptor, b'go')
     os.close(descriptor)
     assert slow.receive(waiting) == (S('FaultWaitedV1'), 'go')
     answered = []
-    for client, identifier, request, key in sent:
+    for writer, identifier, request, key in sent:
         try:
-            answered.append((request, key, client.receive(identifier)))
+            answered.append((request, key, writer.receive(identifier)))
         except (AssertionError, OSError):
             pass
     store.fault.wait('directory fsync EIO')
     code = store.service.ended(10)
     store.fault.clear()
-    for client, _, _, _ in sent:
-        client.socket.close()
+    for writer, _, _, _ in sent:
+        writer.socket.close()
     slow.socket.close()
     if code is None:
         raise AssertionError(('the service kept serving after an uncertain publication', answered))
