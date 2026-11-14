@@ -10,7 +10,7 @@
 (ACT selected-data-branch "" "(let $d (catch (Error origin (Forbidden reason))) (let $r (if True $d 0) (Box $r)))" "(Box (Error origin (Forbidden reason)))")
 (ACT ordinary-held-data "(: plain (-> Atom %Undefined%)) (= (plain $x) $x) " "(let $d (catch (Error origin (Forbidden reason))) (let $r (plain $d) (Box $r)))" "(Box (Error origin (Forbidden reason)))")
 (ACT held-source-program "(: plain (-> Atom %Undefined%)) (= (plain $x) $x) " "(let $r (plain (Error origin (Forbidden reason))) reached)" "(Error origin (Forbidden reason))")
-(ACT data-output-after-opening "(: qdata (-> Atom Atom)) (= (qdata (quote $x)) $x) " "(let $d (catch (Error origin (Forbidden reason))) (let $r (qdata (quote $d)) (Box $r)))" "(Box (Error origin (Forbidden reason)))")
+(ACT data-output-after-opening "(: qdata (-> Atom Atom)) (= (qdata (quote $x)) $x) " "(let $d (catch (Error origin (Forbidden reason))) (let $r (qdata (quote $d)) (Box $r)))" "(Error origin (Forbidden reason))")
 (ACT ordinary-code-opener "(= (qf x) reduced) " "(let $r (unquote (quote (qf x))) (Box $r))" "(Box reduced)")
 (ACT completed-child-opener "" "(let $d (catch (Error origin (Forbidden reason))) (let $r (unquote (quote (Box $d))) (Nested $r)))" "(Nested (Box (Error origin (Forbidden reason))))")
 (ACT completed-child-eval "" "(let $d (catch (Error origin (Forbidden reason))) (let $r (eval (unquote (quote (Box $d)))) (Nested $r)))" "(Nested (Box (Error origin (Forbidden reason))))")

@@ -15,7 +15,7 @@ static inline Atom *cetta_ai_code_reading(Arena *arena, Atom *value) {
  * diagnostic root needs protection; walking every prefix would make cons
  * quadratic and would change the roles of already-admitted children. */
 static inline Atom *cetta_ai_constructed_value(Arena *arena, Atom *value) {
-    return atom_is_error(value) ? atom_he_evaluated_copy(arena, value) : value;
+    return value && atom_is_error(value) ? atom_he_evaluated_copy(arena, value) : value;
 }
 
 /* Only a producer's RAISED channel calls this projection. Error-shaped

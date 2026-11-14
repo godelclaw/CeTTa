@@ -13,7 +13,7 @@ matched
 held
 ordinary-data
 inspectable
-(Box (Error held (Forbidden data)))
+(Error held (Forbidden data))
 ((Error origin (Fault (Error nested (Forbidden inert)))) 7)
 (Box (ai-pattern))
 ()

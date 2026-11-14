@@ -21,8 +21,8 @@
           (hs:budgets $binary))
      ((((HEContractResults $canonical 92 0) (HEContractResults $reference 92 0)
         (HEContractResults $canonical 900 0) (HEContractResults $reference 900 0)
-        (HEProducerResults $canonical 62 0) (HEProducerResults $reference 62 0)
-        (HEBudgetControlsPass 2)) (HEAISuitePass 1984 124 2))
+        (HEProducerResults $canonical 63 0) (HEProducerResults $reference 63 0)
+        (HEBudgetControlsPass 2)) (HEAISuitePass 1984 126 2))
       ($bad (let $shown (println! (HEAISuiteFailed $bad)) (system:exit 1))))))
 
 ; The graph has only linear physical size. An exponential unfolding must

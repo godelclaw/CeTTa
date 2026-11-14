@@ -10,6 +10,9 @@
 (SC map "(let $e (catch (Error $x (Fault b))) (let ($r) (map-atom (5) $x $e) (Box $r)))" "(Error 5 (Fault b))")
 (SC filter "(let $e (catch (Error $x (Fault b))) (filter-atom (5) $x (== $e $e)))" "(5)")
 (SC fold "(let $e (catch (Error $x (Fault b))) (let $r (foldl-atom (5) 0 $acc $x $e) (Box $r)))" "(Error 5 (Fault b))")
+(SC untyped-shared-alias "(let $a (add-atom &self (= (sc:g $v $e) $e)) (let $d (catch (Error $x (Fault b))) (let $r (sc:g $x $d) (case (Box $r) (((Box (Error $w (Fault b))) preserved))))))" "preserved")
+(SC untyped-shared-constructor "(let $a (add-atom &self (= (sc:g $v $e) (Pair $v $e))) (let $d (catch (Error $x (Fault b))) (let $r (sc:g $x $d) (case $r (((Pair $v (Error $w (Fault b))) preserved))))))" "preserved")
+(SC untyped-unshared-control "(let $a (add-atom &self (= (sc:g $v $e) $e)) (let $d (catch (Error $x (Fault b))) (let $r (sc:g 1 $d) (case (Box $r) (((Box (Error $w (Fault b))) preserved))))))" "preserved")
 
 (= (sc:check $binary $route (SubstitutionCase $name $source $wanted))
    (let* (($program (str:join "" ("!(ai:experiment failure-values) !" $source)))
@@ -34,3 +37,15 @@
                      "." inherit 10000 1048576)
        (((proc:exited 0 "[()]\n[ok]\n" "") (SubstitutionGraphPass $route 60))
         ($bad (SubstitutionGraphFailed $route $bad))))))
+
+; Shared data crosses an equation epoch and an alias-renaming boundary.
+; CI may supply its own child address bound for deliberately broken walkers.
+(= (sc:alias-graph $binary $route)
+   (let* (($program "!(ai:experiment failure-values) (= (dag $n $leaf) (if (== $n 0) $leaf (let $t (dag (- $n 1) $leaf) (Pair $t $t)))) (= (carry $v $value) $value) !(let $leaf (catch (Error $x (Fault b))) (let $d (dag 60 $leaf) (let $r (carry $x $d) ok)))")
+          ($base ("/usr/bin/env" $route $binary "--lang" "he" "--profile" "ai" "-e" $program))
+          ($cap (system:getenv-or-default "CETTA_AI_TEST_ADDRESS_LIMIT" ""))
+          ($argv (if (== $cap "") $base
+                   (union-atom ("/usr/bin/prlimit" (str:concat "--as=" $cap) "--") $base))))
+     (case (proc:run $argv "." inherit 10000 1048576)
+       (((proc:exited 0 "[()]\n[ok]\n" "") (AliasGraphPass $route 60))
+        ($bad (AliasGraphFailed $route $bad))))))

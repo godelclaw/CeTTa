@@ -433,7 +433,8 @@ static Atom *he_rewrite_query_representative(Arena *arena, Atom *atom,
         if (rewritten)
             rewritten[i] = next;
     }
-    Atom *result = rewritten ? atom_expr(arena, rewritten, atom->expr.len) : atom;
+    Atom *result = rewritten ? bindings_retain_rebuilt_role(arena, atom,
+        atom_expr(arena, rewritten, atom->expr.len)) : atom;
     if (result)
         he_rewrite_memo_store(memo, atom, result);
     return result;
@@ -653,7 +654,7 @@ static __attribute__((noinline)) bool he_raw_query_data_result(
     CettaCount start = query->outcomes->len;
     bool more = he_raw_query_result(result, bindings, context);
     for (CettaCount i = start; i < query->outcomes->len; i++) {
-        if (!he_admit_equation_value(query->arena, &query->outcomes->items[i])) {
+        if (!ai_authored_equation_result(query->arena, &query->outcomes->items[i])) {
             while (query->outcomes->len > start)
                 outcome_free_fields(&query->outcomes->items[--query->outcomes->len]);
             return false;
@@ -1254,9 +1255,11 @@ static bool he_instruction_complete_function_return(HeInstructionFrame *frame,
     Atom *value;
     if (atom_head_symbol_id(result) == g_builtin_syms.return_text && result->expr.len == 2u) {
         value = result->expr.elems[1];
-        if (eval_failure_values() && he_publish_data_output(frame->arena,
-                atom_atom_type(frame->arena), source, value, NULL, true, frame->target))
+        if (eval_failure_values()) {
+            ai_publish_preserved_result(frame->space, frame->arena,
+                source, value, NULL, frame->target);
             return true;
+        }
     }
     else if (he_minimal_instruction(result))
         return false;
@@ -1570,9 +1573,15 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
             Atom **result = arena_alloc(a, sizeof(*result) * (len + 1u));
             result[0] = expr_arg(atom, 0);
             for (CettaExprIndex i = 0u; i < len; i++) result[i + 1u] = elems[i];
-            Atom *value = he_admit_data(a, atom_sequence_like(a, tail, result, len + 1u));
-            if (value)
-                outcome_set_add(os, value, &frame->env);
+            Atom *value = atom_sequence_like(a, tail, result, len + 1u);
+            if (eval_failure_values() && value)
+                value = cetta_ai_constructed_value(a, value);
+            if (value) {
+                if (eval_failure_values())
+                    ai_publish_preserved_result(s, a, NULL, value, &frame->env, os);
+                else
+                    outcome_set_add(os, value, &frame->env);
+            }
         } else {
             ai_publish_error(a, os, call_signature_error(
                 a, atom, "(cons-atom <head> (: <tail> Expression))"), &frame->env);
@@ -1583,9 +1592,13 @@ static void he_instruction_resume(CettaOwnedFrameStack *stack) {
         CettaExprLen len;
         if (atom_sequence_view(input, &elems, &len) && len > 0u) {
             Atom *tail = atom_sequence_like(a, input, elems + 1u, len - 1u);
-            Atom *value = he_admit_data(a, atom_expr2(a, elems[0], tail));
-            if (value)
-                outcome_set_add(os, value, &frame->env);
+            Atom *value = atom_expr2(a, elems[0], tail);
+            if (value) {
+                if (eval_failure_values())
+                    ai_publish_preserved_result(s, a, NULL, value, &frame->env, os);
+                else
+                    outcome_set_add(os, value, &frame->env);
+            }
         } else {
             ai_publish_error(a, os, call_signature_error(
                 a, atom, "(decons-atom (: <expr> Expression))"), &frame->env);
@@ -1692,6 +1705,9 @@ static bool he_eval_typed_instruction(Space *s, Arena *a, Atom *atom, Atom *codo
         eval_for_caller(s, a, NULL, expr_arg(live[0], control.source), fuel,
                         &env, true, &sources);
         for (CettaCount i = 0u; i < sources.len && !eval_unwinding(); i++) {
+            if (eval_failure_values() && ai_forward_failure(a, &minimal,
+                    &sources.items[i], NULL, true))
+                continue;
             Atom *result = outcome_atom_materialize(a, &sources.items[i]);
             if (!result) continue;
             Atom *body = instantiate_template_variable_once(

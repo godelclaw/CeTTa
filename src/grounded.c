@@ -3487,6 +3487,13 @@ bool grounded_op_is_sequence_constructor(SymbolId id) {
     return false;
 }
 
+bool grounded_op_preserves_result_origin(SymbolId id) {
+#define PRESERVED_RESULT(field) if (id == g_builtin_syms.field) return true;
+    CETTA_NATIVE_PRESERVED_RESULT_ROWS(PRESERVED_RESULT)
+#undef PRESERVED_RESULT
+    return false;
+}
+
 bool grounded_op_sequence_accepts_arity(SymbolId id, uint32_t arity) {
     if (arity > 16u)
         return false;
@@ -3534,6 +3541,11 @@ bool grounded_call(Arena *a, Atom *head, Atom **args, uint32_t nargs,
         *out = cetta_call_raised(result);
     else if (atom_is_petta_no_result(result))
         *out = cetta_call_failure();
+    else if (!raised && eval_current_uses_failure_values && eval_current_uses_failure_values() &&
+             head->kind == ATOM_SYMBOL &&
+             (grounded_op_preserves_result_origin(atom_symbol_current_id(head)) ||
+              grounded_op_is_sequence_constructor(atom_symbol_current_id(head))))
+        *out = cetta_call_preserved_value(result);
     else if ((!raised && head->kind == ATOM_SYMBOL &&
               grounded_op_is_sequence_constructor(atom_symbol_current_id(head))) ||
              (eval_current_language_id &&

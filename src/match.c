@@ -6706,8 +6706,20 @@ static Atom *bindings_apply_shared_fold(BindingsApplyFold *fold,
     return bindings_apply_fold_impl(fold, atom, scope, seen_len, false, graph);
 }
 
+static __attribute__((noinline)) Atom *bindings_apply_epoch_graph(
+    BindingsApplyFold *fold, Atom *atom, BindingsApplyScope scope, uint32_t seen_len) {
+    BindingApplyGraph active = {0};
+    BindingApplyGraph graph = {.active_path = &active};
+    Atom *result = bindings_apply_fold_impl(fold, atom, scope, seen_len, true, &graph);
+    free(graph.entries);
+    free(active.entries);
+    return result;
+}
+
 static Atom *bindings_apply_epoch_fold(BindingsApplyFold *fold, Atom *atom,
         BindingsApplyScope scope, uint32_t seen_len) {
+    if (eval_current_uses_failure_values && eval_current_uses_failure_values())
+        return bindings_apply_epoch_graph(fold, atom, scope, seen_len);
     return bindings_apply_fold_impl(fold, atom, scope, seen_len, true, NULL);
 }
 
@@ -12655,7 +12667,7 @@ static void decoded_match_worklist_free(DecodedMatchWorklist *work) {
     if (work->items != work->inline_items) free(work->items);
 }
 
-static bool decoded_match_push(DecodedMatchWorklist *work,
+static inline __attribute__((always_inline)) bool decoded_match_push(DecodedMatchWorklist *work,
                                MatchTerm left, MatchTerm right) {
     if (work->len == work->cap) {
         size_t next_cap = work->cap * 2u;

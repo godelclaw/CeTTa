@@ -21601,6 +21601,20 @@ static bool petta_machine_advance_choice(
                     match.result_fully_resolved = true;
                     activation_supported = false;
                 }
+                if (machine->host.failure_values && atom_is_error(result) &&
+                    !atom_is_he_evaluated(result)) {
+                    if (match.result_is_activation) {
+                        result = petta_machine_apply_bindings_epoch_then_all(machine,
+                            (Bindings *)search_context_bindings(&machine->search),
+                            &machine->heap, result, match.activation_epoch,
+                            match.activation_first_entry);
+                        if (!result) {
+                            *failure = PETTA_MACHINE_STEP_CAPACITY;
+                            return false;
+                        }
+                    }
+                    return petta_machine_raise_error(machine, result);
+                }
                 bool scheduled = activation_supported
                     ? petta_push_solve_activation_planned(
                           machine, result,
@@ -21900,12 +21914,9 @@ static bool petta_machine_advance_choice(
             if (machine->host.failure_values &&
                 outcome->result_form == CETTA_CALL_RESULT_RAISED)
                 return petta_machine_raise_error(machine, value);
-            if (machine->host.failure_values &&
-                outcome->result_form == CETTA_CALL_RESULT_COMPLETED_VALUE) {
-                value = petta_machine_completed_data(machine, value, failure);
-                if (!value)
-                    return false;
-            }
+            if (machine->host.failure_values && atom_is_error(value) &&
+                !atom_is_he_evaluated(value))
+                return petta_machine_raise_error(machine, value);
             /* A conditional answer holds while its delayed goals do. */
             if (outcome->delayed &&
                 !petta_machine_delay_install(machine, outcome->delayed, failure)) {
@@ -31354,7 +31365,11 @@ static inline bool petta_machine_deliver_native_return(
             machine, outcome, expected, barrier, failure);
     Atom *value = outcome.term;
     if (machine->host.failure_values &&
-        (outcome.result_form == CETTA_CALL_RESULT_COMPLETED_VALUE || atom_is_error(value))) {
+        outcome.result_form == CETTA_CALL_RESULT_PRESERVED_VALUE &&
+        atom_is_error(value) && !atom_is_he_evaluated(value))
+        return petta_machine_raise_error(machine, value);
+    if (machine->host.failure_values &&
+        outcome.result_form != CETTA_CALL_RESULT_PRESERVED_VALUE) {
         value = petta_machine_completed_data(machine, value, failure);
         if (!value) {
             *failure = PETTA_MACHINE_STEP_CAPACITY;

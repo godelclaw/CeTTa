@@ -82,7 +82,6 @@ typedef struct HeCanonicalFrame {
     bool preserve_bindings;
     bool typed;
     bool selected;
-    bool data_output;
     bool has_functions;
     bool has_non_functions;
     bool query_closed;
@@ -554,9 +553,8 @@ static inline __attribute__((always_inline)) void he_canonical_publish_one(
     if (__builtin_expect(frame->lift_answers, 0) &&
         he_canonical_lifted_marker(frame, out))
         return;
-    if (eval_failure_values() && frame->lift_answers && frame->type &&
-        !atom_is_symbol_id(frame->type, g_builtin_syms.undefined_type) &&
-        he_publish_data_output(frame->arena, frame->type, out,
+    if (eval_failure_values() && frame->lift_answers &&
+        ai_publish_authored_result(frame->arena, out,
             outcome_atom_materialize(frame->arena, out),
             invocation ? &frame->env : NULL, frame->preserve_bindings, frame->target))
         return;
@@ -608,7 +606,8 @@ static inline __attribute__((always_inline)) void he_canonical_publish_one(
 }
 
 static void he_canonical_publish_raw_return(HeCanonicalFrame *frame, Outcome *out) {
-    if (eval_failure_values() && ai_outcome_raised(out)) {
+    if (eval_failure_values() && (ai_outcome_raised(out) ||
+            out->result_form == CETTA_CALL_RESULT_PRESERVED_VALUE)) {
         outcome_set_add_prefixed_outcome(frame->arena, frame->target, out,
             NULL, frame->preserve_bindings);
         return;
@@ -1385,6 +1384,11 @@ static void he_canonical_resume_result(HeCanonicalFrame *frame) {
         he_canonical_pop();
         return;
     }
+    if (eval_failure_values() && ai_forward_preserved_value(frame->space, a, seed,
+            candidate, frame->type, NULL, frame->preserve_bindings, frame->target)) {
+        he_canonical_pop();
+        return;
+    }
     if (atom_head_symbol_id(candidate) == g_builtin_syms.function) {
         frame->phase = 1u;
         frame->selected = true;
@@ -1392,7 +1396,7 @@ static void he_canonical_resume_result(HeCanonicalFrame *frame) {
             frame->type, &seed->env, false, false, &frame->child);
         return;
     }
-    if (eval_failure_values() && he_publish_data_output(a, frame->type, seed,
+    if (eval_failure_values() && ai_publish_authored_result(a, seed,
             candidate, NULL, frame->preserve_bindings, frame->target)) {
         he_canonical_pop();
         return;
@@ -2543,7 +2547,7 @@ static void he_canonical_dispatch_call(HeCanonicalFrame *frame, Outcome *call) {
         .arena = a, .query = source, .prefix = env, .outcomes = &pending
     };
     CettaCount matched = eval_query_equations_visit(frame->space, source, a,
-        eval_failure_values() && frame->data_output
+        eval_failure_values()
                 ? he_raw_query_data_result : he_raw_query_result, &query);
     if (!matched) {
         /* Its own value, answered with the bindings it was asked under: no
@@ -2579,6 +2583,9 @@ static void he_canonical_dispatch_call(HeCanonicalFrame *frame, Outcome *call) {
      * the return sequencer answers that alternative with the call, as
      * when no equation applies, and the marker never runs as a body. */
     if (frame->typed && pending.len == 1u &&
+        !(eval_failure_values() &&
+          (ai_outcome_raised(&pending.items[0]) ||
+           pending.items[0].result_form == CETTA_CALL_RESULT_PRESERVED_VALUE)) &&
         !he_call_result_needs_invocation(
             outcome_atom_materialize(a, &pending.items[0]))) {
         SearchContext context;
@@ -2810,8 +2817,6 @@ static void he_canonical_resume_dispatch(HeCanonicalFrame *frame) {
             &frame->env, frame->preserve_bindings, frame->target);
         if (delivery) {
             delivery->selected = true;
-            delivery->data_output = eval_failure_values() &&
-                he_declared_data_result(a, &frame->work.items[frame->path_index], &call->env);
             delivery->query_closed = frame->query_closed;
             delivery->typed = frame->type_count == 1u &&
                 frame->work.len == 1u && frame->child.len == 1u &&
@@ -3457,6 +3462,9 @@ static void he_canonical_resume_instruction(HeCanonicalFrame *frame) {
             frame->index = 0u;
         } else {
             Outcome *source = &frame->child.items[frame->index++];
+            if (eval_failure_values() && ai_forward_failure(a, &frame->work,
+                    source, NULL, true))
+                return;
             Atom *value = outcome_atom_materialize(a, source);
             Atom *body = instantiate_template_variable_once(a,
                 expr_arg(frame->atom, control.last), expr_arg(frame->atom, control.first)->var_id,
@@ -4603,10 +4611,6 @@ static void he_canonical_deliver_ready(Space *s, Arena *a, Atom *call,
     if (frame) {
         frame->selected = true;
         frame->typed = true;
-        frame->data_output = eval_failure_values() &&
-            (atom_is_symbol_id(range, g_builtin_syms.atom) ||
-             atom_is_symbol_id(range, g_builtin_syms.expression) ||
-             atom_is_symbol_id(range, g_builtin_syms.list_type));
         frame->live[1] = demand;
         outcome_set_add(&frame->child, call, env);
         frame->phase = 6u;
