@@ -16634,12 +16634,17 @@ typedef struct {
 
 typedef struct {
     const Atom *left;
+    uint64_t context;
     AtomId right;
 } StoredGroundPair;
 
-/* Scoped to one synchronous closed-ground comparison and one TermUniverse.
- * No variable binding, source epoch or mutable resource can be memoized here.
- * Repeated graph pairs skip construction work, not stored row occurrences. */
+/* Scoped to one synchronous comparison and one TermUniverse. A pair is one
+ * equation between a pattern term and a stored term; a repeated equation
+ * adds nothing, since bindings only grow during the comparison and the first
+ * occurrence decides it. A closed comparison keys its terms by syntax; an
+ * open one also by the binding context, so the same skeleton under another
+ * context stays a different term. Repeated graph pairs skip construction
+ * work, not stored row occurrences. */
 typedef struct {
     StoredGroundPair local[64];
     StoredGroundPair *slots;
@@ -16647,16 +16652,19 @@ typedef struct {
     unsigned warmup;
 } StoredGroundPairs;
 
-static size_t stored_ground_pair_hash(const Atom *left, AtomId right) {
+static size_t stored_ground_pair_hash(const Atom *left, uint64_t context,
+                                      AtomId right) {
     uint64_t x = ((uint64_t)(uintptr_t)left >> 4u) ^
-                 (right * UINT64_C(0x9e3779b97f4a7c15));
+                 (right * UINT64_C(0x9e3779b97f4a7c15)) ^
+                 (context * UINT64_C(0xc2b2ae3d27d4eb4f));
     x ^= x >> 33u;
     x *= UINT64_C(0xff51afd7ed558ccd);
     return (size_t)(x ^ (x >> 33u));
 }
 
 static bool stored_ground_pair_seen(StoredGroundPairs *memo,
-                                    const Atom *left, AtomId right) {
+                                    const Atom *left, uint64_t context,
+                                    AtomId right) {
     if (memo->warmup < 32u) {
         memo->warmup++;
         return false;
@@ -16676,7 +16684,8 @@ static bool stored_ground_pair_seen(StoredGroundPairs *memo,
             StoredGroundPair pair = memo->slots[i];
             if (!pair.left)
                 continue;
-            size_t at = stored_ground_pair_hash(pair.left, pair.right) & (capacity - 1u);
+            size_t at = stored_ground_pair_hash(pair.left, pair.context, pair.right) &
+                        (capacity - 1u);
             while (slots[at].left)
                 at = (at + 1u) & (capacity - 1u);
             slots[at] = pair;
@@ -16686,13 +16695,14 @@ static bool stored_ground_pair_seen(StoredGroundPairs *memo,
         memo->slots = slots;
         memo->capacity = capacity;
     }
-    size_t at = stored_ground_pair_hash(left, right) & (memo->capacity - 1u);
+    size_t at = stored_ground_pair_hash(left, context, right) & (memo->capacity - 1u);
     while (memo->slots[at].left) {
-        if (memo->slots[at].left == left && memo->slots[at].right == right)
+        if (memo->slots[at].left == left && memo->slots[at].context == context &&
+            memo->slots[at].right == right)
             return true;
         at = (at + 1u) & (memo->capacity - 1u);
     }
-    memo->slots[at] = (StoredGroundPair){left, right};
+    memo->slots[at] = (StoredGroundPair){left, context, right};
     memo->used++;
     return false;
 }
@@ -16998,7 +17008,8 @@ retry_pair:
                 closed = match_occurrence_is_finite_dag_qualified(ground_root, true);
                 ground_qualified = true;
             }
-            if (closed && stored_ground_pair_seen(&ground_pairs, left, right_id))
+            if (stored_ground_pair_seen(&ground_pairs, left,
+                                        closed ? 0u : left_value.context, right_id))
                 break;
             for (CettaExprIndex i = atom_authored_len(left); i > 0; i--) {
                 CettaExprIndex child = i - 1u;
