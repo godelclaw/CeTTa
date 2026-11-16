@@ -19,6 +19,11 @@ void cetta_http_result_free(CettaHttpResult *r) {
     free(r->header_lines);
     memset(r,0,sizeof(*r));
 }
+void cetta_http_head_free(CettaHttpHead *head) {
+    if (!head) return;
+    for (size_t i=0;i<head->count;++i) free(head->lines[i]);
+    free(head->lines); memset(head,0,sizeof(*head));
+}
 
 void cetta_http_read_free(CettaHttpRead *r) {
     if (r) { free(r->bytes); memset(r,0,sizeof(*r)); }
@@ -59,6 +64,7 @@ typedef struct Job {
     int save_fd;
     char *save_temp;
     bool save_status_known, save_body;
+    bool response_head_known;
     CURL *easy;
     curl_mime *mime;
     struct curl_slist *headers;
@@ -206,8 +212,26 @@ static size_t save_bytes(Job *j, const char *data, size_t n) {
     return n;
 }
 
+static void collect_headers(CURL *easy, char ***lines_out, size_t *count_out);
+static void publish_response_head(Job *j) {
+    if (j->response_head_known) return;
+    long status = 0;
+    curl_easy_getinfo(j->easy, CURLINFO_RESPONSE_CODE, &status);
+    /* Only the final successful response is useful before transport ends. */
+    if (status < 200 || status >= 300) return;
+    char **lines = NULL; size_t count = 0;
+    collect_headers(j->easy, &lines, &count);
+    pthread_mutex_lock(&j->owner->mutex);
+    j->result.status = status;
+    j->result.header_lines = lines; j->result.header_count = count;
+    j->response_head_known = true;
+    changed(j->owner);
+    pthread_mutex_unlock(&j->owner->mutex);
+}
+
 static size_t receive(char *data, size_t size, size_t count, void *context) {
     Job *j=context; CettaHttpWorker *w=j->owner;
+    publish_response_head(j);
     if (size && count>SIZE_MAX/size) return 0;
     size_t n=size*count;
     if (j->save_fd>=0) {
@@ -483,7 +507,7 @@ static void finish(CettaHttpWorker *w, Job *j, CURLcode code, bool cancelled) {
         if (curl_easy_header(j->easy,"Retry-After",0,CURLH_HEADER,-1,&retry_header)==CURLHE_OK)
             curl_easy_getinfo(j->easy,CURLINFO_RETRY_AFTER,&retry_after);
         known=curl_easy_getinfo(j->easy,CURLINFO_REQUEST_SIZE,&request_size)==CURLE_OK && request_size>=0;
-        if (j->request.save_path) collect_headers(j->easy,&lines,&line_count);
+        collect_headers(j->easy,&lines,&line_count);
     }
     clear_easy(w,j,j->result.started);
     bool saved=false, refused=false; int save_error=0;
@@ -491,7 +515,10 @@ static void finish(CettaHttpWorker *w, Job *j, CURLcode code, bool cancelled) {
         commit_save(j,code==CURLE_OK && !cancelled && response>=200 && response<300,
                     lines,line_count,&saved,&refused,&save_error);
     pthread_mutex_lock(&w->mutex);
+    for (size_t i=0;i<j->result.header_count;++i) free(j->result.header_lines[i]);
+    free(j->result.header_lines);
     j->result.header_lines=lines; j->result.header_count=line_count;
+    j->response_head_known = true;
     j->result.saved=saved; j->result.save_refused=refused;
     if (save_error) j->result.save_errno=save_error;
     j->result.transport_code=code; j->result.status=response; j->result.cancelled=cancelled;
@@ -999,6 +1026,29 @@ CettaHttpReadStatus cetta_http_worker_read(CettaHttpWorker *w, uint64_t id,
     free(copy); return status;
 }
 
+CettaHttpReadStatus cetta_http_worker_head(CettaHttpWorker *w, uint64_t id, CettaHttpHead *out) {
+    if (out) memset(out, 0, sizeof(*out));
+    if (!w || !id || !out) return HTTP_READ_INVALID;
+    CettaHttpReadStatus status = HTTP_READ_OK;
+    pthread_mutex_lock(&w->mutex);
+    Job *j = find_job(w, id);
+    if (!j) status = HTTP_READ_UNKNOWN;
+    else {
+        out->status = j->result.status; out->known = j->response_head_known;
+        out->terminal = j->state == OBSERVING || j->state == READY;
+        size_t count = j->result.header_count;
+        out->lines = count ? calloc(count, sizeof(*out->lines)) : NULL;
+        if (count && !out->lines) status = HTTP_READ_NOMEM;
+        else for (size_t i=0;i<count;++i) {
+            char *line = strdup(j->result.header_lines[i]);
+            if (!line) { status = HTTP_READ_NOMEM; break; }
+            out->lines[out->count++] = line;
+        }
+    }
+    pthread_mutex_unlock(&w->mutex);
+    if (status != HTTP_READ_OK) cetta_http_head_free(out);
+    return status;
+}
 uint64_t cetta_http_worker_wait(CettaHttpWorker *w,uint64_t generation,uint32_t timeout_ms) {
     if (!w) return generation;
     struct timespec deadline; clock_gettime(CLOCK_MONOTONIC,&deadline);
@@ -1022,6 +1072,10 @@ size_t cetta_http_worker_free(CettaHttpWorker *w) {
 #else
 
 void cetta_http_worker_set_wakeup_fd(CettaHttpWorker *w,int fd) { (void)w; (void)fd; }
+CettaHttpReadStatus cetta_http_worker_head(CettaHttpWorker *w,uint64_t id,CettaHttpHead *out) {
+    (void)w; if (out) memset(out,0,sizeof(*out));
+    return id && out ? HTTP_READ_UNAVAILABLE : HTTP_READ_INVALID;
+}
 bool cetta_http_worker_progress(CettaHttpWorker *w,uint64_t id,CettaHttpProgress *out) {
     (void)w; (void)id; (void)out; return false;
 }

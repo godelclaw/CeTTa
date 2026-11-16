@@ -1768,9 +1768,9 @@ static CettaIoRequest *io_parse_tcp(CettaIoRuntime *runtime, Atom *input, char *
                      "optionally followed by ((ca-file path))");
             return NULL;
         }
-        if (strncmp(url, "tcp://", 6) && strncmp(url, "tls://", 6)) {
+        if (strncmp(url, "tcp://", 6) && strncmp(url, "tls://", 6) && strncmp(url, "unix://", 7)) {
             free(ca_file);
-            snprintf(error, error_size, "a TCP URL begins with tcp:// or tls://");
+            snprintf(error, error_size, "a raw connection URL begins with tcp://, tls:// or unix://");
             return NULL;
         }
     } else if (n < 2 || !io_nonnegative_int_arg(x[1], &first) ||
@@ -2063,10 +2063,11 @@ static Atom *io_submit(CettaIoRuntime *runtime, Arena *arena,
             : cetta_ws_open(request->url, (uint32_t)request->timeout_ms, request->max_bytes, request->ca_file,
                             runtime->wakeup[1]);
         if (!connection) {
+            bool raw = request->ws_tcp;
             free(entry);
             io_request_unlink(runtime, request);
             io_request_free(runtime, request);
-            return io_error(arena, head, args, nargs, request->ws_tcp ? "TCP provider unavailable"
+            return io_error(arena, head, args, nargs, raw ? "raw connection provider unavailable"
                                                                       : "WebSocket provider unavailable");
         }
         *entry = (CettaIoWs){request->id, connection, runtime->ws, request->ws_tcp};
@@ -2085,11 +2086,10 @@ static Atom *io_submit(CettaIoRuntime *runtime, Arena *arena,
 }
 
 /* A saved response's header fields as (http:header NAME VALUE) items. */
-static Atom *io_http_header_items(Arena *arena, const CettaIoRequest *request) {
-    size_t count = request->response_header_count;
+static Atom *io_http_header_lines(Arena *arena, char *const *lines, size_t count) {
     Atom **items = count ? arena_alloc(arena, count * sizeof(*items)) : NULL;
     for (size_t i = 0; i < count; i++) {
-        const char *line = request->response_headers[i];
+        const char *line = lines[i];
         const char *colon = strchr(line, ':');
         size_t name_size = colon ? (size_t)(colon - line) : strlen(line);
         const char *value = colon ? colon + 1 : "";
@@ -2103,11 +2103,47 @@ static Atom *io_http_header_items(Arena *arena, const CettaIoRequest *request) {
     return atom_expr(arena, items, (CettaExprLen)count);
 }
 
+static Atom *io_http_header_items(Arena *arena, const CettaIoRequest *request) {
+    return io_http_header_lines(arena, request->response_headers, request->response_header_count);
+}
+
+static Atom *io_http_head(CettaIoRuntime *runtime, Arena *arena, Atom *head, Atom **args, uint32_t nargs) {
+    int64_t id;
+    if (nargs != 1 || !io_nonnegative_int_arg(args[0], &id) || !id)
+        return io_error(arena, head, args, nargs, "expected an owned HTTP request id");
+    CettaIoRequest *request = io_request_find(runtime, (uint64_t)id);
+    if (!request) return atom_expr2(arena, atom_symbol(arena, "io:unknown"), atom_int(arena, id));
+    if (request->provider != IO_HTTP)
+        return io_error(arena, head, args, nargs, "expected an HTTP request handle");
+    CettaHttpHead observed = {0};
+    char **lines = request->response_headers;
+    size_t count = request->response_header_count;
+    long status = request->status;
+    bool known = request->ready;
+    if (!request->ready) {
+#if CETTA_BUILD_HTTP_PROVIDER_CURL
+        CettaHttpReadStatus got = cetta_http_worker_head(runtime->worker, (uint64_t)id, &observed);
+        if (got != HTTP_READ_OK) return io_error(arena, head, args, nargs, "HTTP headers unavailable");
+        lines = observed.lines; count = observed.count; status = observed.status; known = observed.known;
+#else
+        return io_error(arena, head, args, nargs, "HTTP headers unavailable");
+#endif
+    }
+    bool reflected = false;
+    for (size_t i=0;i<count && !reflected;++i)
+        reflected = io_response_has_credential(request, (const unsigned char *)lines[i], strlen(lines[i]));
+    Atom *result = reflected ? io_http_text_error(arena, request, "credential-in-response")
+        : !known ? atom_expr(arena, (Atom *[]){atom_symbol(arena, "http:head-waiting")}, 1)
+        : atom_expr3(arena, atom_symbol(arena, "http:head"), atom_int(arena, status),
+                     io_http_header_lines(arena, lines, count));
+    cetta_http_head_free(&observed);
+    return result;
+}
 static Atom *io_http_result(Arena *arena, CettaIoRequest *request) {
     bool reflected = request->save_refused ||
         io_response_has_credential(request,
             (const unsigned char *)request->response, request->response_len);
-    for (size_t i = 0; !reflected && i < request->response_header_count; i++)
+    for (size_t i = 0; request->save_path && !reflected && i < request->response_header_count; i++)
         reflected = io_response_has_credential(request,
             (const unsigned char *)request->response_headers[i],
             strlen(request->response_headers[i]));
@@ -2421,6 +2457,8 @@ Atom *cetta_io_dispatch(CettaIoRuntime *runtime, Arena *arena,
         return io_poll(runtime, arena, head, args, nargs);
     if (id == g_builtin_syms.lib_io_status)
         return io_status(runtime, arena, head, args, nargs);
+    if (id == g_builtin_syms.lib_io_http_head)
+        return io_http_head(runtime, arena, head, args, nargs);
     if (id == g_builtin_syms.lib_io_http_read)
         return io_http_read(runtime, arena, head, args, nargs);
     if (id == g_builtin_syms.lib_io_wait)

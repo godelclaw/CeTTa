@@ -25,6 +25,8 @@
 (= (system:argc) (__cetta_lib_system_arg_count ()))
 (= (system:has-args) (__cetta_lib_system_has_args ()))
 (= (system:getenv-or-default $name $default) (__cetta_lib_system_getenv_or_default $name $default))
+(= (system:env-nonempty? $name) (__cetta_lib_system_env_nonempty $name))
+(= (system:redact-secrets $text) (__cetta_lib_system_redact_secrets $text))
 (= (system:is-flag $arg) (__cetta_lib_system_is_flag_arg $arg))
 (= (system:exit $code) (__cetta_lib_system_exit_with_code $code))
 (= (system:write $stream $bytes) (__cetta_lib_system_write $stream $bytes))

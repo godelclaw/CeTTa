@@ -537,6 +537,38 @@ static Atom *read_chunk(Arena *arena, FsCursor *cursor, int64_t requested) {
     return result;
 }
 
+/* A bounded observation at an explicit offset. It neither seeks the shared
+ * descriptor nor advances/poisons the sequential cursor. */
+static Atom *read_chunk_at(Arena *arena, FsCursor *cursor,
+                           int64_t requested, int64_t offset) {
+    if ((int64_t)(off_t)offset != offset)
+        return os_failed(arena, "read-at", cursor->path, EOVERFLOW, offset, true);
+    if (!requested)
+        return atom_expr3(arena, atom_symbol(arena, "fs:chunk"),
+            atom_string(arena, ""), atom_int(arena, offset));
+    size_t size = (uint64_t)requested > UINT32_MAX ? UINT32_MAX : (size_t)requested;
+    if (size > (uint64_t)SSIZE_MAX) size = (size_t)SSIZE_MAX;
+    if (size > (uint64_t)(INT64_MAX - offset)) size = (size_t)(INT64_MAX - offset);
+    if (!size)
+        return os_failed(arena, "read-at", cursor->path, EOVERFLOW, offset, true);
+    char *bytes = malloc(size);
+    if (!bytes)
+        return os_failed(arena, "read-at", cursor->path, ENOMEM, offset, true);
+    ssize_t count;
+    do { count = pread(cursor->fd, bytes, size, (off_t)offset); }
+    while (count < 0 && errno == EINTR && !eval_native_interrupted());
+    Atom *result;
+    if (count < 0)
+        result = os_failed(arena, "read-at", cursor->path, errno, offset, true);
+    else if (!count)
+        result = atom_expr2(arena, atom_symbol(arena, "fs:end"), atom_int(arena, offset));
+    else
+        result = atom_expr3(arena, atom_symbol(arena, "fs:chunk"),
+            atom_string_n(arena, bytes, (size_t)count), atom_int(arena, offset));
+    free(bytes);
+    return result;
+}
+
 /* Every byte of a text, as a buffered Python stream's write and flush leave
  * it: short writes continue and signals resume. A fault keeps the owner open
  * and reports how many bytes the owner has written in all. */
@@ -755,6 +787,7 @@ bool cetta_fs_call(CettaLibraryContext *ctx, Arena *arena, Atom *head,
         op == g_builtin_syms.lib_fs_walk_metadata || op == g_builtin_syms.lib_fs_write_all ||
         op == g_builtin_syms.lib_fs_lock || op == g_builtin_syms.lib_fs_make_directories ||
         op == g_builtin_syms.lib_fs_set_mode || op == g_builtin_syms.lib_fs_access ? 2u : 1u;
+    if (op == g_builtin_syms.lib_fs_read_chunk && nargs == 3u) arity = 3u;
     const char *path = nargs ? path_arg(args[0]) : NULL;
     uint64_t observed = 0u;
     bool position_known = true;
@@ -893,7 +926,11 @@ bool cetta_fs_call(CettaLibraryContext *ctx, Arena *arena, Atom *head,
     else {
         if (args[1]->kind != ATOM_GROUNDED || args[1]->ground.gkind != GV_INT ||
             args[1]->ground.ival < 0) goto argument;
-        value = read_chunk(arena, cursor, args[1]->ground.ival);
+        if (nargs == 3u) {
+            if (args[2]->kind != ATOM_GROUNDED || args[2]->ground.gkind != GV_INT ||
+                args[2]->ground.ival < 0) goto argument;
+            value = read_chunk_at(arena, cursor, args[1]->ground.ival, args[2]->ground.ival);
+        } else value = read_chunk(arena, cursor, args[1]->ground.ival);
     }
     goto completed;
 handle:

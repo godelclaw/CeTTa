@@ -27,6 +27,7 @@
 (= (fs:next-entry $owner) (__cetta_lib_fs_next_entry $owner))
 (= (fs:open-read $path) (__cetta_lib_fs_open_read $path))
 (= (fs:read-chunk $owner $count) (__cetta_lib_fs_read_chunk $owner $count))
+(= (fs:read-chunk $owner $count $offset) (__cetta_lib_fs_read_chunk $owner $count $offset))
 (= (fs:close $owner) (__cetta_lib_fs_close $owner))
 (= (fs:open-write $path $flags $mode) (__cetta_lib_fs_open_write $path $flags $mode))
 (= (fs:write-all $owner $text) (__cetta_lib_fs_write_all $owner $text))

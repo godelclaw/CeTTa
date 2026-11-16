@@ -5214,6 +5214,58 @@ static Atom *system_getenv_or_default(Arena *a, Atom *head,
     return atom_deep_copy(a, args[1]);
 }
 
+static Atom *system_env_nonempty(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *name = nargs == 1 ? library_text_arg(args[0]) : NULL;
+    if (!name) return library_signature_error(a, head, args, nargs, "expected an environment variable name");
+    const char *value = getenv(name);
+    return value && *value ? atom_true(a) : atom_false(a);
+}
+
+/* Redaction observes host-owned bytes without returning their values or names. */
+static bool system_secret_name(const char *name, size_t length) {
+    static const char *suffixes[] = {"KEY", "TOKEN", "SECRET", "PASSWORD"};
+    for (size_t i = 0; i < sizeof(suffixes) / sizeof(*suffixes); ++i) {
+        size_t n = strlen(suffixes[i]);
+        if (length >= n && !memcmp(name + length - n, suffixes[i], n)) return true;
+    }
+    return false;
+}
+static Atom *system_redact_secrets(Arena *a, Atom *head, Atom **args, uint32_t nargs) {
+    const char *input = nargs == 1 ? library_text_arg(args[0]) : NULL;
+    if (!input) return library_signature_error(a, head, args, nargs, "expected text");
+    char *text = strdup(input);
+    if (!text) return NULL;
+    extern char **environ;
+    static const char replacement[] = "[redacted]";
+    for (char **entry = environ; entry && *entry; ++entry) {
+        const char *equals = strchr(*entry, '=');
+        if (!equals || !system_secret_name(*entry, (size_t)(equals - *entry))) continue;
+        const char *secret = equals + 1;
+        size_t width = strlen(secret);
+        if (width < 6) continue;
+        size_t count = 0;
+        for (const char *p = text; (p = strstr(p, secret)); p += width) ++count;
+        if (!count) continue;
+        size_t old = strlen(text), mark = sizeof(replacement) - 1;
+        if (mark > width && count > (SIZE_MAX - old - 1) / (mark - width)) { free(text); return NULL; }
+        size_t size = mark >= width ? old + count * (mark - width) : old - count * (width - mark);
+        char *next = malloc(size + 1);
+        if (!next) { free(text); return NULL; }
+        const char *from = text, *found;
+        char *to = next;
+        while ((found = strstr(from, secret))) {
+            size_t prefix = (size_t)(found - from);
+            memcpy(to, from, prefix); to += prefix;
+            memcpy(to, replacement, mark); to += mark;
+            from = found + width;
+        }
+        strcpy(to, from);
+        free(text); text = next;
+    }
+    Atom *result = atom_string(a, text);
+    free(text);
+    return result;
+}
 static Atom *system_is_flag_arg(Arena *a, Atom *head,
                                 Atom **args, uint32_t nargs) {
     const char *value;
@@ -5641,6 +5693,10 @@ static Atom *cetta_library_dispatch_system(CettaLibraryContext *ctx,
     if (head_id == g_builtin_syms.lib_system_getenv_or_default) {
         return system_getenv_or_default(a, head, args, nargs);
     }
+    if (head_id == g_builtin_syms.lib_system_env_nonempty)
+        return system_env_nonempty(a, head, args, nargs);
+    if (head_id == g_builtin_syms.lib_system_redact_secrets)
+        return system_redact_secrets(a, head, args, nargs);
     if (head_id == g_builtin_syms.lib_system_is_flag_arg) {
         return system_is_flag_arg(a, head, args, nargs);
     }

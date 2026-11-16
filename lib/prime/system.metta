@@ -108,6 +108,13 @@
      (case (__cetta_lib_system_getenv_or_default $name $default)
        (($result (return $result)))){$result}))
 
+; Presence only: credential bytes remain on the host side of the boundary.
+(= (system:env-nonempty? $name)
+   (function (case (__cetta_lib_system_env_nonempty $name) (($result (return $result)))){$result}))
+; Mask configured credential values in diagnostics without exporting them.
+(= (system:redact-secrets $text)
+   (function (case (__cetta_lib_system_redact_secrets $text) (($result (return $result)))){$result}))
+
 (= (system:is-flag $arg)
    (function
      (case (__cetta_lib_system_is_flag_arg $arg)

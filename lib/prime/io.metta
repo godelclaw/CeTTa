@@ -63,6 +63,7 @@
 (: __cetta_lib_io_poll (-> Atom Atom))
 (: __cetta_lib_io_status (-> Atom Atom))
 (: __cetta_lib_io_http_read (-> Atom Atom Atom Atom))
+(: __cetta_lib_io_http_head (-> Atom Atom))
 (: __cetta_lib_io_wait (-> Atom Atom))
 (: __cetta_lib_io_wait (-> Atom Atom Atom))
 (: __cetta_lib_io_wait (-> Atom Atom Atom Atom))
@@ -96,6 +97,12 @@
 ; complete response validation.
 (= (io:http-read $id $offset $max-bytes)
    (function (chain (eval (__cetta_lib_io_http_read $id $offset $max-bytes)) $result (return $result)){$result}))
+
+; Non-consuming response headers after they are established: (http:head
+; STATUS ((http:header NAME VALUE) ...)), or (http:head-waiting). This is
+; transport metadata, never evidence that a response body is complete.
+(= (io:http-head $id)
+   (function (chain (eval (__cetta_lib_io_http_head $id)) $result (return $result)){$result}))
 
 (= (io:cancel $id)
    (function (chain (eval (__cetta_lib_io_cancel $id)) $result (return $result)){$result}))
@@ -148,7 +155,8 @@
 ;
 ; TCP client connections, each operation one request:
 ; (tcp:connect url connect-timeout-ms max-bytes lines|pieces) opens a raw
-; tcp://host:port connection, or tls://host:port over TLS, named by this
+; tcp://host:port connection, tls://host:port over TLS, or unix:///absolute/path
+; local connection, named by this
 ; request's ID, and completes (tcp:connected CONN). (tcp:receive CONN) completes
 ; with (tcp:received CONN TEXT): with lines, the next line without its LF or
 ; CRLF; with pieces, the text that has arrived, never splitting a character.

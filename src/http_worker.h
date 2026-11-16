@@ -210,6 +210,14 @@ bool cetta_http_worker_progress(CettaHttpWorker *worker, uint64_t id,
 CettaHttpReadStatus cetta_http_worker_read(CettaHttpWorker *worker,
     uint64_t id, size_t offset, size_t max_bytes, CettaHttpRead *out);
 void cetta_http_read_free(CettaHttpRead *read);
+typedef struct {
+    long status;
+    char **lines;
+    size_t count;
+    bool known, terminal;
+} CettaHttpHead;
+CettaHttpReadStatus cetta_http_worker_head(CettaHttpWorker *worker, uint64_t id, CettaHttpHead *out);
+void cetta_http_head_free(CettaHttpHead *head);
 void cetta_http_result_free(CettaHttpResult *result);
 
 /* Wait for a completion/progress notification or timeout, using a monotonic

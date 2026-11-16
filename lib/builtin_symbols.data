@@ -788,6 +788,9 @@
             (Row lib_outcome_rechannel "__cetta_lib_outcome_rechannel" false false false false false false false)
             (Row lib_outcome_equal "__cetta_lib_outcome_equal" false false false false false false false)
             (Row lib_outcome_pack "__cetta_lib_outcome_pack" false false false false false false false)
+            (Row lib_system_env_nonempty "__cetta_lib_system_env_nonempty" false false false false false false false)
+            (Row lib_system_redact_secrets "__cetta_lib_system_redact_secrets" false false false false false false false)
+            (Row lib_io_http_head "__cetta_lib_io_http_head" false false false false false false false)
         ))
     ; These operations project or transport existing values. Their result
     ; does not establish a new data origin for any selected component.

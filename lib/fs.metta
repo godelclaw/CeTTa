@@ -134,12 +134,14 @@
 (: __cetta_lib_fs_next_entry (-> Atom Atom))
 (: __cetta_lib_fs_open_read (-> Atom Atom))
 (: __cetta_lib_fs_read_chunk (-> Atom Atom Atom))
+(: __cetta_lib_fs_read_chunk (-> Atom Atom Atom Atom))
 (: __cetta_lib_fs_close (-> Atom Atom))
 (: fs:metadata (-> %Undefined% %Undefined% Atom))
 (: fs:open-directory (-> %Undefined% Atom))
 (: fs:next-entry (-> %Undefined% Atom))
 (: fs:open-read (-> %Undefined% Atom))
 (: fs:read-chunk (-> %Undefined% %Undefined% Atom))
+(: fs:read-chunk (-> %Undefined% %Undefined% %Undefined% Atom))
 (: fs:close (-> %Undefined% Atom))
 (= (fs:metadata $path $links)
    (function (chain (eval (__cetta_lib_fs_metadata $path $links)) $result
@@ -169,6 +171,13 @@
 ; position; independently opened owners do not. Faults retain known progress.
 (= (fs:read-chunk $owner $count)
    (function (chain (eval (__cetta_lib_fs_read_chunk $owner $count)) $result
+     (return $result))))
+
+; An explicit byte offset observes the same owned file without changing the
+; sequential cursor. The chunk's position is that offset; a short read is
+; progress, not EOF. Counts and offsets must be nonnegative integers.
+(= (fs:read-chunk $owner $count $offset)
+   (function (chain (eval (__cetta_lib_fs_read_chunk $owner $count $offset)) $result
      (return $result))))
 
 (= (fs:close $owner)

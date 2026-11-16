@@ -53,6 +53,7 @@ struct CettaWsConnection {
     int control[2];         /* the evaluator wakes the worker through this pipe */
     int wakeup_fd;          /* the runtime's; not owned, -1 once released */
     char *url;              /* a client's */
+    char *unix_path;        /* a raw local connection's endpoint, else NULL */
     char *ca_file;          /* a client's trust anchors for TLS, else the default store */
     uint32_t connect_timeout_ms;
     size_t max_message_bytes;
@@ -122,6 +123,7 @@ static void connection_free(CettaWsConnection *c) {
         free(c->url);
     }
     free(c->ca_file);
+    free(c->unix_path);
     free(c->request_text);
     free(c->request_fields);
     pthread_mutex_destroy(&c->lock);
@@ -520,8 +522,11 @@ static char *tcp_text(const char *bytes, size_t length, size_t *out_length) {
 /* Queues these bytes as text; false when memory is exhausted. */
 static bool tcp_push(CettaWsConnection *c, const char *bytes, size_t length, bool *reading) {
     size_t text_length = 0u;
-    char *text = tcp_text(bytes, length, &text_length);
+    /* Local protocol clients validate their complete frame. Preserve bytes
+     * so invalid UTF-8 cannot become a different, accepted JSON value. */
+    char *text = c->unix_path ? malloc(length + 1u) : tcp_text(bytes, length, &text_length);
     if (!text) return false;
+    if (c->unix_path) { memcpy(text, bytes, length); text[length] = '\0'; text_length = length; }
     bool pushed = inbox_push(c, text, text_length, reading);
     free(text);
     return pushed;
@@ -560,6 +565,14 @@ static void *tcp_worker(void *argument) {
         goto done;
     }
     curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, "http,https");
+    if (c->unix_path) {
+        code = curl_easy_setopt(easy, CURLOPT_UNIX_SOCKET_PATH, c->unix_path);
+        if (code == CURLE_OK) code = curl_easy_setopt(easy, CURLOPT_PROXY, "");
+        if (code != CURLE_OK) {
+            finish(c, 1006, "", 0, code, "local connection setup failed");
+            goto done;
+        }
+    }
     /* Connect, and for https also complete TLS, then hand over the stream.
      * HTTP/1.1 keeps TLS from negotiating HTTP/2, whose framing libcurl would
      * then expect on what is a raw stream. */
@@ -705,7 +718,9 @@ CettaWsConnection *cetta_tcp_open(const char *url, uint32_t connect_timeout_ms,
                                   size_t max_bytes, bool lines, const char *ca_file, int wakeup_fd) {
     pthread_once(&ws_curl_once, ws_init_curl);
     bool tls = url && !strncmp(url, "tls://", 6);
-    if (!ws_curl_ready || !url || max_bytes == 0u || (!tls && strncmp(url, "tcp://", 6)))
+    bool local = url && !strncmp(url, "unix://", 7);
+    if (!ws_curl_ready || !url || max_bytes == 0u ||
+        (!tls && !local && strncmp(url, "tcp://", 6)) || (local && url[7] != '/'))
         return NULL;
     CettaWsConnection *c = connection_new(max_bytes, wakeup_fd);
     if (!c) return NULL;
@@ -713,12 +728,13 @@ CettaWsConnection *cetta_tcp_open(const char *url, uint32_t connect_timeout_ms,
     c->lines = lines;
     /* libcurl's connect-only mode reaches a host and port through these
      * schemes without sending a request; https completes TLS first. */
-    size_t length = strlen(url + 6) + 9u;
-    c->url = malloc(length);
-    if (c->url) snprintf(c->url, length, "%s://%s", tls ? "https" : "http", url + 6);
+    size_t length = strlen(url + (local ? 7 : 6)) + 9u;
+    c->url = local ? strdup("http://localhost/") : malloc(length);
+    if (!local && c->url) snprintf(c->url, length, "%s://%s", tls ? "https" : "http", url + 6);
+    c->unix_path = local ? strdup(url + 7) : NULL;
     c->ca_file = ca_file ? strdup(ca_file) : NULL;
     c->connect_timeout_ms = connect_timeout_ms;
-    if (!c->url || (ca_file && !c->ca_file) || !start_worker(c, tcp_worker)) {
+    if (!c->url || (local && !c->unix_path) || (ca_file && !c->ca_file) || !start_worker(c, tcp_worker)) {
         connection_free(c);
         return NULL;
     }

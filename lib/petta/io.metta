@@ -24,6 +24,7 @@
 (= (io:poll $id) (__cetta_lib_io_poll $id))
 (= (io:status $id) (__cetta_lib_io_status $id))
 (= (io:http-read $id $offset $max-bytes) (__cetta_lib_io_http_read $id $offset $max-bytes))
+(= (io:http-head $id) (__cetta_lib_io_http_head $id))
 (= (io:cancel $id) (__cetta_lib_io_cancel $id))
 (= (io:signal $id $signal) (__cetta_lib_io_signal $id $signal))
 (= (http:get $url) (io:submit (http:request "GET" $url () "" 30000 8388608)))
