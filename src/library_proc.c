@@ -5,6 +5,7 @@
 #include "eval.h"
 #include "../native/process_scope_v1.h"
 #include "proc_child.h"
+#include "utf8.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -49,6 +50,7 @@ typedef struct {
     size_t input_len, input_written, limit;
     size_t input_size, input_offset, input_capacity;
     bool streaming, input_closed, input_ended;
+    bool sensitive_env;
     uint64_t timeout_ms;
     int launch_error, host_error, wait_status;
     const char *launch_stage;
@@ -150,6 +152,10 @@ static void free_job(ProcJob *job) {
         free(job->output[i].bytes);
     }
     free_vector(job->argv);
+    if (job->sensitive_env && job->env) for (size_t i = 0; job->env[i]; ++i) {
+        volatile unsigned char *at = (volatile unsigned char *)job->env[i];
+        while (*at) *at++ = 0;
+    }
     free_vector(job->env);
     free(job->cwd); free(job->program); free(job->input);
     pthread_cond_destroy(&job->changed);
@@ -554,6 +560,82 @@ static bool prepare_scope(ProcJob *job) {
     return true;
 }
 
+/* Credential bytes are assembled only into the native child's environment.
+ * No Atom is created from them, and errors never include their contents. */
+static bool bind_credentials(ProcJob *job, Atom *bindings) {
+    if (!bindings || bindings->kind != ATOM_EXPR) { errno = EINVAL; return false; }
+    job->sensitive_env = true;
+    for (size_t i = 0; i < bindings->expr.len; ++i) {
+        Atom *pair = bindings->expr.elems[i];
+        if (!pair || pair->kind != ATOM_EXPR || pair->expr.len != 2u) { errno = EINVAL; return false; }
+        char *name = text_copy(pair->expr.elems[0]), *path = text_copy(pair->expr.elems[1]);
+        if (!name || !path || !*name || strchr(name, '=')) { free(name); free(path); errno = EINVAL; return false; }
+        for (size_t j = 0; j < i; ++j) {
+            Atom *other = bindings->expr.elems[j];
+            char *earlier = text_copy(other->expr.elems[0]);
+            bool duplicate = earlier && !strcmp(name, earlier); free(earlier);
+            if (duplicate) { free(name); free(path); errno = EINVAL; return false; }
+        }
+        int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK), code = errno; free(path);
+        if (fd < 0) { free(name); errno = code; return false; }
+        struct stat st;
+        if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size < 0 || st.st_size > 65536) {
+            code = errno ? errno : EINVAL; close(fd); free(name); errno = code; return false;
+        }
+        size_t maximum = 65537u, length = 0;
+        char *secret = malloc(maximum + 1u);
+        if (!secret) { close(fd); free(name); errno = ENOMEM; return false; }
+        bool valid = true;
+        while (length < maximum) {
+            ssize_t got = read(fd, secret + length, maximum - length);
+            if (got < 0 && errno == EINTR) continue;
+            if (got < 0) { valid = false; code = errno; break; }
+            if (!got) break;
+            length += (size_t)got;
+        }
+        close(fd);
+        if (length == maximum || memchr(secret, 0, length)) { valid = false; code = EINVAL; }
+        size_t first = length, last = length;
+        bool have_text = false;
+        for (size_t position = 0; valid && position < length;) {
+            uint32_t cp, width;
+            if (!cetta_utf8_decode_one((const uint8_t *)secret, length, position, &cp, &width)) {
+                valid = false; code = EILSEQ; break;
+            }
+            bool whitespace = (cp >= 9u && cp <= 13u) || (cp >= 28u && cp <= 32u) || cp == 0x85u ||
+                cp == 0xa0u || cp == 0x1680u || (cp >= 0x2000u && cp <= 0x200au) || cp == 0x2028u ||
+                cp == 0x2029u || cp == 0x202fu || cp == 0x205fu || cp == 0x3000u;
+            if (!whitespace) { if (!have_text) first = position; last = position + width; have_text = true; }
+            position += width;
+        }
+        size_t name_length = strlen(name), bytes = name_length + 1u + last - first;
+        char *entry = valid ? malloc(bytes + 1u) : NULL;
+        if (valid && !entry) { valid = false; code = ENOMEM; }
+        if (valid) {
+            memcpy(entry, name, name_length); entry[name_length] = '=';
+            memcpy(entry + name_length + 1u, secret + first, last - first); entry[bytes] = 0;
+            size_t count = 0, replace = SIZE_MAX;
+            while (job->env[count]) {
+                if (!strncmp(job->env[count], name, name_length) && job->env[count][name_length] == '=') replace = count;
+                ++count;
+            }
+            if (replace != SIZE_MAX) {
+                volatile unsigned char *at = (volatile unsigned char *)job->env[replace]; while (*at) *at++ = 0;
+                free(job->env[replace]); job->env[replace] = entry;
+            } else {
+                char **grown = realloc(job->env, (count + 2u) * sizeof(*grown));
+                if (!grown) { volatile unsigned char *at = (volatile unsigned char *)entry; for (size_t j = 0; j <= bytes; ++j) at[j] = 0; free(entry); valid = false; code = ENOMEM; }
+                else { job->env = grown; job->env[count] = entry; job->env[count + 1u] = NULL; }
+            }
+        }
+        volatile unsigned char *at = (volatile unsigned char *)secret;
+        for (size_t j = 0; j < length; ++j) at[j] = 0;
+        free(secret); free(name);
+        if (!valid) { errno = code; return false; }
+    }
+    return true;
+}
+
 static ProcJob *prepare(Atom *argv, Atom *options, const char **kind, const char **reason) {
     if (!argv || argv->kind != ATOM_EXPR || !argv->expr.len || !options || options->kind != ATOM_EXPR) {
         *reason = "expected a nonempty argv expression and an option expression"; return NULL;
@@ -586,7 +668,7 @@ static ProcJob *prepare(Atom *argv, Atom *options, const char **kind, const char
         }
     }
     if (!*job->argv[0]) { *reason = "program name is empty"; goto refuse; }
-    Atom *env = NULL;
+    Atom *env = NULL, *credentials = NULL;
     unsigned seen = 0;
     for (size_t i = 0; i < options->expr.len; i++) {
         Atom *entry = options->expr.elems[i];
@@ -596,7 +678,8 @@ static ProcJob *prepare(Atom *argv, Atom *options, const char **kind, const char
             atom_is_symbol(key, "stdin") ? 4u : atom_is_symbol(key, "timeout-ms") ? 8u :
             atom_is_symbol(key, "max-bytes") ? 16u : atom_is_symbol(key, "lifetime") ? 32u :
             atom_is_symbol(key, "stdout") ? 64u : atom_is_symbol(key, "stderr") ? 128u :
-            atom_is_symbol(key, "group") ? 256u : atom_is_symbol(key, "mode") ? 512u : 0u;
+            atom_is_symbol(key, "group") ? 256u : atom_is_symbol(key, "mode") ? 512u :
+            atom_is_symbol(key, "credential-files") ? 1024u : 0u;
         if (!bit || (seen & bit)) { *reason = "unknown or duplicate process option"; goto refuse; }
         seen |= bit;
         if (bit == 1u) {
@@ -607,6 +690,7 @@ static ProcJob *prepare(Atom *argv, Atom *options, const char **kind, const char
             }
         }
         else if (bit == 2u) env = value;
+        else if (bit == 1024u) credentials = value;
         else if (bit == 512u) {
             if (!atom_is_symbol(value, "stream") && !atom_is_symbol(value, "capture")) {
                 *reason = "mode must be capture or stream"; goto refuse;
@@ -700,6 +784,9 @@ static ProcJob *prepare(Atom *argv, Atom *options, const char **kind, const char
             free(name); free(value);
             if (!job->env[i]) goto allocation;
         }
+    }
+    if (credentials && !bind_credentials(job, credentials)) {
+        *kind = "proc:credential-failure"; *reason = "credential-file bindings could not be prepared"; goto refuse;
     }
     job->program = resolve_program(job);
     if (!job->program) goto allocation;

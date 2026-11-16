@@ -50,6 +50,10 @@
 ; timeout or capture limit means no bound in capture mode (the default).
 ; (env ENV) takes ENV as above; inherit is the default.
 ; Text decoding is a separate policy.
+; (credential-files (("NAME" "path") ...)) binds trusted credential files
+; into the child's native environment after ENV, replacing matching names.
+; Contents never become evaluator values or diagnostics. Files must be regular,
+; at most 64 KiB, strict UTF-8 without NUL; surrounding Python whitespace is stripped.
 ; lifetime owner selects tree ownership through the Linux process companion;
 ; the default lifetime group retains process-group cancellation.
 ; lifetime run keeps that tree ownership while the command runs:

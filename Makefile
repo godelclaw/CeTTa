@@ -934,6 +934,7 @@ SRC += src/shared_transition.c src/run_report.c src/run_cli.c src/error_presenta
 SRC += src/library_proc.c
 SRC += src/expand_user.c
 SRC += src/library_fs.c
+SRC += src/library_host_io.c
 SRC += src/llm_stream.c
 SRC += src/petta_priority_heap.c
 SRC += src/library_provenance.c native/provenance/prov_kernel_v1.c
@@ -48223,9 +48224,9 @@ PETTA_REFERENCE_VOCABULARY_V1 = tests/support/petta_reference_vocabulary_v1.txt
 # on the CeTTa host's PeTTa lane, over natives real PeTTa does not have.
 LIBRARY_PETTA_PORTABLE_SOURCES_V1 = langdef lib_bnf lib_lbnf lib_module lib_tptp json str
 LIBRARY_PETTA_SPELLING_SOURCES_V1 = $(LIBRARY_PETTA_PORTABLE_SOURCES_V1) lang list \
-	system fs proc sqlite shell cwp io durable space_service store llm llm/io llm/command llm/compat \
+	system fs proc host_io sqlite shell cwp io durable space_service store llm llm/io llm/command llm/compat \
 	re crypto toml postings postings_descriptors tensor tensor_descriptors embedding holkernel mm0kernel
-LIBRARY_PRIME_SPELLING_SOURCES_V1 = json re crypto toml holkernel mm0kernel
+LIBRARY_PRIME_SPELLING_SOURCES_V1 = json re crypto toml holkernel mm0kernel host_io
 LIBRARY_PETTA_SPELLING_SOURCES_V1 += lib_tensor
 LIBRARY_PRIME_SPELLING_SOURCES_V1 += lib_tensor
 LIBRARY_PRIME_SPELLING_SOURCES_V1 += act

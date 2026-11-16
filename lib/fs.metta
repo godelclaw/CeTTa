@@ -355,10 +355,8 @@
 ; blocks in POSIX 512-byte units. Follow policy is explicit.
 (: fs:metadata-v2 (-> %Undefined% %Undefined% Atom))
 (= (fs:metadata-v2 $path $links)
-   (case $links
-     ((follow (fs:metadata $path follow-observed))
-      (no-follow (fs:metadata $path no-follow-observed))
-      ($bad (fs:failed fs:invalid-argument metadata-v2 "" 0 (fs:progress 0 known-position) "expected follow or no-follow")))))
+   (function (chain (eval (__cetta_lib_fs_metadata $path (fs:observed-v2 $links))) $result
+     (return $result))))
 ; Stream a regular file with bounded buffering. A changed file/path refuses;
 ; success is (fs:hashed-v1 HEX (fs:info-v2 ...)). No digest is returned for a
 ; partial read. This does not claim an immutable filesystem snapshot.

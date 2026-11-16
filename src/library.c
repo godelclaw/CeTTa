@@ -37,6 +37,7 @@
 #include "proc_child.h"
 #include "proc_capture.h"
 #include "library_fs.h"
+#include "library_host_io.h"
 #include "library_postings.h"
 #include "library_asp.h"
 #include "library_provenance.h"
@@ -305,6 +306,7 @@ enum {
 #define CETTA_LIBRARY_SAT (UINT64_C(1) << 51)
 #define CETTA_LIBRARY_IPASIR (UINT64_C(1) << 52)
 #define CETTA_LIBRARY_SMT (UINT64_C(1) << 53)
+#define CETTA_LIBRARY_HOST_IO (UINT64_C(1) << 55)
 
 _Static_assert(((CETTA_LIBRARY_ASP | CETTA_LIBRARY_CLINGO |
                  CETTA_LIBRARY_PROVENANCE | CETTA_LIBRARY_SAT |
@@ -352,6 +354,7 @@ typedef struct {
 static const CettaLibrarySpec CETTA_LIBRARIES[] = {
     {"system", CETTA_LIBRARY_SYSTEM, NULL},
     {"fs", CETTA_LIBRARY_FS, NULL},
+    {"host_io", CETTA_LIBRARY_HOST_IO, NULL},
     {"str", CETTA_LIBRARY_STR, NULL},
     {"re", CETTA_LIBRARY_RE, NULL},
     {"postings", CETTA_LIBRARY_POSTINGS, NULL},
@@ -14493,6 +14496,8 @@ bool cetta_library_call_native(CettaLibraryContext *ctx, Space *space,
         cetta_toml_call(ctx, a, head, args, nargs, out)) return true;
     if (ctx && (ctx->active_mask & CETTA_LIBRARY_FS) &&
         cetta_fs_call(ctx, a, head, args, nargs, out)) return true;
+    if (ctx && (ctx->active_mask & CETTA_LIBRARY_HOST_IO) &&
+        cetta_host_io_call(ctx, a, head, args, nargs, out)) return true;
     /* lib/proc offers two families: owned process jobs (spawn, poll, wait,
      * status, cancel, close, await, and run with argv and options), and the
      * capturing runner proc:run with cwd, environment, timeout and capture

@@ -1,0 +1,18 @@
+!(import! &self (library host_io))
+!(import! &self (library fs))
+!(import! &self (library system))
+!(import! &self (library str))
+(= (host-contract:check $condition)
+   (if $condition True (system:exit 1)))
+(= (host-contract:run)
+   (let $buffer (buffer:new 128 text)
+     (let $inserted (buffer:insert $buffer "a雪")
+       (let $value-checked (host-contract:check (== (buffer:value $buffer) "a雪"))
+         (let $width-checked (host-contract:check (== (terminal:cells "a雪") 3))
+           (let $path "tests/host_io_contracts.metta"
+             (let $metadata (fs:metadata-v2 $path no-follow)
+               (let $metadata-checked (host-contract:check (case $metadata
+                    (((fs:info-v2 regular $size $identity $modified $changed $permissions $blocks) (> $size 0)) ($bad False))))
+                 (let $closed (host:close $buffer) True)))))))))
+!(let $answers (collapse (host-contract:run))
+   (if (== $answers (True)) (println! HOST_IO_SHARED_CONTRACTS_OK) (system:exit 1)))

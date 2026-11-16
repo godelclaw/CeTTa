@@ -738,6 +738,12 @@ static Atom *make_directories(Arena *arena, const char *path, mode_t mode) {
  * modification time to the answer and a -permissions variant that adds the
  * permission bits. */
 static bool link_mode(Atom *atom, bool *follow, MetadataExtra *extra) {
+    if (atom && atom->kind == ATOM_EXPR && atom->expr.len == 2u &&
+        atom_is_symbol(atom->expr.elems[0], "fs:observed-v2")) {
+        Atom *policy = atom->expr.elems[1];
+        if (!atom_is_symbol(policy, "follow") && !atom_is_symbol(policy, "no-follow")) return false;
+        *follow = atom_is_symbol(policy, "follow"); *extra = METADATA_OBSERVED; return true;
+    }
     static const struct { const char *name; bool follow; MetadataExtra extra; } modes[] = {
         {"follow", true, METADATA_PLAIN}, {"no-follow", false, METADATA_PLAIN},
         {"follow-modified", true, METADATA_MODIFIED}, {"no-follow-modified", false, METADATA_MODIFIED},

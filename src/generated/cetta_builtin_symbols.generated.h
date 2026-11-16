@@ -747,7 +747,8 @@
     cesta_table_apply_0(lib_outcome_pack, "__cetta_lib_outcome_pack") \
     cesta_table_apply_0(lib_system_env_nonempty, "__cetta_lib_system_env_nonempty") \
     cesta_table_apply_0(lib_system_redact_secrets, "__cetta_lib_system_redact_secrets") \
-    cesta_table_apply_0(lib_io_http_head, "__cetta_lib_io_http_head")
+    cesta_table_apply_0(lib_io_http_head, "__cetta_lib_io_http_head") \
+    cesta_table_apply_0(lib_host_io, "__cetta_lib_host_io")
 
 #define CETTA_PETTA_ONLY_BUILTIN_SYMBOL_ROWS(cesta_table_apply_0) \
     cesta_table_apply_0(petta_member) \
