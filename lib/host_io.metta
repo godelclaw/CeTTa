@@ -29,6 +29,14 @@
 (: host:read (-> %Undefined% %Undefined% Atom))
 (: host:write (-> %Undefined% %Undefined% %Undefined% Atom))
 (: host:wait (-> %Undefined% %Undefined% Atom))
+; During a bounded wait, serve at most eight exact byte frames to same-user
+; peers. Mapping is (HostReplyV1 "request\n" "reply\n"). No JSON is interpreted.
+; A mismatch or unfinished frame returns HostIncomingV1 owner peer bytes time;
+; partial output returns HostOutgoingV1 owner peer reply offset time. The caller
+; owns these handles and resumes or closes them. Other readiness is HostReady.
+; Interests are read/write; the listener must occur with read interest. The
+; request is one newline-terminated frame, at most 4096 bytes; reply <= 1 MiB.
+(: host:wait-reply (-> %Undefined% %Undefined% %Undefined% %Undefined% Atom))
 (: host:stdio (-> %Undefined% Atom))
 (: host:close (-> %Undefined% Atom))
 (: terminal:open (-> %Undefined% Atom))
@@ -64,6 +72,7 @@
 (= (host:read $owner $bytes) (function (chain (eval (__cetta_lib_host_io "read" $owner $bytes)) $r (return $r))))
 (= (host:write $owner $text $offset) (function (chain (eval (__cetta_lib_host_io "write" $owner $text $offset)) $r (return $r))))
 (= (host:wait $requests $timeout) (function (chain (eval (__cetta_lib_host_io "wait" $requests $timeout)) $r (return $r))))
+(= (host:wait-reply $listener $requests $mapping $timeout) (function (chain (eval (__cetta_lib_host_io "wait-reply" $listener $requests $mapping $timeout)) $r (return $r))))
 (= (host:stdio $number) (function (chain (eval (__cetta_lib_host_io "stdio" $number)) $r (return $r))))
 (= (host:close $owner) (function (chain (eval (__cetta_lib_host_io "close" $owner)) $r (return $r))))
 (= (terminal:open $path) (function (chain (eval (__cetta_lib_host_io "terminal-open" $path)) $r (return $r))))

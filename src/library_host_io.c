@@ -407,6 +407,129 @@ static Atom *wait_ready(CettaLibraryContext *ctx, Arena *a, Atom *requests, int 
     for (size_t i = 0; i < count; ++i) (void)cetta_native_handle_use_release(&uses[i]);
     free(fds); free(uses); free(ready); return answer;
 }
+
+/* One caller-validated, immutable line/reply pair may be served while waiting.
+ * This is byte transport, not request interpretation. A mismatch, partial
+ * frame, pending write, or other ready owner returns control to the caller.
+ * At most eight peers are accepted per invocation, within the original wait
+ * budget. The ordinary wait path and its cost remain unchanged. */
+static int64_t host_monotonic_ns(void) {
+    struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
+    return (int64_t)now.tv_sec * INT64_C(1000000000) + now.tv_nsec;
+}
+static Atom *wait_reply(CettaLibraryContext *ctx, Arena *a, Atom *listener_atom,
+                        Atom *requests, Atom *mapping, int timeout) {
+    const char *request, *reply; size_t request_length, reply_length;
+    if (!requests || requests->kind != ATOM_EXPR || requests->expr.len > 65536u ||
+        !mapping || mapping->kind != ATOM_EXPR || mapping->expr.len != 3u ||
+        !atom_is_symbol(mapping->expr.elems[0], "HostReplyV1") ||
+        !string_bytes(mapping->expr.elems[1], &request, &request_length) ||
+        !string_bytes(mapping->expr.elems[2], &reply, &reply_length) ||
+        !request_length || request_length > 4096u || request[request_length - 1u] != '\n' ||
+        memchr(request, '\n', request_length - 1u) || !reply_length || reply_length > 1048576u)
+        return failure(a, "wait-reply", EINVAL);
+    size_t count = requests->expr.len, listener_index = count;
+    struct pollfd *fds = calloc(count + 1u, sizeof(*fds));
+    CettaNativeHandleUse *uses = calloc(count + 1u, sizeof(*uses));
+    Atom **ready = malloc((count + 1u) * sizeof(*ready));
+    if (!fds || !uses || !ready) {
+        free(fds); free(uses); free(ready); return failure(a, "wait-reply", ENOMEM);
+    }
+    CettaNativeHandleUse listener_use = {0};
+    HostFd *listener = acquire_fd(ctx, listener_atom, &listener_use, CETTA_NATIVE_HANDLE_USE_EXCLUSIVE);
+    int code = listener && listener->kind == HOST_LISTENER ? 0 : EBADF;
+    for (size_t i = 0; !code && i < count; ++i) {
+        Atom *pair = requests->expr.elems[i];
+        const char *interest = pair && pair->kind == ATOM_EXPR && pair->expr.len == 2u ? text(pair->expr.elems[1]) : NULL;
+        HostFd *f = interest ? acquire_fd(ctx, pair->expr.elems[0], &uses[i], CETTA_NATIVE_HANDLE_USE_LIFETIME) : NULL;
+        if (!f || (strcmp(interest, "read") && strcmp(interest, "write"))) { code = EINVAL; break; }
+        fds[i].fd = f->fd; fds[i].events = !strcmp(interest, "read") ? POLLIN : POLLOUT;
+        if (f == listener && !strcmp(interest, "read")) listener_index = i;
+    }
+    if (!code && listener_index == count) code = EINVAL;
+    int64_t deadline = host_monotonic_ns() + (int64_t)timeout * 1000000;
+    unsigned accepted = 0; int incoming = -1; struct ucred peer = {0};
+    int64_t accepted_at = 0; size_t used = 0; char bytes[4096];
+    Atom *answer = NULL;
+    while (!code) {
+        int64_t left = deadline - host_monotonic_ns();
+        int remaining = left <= 0 ? 0 : (int)((left + 999999) / 1000000);
+        fds[count] = (struct pollfd){.fd = incoming, .events = POLLIN};
+        bool had_incoming = incoming >= 0;
+        int polled = poll(fds, (nfds_t)(count + had_incoming), remaining > 100 ? 100 : remaining);
+        if (polled < 0 && errno != EINTR) { code = errno; break; }
+        for (size_t i = 0; i < count; ++i)
+            if (!cetta_native_handle_use_is_current(&uses[i])) { code = ESTALE; break; }
+        if (!code && !cetta_native_handle_use_is_current(&listener_use)) code = ESTALE;
+        if (code) break;
+        bool other_ready = had_incoming && fds[listener_index].revents;
+        for (size_t i = 0; i < count; ++i)
+            if (i != listener_index && fds[i].revents) other_ready = true;
+        if (incoming < 0 && !other_ready && fds[listener_index].revents &&
+            !requested_signal && !eval_native_interrupted()) {
+            incoming = accept4(listener->fd, NULL, NULL, SOCK_CLOEXEC | SOCK_NONBLOCK);
+            if (incoming >= 0) {
+                incoming = owned_descriptor(incoming);
+                if (incoming < 0) { code = errno; break; }
+                ++accepted; accepted_at = host_monotonic_ns(); used = 0;
+                socklen_t length = sizeof(peer);
+                if (getsockopt(incoming, SOL_SOCKET, SO_PEERCRED, &peer, &length)) { code = errno; break; }
+                if (peer.uid != geteuid()) { close(incoming); incoming = -1; }
+            } else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) { code = errno; break; }
+        }
+        if (incoming >= 0) {
+            ssize_t got = recv(incoming, bytes + used, sizeof(bytes) - used, 0);
+            if (got > 0) used += (size_t)got;
+            else if (!got) { close(incoming); incoming = -1; }
+            else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) { close(incoming); incoming = -1; }
+            if (incoming >= 0) {
+                const char *newline = memchr(bytes, '\n', used);
+                bool exact = newline && (size_t)(newline - bytes) + 1u == request_length &&
+                    !memcmp(bytes, request, request_length);
+                if (exact) {
+                    ssize_t sent = send(incoming, reply, reply_length, MSG_NOSIGNAL);
+                    if (sent == (ssize_t)reply_length || (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) {
+                        close(incoming); incoming = -1;
+                    } else {
+                        HostFd *owner = calloc(1, sizeof(*owner));
+                        if (!owner) { code = ENOMEM; break; }
+                        owner->fd = incoming; owner->kind = HOST_STREAM; incoming = -1;
+                        Atom *handle = own_fd(ctx, a, owner);
+                        if (!handle || handle->kind != ATOM_EXPR || !atom_is_symbol(handle->expr.elems[0], "NativeHandle")) { answer = handle; break; }
+                        Atom *identity = term(a, "HostPeer", (Atom *[]){atom_int(a, peer.pid), atom_int(a, peer.uid), atom_int(a, peer.gid)}, 3u);
+                        answer = term(a, "HostOutgoingV1", (Atom *[]){handle, identity,
+                            atom_string_n(a, reply, reply_length), atom_int(a, sent > 0 ? sent : 0), atom_int(a, accepted_at)}, 5u);
+                        break;
+                    }
+                } else if (newline || used >= request_length || memcmp(bytes, request, used) ||
+                           other_ready || host_monotonic_ns() >= deadline || requested_signal || eval_native_interrupted()) {
+                    HostFd *owner = calloc(1, sizeof(*owner));
+                    if (!owner) { code = ENOMEM; break; }
+                    owner->fd = incoming; owner->kind = HOST_STREAM; incoming = -1;
+                    Atom *handle = own_fd(ctx, a, owner);
+                    if (!handle || handle->kind != ATOM_EXPR || !atom_is_symbol(handle->expr.elems[0], "NativeHandle")) { answer = handle; break; }
+                    Atom *identity = term(a, "HostPeer", (Atom *[]){atom_int(a, peer.pid), atom_int(a, peer.uid), atom_int(a, peer.gid)}, 3u);
+                    answer = term(a, "HostIncomingV1", (Atom *[]){handle, identity,
+                        atom_string_n(a, bytes, used), atom_int(a, accepted_at)}, 4u);
+                    break;
+                }
+            }
+        }
+        if (incoming >= 0) continue;
+        if (other_ready || (!polled && remaining <= 100) || host_monotonic_ns() >= deadline || accepted >= 8u ||
+            requested_signal || eval_native_interrupted()) {
+            size_t found = 0;
+            for (size_t i = 0; i < count; ++i) if (fds[i].revents) ready[found++] = requests->expr.elems[i];
+            answer = term(a, "HostReady", (Atom *[]){atom_expr(a, ready, (uint32_t)found)}, 1u);
+            break;
+        }
+    }
+    if (incoming >= 0) close(incoming);
+    if (code) answer = failure(a, "wait-reply", code);
+    for (size_t i = 0; i < count; ++i) (void)cetta_native_handle_use_release(&uses[i]);
+    (void)cetta_native_handle_use_release(&listener_use);
+    free(fds); free(uses); free(ready); return answer;
+}
 static pthread_once_t width_once = PTHREAD_ONCE_INIT;
 static locale_t width_locale;
 static void initialize_width(void) { width_locale = newlocale(LC_CTYPE_MASK, "C.UTF-8", (locale_t)0); }
@@ -606,7 +729,9 @@ bool cetta_host_io_call(CettaLibraryContext *ctx, Arena *a, Atom *head, Atom **a
             answer = write_fd(a, f, bytes, take, 0);
         }
         (void)cetta_native_handle_use_release(&second);
-    } else if (!strcmp(operation, "wait") && nargs == 3u && number(args[2], 0, INT_MAX, &value))
+    } else if (!strcmp(operation, "wait-reply") && nargs == 5u && number(args[4], 0, INT_MAX, &value))
+        answer = wait_reply(ctx, a, args[1], args[2], args[3], (int)value);
+    else if (!strcmp(operation, "wait") && nargs == 3u && number(args[2], 0, INT_MAX, &value))
         answer = wait_ready(ctx, a, args[1], (int)value);
     else if (!strcmp(operation, "json-file") && nargs == 2u) answer = json_file(ctx, a, text(args[1]));
     else if (!strcmp(operation, "json-open") && nargs == 2u) answer = open_json_cursor(ctx, a, text(args[1]));

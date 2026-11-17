@@ -19,6 +19,7 @@
 (= (host:read $owner $bytes) (function (case (__cetta_lib_host_io "read" $owner $bytes) (($result (return $result))))))
 (= (host:write $owner $text $offset) (function (case (__cetta_lib_host_io "write" $owner $text $offset) (($result (return $result))))))
 (= (host:wait $requests $timeout) (function (case (__cetta_lib_host_io "wait" $requests $timeout) (($result (return $result))))))
+(= (host:wait-reply $listener $requests $mapping $timeout) (function (case (__cetta_lib_host_io "wait-reply" $listener $requests $mapping $timeout) (($result (return $result))))))
 (= (host:stdio $number) (function (case (__cetta_lib_host_io "stdio" $number) (($result (return $result))))))
 (= (host:close $owner) (function (case (__cetta_lib_host_io "close" $owner) (($result (return $result))))))
 (= (terminal:open $path) (function (case (__cetta_lib_host_io "terminal-open" $path) (($result (return $result))))))

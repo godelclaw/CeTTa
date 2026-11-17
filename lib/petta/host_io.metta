@@ -19,6 +19,7 @@
 (= (host:read $owner $bytes) (__cetta_lib_host_io "read" $owner $bytes))
 (= (host:write $owner $text $offset) (__cetta_lib_host_io "write" $owner $text $offset))
 (= (host:wait $requests $timeout) (__cetta_lib_host_io "wait" $requests $timeout))
+(= (host:wait-reply $listener $requests $mapping $timeout) (__cetta_lib_host_io "wait-reply" $listener $requests $mapping $timeout))
 (= (host:stdio $number) (__cetta_lib_host_io "stdio" $number))
 (= (host:close $owner) (__cetta_lib_host_io "close" $owner))
 (= (terminal:open $path) (__cetta_lib_host_io "terminal-open" $path))
