@@ -1254,8 +1254,8 @@ the single-operand policies, retains distinct discarded destinations and joins
 the schedules to metered contextual execution. Native AST correspondence,
 fresh-name allocation and C ownership remain separate obligations.
 
-The process-stream gate is included in test-all and the alternate process
-launch qualification. Frozen executable bundles include their .proc-scope
+The process-stream gate is in the suite's correctness stage and in the
+alternate process launch qualification. Frozen executable bundles include their .proc-scope
 companion; owner-scoped process execution depends on that exact adjacent file.
 
 Source-fuel admission for authored regions

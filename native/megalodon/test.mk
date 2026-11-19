@@ -252,4 +252,4 @@ test-megalodon: test-megalodon-core test-megalodon-metta test-seal test-megalodo
 test-megalodon-tptp: $(BIN) prepare-tptp-compact-morphism-v1-body
 	$(call megalodon_dual_lane,integration)
 
-test-all: test-megalodon
+SUITE_CORRECTNESS_GATES += test-megalodon

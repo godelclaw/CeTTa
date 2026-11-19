@@ -49,36 +49,54 @@ The cache is local to this checkout and does not certify another machine.
 The complete suite, in stages
 -----------------------------
 
-test-all runs in four stages, cheapest first:
+The complete suite runs in four stages, cheapest first, and make test-all is
+the way to run it:
 
-    make main-readiness-suite
+    make test-all
 
-Correctness comes first: test-all's own gates, which are unit and fixture
-checks. Then the asymptotic checks, which measure how time or memory grows
-with size; they run one at a time, since other runs would disturb them. Then
-the examples. Then the comprehensive sweeps: whole corpora under each switch,
-generated programs, and the mutation tests, which check that a test catches
-the defects it is for. The run stops after the first stage with a failure.
+Correctness comes first: the gates in SUITE_CORRECTNESS_GATES, which are unit
+and fixture checks. Then the asymptotic checks, which measure how time or
+memory grows with size; they run one at a time, since other runs would
+disturb them. Then the examples. Then the comprehensive sweeps: whole corpora
+under each switch, generated programs, the mutation tests, which check that a
+test catches the defects it is for, and the gates that build other
+configurations. The run stops after the first stage with a failure.
+
+A stage runs in one build configuration, the one make test-all was given. Its
+files are built once; every gate then runs in that configuration
+(CETTA_SUITE_STAGE tells the Makefile so), with the runtime-stats build of it
+as the only other. A grammar gate asked for alone builds the core
+configuration without GMP, Prolog or HTTP; in a stage it does not, and
+test-grammar-native-only runs the grammar gates in that configuration once, in
+the comprehensive stage.
 
 Within a stage, the gates that failed when last run go first, then the
 longest. The gates that build another configuration run one at a time; the
-others run three at a time (MAIN_READINESS_SUITE_JOBS). After a repair, rerun
-only what failed:
+others run SUITE_JOBS at a time (3). After a repair, rerun only what failed:
 
-    make main-readiness-suite-failed
+    make test-all SUITE_FAILED=1
 
 or one stage, or named gates:
 
-    python3 scripts/cetta_main_readiness.py --tier suite --stage comprehensive
-    python3 scripts/cetta_main_readiness.py --tier suite --target test-megalodon
+    make test-all SUITE_STAGE=correctness
+    make test-comprehensive
+    make test-all SUITE_TARGETS=test-megalodon
+
+make main-readiness-suite and main-readiness-suite-failed run the same suite.
 
 Each gate's latest output is runtime/main-readiness/suite/logs/GATE.log, and
 every result is appended to runtime/main-readiness/suite/results.tsv.
 
-A gate joins a stage in the Makefile, next to its rule: test-all for
-correctness, otherwise test-asymptotic, test-examples or test-comprehensive.
-A feature whose broad check belongs to a later stage keeps a small essential
-check in correctness, so the first stage still covers it.
+A gate joins a stage in the Makefile, next to its rule, by adding itself to
+SUITE_CORRECTNESS_GATES, SUITE_ASYMPTOTIC_GATES, SUITE_EXAMPLES_GATES or
+SUITE_COMPREHENSIVE_GATES. The stage targets (test-all, test-asymptotic,
+test-examples, test-comprehensive) run the suite and gather no prerequisites:
+a gate made their prerequisite would run in one make outside the stages, and
+make test refuses it (test-test-target-scope). A correctness gate runs in the
+stage's configuration; a check of another configuration joins the
+comprehensive stage. A feature whose broad check belongs to a later stage
+keeps a small essential check in correctness, so the first stage still covers
+it.
 
 Stronger qualification
 ----------------------

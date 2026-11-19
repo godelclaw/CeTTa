@@ -93,7 +93,8 @@ def parse_args() -> argparse.Namespace:
         "--tier",
         choices=("candidate", "suite", "routine", "exhaustive"),
         default="candidate",
-        help=("candidate is bounded; suite runs test-all in stages, cheapest first; "
+        help=("candidate is bounded; suite runs the complete suite in stages, cheapest "
+              "first, as make test-all does; "
               "routine/exhaustive are the legacy broad campaigns"),
     )
     parser.add_argument("--stage",

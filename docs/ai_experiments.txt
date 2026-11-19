@@ -212,9 +212,9 @@ binding patterns and the existing sealed-sort preset have separate
 contracts. Graduation into a stable host requires a stronger review.
 
 Repeatable controls live in tests/ai/. test-ai runs their CeTTa driver and
-native protocol fixture and is included in test-all. Qualification records
-must name the revision, Lean hash, changed golden programs, mutations,
-performance and limitations. HE controls exercise canonical and reference
+native protocol fixture and is in the suite's correctness stage.
+Qualification records must name the revision, Lean hash, changed golden
+programs, mutations, performance and limitations. HE controls exercise canonical and reference
 execution, including nested strict contexts and native producer provenance.
 
 HE instruction returns retain their result channel through metta, chain and
