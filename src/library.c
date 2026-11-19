@@ -10363,6 +10363,18 @@ static bool cetta_library_petta_execute_listed_document_ids(
             bool has_error =
                 first_error != NULL ||
                 result_set_has_error(results);
+            /* A PeTTa import or text run takes an Error a directive returns
+             * as that directive's answer and goes on, as the top level and
+             * the reference loader do. Only a raised error or an incomplete
+             * run stops the document; the importer then raises it. */
+            if (has_error && !execution && !last_results && !observer &&
+                observed.completion == CETTA_EVAL_COMPLETE &&
+                observed.petta_raise_known && !observed.petta_raised_error &&
+                eval_current_language_id &&
+                eval_current_language_id() == CETTA_LANGUAGE_PETTA) {
+                has_error = false;
+                first_error = NULL;
+            }
             /* HE compatibility include and Python runner observations retain
                complete directive frontiers, including language Error values.
                Imports and PeTTa text processing keep their failure policy. */

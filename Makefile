@@ -20084,6 +20084,7 @@ NORMAL_TEST_TARGETS := \
 	test-outcome-library
 
 NORMAL_TEST_TARGETS += test-outcome-kernel
+NORMAL_TEST_TARGETS += test-import-errors
 .PHONY: test test-all test-test-target-scope
 test: $(NORMAL_TEST_TARGETS)
 test-all: test
@@ -25890,7 +25891,7 @@ test-petta-extended-collections: $(BIN)
 	done; \
 	echo "PASS: select, collect and reify in PeTTa's extended profile, on the tier and in the machine"
 
-test-profiles: $(BIN) test-import-as test-bounded-select-threads test-petta-extended-collections test-manifest test-forbidden-availability-errors test-git-module-profiles test-symbolid-guard test-fallback-eval-session test-he-compiled-reader-v1 test-petta-compiled-reader-v1 test-prime-compiled-reader-v1 test-import-modes test-he-prime-search-mutation test-he-prime-scheme-mutation test-prime-crossdialect test-prime-need-he-noninterference
+test-profiles: $(BIN) test-import-as test-import-errors test-bounded-select-threads test-petta-extended-collections test-manifest test-forbidden-availability-errors test-git-module-profiles test-symbolid-guard test-fallback-eval-session test-he-compiled-reader-v1 test-petta-compiled-reader-v1 test-prime-compiled-reader-v1 test-import-modes test-he-prime-search-mutation test-he-prime-scheme-mutation test-prime-crossdialect test-prime-need-he-noninterference
 	@pass=0; fail=0; \
 	cache_dir="$(GIT_TEST_CACHE_DIR)"; mkdir -p "$$cache_dir"; export CETTA_GIT_MODULE_CACHE_DIR="$$cache_dir"; \
 	profiles=$$($(CETTA_BIN_INVOKE) --lang he --list-profiles 2>&1); \
@@ -35396,6 +35397,17 @@ bench-he-compiled-reader-v1: $(HE_COMPILED_READER_BENCH_BIN)
 	@./$(HE_COMPILED_READER_BENCH_BIN) \
 		"$(HE_COMPILED_READER_BENCH_INPUT)" \
 		"$(HE_COMPILED_READER_BENCH_ITERATIONS)"
+
+.PHONY: test-import-errors
+test-import-errors: $(BIN) tests/petta/import_errors.metta tests/petta/import_errors.expected tests/petta/import_errors_raising_lib.metta tests/petta/import_errors_value_lib.metta
+	@set -eu; \
+	actual=$$($(CETTA_BIN_INVOKE) --lang petta tests/petta/import_errors.metta 2>&1); \
+	if [ "$$actual" != "$$(cat tests/petta/import_errors.expected)" ]; then \
+		echo "FAIL: a PeTTa import reports what its module raised"; \
+		diff <(cat tests/petta/import_errors.expected) <(printf '%s\n' "$$actual") | head -20; \
+		exit 1; \
+	fi; \
+	echo "PASS: a PeTTa import raises its module's error and loads past returned Error values"
 
 .PHONY: test-import-as
 test-import-as: $(BIN) tests/petta/import_as.metta tests/petta/import_as.expected tests/petta/import_as.he.expected tests/petta/import_as_lib.metta tests/petta/import_as_ns_lib.metta

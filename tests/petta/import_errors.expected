@@ -1,0 +1,7 @@
+is (Error (existence_error source_sink ./import_errors_absent.metta) (context import! ./import_errors_absent.metta)), should (Error (existence_error source_sink ./import_errors_absent.metta) (context import! ./import_errors_absent.metta)). ✅ 
+is ((raising-lib-tail)), should ((raising-lib-tail)). ✅ 
+is loaded, should loaded. ✅ 
+true
+true
+true
+true

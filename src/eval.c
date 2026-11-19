@@ -99860,6 +99860,13 @@ static __attribute__((noinline)) MettaDispatchResult metta_storage_dispatch(
             } else if (language_id != CETTA_LANGUAGE_PETTA ||
                 has_library_reference) {
                 ai_publish_error(a, os, atom_error(a, (*call), error), empty);
+            } else {
+                /* An error raised while the module loaded reaches the
+                 * importer unchanged, as the reference loader rethrows it.
+                 * Any other failure to load is raised against this import:
+                 * an import never fails silently. */
+                petta_eval_raise(atom_is_error(error)
+                    ? error : atom_error(a, (*call), error));
             }
         } else if (missing_library) {
             if (dest.is_fresh && dest.space)
