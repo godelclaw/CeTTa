@@ -127,8 +127,12 @@ CettaAtomWireStatus cetta_atom_wire_encode_bounded(const Atom *a, size_t maximum
     if (bytes) *bytes = NULL;
     if (n) *n = 0;
     if (!bytes || !n) return ATOM_WIRE_INVALID;
-    Writer *w = calloc(1, sizeof(*w));
+    /* The variable table is read only below vars, so it is not cleared: a
+     * cleared table cost more than encoding a small atom. */
+    Writer *w = malloc(sizeof(*w));
     if (!w) return ATOM_WIRE_NOMEM;
+    w->bytes = NULL;
+    w->size = w->capacity = w->nodes = w->vars = 0;
     w->maximum_bytes = maximum_bytes;
     CettaAtomWireStatus status = append(w, "CAV1", 4);
     if (status == ATOM_WIRE_OK) status = encode(w, a, 0);
@@ -239,9 +243,10 @@ CettaAtomWireStatus cetta_atom_wire_decode_bounded(Arena *arena, const unsigned 
     if (!arena || !bytes) return ATOM_WIRE_INVALID;
     if (n > maximum_bytes) return ATOM_WIRE_LIMIT;
     if (n < 4 || memcmp(bytes, "CAV1", 4)) return ATOM_WIRE_CORRUPT;
-    Reader *r = calloc(1, sizeof(*r));
+    /* As in encoding, variables is read only below vars. */
+    Reader *r = malloc(sizeof(*r));
     if (!r) return ATOM_WIRE_NOMEM;
-    r->bytes = bytes; r->size = n; r->pos = 4;
+    r->bytes = bytes; r->size = n; r->pos = 4; r->nodes = 0; r->vars = 0;
     Atom *value = NULL;
     CettaAtomWireStatus status = decode(r, arena, 0, &value);
     if (status == ATOM_WIRE_OK && r->pos != n) status = ATOM_WIRE_CORRUPT;
