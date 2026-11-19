@@ -742,6 +742,13 @@ struct CettaActBuilder {
   Written final;
   uint64_t final_depth;
   CettaActStatus failure;
+  /* The source file last checked by put_fd and its size then. */
+  int source_fd;
+  uint64_t source_size;
+  /* A file-backed builder holds its frontier in memory up to frontier_limit
+   * bytes, and in the frontier file once it has outgrown them. */
+  size_t frontier_limit;
+  bool frontier_spilled;
   unsigned char output_buffer[32768], scratch[32768], incoming[32768];
 };
 static bool file_at(int fd, void *data, size_t size, uint64_t offset,
@@ -830,7 +837,7 @@ static CettaActStatus previous_save(CettaActBuilder *b,const InputKey *key) {
       if (cap<size) cap=size;
       void *p=realloc(b->previous.data,cap);if (!p) return CETTA_ACT_NOMEM;
       if (!b->memory) {
-        size_t preparation=sizeof(*b)+b->previous.cap+cap;
+        size_t preparation=sizeof(*b)+b->previous.cap+cap+b->memory_frontier.cap;
         if (preparation>b->peak_heap) b->peak_heap=preparation;
       }
       b->previous.data=p;b->previous.cap=cap;
@@ -850,10 +857,26 @@ static CettaActStatus previous_save(CettaActBuilder *b,const InputKey *key) {
   b->previous_size=key->size;b->have_previous=true;return CETTA_ACT_OK;
 }
 static bool frontier_at(CettaActBuilder *b,void *data,size_t n,uint64_t at,bool writing) {
-  if (!b->memory) return file_at(b->frontier,data,n,at,writing);
+  if (!b->memory && b->frontier_spilled) return file_at(b->frontier,data,n,at,writing);
   if (at>SIZE_MAX || n>SIZE_MAX-(size_t)at) return false;
   if (writing) {
-    if (at!=b->memory_frontier.len || !append(&b->memory_frontier,data,n)) {
+    if (at!=b->memory_frontier.len) return false;
+    if (!b->memory && n>b->memory_frontier.cap-b->memory_frontier.len) {
+      size_t cap=b->memory_frontier.cap ? b->memory_frontier.cap : 1;
+      while (cap<b->memory_frontier.len+n && cap<=b->frontier_limit/2) cap*=2;
+      if (cap<b->memory_frontier.len+n || cap>b->frontier_limit) {
+        /* The frontier outgrew its memory: from now on it is in the file. */
+        if (!file_at(b->frontier,b->memory_frontier.data,b->memory_frontier.len,0,true)) return false;
+        free(b->memory_frontier.data);b->memory_frontier=(Buffer){0};b->frontier_spilled=true;
+        return file_at(b->frontier,data,n,at,true);
+      }
+      size_t preparation=sizeof(*b)+b->previous.cap+b->memory_frontier.cap+cap;
+      void *p=realloc(b->memory_frontier.data,cap);
+      if (!p) {b->failure=CETTA_ACT_NOMEM;return false;}
+      if (preparation>b->peak_heap) b->peak_heap=preparation;
+      b->memory_frontier.data=p;b->memory_frontier.cap=cap;
+    }
+    if (!append(&b->memory_frontier,data,n)) {
       b->failure=CETTA_ACT_NOMEM;return false;
     }
   } else {
@@ -890,11 +913,12 @@ static bool frame_restore(CettaActBuilder *b) {
   size_t children = (size_t)h.count * sizeof(Written);
   if (!frontier_at(b, b->frame.children, children, at + sizeof(h), false) ||
       !frontier_at(b, b->frame.labels, (size_t)h.count,
-                at + sizeof(h) + children, false) || (!b->memory && ftruncate(b->frontier, (off_t)at)))
+                at + sizeof(h) + children, false) ||
+      (!b->memory && b->frontier_spilled && ftruncate(b->frontier, (off_t)at)))
     return false;
   b->frame.depth = h.depth; b->frame.value = h.value;
   b->frame.count = (unsigned)h.count; b->frame.valued = h.valued != 0;
-  if (b->memory) b->memory_frontier.len=(size_t)at;
+  if (b->memory || !b->frontier_spilled) b->memory_frontier.len=(size_t)at;
   b->frontier_end = at; b->active = true; return true;
 }
 static bool wrap_previous(CettaActBuilder *b, Written *result,
@@ -964,9 +988,11 @@ CettaActStatus cetta_act_builder_open(int output, int frontier, int key_file,
   }
   CettaActBuilder *b = calloc(1, sizeof(*b));
   if (!b) return CETTA_ACT_NOMEM;
-  b->output = b->frontier = b->key_file = -1;
-  /* Reserve the old and new key buffers together during realloc. */
-  b->budget = budget; b->key_limit = (budget - sizeof(*b)) / 2;
+  b->output = b->frontier = b->key_file = b->source_fd = -1;
+  /* A quarter of the budget for the frontier and its growth; the old and
+   * new key buffers of a realloc together fit the rest. */
+  b->budget = budget; b->frontier_limit = (budget - sizeof(*b)) / 4;
+  b->key_limit = (budget - sizeof(*b) - b->frontier_limit) / 2;
   b->peak_heap = sizeof(*b);
   b->output = fcntl(output, F_DUPFD_CLOEXEC, 0);
   b->frontier = fcntl(frontier, F_DUPFD_CLOEXEC, 0);
@@ -1025,17 +1051,22 @@ CettaActStatus cetta_act_builder_put(CettaActBuilder *b,CettaActBytes key,uint64
   if (key.size && !key.data) return b ? builder_fail(b,CETTA_ACT_CORRUPT) : CETTA_ACT_CORRUPT;
   InputKey input={.data=key.data,.fd=-1,.size=key.size};return builder_put_key(b,&input,value);
 }
+/* The source is checked when it is new, or when a key reaches past its size
+ * as last checked; it stays open while the builder reads keys from it. */
 CettaActStatus cetta_act_builder_put_fd(CettaActBuilder *b,int fd,uint64_t offset,uint64_t size,uint64_t value) {
   if (!b) return CETTA_ACT_CORRUPT;
   if (b->failure!=CETTA_ACT_OK) return b->failure;
-  struct stat source,other;
-  if (fstat(fd,&source)) return builder_fail(b,CETTA_ACT_IO);
-  if (!S_ISREG(source.st_mode) || source.st_size<0 || offset>(uint64_t)source.st_size || size>(uint64_t)source.st_size-offset)
-    return builder_fail(b,CETTA_ACT_CORRUPT);
-  int owned[]={b->output,b->frontier,b->key_file};
-  for (unsigned i=0;i<3;i++) if (owned[i]>=0) {
-    if (fstat(owned[i],&other)) return builder_fail(b,CETTA_ACT_IO);
-    if (source.st_dev==other.st_dev && source.st_ino==other.st_ino) return builder_fail(b,CETTA_ACT_CORRUPT);
+  if (fd<0 || fd!=b->source_fd || offset>b->source_size || size>b->source_size-offset) {
+    struct stat source,other;
+    if (fstat(fd,&source)) return builder_fail(b,CETTA_ACT_IO);
+    if (!S_ISREG(source.st_mode) || source.st_size<0 || offset>(uint64_t)source.st_size || size>(uint64_t)source.st_size-offset)
+      return builder_fail(b,CETTA_ACT_CORRUPT);
+    int owned[]={b->output,b->frontier,b->key_file};
+    for (unsigned i=0;i<3;i++) if (owned[i]>=0) {
+      if (fstat(owned[i],&other)) return builder_fail(b,CETTA_ACT_IO);
+      if (source.st_dev==other.st_dev && source.st_ino==other.st_ino) return builder_fail(b,CETTA_ACT_CORRUPT);
+    }
+    b->source_fd=fd;b->source_size=(uint64_t)source.st_size;
   }
   InputKey input={.fd=fd,.offset=offset,.size=size};return builder_put_key(b,&input,value);
 }

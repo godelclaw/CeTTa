@@ -793,6 +793,9 @@ typedef struct {
   uint64_t body,domain,native_ordinal,postings,compact;
 } ExportOccurrence;
 typedef struct { CettaByteSpan key; uint64_t ordinal,identity; } ExportPosting;
+/* A scratch file of records written in order and then read in order moves
+ * whole buffers, not one record a call. */
+typedef struct { uint64_t base; size_t used; bool reading; unsigned char data[16384]; } RecordBuffer;
 enum { EXPORT_CAPTURE,EXPORT_BODY_SORT,EXPORT_BODY_NEXT,EXPORT_BODY_COMPARE,
   EXPORT_BODY_COPY,EXPORT_MAP_ADD,EXPORT_MAP_SORT,EXPORT_OCCURRENCE,
   EXPORT_ID_COPY,EXPORT_POSTINGS,EXPORT_KEY_SORT,EXPORT_KEY_NEXT,
@@ -825,6 +828,7 @@ struct CettaActSpaceExport {
   ExportOccurrence occurrence;
   ExportPosting posting;
   CettaNativeSha256 sha;
+  RecordBuffer appended,occurrence_records,posting_records;
 };
 static bool export_io(int fd,void *raw,size_t n,uint64_t at,bool write) {
   if (at>INT64_MAX || n>(uint64_t)INT64_MAX-at) return false;
@@ -837,11 +841,41 @@ static bool export_io(int fd,void *raw,size_t n,uint64_t at,bool write) {
   }
   return true;
 }
+static bool record_flush(int fd,RecordBuffer *r) {
+  if (r->reading || !r->used) return true;
+  if (!export_io(fd,r->data,r->used,r->base,true)) return false;
+  r->base+=r->used;r->used=0;return true;
+}
+static bool record_put(int fd,RecordBuffer *r,const void *p,size_t n,uint64_t at) {
+  if (r->reading || n>sizeof(r->data) || at!=r->base+r->used) return false;
+  if (r->used+n>sizeof(r->data) && !record_flush(fd,r)) return false;
+  memcpy(r->data+r->used,p,n);r->used+=n;return true;
+}
+/* end is the length of the records written. */
+static bool record_get(int fd,RecordBuffer *r,void *p,size_t n,uint64_t at,uint64_t end) {
+  if (!r->reading) {
+    if (!record_flush(fd,r)) return false;
+    r->reading=true;r->base=0;r->used=0;
+  }
+  if (at<r->base || at-r->base>r->used || n>r->used-(at-r->base)) {
+    if (at>end || n>end-at) return false;
+    size_t take=end-at<sizeof(r->data) ? (size_t)(end-at) : sizeof(r->data);
+    if (!export_io(fd,r->data,take,at,false)) return false;
+    r->base=at;r->used=take;
+  }
+  memcpy(p,r->data+(size_t)(at-r->base),n);return true;
+}
 static CettaActStatus export_fail(CettaActSpaceExport *j,CettaActStatus s) {
   j->failed=true;j->failure=s;return s;
 }
+/* The payload is appended through a buffer and read only once assembled. */
 static bool export_append(CettaActSpaceExport *j,const void *p,size_t n) {
-  if (!export_io(j->payload,(void *)p,n,j->payload_end,true)) return false;
+  RecordBuffer *r=&j->appended;
+  if (n>sizeof(r->data)) {
+    if (!record_flush(j->payload,r) || !export_io(j->payload,(void *)p,n,j->payload_end,true)) return false;
+    j->payload_end+=n;r->base=j->payload_end;return true;
+  }
+  if (!record_put(j->payload,r,p,n,j->payload_end)) return false;
   j->payload_end+=n;return true;
 }
 static bool export_var(CettaActSpaceExport *j,uint64_t value) {
@@ -986,7 +1020,7 @@ static CettaActStatus export_posting_key(CettaActSpaceExport *j,CettaActBytes ke
   ExportPosting p={span,j->count,identity};
   uint64_t at;
   if (__builtin_mul_overflow(j->posting_at,(uint64_t)sizeof(p),&at) ||
-      !export_io(j->postings,&p,sizeof(p),at,true)) return CETTA_ACT_IO;
+      !record_put(j->postings,&j->posting_records,&p,sizeof(p),at)) return CETTA_ACT_IO;
   ++j->posting_at;++j->posting_count;++j->occurrence.postings;return CETTA_ACT_OK;
 }
 static CettaActStatus export_capture_postings(CettaActSpaceExport *j) {
@@ -1027,6 +1061,8 @@ static CettaActStatus export_capture(CettaActSpaceExport *j,uint64_t work) {
     s=export_capture_row(j);
     if (s==CETTA_ACT_END) {
       j->posting_at=0;
+      if (!record_flush(j->occurrences,&j->occurrence_records) || !record_flush(j->postings,&j->posting_records))
+        return CETTA_ACT_IO;
       j->phase=j->mork ? EXPORT_KEY_SORT : EXPORT_BODY_SORT;
       s=cetta_byte_sort_seal(j->mork ? j->keys : j->bodies);
       return s==CETTA_ACT_OK ? CETTA_ACT_PROGRESS : s;
@@ -1053,7 +1089,7 @@ static CettaActStatus export_capture(CettaActSpaceExport *j,uint64_t work) {
     if (s!=CETTA_ACT_OK) return s;
     uint64_t at;
     if (__builtin_mul_overflow(j->count,(uint64_t)sizeof(j->occurrence),&at) ||
-        !export_io(j->occurrences,&j->occurrence,sizeof(j->occurrence),at,true)) return CETTA_ACT_IO;
+        !record_put(j->occurrences,&j->occurrence_records,&j->occurrence,sizeof(j->occurrence),at)) return CETTA_ACT_IO;
   }
   free(j->wire);j->wire=NULL;j->wire_size=0;free(j->identity_wire);j->identity_wire=NULL;j->identity_size=0;
   j->body_span=j->domain_span=(CettaByteSpan){0};j->row_pending=j->body_added=j->domain_added=false;
@@ -1119,7 +1155,8 @@ CettaActStatus cetta_act_space_export_step(CettaActSpaceExport *j,uint64_t work)
       if (cetta_byte_sort_next(j->offsets,&unused)!=CETTA_ACT_END) {s=CETTA_ACT_CORRUPT;break;}
       s=cetta_byte_sort_seal(j->keys);j->phase=EXPORT_KEY_SORT;break;
     }
-    if (!export_io(j->occurrences,&j->occurrence,sizeof(j->occurrence),j->occurrence_at*sizeof(j->occurrence),false)) {s=CETTA_ACT_IO;break;}
+    if (!record_get(j->occurrences,&j->occurrence_records,&j->occurrence,sizeof(j->occurrence),
+        j->occurrence_at*sizeof(j->occurrence),j->count*sizeof(j->occurrence))) {s=CETTA_ACT_IO;break;}
     s=export_mapping(j,j->occurrence.body,&j->body_offset);
     if (s==CETTA_ACT_OK && j->occurrence.compact) s=export_mapping(j,j->occurrence.domain,&j->domain_offset);
     if (s!=CETTA_ACT_OK) break;
@@ -1143,7 +1180,8 @@ CettaActStatus cetta_act_space_export_step(CettaActSpaceExport *j,uint64_t work)
     break;
   case EXPORT_POSTINGS:
     if (!j->postings_left) {++j->occurrence_at;j->phase=EXPORT_OCCURRENCE;break;}
-    if (!export_io(j->postings,&j->posting,sizeof(j->posting),j->posting_at*sizeof(j->posting),false)) {s=CETTA_ACT_IO;break;}
+    if (!record_get(j->postings,&j->posting_records,&j->posting,sizeof(j->posting),
+        j->posting_at*sizeof(j->posting),j->posting_count*sizeof(j->posting))) {s=CETTA_ACT_IO;break;}
     if (j->posting.ordinal!=j->occurrence_at) {s=CETTA_ACT_CORRUPT;break;}
     s=cetta_byte_sort_add(j->keys,j->posting.key,j->posting.identity ? j->occurrence_at : j->record_offset);
     if (s==CETTA_ACT_PROGRESS) s=export_sort_work(j->keys,work);
@@ -1162,12 +1200,16 @@ CettaActStatus cetta_act_space_export_step(CettaActSpaceExport *j,uint64_t work)
     if (!order) {if (j->mork) j->phase=EXPORT_KEY_NEXT;else s=CETTA_ACT_CORRUPT;}
     else j->phase=EXPORT_KEY_BUILD;
     break;
-  case EXPORT_KEY_BUILD:
-    s=cetta_act_builder_put_fd(j->builder,cetta_byte_sort_key_fd(j->keys),j->current.key.offset,j->current.key.size,j->mork ? 0 : j->current.value);
+  case EXPORT_KEY_BUILD: {
+    CettaActBytes held;uint64_t value=j->mork ? 0 : j->current.value;
+    s=cetta_byte_sort_view(j->keys,j->current.key,&held) ? cetta_act_builder_put(j->builder,held,value)
+      : cetta_act_builder_put_fd(j->builder,cetta_byte_sort_key_fd(j->keys),j->current.key.offset,j->current.key.size,value);
     if (s==CETTA_ACT_OK) {j->previous=j->current.key;j->have_previous=true;j->phase=EXPORT_KEY_NEXT;}
     break;
+  }
   case EXPORT_TRIE_FINISH:
     s=cetta_act_builder_finish_step(j->builder,work,&j->trie_size);
+    if (s==CETTA_ACT_OK && !record_flush(j->payload,&j->appended)) s=CETTA_ACT_IO;
     if (s==CETTA_ACT_OK) {
       if (j->mork) j->phase=EXPORT_VALIDATE;
       else {
@@ -1246,9 +1288,12 @@ void cetta_act_space_export_storage(const CettaActSpaceExport *j,CettaStorageCen
   cetta_byte_sort_storage(j->keys,census);cetta_byte_sort_storage(j->bodies,census);cetta_byte_sort_storage(j->offsets,census);
   cetta_act_builder_storage(j->builder,census);validation_storage(j->validation,census);
 }
+/* An in-process dump may hold its sort in memory: its budget is a bound, and
+ * a small dump allocates as little as before. */
+#define ACT_DUMP_MEMORY ((size_t)1u << 31)
 CettaActStatus cetta_act_space_dump(Space *space,const char *path,bool mork,size_t maximum) {
   CettaActSpaceExport *job=NULL;
-  CettaActStatus status=cetta_act_space_export_open(space,path,mork,maximum,32u*1024u*1024u,&job);
+  CettaActStatus status=cetta_act_space_export_open(space,path,mork,maximum,ACT_DUMP_MEMORY,&job);
   if (status!=CETTA_ACT_OK) return status;
   do status=cetta_act_space_export_step(job,65536);while (status==CETTA_ACT_PROGRESS);
   cetta_act_space_export_close(job);return status;

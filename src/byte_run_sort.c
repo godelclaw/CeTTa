@@ -11,9 +11,14 @@
 enum {PREFIX=32,FANIN=16,COLLECT,SORT,FLUSH,MERGE_INIT,MERGE_FILL,MERGE_SELECT,READY};
 typedef struct {uint64_t offset,size,value;unsigned char prefix[PREFIX];} Entry;
 typedef struct {Entry item;uint64_t next,end;bool live;} Head;
+/* Key bytes go to the keys file, and while they fit beside the entries in
+ * the budget also to a mirror in memory, from which prefixes and comparisons
+ * are read without a call. Entries grow as they come, up to capacity; a sort
+ * of at most capacity entries is held in memory and never written. */
 struct CettaByteRunSort {
     int keys,run[2],input,output;
-    Entry *items;size_t capacity,length;
+    Entry *items;size_t capacity,length,allocated,budget;
+    unsigned char *mirror;size_t mirror_cap;bool mirrored,in_memory;
     uint64_t records,key_end,key_flushed,run_end,read_records,run_size[2];
     size_t key_used;
     unsigned phase;
@@ -47,7 +52,19 @@ void cetta_byte_sort_close(CettaByteRunSort *s) {
     if (!s) return;
     if (s->keys>=0) close(s->keys);
     for (unsigned i=0;i<2;i++) if (s->run[i]>=0) close(s->run[i]);
-    free(s->items);free(s);
+    free(s->items);free(s->mirror);free(s);
+}
+static size_t heap_bytes(const CettaByteRunSort *s) {
+    return sizeof(*s)+s->allocated*sizeof(Entry)+s->mirror_cap;
+}
+/* Bytes of the budget that neither the entries nor the mirror hold. */
+static size_t room(const CettaByteRunSort *s) {
+    size_t held=heap_bytes(s);return held<s->budget ? s->budget-held : 0;
+}
+/* Every key byte is in the file before the mirror goes. */
+static bool mirror_drop(CettaByteRunSort *s) {
+    free(s->mirror);s->mirror=NULL;s->mirror_cap=0;s->mirrored=false;
+    return key_flush(s);
 }
 CettaActStatus cetta_byte_sort_open(int keys,int a,int b,size_t budget,CettaByteRunSort **out) {
     if (!out) return CETTA_ACT_CORRUPT;
@@ -62,9 +79,7 @@ CettaActStatus cetta_byte_sort_open(int keys,int a,int b,size_t budget,CettaByte
     }
     CettaByteRunSort *s=calloc(1,sizeof(*s));if (!s) return CETTA_ACT_NOMEM;
     s->keys=s->run[0]=s->run[1]=-1;s->input=0;s->output=1;
-    s->capacity=(budget-sizeof(*s))/sizeof(Entry);
-    s->items=malloc(s->capacity*sizeof(Entry));
-    if (!s->items) {free(s);return CETTA_ACT_NOMEM;}
+    s->capacity=(budget-sizeof(*s))/sizeof(Entry);s->budget=budget;s->mirrored=true;
     s->keys=fcntl(keys,F_DUPFD_CLOEXEC,0);s->run[0]=fcntl(a,F_DUPFD_CLOEXEC,0);s->run[1]=fcntl(b,F_DUPFD_CLOEXEC,0);
     if (s->keys<0 || s->run[0]<0 || s->run[1]<0) {cetta_byte_sort_close(s);return CETTA_ACT_IO;}
     s->phase=COLLECT;*out=s;return CETTA_ACT_OK;
@@ -73,7 +88,27 @@ CettaActStatus cetta_byte_sort_key(CettaByteRunSort *s,CettaActBytes bytes,Cetta
     if (!s || !out || (bytes.size && !bytes.data)) return CETTA_ACT_CORRUPT;
     if (s->failed) return s->failure;
     if (s->sealed || bytes.size>(uint64_t)INT64_MAX-s->key_end) return fail(s,CETTA_ACT_LIMIT);
-    *out=(CettaByteSpan){s->key_end,bytes.size};const unsigned char *p=bytes.data;size_t n=bytes.size;
+    *out=(CettaByteSpan){s->key_end,bytes.size};
+    if (s->mirrored && bytes.size) {
+        uint64_t need=s->key_end+bytes.size;
+        if (need>s->mirror_cap) {
+            /* Double, within what the budget leaves. */
+            size_t most=s->mirror_cap+room(s),cap=s->mirror_cap ? s->mirror_cap : 4096u;
+            while (cap<need && cap<=SIZE_MAX/2u) cap*=2u;
+            if (cap>most) cap=most;
+            /* Past the budget the keys are read from their file; a failed
+             * allocation within it fails, as every allocation does. */
+            if (need>SIZE_MAX || cap<need) {
+                if (!mirror_drop(s)) return fail(s,CETTA_ACT_IO);
+            } else {
+                unsigned char *grown=realloc(s->mirror,cap);
+                if (!grown) return fail(s,CETTA_ACT_NOMEM);
+                s->mirror=grown;s->mirror_cap=cap;
+            }
+        }
+        if (s->mirrored) memcpy(s->mirror+s->key_end,bytes.data,bytes.size);
+    }
+    const unsigned char *p=bytes.data;size_t n=bytes.size;
     while (n) {
         size_t amount=sizeof(s->key_buffer)-s->key_used;if (amount>n) amount=n;
         memcpy(s->key_buffer+s->key_used,p,amount);s->key_used+=amount;s->key_end+=amount;p+=amount;n-=amount;
@@ -85,6 +120,7 @@ static bool entry_span(CettaByteRunSort *s,CettaByteSpan key,uint64_t value,Entr
     if (key.offset>s->key_end || key.size>s->key_end-key.offset) return false;
     *e=(Entry){.offset=key.offset,.size=key.size,.value=value};
     size_t n=key.size<PREFIX ? (size_t)key.size : PREFIX;
+    if (s->mirrored) {if (n) memcpy(e->prefix,s->mirror+key.offset,n);return true;}
     return !n || at_io(s->keys,e->prefix,n,key.offset,false);
 }
 static void start_sort(CettaByteRunSort *s) {
@@ -97,7 +133,33 @@ CettaActStatus cetta_byte_sort_add(CettaByteRunSort *s,CettaByteSpan key,uint64_
     if (s->phase!=COLLECT) return CETTA_ACT_PROGRESS;
     if (key.offset>s->key_end || key.size>s->key_end-key.offset) return fail(s,CETTA_ACT_CORRUPT);
     if (s->records>=(uint64_t)INT64_MAX/sizeof(Entry)) return fail(s,CETTA_ACT_LIMIT);
-    if (!key_flush(s)) return fail(s,CETTA_ACT_IO);
+    if (s->length==s->allocated) {
+        /* Double, leaving the mirror room for as many key bytes per entry as
+         * so far. When no entry fits beside it, its slack goes, and then the
+         * mirror itself, and entries take its room. */
+        size_t want=s->allocated ? s->allocated*2u : 256u;
+        if (want>s->capacity) want=s->capacity;
+        if (s->mirrored && s->length) {
+            double share=(double)(s->budget-sizeof(*s))/((double)sizeof(Entry)+(double)s->key_end/(double)s->length);
+            if ((double)want>share) want=(size_t)share;
+            size_t beside=s->allocated+room(s)/sizeof(Entry);
+            if (want>beside && s->mirror_cap>s->key_end) {
+                unsigned char *exact=realloc(s->mirror,(size_t)s->key_end);
+                if (!exact) return fail(s,CETTA_ACT_NOMEM);
+                s->mirror=exact;s->mirror_cap=(size_t)s->key_end;beside=s->allocated+room(s)/sizeof(Entry);
+            }
+            if (want>beside) want=beside;
+            if (want<=s->allocated) {
+                if (!mirror_drop(s)) return fail(s,CETTA_ACT_IO);
+                want=s->allocated*2u;
+                if (want>s->capacity) want=s->capacity;
+            }
+        }
+        Entry *grown=realloc(s->items,want*sizeof(Entry));
+        if (!grown) return fail(s,CETTA_ACT_NOMEM);
+        s->items=grown;s->allocated=want;
+    }
+    if (!s->mirrored && !key_flush(s)) return fail(s,CETTA_ACT_IO);
     Entry entry;
     if (!entry_span(s,key,value,&entry)) return fail(s,CETTA_ACT_IO);
     s->items[s->length++]=entry;++s->records;
@@ -118,6 +180,10 @@ static CettaActStatus compare_step(CettaByteRunSort *s,const Entry *a,const Entr
     else if (s->compare.a.offset!=a->offset || s->compare.a.size!=a->size ||
              s->compare.b.offset!=b->offset || s->compare.b.size!=b->size) return fail(s,CETTA_ACT_CORRUPT);
     uint64_t n=a->size<b->size ? a->size : b->size;
+    if (s->mirrored) {
+        int c=n ? memcmp(s->mirror+a->offset,s->mirror+b->offset,(size_t)n) : 0;spend(work,n+1);
+        *order=c ? c : (a->size>b->size)-(a->size<b->size);s->compare.active=false;return CETTA_ACT_OK;
+    }
     if (!s->compare.at) {
         size_t initial=n<PREFIX ? (size_t)n : PREFIX;
         int c=initial ? memcmp(a->prefix,b->prefix,initial) : 0;spend(work,initial+1);
@@ -146,7 +212,11 @@ static CettaActStatus sort_step(CettaByteRunSort *s,uint64_t *work) {
             if (s->building && s->build) s->root=--s->build;
             else {
                 s->building=false;
-                if (s->end<2) {s->phase=FLUSH;s->flush_at=0;return CETTA_ACT_OK;}
+                if (s->end<2) {
+                    /* Sealed in its first run: the whole sort stays in memory. */
+                    if (s->sealed && !s->run_end) {s->in_memory=true;s->phase=READY;return CETTA_ACT_OK;}
+                    s->phase=FLUSH;s->flush_at=0;return CETTA_ACT_OK;
+                }
                 Entry e=s->items[0];s->items[0]=s->items[s->end-1];s->items[--s->end]=e;s->root=0;
             }
             s->sifting=true;s->sift_phase=0;spend(work,1);
@@ -170,7 +240,7 @@ static CettaActStatus sort_step(CettaByteRunSort *s,uint64_t *work) {
     return CETTA_ACT_PROGRESS;
 }
 static CettaActStatus prepare_merge(CettaByteRunSort *s) {
-    free(s->items);s->items=NULL;
+    free(s->items);s->items=NULL;s->allocated=0;
     s->run_records=s->capacity;s->group_start=0;s->merge_written=0;s->input=0;s->output=1;
     if (s->records<=s->capacity) s->phase=READY;
     else {
@@ -260,7 +330,8 @@ CettaActStatus cetta_byte_sort_next(CettaByteRunSort *s,CettaByteSortItem *out) 
     if (s->phase!=READY) return CETTA_ACT_PROGRESS;
     if (s->read_records==s->records) return CETTA_ACT_END;
     Entry e;
-    if (!at_io(s->run[s->input],&e,sizeof(e),s->read_records*sizeof(e),false)) return fail(s,CETTA_ACT_IO);
+    if (s->in_memory) e=s->items[s->read_records];
+    else if (!at_io(s->run[s->input],&e,sizeof(e),s->read_records*sizeof(e),false)) return fail(s,CETTA_ACT_IO);
     ++s->read_records;*out=(CettaByteSortItem){{e.offset,e.size},e.value};return CETTA_ACT_OK;
 }
 CettaActStatus cetta_byte_sort_read(CettaByteRunSort *s,CettaByteSpan span,uint64_t offset,
@@ -268,8 +339,9 @@ CettaActStatus cetta_byte_sort_read(CettaByteRunSort *s,CettaByteSpan span,uint6
     if (!s || !written || (capacity && !bytes)) return CETTA_ACT_CORRUPT;
     *written=0;if (s->failed) return s->failure;
     if (span.offset>s->key_end || span.size>s->key_end-span.offset || offset>span.size) return fail(s,CETTA_ACT_CORRUPT);
-    if (!key_flush(s)) return fail(s,CETTA_ACT_IO);
     size_t n=span.size-offset<capacity ? (size_t)(span.size-offset) : capacity;
+    if (s->mirrored) {if (n) memcpy(bytes,s->mirror+span.offset+offset,n);*written=n;return CETTA_ACT_OK;}
+    if (!key_flush(s)) return fail(s,CETTA_ACT_IO);
     if (!at_io(s->keys,bytes,n,span.offset+offset,false)) return fail(s,CETTA_ACT_IO);
     *written=n;return CETTA_ACT_OK;
 }
@@ -281,13 +353,18 @@ CettaActStatus cetta_byte_sort_compare(CettaByteRunSort *s,CettaByteSpan a,Cetta
     return compare_step(s,&x,&y,&work,order);
 }
 int cetta_byte_sort_key_fd(const CettaByteRunSort *s) {return s ? s->keys : -1;}
+bool cetta_byte_sort_view(const CettaByteRunSort *s,CettaByteSpan span,CettaActBytes *out) {
+    if (!s || !out || !s->mirrored || s->failed || span.offset>s->key_end || span.size>s->key_end-span.offset) return false;
+    *out=(CettaActBytes){s->mirror+span.offset,(size_t)span.size};return true;
+}
 bool cetta_byte_sort_info(const CettaByteRunSort *s,CettaByteSortInfo *out) {
     if (!s || !out) return false;
     *out=(CettaByteSortInfo){.records=s->records,.key_bytes=s->key_end,.run_bytes=s->run_size[0]+s->run_size[1],
-        .read_records=s->read_records,.heap_bytes=sizeof(*s)+(s->items ? s->capacity*sizeof(Entry) : 0),
+        .read_records=s->read_records,.heap_bytes=heap_bytes(s),
         .capacity=s->capacity,.phase=s->phase};return true;
 }
 void cetta_byte_sort_storage(const CettaByteRunSort *s,CettaStorageCensus *census) {
     if (!s || !cetta_storage_object(census,s,sizeof(*s),CETTA_STORAGE_BLOCK)) return;
-    cetta_storage_array(census,s->items,s->items ? s->capacity : 0,sizeof(Entry),0);
+    cetta_storage_array(census,s->items,s->items ? s->allocated : 0,sizeof(Entry),0);
+    cetta_storage_array(census,s->mirror,s->mirror_cap,1,0);
 }

@@ -17,12 +17,13 @@ ssize_t __wrap_pwrite(int f,const void *p,size_t n,off_t o) {return fault(2) ? -
 int __wrap_fsync(int f) {return fault(3) ? -1 : __real_fsync(f);}
 int __wrap_ftruncate(int f,off_t n) {return fault(4) ? -1 : __real_ftruncate(f,n);}
 int __wrap_renameat(int a,const char *p,int b,const char *q) {return fault(5) ? -1 : __real_renameat(a,p,b,q);}
+static size_t memory=1024*1024;
 static bool trial(Space *source,const char *path,unsigned k,unsigned point) {
     unsigned char *empty=NULL;size_t size;
     assert(cetta_act_build(NULL,0,&empty,&size)==CETTA_ACT_OK);
     assert(cetta_act_publish(path,(CettaActBytes){empty,size})==CETTA_ACT_OK);free(empty);
     kind=k;nth=point;calls=0;hit=false;
-    CettaActSpaceExport *j=NULL;CettaActStatus status=cetta_act_space_export_open(source,path,false,CETTA_ATOM_WIRE_BYTES,1024*1024,&j);
+    CettaActSpaceExport *j=NULL;CettaActStatus status=cetta_act_space_export_open(source,path,false,CETTA_ATOM_WIRE_BYTES,memory,&j);
     if(status==CETTA_ACT_OK) do status=cetta_act_space_export_step(j,4096);while(status==CETTA_ACT_PROGRESS);
     bool injected=hit;kind=0;
     if (injected) {
@@ -45,10 +46,14 @@ int main(void) {
         atom_symbol(&data,"row"),atom_int(&data,i%3),atom_int(&data,i))));
     char directory[]="runtime/act-export-faults-XXXXXX";assert(mkdtemp(directory));char path[128];snprintf(path,sizeof(path),"%s/data.cact",directory);
     unsigned total=0;
-    for (unsigned k=1;k<=5;k++) {
+    /* At its least memory an export keeps every scratch structure in files
+     * and makes every kind of call; at 1 MiB it sorts and builds in memory
+     * and truncates nothing. Every cutpoint of both must fail cleanly. */
+    for (unsigned least=0;least<2;least++) for (unsigned k=1;k<=5;k++) {
+        memory=least ? 4*cetta_act_builder_minimum_memory() : 1024*1024;
         unsigned n=1;
         while(trial(&source,path,k,n)) {++n;++total;assert(n<10000);}
-        assert(n>1);
+        assert(n>1 || (!least && k==4));
     }
     assert(!unlink(path) && !rmdir(directory));space_free(&source);term_universe_free(&universe);arena_free(&data);symbol_table_free(&symbols);g_symbols=NULL;
     printf("ACT export faults: %u read/write/sync/truncate/publication cutpoints passed\n",total);

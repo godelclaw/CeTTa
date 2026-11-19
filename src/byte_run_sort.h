@@ -23,6 +23,9 @@ CettaActStatus cetta_byte_sort_read(CettaByteRunSort *,CettaByteSpan,
 CettaActStatus cetta_byte_sort_compare(CettaByteRunSort *,CettaByteSpan,
     CettaByteSpan,uint64_t work,int *order);
 int cetta_byte_sort_key_fd(const CettaByteRunSort *);
+/* The key's bytes in memory, while the sorter holds them there; valid until
+ * the next key is added. */
+bool cetta_byte_sort_view(const CettaByteRunSort *,CettaByteSpan,CettaActBytes *);
 typedef struct {
     uint64_t records,key_bytes,run_bytes,read_records;
     size_t heap_bytes,capacity;

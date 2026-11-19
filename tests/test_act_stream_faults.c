@@ -22,6 +22,7 @@ void *__wrap_realloc(void *p,size_t n) {return fault(1) ? NULL : __real_realloc(
 ssize_t __wrap_pread(int fd,void *p,size_t n,off_t at) {return fault(2) ? -1 : __real_pread(fd,p,n,at);}
 ssize_t __wrap_pwrite(int fd,const void *p,size_t n,off_t at) {return fault(3) ? -1 : __real_pwrite(fd,p,n,at);}
 int __wrap_ftruncate(int fd,off_t n) {return fault(4) ? -1 : __real_ftruncate(fd,n);}
+static size_t trie_budget=256*1024;
 static bool trial(bool base,unsigned selected,unsigned position) {
     char names[5][64];int fd[5];
     for (unsigned i=0;i<5;i++) {
@@ -34,7 +35,7 @@ static bool trial(bool base,unsigned selected,unsigned position) {
     kind=selected;nth=position;calls=0;hit=false;
     CettaActStatus s=base ? cetta_act_base_builder_open(fd[0],fd[1],fd[2],fd[3],fd[4],
         256*1024,generation,(CettaActBaseLimits){4096,4096},&b)
-        : cetta_act_builder_open(fd[0],fd[1],fd[2],256*1024,&trie);
+        : cetta_act_builder_open(fd[0],fd[1],fd[2],trie_budget,&trie);
     for (unsigned i=0;s==CETTA_ACT_OK && i<sizeof(keys)/sizeof(*keys);i++) {
         if (base) {
             s=cetta_act_base_value_begin(b,4);
@@ -60,10 +61,18 @@ static bool trial(bool base,unsigned selected,unsigned position) {
 }
 int main(void) {
     unsigned total=0;
-    for (unsigned base=0;base<2;base++) for (unsigned k=1;k<=4;k++) {
+    /* The trie builder at its least budget keeps its frontier and keys in
+     * files, and at 256 KiB in memory, as the base builder does; each
+     * configuration survives every cutpoint. The least budget cuts every kind
+     * of call, and the base builder all but truncation, which its frontier in
+     * memory no longer needs. */
+    unsigned cuts[3][5]={{0}};
+    for (unsigned config=0;config<3;config++) for (unsigned k=1;k<=4;k++) {
+        trie_budget=config==0 ? cetta_act_builder_minimum_memory() : 256*1024;
         unsigned n=1;
-        while (trial(base!=0,k,n)) {++n;++total;assert(n<1000);}
-        assert(n>1);
+        while (trial(config==1,k,n)) {++n;++total;assert(n<1000);}
+        cuts[config][k]=n-1;
     }
+    for (unsigned k=1;k<=4;k++) assert(cuts[0][k] && (k==4 || cuts[1][k]));
     printf("ACT streaming faults: %u allocation/read/write/truncation cutpoints\n",total);
 }
