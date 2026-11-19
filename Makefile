@@ -47038,7 +47038,7 @@ test-ebnf-projection-native-equivalence-extended-v1: $(BIN) langdef/petta/genera
 
 .PHONY: test-bnf-native-entry-v1
 test-bnf-native-entry-v1:
-	@env -u BUILD -u MAKEFLAGS -u MFLAGS -u MAKEOVERRIDES \
+	@env -u BUILD -u MAKEFLAGS -u MFLAGS -u MAKEOVERRIDES -u CETTA_SUITE_STAGE \
 		$(MAKE) --no-print-directory PYTHON_CONFIG=/unavailable-python-config \
 		test-plain-bnf-reader-v1 test-ebnf-workbench-v1
 	@echo '(BnfNativeEntryV1Summary 2 0)'
@@ -50031,7 +50031,7 @@ NATIVE_ONLY_GRAMMAR_GATES_V1 := \
 .PHONY: test-grammar-native-only
 SUITE_COMPREHENSIVE_GATES += test-grammar-native-only
 test-grammar-native-only:
-	@env -u CETTA_SUITE_STAGE $(MAKE) --no-print-directory $(NATIVE_ONLY_GRAMMAR_GATES_V1)
+	@env -u CETTA_SUITE_STAGE $(MAKE) -k --no-print-directory $(NATIVE_ONLY_GRAMMAR_GATES_V1)
 
 # The JSON GSLT library in other build configurations: linked by C alone,
 # without HTTP or Prolog, disabled, and bridged to IO without HTTP.
