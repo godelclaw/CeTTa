@@ -1,14 +1,19 @@
 #include "native_sha256.h"
 
+#include <stdatomic.h>
 #include <string.h>
+
+#if (defined(__x86_64__) || defined(__i386__)) && defined(__GNUC__)
+#include <cpuid.h>
+#include <immintrin.h>
+#define NATIVE_SHA_X86 1
+#endif
 
 static uint32_t native_sha_rotr(uint32_t value, uint32_t amount) {
     return (value >> amount) | (value << (32u - amount));
 }
 
-static void native_sha_transform(CettaNativeSha256 *sha,
-                                 const uint8_t block[64]) {
-    static const uint32_t constants[64] = {
+static const uint32_t constants[64] = {
         0x428a2f98u, 0x71374491u, 0xb5c0fbcfu, 0xe9b5dba5u,
         0x3956c25bu, 0x59f111f1u, 0x923f82a4u, 0xab1c5ed5u,
         0xd807aa98u, 0x12835b01u, 0x243185beu, 0x550c7dc3u,
@@ -25,7 +30,9 @@ static void native_sha_transform(CettaNativeSha256 *sha,
         0x391c0cb3u, 0x4ed8aa4au, 0x5b9cca4fu, 0x682e6ff3u,
         0x748f82eeu, 0x78a5636fu, 0x84c87814u, 0x8cc70208u,
         0x90befffau, 0xa4506cebu, 0xbef9a3f7u, 0xc67178f2u,
-    };
+};
+
+static void native_sha_transform(uint32_t state[8], const uint8_t block[64]) {
     uint32_t words[64];
     uint32_t a, b, c, d, e, f, g, h;
 
@@ -44,14 +51,14 @@ static void native_sha_transform(CettaNativeSha256 *sha,
                       (words[i - 2u] >> 10u);
         words[i] = words[i - 16u] + s0 + words[i - 7u] + s1;
     }
-    a = sha->state[0];
-    b = sha->state[1];
-    c = sha->state[2];
-    d = sha->state[3];
-    e = sha->state[4];
-    f = sha->state[5];
-    g = sha->state[6];
-    h = sha->state[7];
+    a = state[0];
+    b = state[1];
+    c = state[2];
+    d = state[3];
+    e = state[4];
+    f = state[5];
+    g = state[6];
+    h = state[7];
     for (uint32_t i = 0; i < 64u; i++) {
         uint32_t sum1 = native_sha_rotr(e, 6u) ^
                         native_sha_rotr(e, 11u) ^
@@ -72,14 +79,89 @@ static void native_sha_transform(CettaNativeSha256 *sha,
         b = a;
         a = temp1 + temp2;
     }
-    sha->state[0] += a;
-    sha->state[1] += b;
-    sha->state[2] += c;
-    sha->state[3] += d;
-    sha->state[4] += e;
-    sha->state[5] += f;
-    sha->state[6] += g;
-    sha->state[7] += h;
+    state[0] += a;
+    state[1] += b;
+    state[2] += c;
+    state[3] += d;
+    state[4] += e;
+    state[5] += f;
+    state[6] += g;
+    state[7] += h;
+}
+
+#if NATIVE_SHA_X86
+/* The SHA extensions, which x86 processors have had since 2016 (AMD) and
+ * 2019 (Intel cores): two rounds per instruction, the message schedule in
+ * two more. The state is held as (ABEF, CDGH), as sha256rnds2 takes it. */
+__attribute__((target("sha,sse4.1")))
+static void native_sha_blocks_x86(uint32_t state[8], const uint8_t *data, size_t blocks) {
+    const __m128i order = _mm_set_epi64x(0x0c0d0e0f08090a0bLL, 0x0405060700010203LL);
+    __m128i swapped = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i *)&state[0]), 0xB1);
+    __m128i cdgh = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i *)&state[4]), 0x1B);
+    __m128i abef = _mm_alignr_epi8(swapped, cdgh, 8);
+    cdgh = _mm_blend_epi16(cdgh, swapped, 0xF0);
+    for (; blocks; --blocks, data += 64) {
+        __m128i saved_abef = abef, saved_cdgh = cdgh, w[4];
+        for (unsigned g = 0; g < 4u; ++g)
+            w[g] = _mm_shuffle_epi8(_mm_loadu_si128((const __m128i *)(data + 16u * g)), order);
+        for (unsigned g = 0; g < 16u; ++g) {
+            /* Rounds 4g to 4g + 3, then words 4g + 16 to 4g + 19. */
+            __m128i message = _mm_add_epi32(w[g & 3u], _mm_loadu_si128((const __m128i *)&constants[4u * g]));
+            cdgh = _mm_sha256rnds2_epu32(cdgh, abef, message);
+            abef = _mm_sha256rnds2_epu32(abef, cdgh, _mm_shuffle_epi32(message, 0x0E));
+            if (g < 12u) {
+                __m128i next = _mm_sha256msg1_epu32(w[g & 3u], w[(g + 1u) & 3u]);
+                next = _mm_add_epi32(next, _mm_alignr_epi8(w[(g + 3u) & 3u], w[(g + 2u) & 3u], 4));
+                w[g & 3u] = _mm_sha256msg2_epu32(next, w[(g + 3u) & 3u]);
+            }
+        }
+        abef = _mm_add_epi32(abef, saved_abef);
+        cdgh = _mm_add_epi32(cdgh, saved_cdgh);
+    }
+    swapped = _mm_shuffle_epi32(abef, 0x1B);
+    cdgh = _mm_shuffle_epi32(cdgh, 0xB1);
+    _mm_storeu_si128((__m128i *)&state[0], _mm_blend_epi16(swapped, cdgh, 0xF0));
+    _mm_storeu_si128((__m128i *)&state[4], _mm_alignr_epi8(cdgh, swapped, 8));
+}
+#endif
+
+/* -1 unknown, 0 portable, 1 the SHA extensions. */
+static _Atomic int native_sha_hardware = -1;
+
+static int native_sha_hardware_available(void) {
+#if NATIVE_SHA_X86
+    unsigned a, b, c, d;
+    return __get_cpuid(1u, &a, &b, &c, &d) && (c & bit_SSE4_1) && (c & bit_SSSE3) &&
+           __get_cpuid_count(7u, 0u, &a, &b, &c, &d) && (b & bit_SHA);
+#else
+    return 0;
+#endif
+}
+
+bool cetta_native_sha256_hardware(void) {
+    int known = atomic_load_explicit(&native_sha_hardware, memory_order_relaxed);
+    if (known < 0) {
+        known = native_sha_hardware_available();
+        atomic_store_explicit(&native_sha_hardware, known, memory_order_relaxed);
+    }
+    return known > 0;
+}
+
+bool cetta_native_sha256_use_hardware(bool use) {
+    bool available = native_sha_hardware_available();
+    atomic_store_explicit(&native_sha_hardware, use && available, memory_order_relaxed);
+    return use && available;
+}
+
+static void native_sha_blocks(uint32_t state[8], const uint8_t *data, size_t blocks) {
+#if NATIVE_SHA_X86
+    if (cetta_native_sha256_hardware()) {
+        native_sha_blocks_x86(state, data, blocks);
+        return;
+    }
+#endif
+    for (; blocks; --blocks, data += 64)
+        native_sha_transform(state, data);
 }
 
 void cetta_native_sha256_init(CettaNativeSha256 *sha) {
@@ -91,16 +173,34 @@ void cetta_native_sha256_init(CettaNativeSha256 *sha) {
     memcpy(sha->state, initial, sizeof(initial));
 }
 
+/* Whole blocks are hashed where they lie; only a partial one is copied. */
 void cetta_native_sha256_update(CettaNativeSha256 *sha,
                                 const uint8_t *bytes,
                                 size_t len) {
-    for (size_t i = 0; i < len; i++) {
-        sha->block[sha->block_len++] = bytes[i];
-        if (sha->block_len == 64u) {
-            native_sha_transform(sha, sha->block);
-            sha->bit_len += UINT64_C(512);
-            sha->block_len = 0;
-        }
+    if (sha->block_len) {
+        size_t take = 64u - sha->block_len;
+        if (take > len)
+            take = len;
+        memcpy(sha->block + sha->block_len, bytes, take);
+        sha->block_len += (uint32_t)take;
+        bytes += take;
+        len -= take;
+        if (sha->block_len < 64u)
+            return;
+        native_sha_blocks(sha->state, sha->block, 1u);
+        sha->bit_len += UINT64_C(512);
+        sha->block_len = 0;
+    }
+    size_t blocks = len / 64u;
+    if (blocks) {
+        native_sha_blocks(sha->state, bytes, blocks);
+        sha->bit_len += (uint64_t)blocks * UINT64_C(512);
+        bytes += blocks * 64u;
+        len -= blocks * 64u;
+    }
+    if (len) {
+        memcpy(sha->block, bytes, len);
+        sha->block_len = (uint32_t)len;
     }
 }
 
@@ -112,14 +212,14 @@ static void native_sha_finish(CettaNativeSha256 *sha, uint8_t digest[32]) {
     if (sha->block_len > 56u) {
         while (sha->block_len < 64u)
             sha->block[sha->block_len++] = 0;
-        native_sha_transform(sha, sha->block);
+        native_sha_blocks(sha->state, sha->block, 1u);
         sha->block_len = 0;
     }
     while (sha->block_len < 56u)
         sha->block[sha->block_len++] = 0;
     for (uint32_t i = 0; i < 8u; i++)
         sha->block[63u - i] = (uint8_t)(total_bits >> (i * 8u));
-    native_sha_transform(sha, sha->block);
+    native_sha_blocks(sha->state, sha->block, 1u);
     for (uint32_t i = 0; i < 8u; i++) {
         digest[i * 4u] = (uint8_t)(sha->state[i] >> 24u);
         digest[i * 4u + 1u] = (uint8_t)(sha->state[i] >> 16u);

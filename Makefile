@@ -20086,6 +20086,7 @@ NORMAL_TEST_TARGETS := \
 
 NORMAL_TEST_TARGETS += test-outcome-kernel
 NORMAL_TEST_TARGETS += test-import-errors
+NORMAL_TEST_TARGETS += test-native-sha256
 .PHONY: test test-all test-test-target-scope
 test: $(NORMAL_TEST_TARGETS)
 test-all: test
@@ -53157,6 +53158,12 @@ test-act-stream: runtime/test-act-stream runtime/test-act-stream-faults
 	@./runtime/test-act-stream-faults
 test-native-act-base: runtime/test-native-act-base
 	@./runtime/test-native-act-base
+.PHONY: test-native-sha256
+runtime/test-native-sha256: tests/test_native_sha256.c src/native_sha256.c src/native_sha256.h
+	@mkdir -p runtime
+	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc tests/test_native_sha256.c src/native_sha256.c -o $@
+test-native-sha256: runtime/test-native-sha256
+	@./runtime/test-native-sha256
 
 NATIVE_ACT_STORE_SRC = src/native_disk_store.c src/native_disk_index.c src/native_journal.c src/native_sha256.c src/native_act_base.c src/act_trie.c
 NATIVE_ACT_STORE_HEADERS = src/native_disk_store.h src/native_disk_index.h src/native_act_base.h src/act_trie.h
