@@ -45969,11 +45969,11 @@ LANGUAGE_DEF_PARSER_PACK_V1_TEST_SRC = tests/support/test_language_def_parser_pa
 LANGUAGE_DEF_PARSER_PACK_V1_BENCH_SRC = tests/bench_json_gslt_runtime.c
 LANGUAGE_DEF_PARSER_PACK_V1_CORPUS_SRC = tests/qualify_json_gslt_corpus.c
 JSON_NIK_V1_TEST_SRC = tests/support/test_json_nik_v1.c
-LANGUAGE_DEF_PARSER_PACK_V1_TEST_BIN = runtime/test_language_def_parser_pack_v1-c-only$(if $(filter 1,$(ENABLE_SANITIZERS)),-sanitize,)
-LANGUAGE_DEF_PARSER_PACK_V1_MUTATION_BIN = runtime/test_language_def_parser_pack_v1-invent-occurrence-mutant
-LANGUAGE_DEF_PARSER_PACK_V1_BENCH_BIN = runtime/bench_json_gslt_runtime-c-only
-LANGUAGE_DEF_PARSER_PACK_V1_CORPUS_BIN = runtime/qualify_json_gslt_corpus-c-only
-JSON_NIK_V1_TEST_BIN = runtime/test_json_nik_v1-c-only$(if $(filter 1,$(ENABLE_SANITIZERS)),-sanitize,)
+LANGUAGE_DEF_PARSER_PACK_V1_TEST_BIN = runtime/test_language_def_parser_pack_v1-c-only-$(BUILD_OBJ_TAG)
+LANGUAGE_DEF_PARSER_PACK_V1_MUTATION_BIN = runtime/test_language_def_parser_pack_v1-invent-occurrence-mutant-$(BUILD_OBJ_TAG)
+LANGUAGE_DEF_PARSER_PACK_V1_BENCH_BIN = runtime/bench_json_gslt_runtime-c-only-$(BUILD_OBJ_TAG)
+LANGUAGE_DEF_PARSER_PACK_V1_CORPUS_BIN = runtime/qualify_json_gslt_corpus-c-only-$(BUILD_OBJ_TAG)
+JSON_NIK_V1_TEST_BIN = runtime/test_json_nik_v1-c-only-$(BUILD_OBJ_TAG)
 PARSER_PACK_FOREST_ENCODING_V1_TEST_BIN = runtime/test_parser_pack_forest_encoding_v1-$(BUILD_OBJ_TAG)
 LANGUAGE_DEF_PARSER_PACK_V1_RUNTIME_C_SOURCES = \
 	$(LANGUAGE_DEF_PARSER_PACK_V1_SRC) \
