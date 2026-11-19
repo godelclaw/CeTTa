@@ -7933,6 +7933,11 @@ struct CettaOpenEquationCursor {
     OemExported *exported;
     uint32_t exported_len;
     uint32_t exported_cap;
+    /* For each cell, its export's entry + 1, or 0 (oem_exported_of_cell).
+     * A slot counts only while its entry stands and names the cell, so an
+     * entry let go of with a frame needs no slot cleared. */
+    uint32_t *exported_slot;
+    uint32_t exported_slot_cap;
     /* The last activation's head took the call's arguments: its parameter
      * operations all succeeded, whatever the destination then did. HE's
      * value of an unmatched call reads it (`unmatched_call_is_value`). */
@@ -9345,10 +9350,11 @@ static OemSource *oem_value_source(
 /* The variable cell `index` was exported as to a host goal, if it was. */
 static inline const OemExported *oem_exported_of_cell(
     const CettaOpenEquationCursor *cursor, uint32_t index) {
-    for (uint32_t entry = cursor->exported_len; entry-- > 0u;)
-        if (cursor->exported[entry].cell == index)
-            return &cursor->exported[entry];
-    return NULL;
+    uint32_t slot = index < cursor->exported_slot_cap
+        ? cursor->exported_slot[index] : 0u;
+    return slot != 0u && slot <= cursor->exported_len &&
+            cursor->exported[slot - 1u].cell == index
+        ? &cursor->exported[slot - 1u] : NULL;
 }
 
 /* The cell exported as variable `id`, if any. */
@@ -9366,9 +9372,13 @@ static bool oem_exported_note(CettaOpenEquationCursor *cursor, uint32_t cell,
     if (oem_exported_of_cell(cursor, cell))
         return true;
     if (!oem_reserve((void **)&cursor->exported, &cursor->exported_cap,
-                     cursor->exported_len + 1u, sizeof(*cursor->exported)))
+                     cursor->exported_len + 1u, sizeof(*cursor->exported)) ||
+        !oem_reserve_zeroed((void **)&cursor->exported_slot,
+                            &cursor->exported_slot_cap, cell + 1u,
+                            sizeof(*cursor->exported_slot)))
         return false;
     cursor->exported[cursor->exported_len++] = (OemExported){.id = id, .cell = cell};
+    cursor->exported_slot[cell] = cursor->exported_len;
     return true;
 }
 
@@ -17470,6 +17480,12 @@ static bool oem_collect_generation(CettaOpenEquationCursor *cursor,
         for (; next_frame < cursor->frame_len; next_frame++)
             cursor->frames[next_frame].exported_mark = kept_exports;
         cursor->exported_len = kept_exports;
+        /* The kept cells are numbered anew, no higher than they were, so
+         * each has its slot still. */
+        for (uint32_t entry = 0u; entry < kept_exports; entry++) {
+            assert(cursor->exported[entry].cell < cursor->exported_slot_cap);
+            cursor->exported_slot[cursor->exported[entry].cell] = entry + 1u;
+        }
     }
     cursor->destination = destination;
     oem_forget_answer_vars(cursor);
@@ -21221,6 +21237,7 @@ void cetta_open_equation_cursor_close(CettaOpenEquationCursor *cursor) {
         oem_state_var_pop(cursor);
     free(cursor->state_vars);
     free(cursor->exported);
+    free(cursor->exported_slot);
     free(cursor->fresh_vars);
     cetta_var_index_free(&cursor->fresh_index);
     cetta_var_index_free(&cursor->query_index);
