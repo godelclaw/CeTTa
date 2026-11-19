@@ -145,6 +145,11 @@ def exercise(binary, module, work):
             found = call(E("MemoryQuery", profile, Tensor.vector(queries[0]), n, S("All")))
             checked += check_hits(f"{name}/all-rows", found, oracle(held, queries[0], n), ids)
 
+        # A collection of IDs alone has no rows to get.
+        result = call(E("get", (ids[0],)))
+        expect(isinstance(result, tuple) and result[:1] == (S("MemoryFailure"),) and "no-rows" in repr(result),
+               "get without rows")
+
         # Rows with documents and metadata: records exported as a matrix file
         # and an ACT snapshot, then served from those files.
         expect(call(E("reset",)) == E("Reset",), 'reset')
@@ -171,6 +176,13 @@ def exercise(binary, module, work):
             for qi, q in enumerate(queries):
                 found = call(E("MemoryQuery", profile, Tensor.vector(q), 5, where))
                 checked += check_hits(f"rows/filter{fi}/q{qi}", found, oracle(held, q, 5, keep), ids, meta_of)
+        # Rows are fetched by ID; record requests that would read no records refuse.
+        got = call(E("get", (ids[3], "absent", ids[7])))
+        expect([row[1:] for row in got] == [(ids[i],) + meta_of[ids[i]] for i in (3, 7)], "get by ID")
+        for request, reason in ((E("records", (ids[3],)), "matrix-collection"), (E("ids", S("All")), "matrix-collection"),
+                                (E("query-reference", profile, Tensor.vector(queries[0]), 5, S("All")), "matrix-collection")):
+            result = call(request)
+            expect(isinstance(result, tuple) and result[:1] == (S("MemoryFailure"),) and reason in repr(result), repr(request[0]))
         # The served files export again, and a copy reloads to the same answers.
         again, again_rows = work / "again.safetensors", work / "again.cact"
         expect(call(E("export-matrix", str(again), str(again_rows)))[:2] == (S("Exported"), n), 'export again')
@@ -225,6 +237,10 @@ CONTROLS = {
                             '((($row) (MemoryInfo $id 0 "" ())) ($other (MemoryInfo $id 0 "" ()))))))'),
     "filter-index-skips-rows": ("(memory:field-index $projection $i (MemoryInfo $id $rev $doc $meta))))))))",
                                 "(if (< $i 300) (memory:field-index $projection $i (MemoryInfo $id $rev $doc $meta)) ())))))))"),
+    "ids-read-no-records": ("         (MemoryFailure ids matrix-collection)))",
+                            "         (collapse (case (memory:matches $filter) (((Memory $id $rev $p $v $doc $meta) $id))))))"),
+    "get-ignores-rows": ("      ($other (MemoryFailure get no-rows)))))\n(= (memory:has-rows $rows)",
+                         "      ($other (MemoryFailure get no-rows)))))\n(= (memory:matrix-get $source $ids) ())\n(= (memory:has-rows $rows)"),
     "rows-count-unchecked": ("(if (not (== (memory:row-count $space) $count)) (MemoryFailure load-matrix rows-count)",
                              "(if False (MemoryFailure load-matrix rows-count)"),
     "refusal-resets": ("(MemoryFailure load-matrix-file profile-mismatch)",

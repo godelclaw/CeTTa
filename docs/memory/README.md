@@ -150,7 +150,9 @@ Documents and metadata come from an optional ACT snapshot of
 indexes the ID, so a hit's row is found without a scan; without one, hits carry
 IDs only. Opening a snapshot validates all of it. Metadata filters index the
 rows the first time a filter needs them. A matrix collection takes no writes,
-and each load replaces the collection only if it succeeds.
+and each load replaces the collection only if it succeeds. `get` returns rows
+by ID from the snapshot; requests that read records (`records`, `ids`,
+`query-reference`) refuse a matrix collection rather than answer empty.
 
 `NativeCollection.export_matrix(path, rows=None)` writes the current view's
 normalized f64 rows and IDs as such a file (format `cetta-memory-matrix-v1`,
