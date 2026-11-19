@@ -124,6 +124,65 @@ operations. Stack checks homogeneous vector shapes. Cosine rows consumes the
 norms belonging to that immutable matrix; callers are responsible for pairing
 them correctly. Row norms and query norm must be finite and positive.
 
+## Matrix collections
+
+A collection can also be served from a matrix file, without an atom per record
+or a space service. The file is safetensors with `vectors` [n d] (f32 or f64)
+and the row IDs as a string column: `ids.offsets`, i64 [n + 1], and
+`ids.bytes`, UTF-8. A `profile` metadata entry, when present, must match the
+collection's profile. The file is mapped when CeTTa can read it as stored, and
+copied otherwise. Rows of unit length within 1e-5, as normalized f32 embeddings
+are, are used as stored; scores are their inner products with the normalized
+query. Other rows are normalized into an f64 copy. All three scan tiers apply.
+On an f32 matrix the f32 tier is the full scan, since its screen would be the
+matrix itself.
+
+```python
+from memory_collection import MatrixCollection
+
+collection = MatrixCollection("memories.safetensors", profile, worker_binary,
+                              rows="memories.cact", scan_tier="int8")
+found = collection.query([embedding], n_results=5, where={"kind": "note"})
+```
+
+Documents and metadata come from an optional ACT snapshot of
+`(MemoryInfo id revision document metadata)` atoms, one per ID. The snapshot
+indexes the ID, so a hit's row is found without a scan; without one, hits carry
+IDs only. Opening a snapshot validates all of it. Metadata filters index the
+rows the first time a filter needs them. A matrix collection takes no writes,
+and each load replaces the collection only if it succeeds.
+
+`NativeCollection.export_matrix(path, rows=None)` writes the current view's
+normalized f64 rows and IDs as such a file (format `cetta-memory-matrix-v1`,
+with the profile and dimensions in its metadata), and its rows as an ACT
+snapshot when `rows` names one. Other programs write the file with NumPy and
+safetensors:
+
+```python
+import numpy as np
+from safetensors.numpy import save_file
+
+def save_matrix(path, vectors, ids, profile):
+    encoded = [i.encode() for i in ids]
+    offsets = np.zeros(len(ids) + 1, dtype=np.int64)
+    offsets[1:] = np.cumsum([len(e) for e in encoded])
+    save_file({"vectors": np.ascontiguousarray(vectors, dtype=np.float32),
+               "ids.offsets": offsets,
+               "ids.bytes": np.frombuffer(b"".join(encoded), dtype=np.uint8)},
+              path, metadata={"profile": profile})
+```
+
+Here `profile` is the collection's profile identity, the first value that
+`profile_identity` in `tools/memory_collection.py` returns. In MeTTa, the
+requests are `(load-matrix-file profile dimensions path)`, with a rows path as
+a fourth argument, and `(load-matrix profile dimensions ids matrix)`, where
+`ids` is `(Ids (id ...))` or `(IdColumn offsets bytes)`, optionally with a
+Space of rows. They answer `(LoadedMatrix n)`. `(export-matrix path)` and
+`(export-matrix path rows-path)` answer `(Exported n bytes)`. `apply` and
+`load` refuse a matrix collection with `matrix-read-only`; `reset` empties it
+and closes its snapshot. `make test-memory-matrix` checks every tier against
+an independent oracle and rejects incorrect policies.
+
 ## Reusable row selectors
 
 `lib/petta/lib_row_index.metta` provides an exact access method for aligned

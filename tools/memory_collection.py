@@ -65,6 +65,55 @@ def where_atom(where):
     return E("Eq", key, value)
 
 
+DEFAULT_MODULE = Path(__file__).resolve().parents[1] / "lib/petta/lib_memory_collection.metta"
+
+
+def profile_identity(profile):
+    """The profile's identity, dimensions and canonical JSON."""
+    if profile.get("hnsw:space", "cosine") != "cosine":
+        raise ValueError("this collection profile requires cosine")
+    dimensions = int(profile["embedding_output_dim"])
+    if dimensions < 1:
+        raise ValueError("positive embedding dimensions required")
+    # Operational index parameters do not change the embedding's meaning.
+    semantic = {k: v for k, v in profile.items() if not k.startswith("hnsw:")}
+    semantic.update(metric="cosine", representation="f64-copy-of-source")
+    profile_json = json.dumps(semantic, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(profile_json.encode()).hexdigest(), dimensions, profile_json
+
+
+def query_vector(value, dimensions):
+    tensor = value if isinstance(value, Tensor) else Tensor.vector(value)
+    if tensor.shape != (dimensions,):
+        raise ValueError("embedding dimension mismatch")
+    return tensor
+
+
+def query_batches(call, profile, queries, n_results, filter_value):
+    """One reply per query, in order, from one worker frame."""
+    if len(queries) == 1:
+        return [call(E("query", profile, queries[0], n_results, filter_value))]
+    # Explicit query ordinals preserve correlation across alternatives.
+    numbered = call(E("query-many", profile, queries, n_results, filter_value))
+    if (not isinstance(numbered, tuple) or len(numbered) != len(queries) or
+        any(not isinstance(row, tuple) or len(row) != 2 or not isinstance(row[0], int) for row in numbered) or
+        sorted(row[0] for row in numbered) != list(range(len(queries)))):
+        raise RuntimeError("uncorrelated query batch")
+    return [row[1] for row in sorted(numbered)]
+
+
+def query_result(batches, include):
+    result = {k: [] for k in ("ids", "documents", "metadatas", "distances")}
+    for found in batches:
+        if isinstance(found, tuple) and found and found[0] == S("MemoryFailure"):
+            raise ValueError("MeTTa collection refused: " + repr(found))
+        result["ids"].append([r[1][1] for r in found])
+        result["documents"].append([r[1][3] for r in found])
+        result["metadatas"].append([metadata_python(r[1][4]) for r in found])
+        result["distances"].append([1.0 - plain(r[0]) for r in found])
+    return {key: value if key == "ids" or key in include else None for key, value in result.items()}
+
+
 class NativeCollection:
     def __init__(self, socket, name, profile, binary, module=None, profile_requests=False, scan_tier="wide"):
         if scan_tier not in ("wide", "f32", "int8"):
@@ -74,16 +123,7 @@ class NativeCollection:
             raise RuntimeError("space service does not advertise native tensors")
         self.space = self.client.open(name, "native")
         self.metadata = dict(profile)
-        if profile.get("hnsw:space", "cosine") != "cosine":
-            raise ValueError("this collection profile requires cosine")
-        self.dimensions = int(profile["embedding_output_dim"])
-        if self.dimensions < 1:
-            raise ValueError("positive embedding dimensions required")
-        # Operational index parameters do not change the embedding's meaning.
-        semantic = {k: v for k, v in profile.items() if not k.startswith("hnsw:")}
-        semantic.update(metric="cosine", representation="f64-copy-of-source")
-        profile_json = json.dumps(semantic, sort_keys=True, separators=(",", ":"))
-        self.profile = hashlib.sha256(profile_json.encode()).hexdigest()
+        self.profile, self.dimensions, profile_json = profile_identity(profile)
         contract = E("MemoryProfile", self.profile, profile_json)
         existing = self.space.match(E("MemoryProfile", Var(0), Var(1)),
                                     E("MemoryProfile", Var(0), Var(1)))
@@ -94,7 +134,7 @@ class NativeCollection:
         elif existing != [contract]:
             raise ValueError("persisted embedding profile mismatch")
         self.binary = str(binary)
-        self.module = str(module or Path(__file__).resolve().parents[1] / "lib/petta/lib_memory_collection.metta")
+        self.module = str(module or DEFAULT_MODULE)
         self.worker = None
         self.profile_requests = profile_requests
         self.scan_tier = scan_tier
@@ -257,40 +297,28 @@ class NativeCollection:
         with self.lock:
             queries = tuple(self._vector(q) for q in query_embeddings)
             filter_value = where_atom(where)
-            result = {k: [] for k in ("ids", "documents", "metadatas", "distances")}
             if not queries:
-                return {key: value if key == "ids" or key in include else None for key, value in result.items()}
+                return query_result((), include)
             refresh_started = time.perf_counter_ns() if self.profile_requests else 0
             self._refresh()
             refreshed_at = time.perf_counter_ns() if self.profile_requests else 0
             # A batch captures one owner revision and uses one worker frame.
-            # Explicit query ordinals preserve correlation across alternatives.
-            if len(queries) == 1:
-                batches = [self._call(E("query", self.profile, queries[0], n_results, filter_value))]
-            else:
-                numbered = self._call(E("query-many", self.profile, queries, n_results, filter_value))
-                if (not isinstance(numbered, tuple) or len(numbered) != len(queries) or
-                    any(not isinstance(row, tuple) or len(row) != 2 or not isinstance(row[0], int) for row in numbered) or
-                    sorted(row[0] for row in numbered) != list(range(len(queries)))):
-                    raise RuntimeError("uncorrelated query batch")
-                batches = [row[1] for row in sorted(numbered)]
+            batches = query_batches(self._call, self.profile, queries, n_results, filter_value)
             if self.profile_requests:
                 self.last_query_metrics = dict(self.worker.last_metrics, revision_check_ns=refreshed_at-refresh_started,
                                                queries=len(queries))
-            for found in batches:
-                if isinstance(found, tuple) and found and found[0] == S("MemoryFailure"):
-                    raise ValueError("MeTTa collection refused: " + repr(found))
-                result["ids"].append([r[1][1] for r in found])
-                result["documents"].append([r[1][3] for r in found])
-                result["metadatas"].append([metadata_python(r[1][4]) for r in found])
-                result["distances"].append([1.0 - plain(r[0]) for r in found])
-            return {key: value if key == "ids" or key in include else None for key, value in result.items()}
+            return query_result(batches, include)
+
+    def export_matrix(self, path, rows=None):
+        """Write the current view as a matrix file, and its rows as an ACT
+        snapshot when rows names one; MatrixCollection serves them."""
+        with self.lock:
+            self._refresh()
+            request = E("export-matrix", str(path)) if rows is None else E("export-matrix", str(path), str(rows))
+            return self._call(request)[1]
 
     def _vector(self, value):
-        tensor = value if isinstance(value, Tensor) else Tensor.vector(value)
-        if tensor.shape != (self.dimensions,):
-            raise ValueError("embedding dimension mismatch")
-        return tensor
+        return query_vector(value, self.dimensions)
 
     def upsert(self, ids, embeddings, documents=None, metadatas=None, _insert=False):
         if len(set(ids)) != len(ids) or not all(isinstance(i, str) and i for i in ids):
@@ -329,3 +357,45 @@ class NativeCollection:
             for item_id, meta in zip(ids, metadatas):
                 operations.extend(self._call(E("patch", self.revision+1, item_id, metadata_atom(meta, allow_delete=True))))
             self._commit(operations)
+
+
+class MatrixCollection:
+    """A read-only collection served from a matrix file.
+
+    The file holds vectors and their IDs (see export_matrix); documents and
+    metadata come from an optional ACT snapshot of rows. The worker maps the
+    file and serves exact queries; no space service is involved."""
+    def __init__(self, path, profile, binary, rows=None, module=None, scan_tier="wide", timeout=300):
+        if scan_tier not in ("wide", "f32", "int8"):
+            raise ValueError("scan tier must be wide, f32 or int8")
+        self.profile, self.dimensions, _ = profile_identity(profile)
+        self.lock = threading.RLock()
+        self.worker = Worker(str(binary), str(module or DEFAULT_MODULE), "memory:dispatch", timeout=timeout)
+        try:
+            if self.worker.call(E("scan-tier", S(scan_tier))) != E("ScanTier", S(scan_tier)):
+                raise RuntimeError("worker scan tier initialization failed")
+            request = (E("load-matrix-file", self.profile, self.dimensions, str(path)) if rows is None else
+                       E("load-matrix-file", self.profile, self.dimensions, str(path), str(rows)))
+            loaded = self.worker.call(request)
+            if not (isinstance(loaded, tuple) and len(loaded) == 2 and loaded[0] == S("LoadedMatrix")):
+                raise ValueError("MeTTa collection refused: " + repr(loaded))
+            self.size = loaded[1]
+        except BaseException:
+            self.worker.close(); raise
+
+    def close(self):
+        self.worker.close()
+
+    def count(self):
+        return self.size
+
+    def query(self, query_embeddings, n_results=10, where=None, include=None):
+        if not isinstance(n_results, int) or not 0 < n_results <= 1000:
+            raise ValueError("n_results must be between 1 and 1000")
+        include = ["documents", "metadatas", "distances"] if include is None else include
+        with self.lock:
+            queries = tuple(query_vector(q, self.dimensions) for q in query_embeddings)
+            if not queries:
+                return query_result((), include)
+            return query_result(query_batches(self.worker.call, self.profile, queries, n_results,
+                                              where_atom(where)), include)
