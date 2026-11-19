@@ -56,13 +56,17 @@ def main():
     ]
     env = dict(os.environ)
     # A caller's command-line variables reach this process as environment
-    # variables as well as through MAKEFLAGS (after its ' -- '); the probes
-    # evaluate the configurations listed here and no other.
+    # variables as well as through MAKEFLAGS (after its ' -- '), and a shell may
+    # export a configuration; the probes evaluate the configurations listed
+    # here and no other.
     overrides = env.get('MAKEFLAGS', '').partition(' -- ')[2]
     for word in re.split(r'(?<!\\) ', overrides):
         name = re.match(r'([A-Za-z_][A-Za-z0-9_]*)=', word)
         if name:
             env.pop(name.group(1), None)
+    for name in [name for name in env
+                 if re.fullmatch(r'BUILD|ENABLE_[A-Z0-9_]+|SANITIZERS|SQLITE_PROVIDER', name)]:
+        env.pop(name)
     for key in ['MAKEFLAGS', 'MFLAGS', 'MAKEOVERRIDES', 'MAKELEVEL']:
         env.pop(key, None)
     records = []
