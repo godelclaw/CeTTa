@@ -32075,7 +32075,8 @@ test-petta-dispatch-memo: $(BIN) tests/support/check_petta_dispatch_memo.py
 	@$(CETTA_SCRIPT_RUN_ENV) python3 tests/support/check_petta_dispatch_memo.py ./$(BIN) --key-changes
 .PHONY: test-petta-dispatch-memo-corpus
 test-petta-dispatch-memo-corpus: $(BIN) tests/support/check_petta_dispatch_memo.py
-	@$(CETTA_SCRIPT_RUN_ENV) python3 tests/support/check_petta_dispatch_memo.py ./$(BIN)
+	@$(CETTA_SCRIPT_RUN_ENV) CETTA_LIB_PROLOG_ENABLED=$(LIB_PROLOG_ENABLED) \
+		python3 tests/support/check_petta_dispatch_memo.py ./$(BIN)
 SUITE_COMPREHENSIVE_GATES += test-petta-dispatch-memo-corpus
 
 SUITE_CORRECTNESS_GATES += test-petta-dispatch-memo
@@ -32151,7 +32152,8 @@ test-open-query-bodies: $(BIN)
 # every body on the machine.
 .PHONY: test-open-query-bodies-corpus
 test-open-query-bodies-corpus: $(BIN) tests/support/check_open_query_bodies.py
-	@$(CETTA_SCRIPT_RUN_ENV) python3 tests/support/check_open_query_bodies.py ./$(BIN)
+	@$(CETTA_SCRIPT_RUN_ENV) CETTA_LIB_PROLOG_ENABLED=$(LIB_PROLOG_ENABLED) \
+		python3 tests/support/check_open_query_bodies.py ./$(BIN)
 
 SUITE_CORRECTNESS_GATES += test-open-query-bodies
 SUITE_COMPREHENSIVE_GATES += test-open-query-bodies-corpus

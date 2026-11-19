@@ -18,6 +18,11 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+
+# A program that writes a fixture file writes it here, not into the source
+# tree, and apart from other runs of the same program.
+FIXTURES = tempfile.TemporaryDirectory(prefix="petta-corpus-fixtures-")
 
 TIMEOUT = 60
 # Some fixtures are infinite searches meant for a bounded controller; a
@@ -26,7 +31,8 @@ TRANSITIONS = "2000000"
 
 
 def run(cetta, program, memo, timeout):
-    env = dict(os.environ, CETTA_PETTA_DISPATCH_MEMO=memo)
+    env = dict(os.environ, CETTA_PETTA_DISPATCH_MEMO=memo,
+               CETTA_VALUE_FIXTURE_DIR=FIXTURES.name)
     env.setdefault("CETTA_PETTA_MACHINE_TRANSITION_LIMIT", TRANSITIONS)
     try:
         result = subprocess.run([cetta, "--lang", "petta", program],
@@ -37,10 +43,23 @@ def run(cetta, program, memo, timeout):
     return result.returncode, result.stdout, result.stderr
 
 
+def needs_absent_prolog_library(program):
+    """Whether PROGRAM sets a flag through the optional Prolog library and
+    this build lacks it: its hyperpose then has a worker per processor, not
+    the one the flag asks for, and its answers vary from run to run.  The
+    program's own gate skips it the same way."""
+    if os.environ.get("CETTA_LIB_PROLOG_ENABLED", "1") == "1":
+        return False
+    with open(program) as handle:
+        return "set_prolog_flag" in handle.read()
+
+
 def compare(cetta, program):
     """None when the program answers alike; a reason to skip (the program
     ends abnormally or answers differently without the memo, run twice);
     or the failure."""
+    if needs_absent_prolog_library(program):
+        return program, "skipped: sets a flag through the optional Prolog library, absent here"
     off = run(cetta, program, "off", TIMEOUT)
     if off is None or off[0] < 0:
         # Still read what checking reports before the program ends.

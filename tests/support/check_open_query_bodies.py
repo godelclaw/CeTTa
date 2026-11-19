@@ -14,6 +14,11 @@ import glob
 import os
 import subprocess
 import sys
+import tempfile
+
+# A program that writes a fixture file writes it here, not into the source
+# tree, and apart from other runs of the same program.
+FIXTURES = tempfile.TemporaryDirectory(prefix="petta-corpus-fixtures-")
 
 TIMEOUT = 60
 # Some fixtures are infinite searches meant for a bounded controller: the
@@ -26,7 +31,8 @@ PROFILES = ([], ["--profile", "extended"])
 
 
 def run(cetta, program, bodies, timeout, bounded, profile=()):
-    env = dict(os.environ, CETTA_OPEN_QUERY_BODIES=bodies)
+    env = dict(os.environ, CETTA_OPEN_QUERY_BODIES=bodies,
+               CETTA_VALUE_FIXTURE_DIR=FIXTURES.name)
     if bounded:
         env.setdefault("CETTA_PETTA_MACHINE_TRANSITION_LIMIT", TRANSITIONS)
     else:
@@ -40,7 +46,20 @@ def run(cetta, program, bodies, timeout, bounded, profile=()):
     return result.returncode, result.stdout, result.stderr
 
 
+def needs_absent_prolog_library(program):
+    """Whether PROGRAM sets a flag through the optional Prolog library and
+    this build lacks it: its hyperpose then has a worker per processor, not
+    the one the flag asks for, and its answers vary from run to run.  The
+    program's own gate skips it the same way."""
+    if os.environ.get("CETTA_LIB_PROLOG_ENABLED", "1") == "1":
+        return False
+    with open(program) as handle:
+        return "set_prolog_flag" in handle.read()
+
+
 def compare(cetta, program):
+    if needs_absent_prolog_library(program):
+        return program, "skipped: sets a flag through the optional Prolog library, absent here"
     for profile in PROFILES:
         name, problem = compare_in(cetta, program, profile)
         if problem is not None:
