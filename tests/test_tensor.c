@@ -680,6 +680,58 @@ static void matrix_reference(void) {
     cetta_dense_tensor_v1_release(indices); cetta_dense_tensor_v1_release(q); cetta_dense_tensor_v1_release(matrix);
 }
 
+/* The content hash keeps its definition when it is computed on demand: FNV-1a
+ * over the little-endian bytes, then the dtype, rank and each dimension as
+ * 64-bit words. Equality answers alike whether hashes are known or not. */
+static uint32_t reference_fnv(uint32_t hash, const unsigned char *bytes, size_t n) {
+    for (size_t i = 0; i < n; ++i) hash = (hash ^ bytes[i]) * UINT32_C(16777619);
+    return hash;
+}
+static uint32_t reference_word(uint32_t hash, uint64_t word) {
+    unsigned char bytes[8];
+    for (unsigned i = 0; i < 8u; ++i) bytes[i] = (unsigned char)(word >> (8u * i));
+    return reference_fnv(hash, bytes, 8u);
+}
+static uint32_t reference_hash(CettaDenseTensorV1DType dtype, const size_t *shape, size_t rank,
+    const void *data, size_t bytes) {
+    uint32_t hash = reference_fnv(UINT32_C(2166136261), data, bytes);
+    hash = reference_word(reference_word(hash, (uint64_t)dtype), rank);
+    for (size_t i = 0; i < rank; ++i) hash = reference_word(hash, shape[i]);
+    return hash;
+}
+static void lazy_hash_reference(void) {
+    double values[6] = {1.5, -0., 3., 1e-300, -7.25, 2.};
+    size_t flat[] = {6u}, grid[] = {2u, 3u};
+    CettaDenseTensorV1 *a = make(CETTA_DENSE_TENSOR_V1_F64, flat, 1u, values, sizeof values);
+    CettaDenseTensorV1 *b = make(CETTA_DENSE_TENSOR_V1_F64, flat, 1u, values, sizeof values);
+    assert(cetta_dense_tensor_v1_equal(a, b));
+    assert(cetta_dense_tensor_v1_hash(a) == reference_hash(CETTA_DENSE_TENSOR_V1_F64, flat, 1u, values, sizeof values));
+    assert(cetta_dense_tensor_v1_equal(a, b) && cetta_dense_tensor_v1_equal(b, a));
+    assert(cetta_dense_tensor_v1_hash(b) == cetta_dense_tensor_v1_hash(a));
+    CettaDenseTensorV1 *view = NULL;
+    assert(cetta_dense_tensor_v1_reshape(a, grid, 2u, &view) == CETTA_DENSE_TENSOR_V1_OK);
+    CettaDenseTensorV1 *fresh = make(CETTA_DENSE_TENSOR_V1_F64, grid, 2u, values, sizeof values);
+    assert(cetta_dense_tensor_v1_hash(view) == reference_hash(CETTA_DENSE_TENSOR_V1_F64, grid, 2u, values, sizeof values));
+    assert(cetta_dense_tensor_v1_hash(fresh) == cetta_dense_tensor_v1_hash(view));
+    assert(cetta_dense_tensor_v1_hash(view) != cetta_dense_tensor_v1_hash(a));
+    double other[6];
+    memcpy(other, values, sizeof other);
+    other[5] = 2.0000000000000004;
+    CettaDenseTensorV1 *c = make(CETTA_DENSE_TENSOR_V1_F64, flat, 1u, other, sizeof other);
+    assert(!cetta_dense_tensor_v1_equal(a, c) && !cetta_dense_tensor_v1_equal(c, a));
+    assert(cetta_dense_tensor_v1_hash(c) != cetta_dense_tensor_v1_hash(a));
+    assert(!cetta_dense_tensor_v1_equal(a, c));
+    float narrow[3] = {1.f, -2.f, .5f};
+    size_t three[] = {3u}, five[] = {5u};
+    CettaDenseTensorV1 *f = make(CETTA_DENSE_TENSOR_V1_F32, three, 1u, narrow, sizeof narrow);
+    assert(cetta_dense_tensor_v1_hash(f) == reference_hash(CETTA_DENSE_TENSOR_V1_F32, three, 1u, narrow, sizeof narrow));
+    unsigned char bytes[5] = {0u, 1u, 254u, 255u, 7u};
+    CettaDenseTensorV1 *u = make(CETTA_DENSE_TENSOR_V1_U8, five, 1u, bytes, sizeof bytes);
+    assert(cetta_dense_tensor_v1_hash(u) == reference_hash(CETTA_DENSE_TENSOR_V1_U8, five, 1u, bytes, sizeof bytes));
+    CettaDenseTensorV1 *all[] = {a, b, view, fresh, c, f, u};
+    for (size_t i = 0; i < sizeof all / sizeof all[0]; ++i) cetta_dense_tensor_v1_release(all[i]);
+}
+
 int main(void) {
     SymbolTable symbols; symbol_table_init(&symbols);
     symbol_table_init_builtins(&symbols, &g_builtin_syms); g_symbols = &symbols;
@@ -806,7 +858,7 @@ int main(void) {
     assert(cetta_dense_tensor_v1_reduce(tensor, NULL, &sum) == CETTA_DENSE_TENSOR_V1_OK && sum.value.integer == 256);
     cetta_dense_tensor_v1_release(tensor);
     arithmetic_reference();
-    selection_reference(); matrix_reference(); compact_screening_reference(); int8_screening_reference(); screening_exponent_reference();
+    selection_reference(); matrix_reference(); lazy_hash_reference(); compact_screening_reference(); int8_screening_reference(); screening_exponent_reference();
     arena_free(&survivor); symbol_table_free(&symbols);
     puts("PASS: native tensor ownership, alternatives, arithmetic, bounds and codecs");
     return 0;

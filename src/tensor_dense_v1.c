@@ -23,10 +23,16 @@ _Static_assert(sizeof(double) == 8 && DBL_MANT_DIG == 53 && DBL_MAX_EXP == 1024,
 _Static_assert(sizeof(float) == 4 && FLT_MANT_DIG == 24 && FLT_MAX_EXP == 128 && FLT_RADIX == 2,
                "native f32 tensors require binary32");
 
+/* Content hashes are computed when first asked for, not when a tensor is made:
+ * most tensors are intermediate values nobody hashes, and hashing reads every
+ * byte. A cached hash is 0 until known, then the value with HASH_KNOWN set.
+ * Published data never changes, so racing readers compute the same value. */
+#define HASH_KNOWN (UINT64_C(1) << 32)
+
 typedef struct {
     _Atomic size_t holds;
     size_t bytes;
-    uint32_t hash;
+    _Atomic uint64_t hash;
     unsigned char *data;
 } TensorStorage;
 
@@ -35,7 +41,7 @@ struct CettaDenseTensorV1 {
     TensorStorage *storage;
     CettaDenseTensorV1DType dtype;
     size_t rank, count;
-    uint32_t hash;
+    _Atomic uint64_t hash;
     size_t shape[];
 };
 
@@ -120,11 +126,23 @@ static uint32_t storage_hash(CettaDenseTensorV1DType dtype, const TensorStorage 
     return hash;
 }
 
-static void finish_hash(CettaDenseTensorV1 *tensor) {
-    uint32_t hash = hash_word(tensor->storage->hash, tensor->dtype);
+static uint32_t storage_hash_value(CettaDenseTensorV1DType dtype, TensorStorage *storage) {
+    uint64_t state = atomic_load_explicit(&storage->hash, memory_order_acquire);
+    if (state & HASH_KNOWN) return (uint32_t)state;
+    uint32_t hash = storage_hash(dtype, storage);
+    atomic_store_explicit(&storage->hash, HASH_KNOWN | hash, memory_order_release);
+    return hash;
+}
+
+static uint32_t tensor_hash_value(const CettaDenseTensorV1 *tensor) {
+    CettaDenseTensorV1 *cache = (CettaDenseTensorV1 *)tensor;
+    uint64_t state = atomic_load_explicit(&cache->hash, memory_order_acquire);
+    if (state & HASH_KNOWN) return (uint32_t)state;
+    uint32_t hash = hash_word(storage_hash_value(tensor->dtype, tensor->storage), tensor->dtype);
     hash = hash_word(hash, tensor->rank);
     for (size_t i = 0; i < tensor->rank; ++i) hash = hash_word(hash, tensor->shape[i]);
-    tensor->hash = hash;
+    atomic_store_explicit(&cache->hash, HASH_KNOWN | hash, memory_order_release);
+    return hash;
 }
 
 static CettaDenseTensorV1Status descriptor(TensorStorage *storage, CettaDenseTensorV1DType dtype,
@@ -136,7 +154,7 @@ static CettaDenseTensorV1Status descriptor(TensorStorage *storage, CettaDenseTen
     tensor->storage = storage; tensor->dtype = dtype;
     tensor->rank = rank; tensor->count = count;
     if (rank) memcpy(tensor->shape, shape, rank * sizeof(size_t));
-    finish_hash(tensor);
+    atomic_init(&tensor->hash, UINT64_C(0));
     *out = tensor;
     return CETTA_DENSE_TENSOR_V1_OK;
 }
@@ -152,7 +170,8 @@ static CettaDenseTensorV1Status allocate(CettaDenseTensorV1DType dtype, const si
     if (rank > (SIZE_MAX - sizeof(CettaDenseTensorV1)) / sizeof(size_t)) return CETTA_DENSE_TENSOR_V1_OVERFLOW;
     TensorStorage *storage = calloc(1u, sizeof(*storage));
     if (!storage) return CETTA_DENSE_TENSOR_V1_NOMEM;
-    atomic_init(&storage->holds, 1u); storage->bytes = bytes;
+    atomic_init(&storage->holds, 1u); atomic_init(&storage->hash, UINT64_C(0));
+    storage->bytes = bytes;
     if (bytes) {
         storage->data = malloc(bytes);
         if (!storage->data) { free(storage); return CETTA_DENSE_TENSOR_V1_NOMEM; }
@@ -162,9 +181,10 @@ static CettaDenseTensorV1Status allocate(CettaDenseTensorV1DType dtype, const si
     return status;
 }
 
+/* Filling an unpublished tensor's data forgets any hash taken before. */
 static void finish_storage(CettaDenseTensorV1 *tensor) {
-    tensor->storage->hash = storage_hash(tensor->dtype, tensor->storage);
-    finish_hash(tensor);
+    atomic_store_explicit(&tensor->storage->hash, UINT64_C(0), memory_order_relaxed);
+    atomic_store_explicit(&tensor->hash, UINT64_C(0), memory_order_relaxed);
 }
 
 CettaDenseTensorV1Status cetta_dense_tensor_v1_new(CettaDenseTensorV1DType dtype, const size_t *shape,
@@ -219,7 +239,7 @@ size_t cetta_dense_tensor_v1_nbytes(const CettaDenseTensorV1 *tensor) { return t
 const size_t *cetta_dense_tensor_v1_shape(const CettaDenseTensorV1 *tensor) { return tensor->shape; }
 CettaDenseTensorV1DType cetta_dense_tensor_v1_dtype(const CettaDenseTensorV1 *tensor) { return tensor->dtype; }
 const void *cetta_dense_tensor_v1_data(const CettaDenseTensorV1 *tensor) { return tensor->storage->data; }
-uint32_t cetta_dense_tensor_v1_hash(const CettaDenseTensorV1 *tensor) { return tensor ? tensor->hash : 0u; }
+uint32_t cetta_dense_tensor_v1_hash(const CettaDenseTensorV1 *tensor) { return tensor ? tensor_hash_value(tensor) : 0u; }
 bool cetta_dense_tensor_v1_shares_storage(const CettaDenseTensorV1 *left, const CettaDenseTensorV1 *right) {
     return left && right && left->storage == right->storage;
 }
@@ -231,9 +251,14 @@ static bool same_shape(const CettaDenseTensorV1 *left, const CettaDenseTensorV1 
 
 bool cetta_dense_tensor_v1_equal(const CettaDenseTensorV1 *left, const CettaDenseTensorV1 *right) {
     if (left == right) return true;
-    return left && right && left->dtype == right->dtype && left->hash == right->hash &&
-        same_shape(left, right) && (!left->storage->bytes ||
-        memcmp(left->storage->data, right->storage->data, left->storage->bytes) == 0);
+    if (!left || !right || left->dtype != right->dtype || !same_shape(left, right)) return false;
+    /* Known hashes reject at once; computing them would read both tensors,
+     * which the comparison does anyway and stops at the first difference. */
+    uint64_t a = atomic_load_explicit(&((CettaDenseTensorV1 *)left)->hash, memory_order_acquire);
+    uint64_t b = atomic_load_explicit(&((CettaDenseTensorV1 *)right)->hash, memory_order_acquire);
+    if ((a & HASH_KNOWN) && (b & HASH_KNOWN) && a != b) return false;
+    return left->storage == right->storage || !left->storage->bytes ||
+        memcmp(left->storage->data, right->storage->data, left->storage->bytes) == 0;
 }
 
 int cetta_dense_tensor_v1_compare(const CettaDenseTensorV1 *left, const CettaDenseTensorV1 *right) {

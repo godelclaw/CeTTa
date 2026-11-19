@@ -98,6 +98,12 @@ def main():
         ("int8-dot-drops-last-code", "src/tensor_dense_v1.c",
          "    for (size_t j = 0; j < width; ++j) total += (int32_t)a[j] * (int32_t)b[j];",
          "    for (size_t j = 0; j + 1 < width; ++j) total += (int32_t)a[j] * (int32_t)b[j];"),
+        ("lazy-hash-omits-shape", "src/tensor_dense_v1.c",
+         "    for (size_t i = 0; i < tensor->rank; ++i) hash = hash_word(hash, tensor->shape[i]);\n    atomic_store_explicit(&cache->hash",
+         "    atomic_store_explicit(&cache->hash"),
+        ("equality-trusts-one-known-hash", "src/tensor_dense_v1.c",
+         "if ((a & HASH_KNOWN) && (b & HASH_KNOWN) && a != b) return false;",
+         "if (((a & HASH_KNOWN) || (b & HASH_KNOWN)) && a != b) return false;"),
     )
     for label, name, old, replacement in controls:
         original = (ROOT / name).read_text()
