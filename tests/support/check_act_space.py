@@ -136,7 +136,26 @@ def main():
         libc.free(out)
         file.write_bytes(changed + hashlib.sha256(changed).digest())
         run("reject")
+        # Opened with the digest of the validated image, the same image opens
+        # without the walk, and this one, which only the walk would reject,
+        # is refused by its digest.
+        def open_known(path, digest=None):
+            nonlocal checks
+            opened = f'(act:open "{path}" "{digest}")' if digest else f'(act:open "{path}")'
+            result = subprocess.run([
+                str(cetta), "--lang", "petta", "-e", "!(import! &self (library act))", "-e",
+                f'!(println! (case {opened} (((Error $where $why) $why) ($space '
+                '(collapse (match $space (edge a $who) $who))))))'],
+                cwd=ROOT, env=env, capture_output=True, text=True, timeout=90)
+            checks += 1
+            assert result.returncode == 0, result.stderr
+            return result.stdout
+        digest = hashlib.sha256(original).hexdigest()
+        refused = open_known(file, digest)
+        assert "corrupt" in refused and "(b b)" not in refused, refused
         file.write_bytes(original)
+        opened = open_known(file, digest)
+        assert opened == open_known(file) and "corrupt" not in opened, opened
         for dialect in ("petta", "he", "prime"):
             path = work / f"{dialect}.cact"
             source = ROOT / "tests/support/act_space_fixture.metta"

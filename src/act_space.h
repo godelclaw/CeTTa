@@ -7,6 +7,11 @@
  * The initialized empty target becomes an ordinary source-backed Space. */
 CettaActStatus cetta_act_space_capture(Space *, const char *path,
                                        size_t maximum_bytes);
+/* As capture, for the snapshot whose whole image has the given sha256 (64 hex
+ * digits, as cetta_act_space_info reports it): a typed snapshot of that image
+ * is hashed once instead of validated again; any other image is refused. */
+CettaActStatus cetta_act_space_capture_known(Space *, const char *path,
+                                             size_t maximum_bytes, const char *digest);
 typedef struct {
     uint64_t occurrences, bytes;
     size_t maximum_bytes;

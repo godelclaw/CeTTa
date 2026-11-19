@@ -2,6 +2,7 @@
 ; Upstream ACTree03 has structural-set semantics. CACT0001 preserves typed atoms
 ; and identified duplicate occurrences. Loading copies into the target domain.
 (: __cetta_lib_act_open (-> String Atom))
+(: __cetta_lib_act_open (-> String String Atom))
 (: __cetta_lib_act_close (-> Atom Atom))
 (: __cetta_lib_act_workspace (-> Atom Atom))
 (: __cetta_lib_act_dump (-> Atom String Atom))
@@ -9,6 +10,11 @@
 (: __cetta_lib_act_load (-> Atom String Atom))
 (: act:open (-> String %Undefined%))
 (= (act:open $path) (function (case (__cetta_lib_act_open $path) (($r (return $r))))))
+; Opening validates the whole snapshot. Given the digest act:info reported for
+; a snapshot opened before, a typed snapshot with that digest is hashed once
+; instead, and any other refused as corrupt.
+(: act:open (-> String String %Undefined%))
+(= (act:open $path $digest) (function (case (__cetta_lib_act_open $path $digest) (($r (return $r))))))
 (: act:workspace (-> %Undefined% %Undefined%))
 (= (act:workspace $space) (function (case (__cetta_lib_act_workspace $space) (($r (return $r))))))
 (: act:close! (-> %Undefined% %Undefined%))

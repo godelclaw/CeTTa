@@ -713,14 +713,46 @@ static CettaActStatus source_read(const char *path,size_t maximum,Source **out) 
   if (fd<0) return CETTA_ACT_IO;
   CettaActStatus status=source_read_descriptor(fd,maximum,out);close(fd);return status;
 }
+/* A typed snapshot whose whole image has the digest of one validated before,
+ * as act:info gives it, is that snapshot: its bounds are checked, its image
+ * hashed once, and its keys and index entries are not walked again. */
+static CettaActStatus source_read_known(const char *path,size_t maximum,const char *digest,Source **out) {
+  *out=NULL;
+  if (!path || !*path || sidecar_exists(path) || !digest || strlen(digest)!=64) return CETTA_ACT_CORRUPT;
+  int fd=open(path,O_RDONLY|O_CLOEXEC|O_NONBLOCK);
+  if (fd<0) return CETTA_ACT_IO;
+  SourceValidation *v=NULL;
+  CettaActStatus status=validation_open(fd,maximum,&v);close(fd);
+  if (status!=CETTA_ACT_OK) return status;
+  if (v->source->cetta) {
+    CettaActBytes image=cetta_act_image(v->source->mapping);char actual[65];
+    cetta_native_sha256_hex(image.data,image.size,actual);
+    status=memcmp(actual,digest,64) ? CETTA_ACT_CORRUPT : CETTA_ACT_OK;
+  } else {
+    /* An upstream ACTree03 set states no count; walking it is the count. */
+    do status=validation_step(v,65536);while (status==CETTA_ACT_PROGRESS);
+    if (status==CETTA_ACT_OK) {
+      CettaActBytes image=cetta_act_image(v->source->mapping);char actual[65];
+      cetta_native_sha256_hex(image.data,image.size,actual);
+      if (memcmp(actual,digest,64)) status=CETTA_ACT_CORRUPT;
+    }
+  }
+  if (status==CETTA_ACT_OK) {*out=v->source;retain(*out);}
+  validation_close(v);return status;
+}
 CettaActStatus cetta_act_space_capture(Space *target, const char *path,
                                        size_t maximum) {
+  return cetta_act_space_capture_known(target, path, maximum, NULL);
+}
+CettaActStatus cetta_act_space_capture_known(Space *target, const char *path,
+                                             size_t maximum, const char *digest) {
   if (!target || space_length64(target) ||
       target->match_backend.kind != SPACE_ENGINE_NATIVE ||
       target->overlay_base || space_has_dependencies(target))
     return CETTA_ACT_CORRUPT;
   Source *s = NULL;
-  CettaActStatus status = source_read(path, maximum, &s);
+  CettaActStatus status = digest ? source_read_known(path, maximum, digest, &s)
+                                 : source_read(path, maximum, &s);
   if (status != CETTA_ACT_OK)
     return status;
   target->match_backend.kind = SPACE_ENGINE_SOURCE;

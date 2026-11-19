@@ -110,7 +110,12 @@ backend requirements.
 ```
 
 HE and Prime use `!(import! &self act)`. `act:open` returns an ordinary
-read-only Space. `act:workspace` supplies an editable overlay on the captured
+read-only Space. It validates the whole snapshot first: its checksum, the
+order of every key and every index entry, about 10 s for a million rows.
+`(act:open path digest)` opens a snapshot already validated once, given the
+SHA-256 that `act:info` reported for it then. A `CACT0001` snapshot with that
+digest is hashed once instead of walked again; any other file is refused as
+`corrupt`. `act:workspace` supplies an editable overlay on the captured
 base; additions and removals use the ordinary Space operations. It retains
 the base independently. `act:dump!` publishes a new immutable snapshot;
 `act:load!` copies atoms into an editable Space as one admission batch.

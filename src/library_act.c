@@ -147,11 +147,15 @@ Atom *cetta_act_dispatch(CettaLibraryContext *ctx, Arena *a, Atom *head,
   if (!open && !snapshot && !workspace && !close && !dump && !mork && !load && !info)
     return NULL;
   CETTA_SCOPED_SHARED_TRANSITION(transition);
-  if (!ctx || !a || n != (open || snapshot || workspace || close || info ? 1u : 2u))
+  if (!ctx || !a || (n != (open || snapshot || workspace || close || info ? 1u : 2u) && !(open && n == 2u)))
     return error(a, head, CETTA_ACT_CORRUPT);
   size_t maximum = cetta_library_value_byte_limit(ctx);
   if (open || snapshot || workspace) {
     const char *p = open ? path(args[0]) : NULL;
+    /* With a digest from act:info, the snapshot of that image opens unwalked. */
+    const char *digest = open && n == 2u ? path(args[1]) : NULL;
+    if (open && n == 2u && !digest)
+      return error(a, head, CETTA_ACT_CORRUPT);
     Space *base =
         (workspace || snapshot) ? resolve_space(eval_current_registry(), args[0]) : NULL;
     if ((open && !p) || ((workspace || snapshot) && (!base || !space_owner_is_current(base))))
@@ -168,7 +172,7 @@ Atom *cetta_act_dispatch(CettaLibraryContext *ctx, Arena *a, Atom *head,
       (void)atom_space(&s->retention, base);
     space_init(&s->space);
     CettaActStatus status =
-        open ? cetta_act_space_capture(&s->space, p, maximum)
+        open ? cetta_act_space_capture_known(&s->space, p, maximum, digest)
         : (snapshot ? space_source_snapshot_init(&s->space,base) : space_init_overlay_local(&s->space, base)) ? CETTA_ACT_OK
                                                     : CETTA_ACT_CORRUPT;
     s->space.lifetime = (SpaceOwner){s, &owner_ops};

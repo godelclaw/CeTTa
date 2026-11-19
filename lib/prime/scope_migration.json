@@ -648,7 +648,7 @@
     {
       "source": "act.metta",
       "generator": "library_spelling.py",
-      "output_sha256": "2c3c41c7601d49c964b2b5ad616d85819573d1135564e947582bf063e0d691e6"
+      "output_sha256": "cd3d74246f0f0ee2c9927e261e9e05222c99a1181e78944c7c3aec12ce90e2df"
     },
     {
       "source": "binary.metta",
