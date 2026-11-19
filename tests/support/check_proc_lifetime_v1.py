@@ -123,6 +123,25 @@ def main():
                 check("detached: leads a session of its own", os.getsid(pid) == pid, True)
                 check("detached: apart from the starter's session", os.getsid(pid) != os.getsid(0), True)
 
+            # Starters that end at once, side by side: a spawn returns only
+            # once its child exists, so no starter's end can prevent it.
+            marks = [work / ("detached-together-%d" % index) for index in range(8)]
+            starters = []
+            for mark in marks:
+                starters.append(run(directory,
+                                    '!(println! (proc:spawn ("sh" "-c" "echo $$ > %s; exec sleep 300") '
+                                    '((lifetime detached) (stdout null) (stderr null))))' % mark, wait=False))
+                started.append(None)
+            for starter in starters:
+                starter.communicate(timeout=60)
+            settle(lambda: all(mark.exists() and mark.read_text().strip().isdigit() for mark in marks), 10.0)
+            pids = [pid_from(mark, 0) for mark in marks]
+            started.extend(pids)
+            check("detached: starters that end at once leave every child running",
+                  ([starter.returncode for starter in starters],
+                   [pid is not None and alive(pid) for pid in pids]),
+                  ([0] * len(marks), [True] * len(marks)))
+
             mark = work / "detached-cancel"
             code, out = run(directory,
                             '!(let $owner (proc:spawn ("sh" "-c" "echo $$ > %s; exec sleep 300") '

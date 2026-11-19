@@ -42,7 +42,7 @@ typedef struct {
     pthread_t thread;
     pthread_mutex_t lock;
     pthread_cond_t changed;
-    bool started, done, consumed, cancel;
+    bool started, launched, done, consumed, cancel;
     int wake[2];
     char **argv, **env;
     char *cwd, *program;
@@ -341,6 +341,10 @@ static void *execute(void *resource) {
         close(receipt[1]); receipt[1] = -1;
     }
 #endif
+    pthread_mutex_lock(&job->lock);
+    job->launched = true;
+    pthread_cond_broadcast(&job->changed);
+    pthread_mutex_unlock(&job->lock);
     if (input[0] >= 0) { close(input[0]); input[0] = -1; }
     for (int i = 0; i < 2; i++) if (output[i][1] >= 0) { close(output[i][1]); output[i][1] = -1; }
     if (null_device >= 0) { close(null_device); null_device = -1; }
@@ -947,6 +951,14 @@ static Atom *proc_dispatch(CettaLibraryContext *ctx, Arena *arena, Atom *head, A
         int error = pthread_create(&job->thread, NULL, execute, job);
         if (error) { cetta_native_handle_close(ctx, "process", id); return failed(arena, "proc:host-failure", strerror(error)); }
         job->started = true;
+        if (job->detached) {
+            /* A detached child outlives its caller, so the caller must not
+             * end before the child exists: spawn returns once it does, or
+             * once its launch has failed. */
+            pthread_mutex_lock(&job->lock);
+            while (!job->launched && !job->done) pthread_cond_wait(&job->changed, &job->lock);
+            pthread_mutex_unlock(&job->lock);
+        }
         if (run) {
             Atom *observed = proc_dispatch(ctx, arena, atom_symbol(arena, "__cetta_lib_proc_await"), &owner, 1u, interrupted);
             cetta_native_handle_close(ctx, "process", id);
