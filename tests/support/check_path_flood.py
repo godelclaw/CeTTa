@@ -1,28 +1,27 @@
 #!/usr/bin/env python3
 """Values crafted to share one home in a path index cost about what random
-values cost: 80,000 facts (p I V) whose values V the index's former, public
+values cost: 20,000 facts (p I V) whose values V the index's former, public
 placement hash (the splitmix64 finalizer, invertible) sends to one slot,
 read back through the index by (p $x V), load and answer within three times
-the random values' time plus 0.2 s (under that hash they took about
-thirty times as long).
+the random values' work (under that hash, 80,000 of them took about thirty
+times as long).  Work is counted in user-space instructions, start-up taken
+off, so one run of each decides, whatever the machine's load.
 
 An integer field's key is the value itself, so the values are chosen by
 inverting the finalizer at hashes whose low 24 bits are zero.
 
 Usage: check_path_flood.py CETTA
 """
-import os
 import random
-import resource
-import subprocess
 import sys
-import tempfile
+
+from instruction_count import instructions, startup
 
 M = (1 << 64) - 1
 C1 = 0xbf58476d1ce4e5b9
 C2 = 0x94d049bb133111eb
 K = 24
-N = 80000
+N = 20000
 QUERIES = 64
 
 
@@ -74,28 +73,11 @@ def scattered():
     return values
 
 
-def cpu(cetta, values):
+def work(cetta, values):
     probes = values[::max(1, len(values) // QUERIES)][:QUERIES]
-    with tempfile.NamedTemporaryFile("w", suffix=".metta", delete=False) as f:
-        for i, v in enumerate(values):
-            f.write(f"(p {i} {v})\n")
-        for v in probes:
-            f.write(f"!(match &self (p $x {v}) $x)\n")
-        path = f.name
-    try:
-        before = resource.getrusage(resource.RUSAGE_CHILDREN)
-        result = subprocess.run([cetta, "--lang", "petta", path],
-                                capture_output=True, text=True, timeout=600)
-        after = resource.getrusage(resource.RUSAGE_CHILDREN)
-    finally:
-        os.unlink(path)
-    expected = [str(values.index(v)) for v in probes]
-    if result.returncode != 0 or result.stdout.split() != expected:
-        print(f"FAIL: exit {result.returncode}, answers "
-              f"{result.stdout.split()[:4]} where {expected[:4]}; "
-              f"{result.stderr[-200:]}")
-        sys.exit(1)
-    return (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
+    text = "".join(f"(p {i} {v})\n" for i, v in enumerate(values))
+    text += "".join(f"!(match &self (p $x {v}) $x)\n" for v in probes)
+    return instructions(cetta, text, [str(values.index(v)) for v in probes])
 
 
 def main():
@@ -103,16 +85,16 @@ def main():
         print(__doc__)
         sys.exit(2)
     cetta = sys.argv[1]
-    flood = crafted()
-    plain = scattered()
-    plain_cpu = min(cpu(cetta, plain) for _ in range(2))
-    flood_cpu = min(cpu(cetta, flood) for _ in range(2))
-    if flood_cpu > 3.0 * plain_cpu + 0.2:
-        print(f"FAIL: crafted path keys take {flood_cpu:.2f} s against "
-              f"{plain_cpu:.2f} s for random ones")
+    base = startup(cetta)
+    plain = work(cetta, scattered()) - base
+    flood = work(cetta, crafted()) - base
+    ratio = flood / max(plain, 1)
+    if ratio > 3.0:
+        print(f"FAIL: crafted path keys take {flood / 1e6:.0f}M instructions against "
+              f"{plain / 1e6:.0f}M for random ones ({ratio:.1f}x)")
         sys.exit(1)
-    print(f"PASS: crafted path keys take {flood_cpu:.2f} s against "
-          f"{plain_cpu:.2f} s for random ones ({N} facts, {QUERIES} reads)")
+    print(f"PASS: crafted path keys take {flood / 1e6:.0f}M instructions against "
+          f"{plain / 1e6:.0f}M for random ones ({ratio:.1f}x; {N} facts, {QUERIES} reads)")
 
 
 if __name__ == "__main__":

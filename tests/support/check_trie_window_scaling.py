@@ -6,17 +6,15 @@ Usage: check_trie_window_scaling.py CETTA_BINARY
 The trie reads a row's first 511 elements and 8 levels.  Rows of 522
 columns asked by their last bound column, and facts ten deep asked by a
 value below the trie's levels (fewer than make a relation), each asked
-once per row: from N to 4 N rows the lookups' time (best of three) grows at
-most eightfold, where reading every row per lookup grows it sixteenfold,
-and every lookup answers.
+once per row: from N to 4 N rows the lookups' work grows at most eightfold,
+where reading every row per lookup grows it sixteenfold, and every lookup
+answers.  Work is counted in user-space instructions, start-up taken off,
+so one run at each size decides, whatever the machine's load.
 """
 import os
-import subprocess
 import sys
-import tempfile
-import time
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from instruction_count import instructions, startup
 
 
 def wide(rows, key_column=521):
@@ -39,44 +37,31 @@ def deep(rows):
     return lines
 
 
-def run(binary, work, name, lines, rows):
+def run(binary, lines, rows):
     lines = lines + [
         "(= (all $n $acc) (if (== $n 0) $acc "
         "(let $v (ask (- $n 1)) (all (- $n 1) (+ $acc 1)))))",
         f"!(all {rows} 0)"]
-    path = os.path.join(work, f"{name}_{rows}.metta")
-    with open(path, "w") as f:
-        f.write("\n".join(lines) + "\n")
-    best = None
-    for _ in range(3):
-        began = time.perf_counter()
-        p = subprocess.run([binary, "--lang", "petta", path], cwd=ROOT,
-                           capture_output=True, text=True, timeout=900)
-        took = time.perf_counter() - began
-        if p.returncode != 0 or p.stdout.split() != [str(rows)]:
-            print(f"FAIL: {name} over {rows} rows answered {p.stdout.split()[:3]}")
-            return None
-        best = took if best is None else min(best, took)
-    return best
+    return instructions(binary, "\n".join(lines) + "\n", [str(rows)], timeout=900)
 
 
 def main():
     binary = os.path.abspath(sys.argv[1])
+    base = startup(binary)
     cases = (("wide", wide, (400, 1600)),
              ("wide-first-unindexed", lambda n: wide(n, 511), (400, 1600)),
              ("wide-middle-unindexed", lambda n: wide(n, 516), (400, 1600)),
              ("deep", deep, (800, 3200)))
-    with tempfile.TemporaryDirectory(prefix="cetta-trie-window-") as work:
-        for name, make, (small, large) in cases:
-            per = [run(binary, work, name, make(n), n) for n in (small, large)]
-            if None in per:
-                return 1
-            if per[1] > 8 * per[0] + 0.05:
-                print(f"FAIL: {name} lookups took {per[0]:.3f} s over {small} rows "
-                      f"and {per[1]:.3f} s over {large}")
-                return 1
-            print(f"PASS: {name} lookups past the trie's window: {per[0]:.3f} s and "
-                  f"{per[1]:.3f} s over {small} and {large} rows")
+    for name, make, (small, large) in cases:
+        per = [run(binary, make(n), n) - base for n in (small, large)]
+        ratio = per[1] / max(per[0], 1)
+        if ratio > 8.0:
+            print(f"FAIL: {name} lookups took {per[0] / 1e6:.0f}M instructions over "
+                  f"{small} rows and {per[1] / 1e6:.0f}M over {large} ({ratio:.1f}x)")
+            return 1
+        print(f"PASS: {name} lookups past the trie's window: {per[0] / 1e6:.0f}M and "
+              f"{per[1] / 1e6:.0f}M instructions over {small} and {large} rows "
+              f"({ratio:.1f}x)")
     return 0
 
 

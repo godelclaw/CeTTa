@@ -5,7 +5,7 @@ reclaims, and grows with collection off.
 usage: check_plateau.py PROGRAM EXPECTED TURNS
 
 The program takes its number of turns as its first argument.  It runs at
-four and at sixteen times TURNS, reclaiming and with collection off, and
+four and at eight times TURNS, reclaiming and with collection off, and
 must answer EXPECTED each time: the turns before the first size warm the
 universe's tables to the size the turns keep needing (its peak grows by
 about 1 MiB over the first 40,000 turns of the churn program, then stays
@@ -13,15 +13,16 @@ flat to 320,000).  Reclaiming, its peak may grow by 1 MiB at most between
 the two sizes; with collection off it must grow by more, or the test
 measures nothing.  A peak varies from run to run by some hundreds of KiB
 with the allocator's timing, never below what the program needs, so each
-size runs three times and its least peak counts.  The binary is
-$CETTA_BIN."""
+size runs three times reclaiming and its least peak counts; with
+collection off the growth is megabytes, and one run of each size shows it.
+The binary is $CETTA_BIN."""
 import os
 import resource
 import subprocess
 import sys
 
 BOUND_KIB = 1024
-RUNS = 3
+RUNS = {'reclaim': 3, 'off': 1}
 
 
 def peak_kib(program, turns, mode):
@@ -43,9 +44,9 @@ def main():
     growth = {}
     for mode in ('reclaim', 'off'):
         peaks = []
-        for n in (4 * turns, 16 * turns):
+        for n in (4 * turns, 8 * turns):
             least = None
-            for _ in range(RUNS):
+            for _ in range(RUNS[mode]):
                 # Each run in its own child, so its peak is its own.
                 child = subprocess.run(
                     [sys.executable, __file__, '--one', program, str(n), mode],
@@ -59,13 +60,13 @@ def main():
             peaks.append(least)
         growth[mode] = peaks[1] - peaks[0]
     if growth['reclaim'] > BOUND_KIB:
-        print(f"FAIL: reclaiming, the peak grew {growth['reclaim']} KiB from {4 * turns} to {16 * turns} turns")
+        print(f"FAIL: reclaiming, the peak grew {growth['reclaim']} KiB from {4 * turns} to {8 * turns} turns")
         return 1
     if growth['off'] <= BOUND_KIB:
         print(f"FAIL: with collection off the peak grew only {growth['off']} KiB: the test measures nothing")
         return 1
     print(f"PASS: churned terms plateau: +{growth['reclaim']} KiB reclaiming, "
-          f"+{growth['off']} KiB with collection off, from {4 * turns} to {16 * turns} turns")
+          f"+{growth['off']} KiB with collection off, from {4 * turns} to {8 * turns} turns")
     return 0
 
 

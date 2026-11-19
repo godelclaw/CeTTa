@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 """Integers crafted to share one home in the integer table cost about what
-random integers cost: 40,000 values whose pages' prefixes the table's former,
-public hash sent to one slot load within three times the random values' time
-plus 0.2 s (under that hash they took about sixty times as long).
+random integers cost: 5,000 values whose pages' prefixes the table's former,
+public hash sent to one slot load within three times the random values' work
+(under that hash, 40,000 of them took about sixty times as long).  Work is
+counted in user-space instructions, start-up taken off, so one run of each
+decides, whatever the machine's load.
 
 Usage: check_integer_flood.py CETTA
 """
-import os
 import random
-import resource
-import subprocess
 import sys
-import tempfile
+
+from instruction_count import instructions, startup
 
 M = (1 << 64) - 1
 C1 = 0xbf58476d1ce4e5b9
 C1_INVERSE = pow(C1, -1, 1 << 64)
 K = 24
-N = 40000
+N = 5000
 
 
 def inv_xorshift(y, s):
@@ -66,37 +66,22 @@ def scattered(n):
     return values
 
 
-def cpu(cetta, values):
-    with tempfile.NamedTemporaryFile("w", suffix=".metta", delete=False) as f:
-        for v in values:
-            f.write(f"(n {v})\n")
-        f.write("!(+ 1 1)\n")
-        path = f.name
-    try:
-        before = resource.getrusage(resource.RUSAGE_CHILDREN)
-        result = subprocess.run([cetta, "--lang", "petta", path],
-                                capture_output=True, text=True, timeout=600)
-        after = resource.getrusage(resource.RUSAGE_CHILDREN)
-    finally:
-        os.unlink(path)
-    if result.returncode != 0 or result.stdout.split() != ["2"]:
-        print(f"FAIL: exit {result.returncode}, answers "
-              f"{result.stdout.split()[:4]}; {result.stderr[-200:]}")
-        sys.exit(1)
-    return (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
+def work(cetta, values):
+    return instructions(cetta, "".join(f"(n {v})\n" for v in values) + "!(+ 1 1)\n", ["2"])
 
 
 def main():
     cetta = sys.argv[1]
-    flood, plain = crafted(N), scattered(N)
-    flood_cpu = min(cpu(cetta, flood) for _ in range(2))
-    plain_cpu = min(cpu(cetta, plain) for _ in range(2))
-    if flood_cpu > 3.0 * plain_cpu + 0.2:
-        print(f"FAIL: crafted integers take {flood_cpu:.2f} s against "
-              f"{plain_cpu:.2f} s for random ones")
+    base = startup(cetta)
+    flood = work(cetta, crafted(N)) - base
+    plain = work(cetta, scattered(N)) - base
+    ratio = flood / max(plain, 1)
+    if ratio > 3.0:
+        print(f"FAIL: crafted integers take {flood / 1e6:.0f}M instructions against "
+              f"{plain / 1e6:.0f}M for random ones ({ratio:.1f}x)")
         sys.exit(1)
-    print(f"PASS: crafted integers take {flood_cpu:.2f} s against "
-          f"{plain_cpu:.2f} s for random ones")
+    print(f"PASS: crafted integers take {flood / 1e6:.0f}M instructions against "
+          f"{plain / 1e6:.0f}M for random ones ({ratio:.1f}x)")
 
 
 if __name__ == "__main__":

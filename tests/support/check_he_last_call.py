@@ -7,7 +7,7 @@ stands in for the child (eval_he_canonical.inc, he_last_call).
 
 --memory (a runtime-stats build): a recursion whose levels end in such calls
 holds the same number of frames at two depths, and its peak RSS at 10,000 and
-100,000 levels differs by a small constant; a recursion whose levels keep
+40,000 levels, under a 2 MB collection budget, differs by a small constant; a recursion whose levels keep
 work after their child (a second equation, a superposed alternative, a typed
 argument checked after its value, an error a later alternative drops) holds
 more frames the deeper it runs.  With CETTA_HE_LAST_CALL=0 every frame stays.
@@ -124,10 +124,12 @@ NEGATIVE = (
 )
 
 FRAME_DEPTHS = (200, 400)
-RSS_DEPTHS = (10000, 100000)
+RSS_DEPTHS = (10000, 40000)
 # What a recursion's frames and their roots may add between the two depths
-# under a small collection budget: the arena's churn, not its depth.
-RSS_SLACK_KIB = 12 * 1024
+# under a small collection budget: the arena's churn, not its depth.  Over
+# the 30,000 levels between the depths, it catches 140 bytes a level kept.
+RSS_GC_BUDGET_MB = "2"
+RSS_SLACK_KIB = 4 * 1024
 
 
 def python_available(binary, scratch):
@@ -183,7 +185,7 @@ def check_memory(binary):
                 with open(path, "w") as out:
                     out.write(template.format(n=n))
                 rss.append(peak_rss_kib(binary, path,
-                                        {"CETTA_GC_BUDGET_MB": "8"}))
+                                        {"CETTA_GC_BUDGET_MB": RSS_GC_BUDGET_MB}))
             if rss[1] - rss[0] > RSS_SLACK_KIB:
                 sys.exit(f"FAIL: {name} peaks at {rss} KiB at depths "
                          f"{RSS_DEPTHS}")

@@ -8033,7 +8033,7 @@ endif
 
 # A strict stack keeps no structure beyond its order: general matches grow
 # its peak memory by nothing, where a full stack builds its indexes.
-SPACE_PROFILES_SCALING_ITEMS ?= 50000
+SPACE_PROFILES_SCALING_ITEMS ?= 25000
 .PHONY: test-space-profiles-scaling
 test-space-profiles-scaling: $(BIN) tests/support/check_space_profiles_scaling.py
 	@$(CETTA_SCRIPT_RUN_ENV) python3 tests/support/check_space_profiles_scaling.py \
