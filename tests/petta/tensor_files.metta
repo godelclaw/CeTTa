@@ -1,0 +1,23 @@
+; Standard tensor files: fixtures written by NumPy and safetensors themselves
+; are copied, shared, refused with the reason, and written back.
+!(import! &self (library lib_tensor))
+!(tensor:to-expr (tensor:load "tests/fixtures/tensor_files/f64_2x3.npy"))
+!(tensor:shape (tensor:map "tests/fixtures/tensor_files/f64_2x3.npy"))
+!(tensor:map "tests/fixtures/tensor_files/f16_vector.npy")
+!(tensor:to-expr (tensor:load "tests/fixtures/tensor_files/f16_vector.npy"))
+!(tensor:to-expr (tensor:load "tests/fixtures/tensor_files/i32_fortran.npy"))
+!(tensor:to-expr (tensor:map "tests/fixtures/tensor_files/mixed.safetensors" "ids"))
+!(tensor:to-expr (tensor:load "tests/fixtures/tensor_files/bf16.safetensors"))
+!(tensor:load "tests/fixtures/tensor_files/mixed.safetensors")
+!(tensor:load "tests/fixtures/tensor_files/mixed.safetensors" "absent")
+!(tensor:file-info "tests/fixtures/tensor_files/bf16.safetensors")
+!(tensor:save-npy "runtime/tensor_files_petta.npy" (tensor:from f32 (2 2) (0.5 1.5 -2 4)))
+!(tensor:to-expr (tensor:map "runtime/tensor_files_petta.npy"))
+!(tensor:save-safetensors "runtime/tensor_files_petta.safetensors" (("v" (tensor:from f64 (2) (1 2))) ("n" (tensor:from u8 (1) (7)))) (("k" "v")))
+!(tensor:map-all "runtime/tensor_files_petta.safetensors")
+!(let ($o $b) (tensor:string-column ("ab" "" "é")) (tensor:strings $o $b))
+!(let ($o $b) (tensor:string-column ("ab" "" "é")) (tensor:string-at $o $b 2))
+; f32 rows, as loaded embeddings often are, read as their exact f64 values.
+!(tensor:to-expr (tensor:row-norms (tensor:from f32 (2 2) (3 4 0 0.5))))
+!(tensor:to-expr (tensor:normalize-rows (tensor:from f32 (2 2) (3 4 0 0.5))))
+!(tensor:dtype (tensor:normalize-rows (tensor:from f32 (2 2) (3 4 0 0.5))))

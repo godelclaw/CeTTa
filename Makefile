@@ -956,6 +956,7 @@ SRC += src/term_molecule.c src/native_open_query.c
 SRC += src/space_path_index.c
 SRC += src/producer_reads.c
 SRC += src/tensor_dense_v1.c
+SRC += src/tensor_files_v1.c
 SRC += src/producer_dependencies.c src/producer_schedule.c
 SRC += src/fallible_alloc.c
 SRC += src/occurrence_log.c src/shared_return_producer.c src/owned_return_image.c
@@ -48417,6 +48418,13 @@ $(TENSOR_DLPACK_LIB): src/tensor_dlpack.h src/tensor.h src/generated/tensor_desc
 .PHONY: test-tensor-dlpack test-tensor-dlpack-numpy
 test-tensor-dlpack: $(TENSOR_DLPACK_BIN)
 	./$(TENSOR_DLPACK_BIN)
+# Tensor files against the reference libraries, both ways; TENSOR_FILES_PYTHON
+# must provide numpy and safetensors.
+TENSOR_FILES_PYTHON ?= python3
+.PHONY: test-tensor-files-interop
+test-tensor-files-interop: $(BIN)
+	$(TENSOR_FILES_PYTHON) tests/support/check_tensor_files_interop.py --cetta ./$(BIN)
+
 test-tensor-dlpack-numpy: $(TENSOR_DLPACK_LIB)
 	python3 tests/support/check_tensor_dlpack.py --library ./$(TENSOR_DLPACK_LIB)
 
@@ -50411,7 +50419,7 @@ test-atom-wire-limits: $(ATOM_WIRE_LIMITS_TEST_BIN)
 test-all: test-atom-wire-limits
 
 DENSE_TENSOR_V1_TEST_BIN = runtime/test-tensor-$(BUILD_OBJ_TAG)
-TENSOR_TEST_SOURCES = tests/test_tensor.c src/tensor_dense_v1.c src/atom.c $(SYMBOL_STANDALONE_SRC) \
+TENSOR_TEST_SOURCES = tests/test_tensor.c src/tensor_dense_v1.c src/tensor_files_v1.c src/atom.c $(SYMBOL_STANDALONE_SRC) \
 	src/binding/frame_identity.c src/atom_wire.c src/durable_value.c
 .PHONY: test-tensor-unit test-tensor-native test-tensor-mutations benchmark-tensor-compact benchmark-tensor-capacity
 $(DENSE_TENSOR_V1_TEST_BIN): $(TENSOR_TEST_SOURCES) src/tensor_dense_v1.h src/atom.h src/symbol.h \

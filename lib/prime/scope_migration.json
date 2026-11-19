@@ -86,8 +86,8 @@
     {
       "source": "gslt_execution_contracts.metta",
       "output": "gslt_execution_contracts.metta",
-      "source_sha256": "dcaf85d77f29a6bb3f4c9abe95a27ae296e6484a9567032761cc5299a880ba4e",
-      "output_sha256": "4a55ab4f763e8a7ba4a8bf4740a2abe653d21cc9051b0b4952e88c57a2a1cdf3",
+      "source_sha256": "b4aefc56a833a99482c8e26d47de2969a5590438f758c5368914e50ac81712dc",
+      "output_sha256": "f6283eb71d8a8e3d9e7ef18a2eae572933136f21b11806edffd58599a9f258d5",
       "edits": 4,
       "code_diagnostics": 0
     },
@@ -763,7 +763,7 @@
     {
       "source": "lib_tensor.metta",
       "generator": "library_spelling.py",
-      "output_sha256": "36534cb46b69778be9080400b28fa2f4467a88cfa9961fd2681a8c7c44d11c6b"
+      "output_sha256": "fa82e7b0a1c39ebf40b0d52069cbb4dcfbfe19e950f7efd784f1cd27f1ec254e"
     },
     {
       "source": "math.metta",

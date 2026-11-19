@@ -37,6 +37,17 @@ CettaDenseTensorV1Status cetta_dense_tensor_v1_byte_count(CettaDenseTensorV1DTyp
 CettaDenseTensorV1Status cetta_dense_tensor_v1_new(CettaDenseTensorV1DType dtype,
     const size_t *shape, size_t rank, const void *data, size_t bytes,
     CettaDenseTensorV1 **out);
+/* Allocates the storage and lets fill write its bytes; false refuses (VALUE). */
+CettaDenseTensorV1Status cetta_dense_tensor_v1_new_filled(CettaDenseTensorV1DType dtype,
+    const size_t *shape, size_t rank, bool (*fill)(void *context, unsigned char *data, size_t bytes),
+    void *context, CettaDenseTensorV1 **out);
+/* Wraps immutable bytes owned elsewhere, such as a read-only file mapping,
+ * aligned to the element width. release(context) runs once, when the last view
+ * of the storage is released; the bytes must stay valid and unchanged until
+ * then. They are charged to no arena. On failure release is not called. */
+CettaDenseTensorV1Status cetta_dense_tensor_v1_new_external(CettaDenseTensorV1DType dtype,
+    const size_t *shape, size_t rank, const void *data, size_t bytes,
+    void (*release)(void *context), void *context, CettaDenseTensorV1 **out);
 void cetta_dense_tensor_v1_retain(void *tensor);
 void cetta_dense_tensor_v1_release(void *tensor);
 size_t cetta_dense_tensor_v1_rank(const CettaDenseTensorV1 *tensor);

@@ -9,7 +9,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = ("tests/test_tensor.c", "src/tensor_dense_v1.c", "src/atom.c", "src/symbol.c",
            "src/scalar_trie.c", "src/binding/frame_identity.c", "src/atom_wire.c",
-           "src/durable_value.c")
+           "src/durable_value.c", "src/tensor_files_v1.c")
 
 
 def main():
@@ -50,7 +50,8 @@ def main():
             if result.returncode:
                 raise RuntimeError(f"Correct baseline failed: {label}")
         elif not result.returncode or not any(marker in evidence for marker in
-                ("Assertion", "heap-use-after-free", "runtime error:", "double-free")):
+                ("Assertion", "heap-use-after-free", "runtime error:", "double-free",
+                 "AddressSanitizer: SEGV")):
             raise RuntimeError(f"Mutation did not produce the expected rejection: {label}")
         print(f"PASS: {label}" + (" rejected" if broken else ""), flush=True)
 
@@ -104,6 +105,38 @@ def main():
         ("equality-trusts-one-known-hash", "src/tensor_dense_v1.c",
          "if ((a & HASH_KNOWN) && (b & HASH_KNOWN) && a != b) return false;",
          "if (((a & HASH_KNOWN) || (b & HASH_KNOWN)) && a != b) return false;"),
+        ("npy-ignores-fortran-order", "src/tensor_files_v1.c",
+         "    if (!entry->fortran_order) {\n        for (size_t i = 0; i < count; ++i)",
+         "    if (1) {\n        for (size_t i = 0; i < count; ++i)"),
+        ("safetensors-allows-holes", "src/tensor_files_v1.c",
+         "        if (file->entries[i].offset != next)\n",
+         "        if (0)\n"),
+        ("half-misplaces-exponent", "src/tensor_files_v1.c",
+         "bits = sign | (exponent + 112u) << 23u | mantissa << 13u;",
+         "bits = sign | (exponent + 111u) << 23u | mantissa << 13u;"),
+        ("share-ignores-alignment", "src/tensor_files_v1.c",
+         "    if (entry->offset % entry->width != 0u) return \"data not aligned to its element width\";\n",
+         ""),
+        ("u64-wraps-into-i64", "src/tensor_files_v1.c",
+         "        if (raw > (uint64_t)INT64_MAX)\n",
+         "        if (0)\n"),
+        ("shared-view-drops-mapping", "src/tensor_files_v1.c",
+         "        atomic_fetch_add_explicit(&mapping->refs, 1u, memory_order_relaxed);\n",
+         ""),
+        ("npy-writer-aligns-to-16", "src/tensor_files_v1.c",
+         "size_t padded = (total + 63u) / 64u * 64u;",
+         "size_t padded = (total + 15u) / 16u * 16u;"),
+        ("string-count-checks-first", "src/tensor_files_v1.c",
+         "    for (size_t i = 0; i < n; ++i) {\n        const char *text;\n        size_t length;\n"
+         "        if (!cetta_tensor_string_at(offsets, bytes, i, &text, &length, e)) return false;",
+         "    for (size_t i = 0; i < n && i < 1u; ++i) {\n        const char *text;\n        size_t length;\n"
+         "        if (!cetta_tensor_string_at(offsets, bytes, i, &text, &length, e)) return false;"),
+        ("int8-f32-reads-first-row", "src/tensor_dense_v1.c",
+         "widened[j] = (double)narrow_data[row * width + j];",
+         "widened[j] = (double)narrow_data[j];"),
+        ("safetensors-writer-keeps-order", "src/tensor_files_v1.c",
+         "for (; k > 0u && written_before(moving, order[k - 1u], names, tensors); --k)",
+         "for (; 0 && k > 0u && written_before(moving, order[k - 1u], names, tensors); --k)"),
     )
     for label, name, old, replacement in controls:
         original = (ROOT / name).read_text()

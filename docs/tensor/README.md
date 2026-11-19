@@ -247,6 +247,62 @@ read-only CPU sharing, qualify release and alias behavior, then admit writable
 sharing and device providers. Tensor wire/storage formats must contain portable
 values and metadata, never process pointers or Python handles.
 
+## Tensor files
+
+`lib_tensor` reads NumPy `.npy` files (format versions 1.0 to 3.0),
+[safetensors](https://huggingface.co/docs/safetensors) files and CeTTa's CTN1,
+recognized by their magic. `tensor:load` copies, converting what CeTTa does not
+store: f16 and bf16 widen to f32; signed and unsigned integers narrower than 64
+bits widen to i64; u64 widens to i64 when every value fits; bool becomes u8;
+big-endian and Fortran-ordered data is reordered. `tensor:map` shares the file
+read-only (a private read-only mapping). It never converts and fails with
+`(TensorFailure (unshareable "<why>"))` when it would have to, as the
+interchange rule above requires. A shared tensor keeps its mapping alive until
+its last view is released, and is charged as its descriptor, not its bytes.
+
+```metta
+!(import! &self (library lib_tensor))
+!(tensor:shape (tensor:map "embeddings.npy"))                 ; (1000000 1024)
+!(tensor:load "model.safetensors" "encoder.weight")
+!(tensor:map-all "matrix.safetensors")
+; (TensorFile safetensors ((name tensor) ...) ((key value) ...))
+```
+
+A safetensors file may hold several tensors: name one, or read them all with
+`tensor:load-all`/`tensor:map-all`, whose last part is the file's
+`__metadata__`. `tensor:file-info` describes a file without reading its data:
+each tensor's stored and loaded dtype, shape, and whether loading copies and
+why.
+
+`tensor:save-npy` writes format 1.0, or 2.0 when the header needs it, with the
+data aligned to 64 bytes, so `numpy.load(path, mmap_mode="r")` maps it.
+`tensor:save-safetensors` takes `((name tensor) ...)` and optional string
+metadata. It orders tensors by element width so that each is aligned, and pads
+the header to 8 bytes. Both write a temporary file, sync it and rename it into
+place.
+
+Strings travel as an Arrow-style column of two tensors: offsets, i64 [n + 1],
+and UTF-8 bytes, u8. `tensor:string-column` builds one from strings;
+`tensor:string-count` checks a whole column and returns n; `tensor:string-at`
+and `tensor:strings` read one string or all of them.
+
+`tensor:row-norms`, `tensor:div-rows`, `tensor:normalize-rows`,
+`tensor:cosine-rows` and `tensor:int8-rows` read f32 rows as their exact f64
+values, so a mapped f32 matrix needs no f64 copy. Their results are f64.
+
+Failures are `(TensorFailure (<reason> "<detail>"))`. File reasons are
+`file-unreadable`, `file-unwritable`, `not-a-regular-file`, `file-too-large`,
+`unknown-format`, `unsupported-version`, `malformed-header`,
+`header-too-large`, `truncated`, `unsupported-dtype`, `missing-tensor`,
+`several-tensors`, `value-out-of-range` and `unshareable`. String columns add
+`invalid-column`, `invalid-string` and `index-out-of-range`.
+
+`make test-tensor-files-interop TENSOR_FILES_PYTHON=<python with numpy and
+safetensors>` writes every supported dtype, shape, byte order and layout with
+the reference libraries, loads and maps each in CeTTa, and requires CeTTa's
+`.npy` output to equal NumPy's own conversion bit for bit. It then reads
+CeTTa's files back with NumPy and safetensors.
+
 ## Checked groundwork and remaining implementation
 
 MeTTapedia's `Mettapedia.Algebra.TensorShape` models arbitrary-rank dense values

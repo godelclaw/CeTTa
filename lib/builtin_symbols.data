@@ -792,6 +792,14 @@
             (Row lib_system_redact_secrets "__cetta_lib_system_redact_secrets" false false false false false false false)
             (Row lib_io_http_head "__cetta_lib_io_http_head" false false false false false false false)
             (Row lib_host_io "__cetta_lib_host_io" false false false false false false false)
+            ; Standard tensor files (src/tensor_files_v1.c); declared for their effects.
+            (Row lib_tensor_file_info "__cetta_lib_tensor_file_info" false false false false false false false)
+            (Row lib_tensor_load "__cetta_lib_tensor_load" false false false false false false false)
+            (Row lib_tensor_map "__cetta_lib_tensor_map" false false false false false false false)
+            (Row lib_tensor_load_all "__cetta_lib_tensor_load_all" false false false false false false false)
+            (Row lib_tensor_map_all "__cetta_lib_tensor_map_all" false false false false false false false)
+            (Row lib_tensor_save_npy "__cetta_lib_tensor_save_npy" false false false false false false false)
+            (Row lib_tensor_save_safetensors "__cetta_lib_tensor_save_safetensors" false false false false false false false)
         ))
     ; These operations project or transport existing values. Their result
     ; does not establish a new data origin for any selected component.

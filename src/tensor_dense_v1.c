@@ -29,11 +29,15 @@ _Static_assert(sizeof(float) == 4 && FLT_MANT_DIG == 24 && FLT_MAX_EXP == 128 &&
  * Published data never changes, so racing readers compute the same value. */
 #define HASH_KNOWN (UINT64_C(1) << 32)
 
+/* Storage is malloc'd, or owned elsewhere (a file mapping) and handed back
+ * through release(context) when its last view goes. */
 typedef struct {
     _Atomic size_t holds;
     size_t bytes;
     _Atomic uint64_t hash;
     unsigned char *data;
+    void (*release)(void *context);
+    void *release_context;
 } TensorStorage;
 
 struct CettaDenseTensorV1 {
@@ -203,6 +207,47 @@ CettaDenseTensorV1Status cetta_dense_tensor_v1_new(CettaDenseTensorV1DType dtype
     return CETTA_DENSE_TENSOR_V1_OK;
 }
 
+CettaDenseTensorV1Status cetta_dense_tensor_v1_new_filled(CettaDenseTensorV1DType dtype, const size_t *shape,
+    size_t rank, bool (*fill)(void *context, unsigned char *data, size_t bytes), void *context,
+    CettaDenseTensorV1 **out) {
+    if (!out || !fill) return CETTA_DENSE_TENSOR_V1_VALUE;
+    *out = NULL;
+    CettaDenseTensorV1 *tensor = NULL;
+    CettaDenseTensorV1Status status = allocate(dtype, shape, rank, &tensor);
+    if (status != CETTA_DENSE_TENSOR_V1_OK) return status;
+    if (!fill(context, tensor->storage->data, tensor->storage->bytes)) {
+        cetta_dense_tensor_v1_release(tensor);
+        return CETTA_DENSE_TENSOR_V1_VALUE;
+    }
+    finish_storage(tensor);
+    *out = tensor;
+    return CETTA_DENSE_TENSOR_V1_OK;
+}
+
+CettaDenseTensorV1Status cetta_dense_tensor_v1_new_external(CettaDenseTensorV1DType dtype, const size_t *shape,
+    size_t rank, const void *data, size_t bytes, void (*release)(void *context), void *context,
+    CettaDenseTensorV1 **out) {
+    if (!out || !release) return CETTA_DENSE_TENSOR_V1_VALUE;
+    *out = NULL;
+    size_t count, required;
+    CettaDenseTensorV1Status status = cetta_dense_tensor_v1_byte_count(dtype, shape, rank, &count, &required);
+    if (status != CETTA_DENSE_TENSOR_V1_OK) return status;
+    if (bytes != required) return CETTA_DENSE_TENSOR_V1_COUNT;
+    size_t width = cetta_dense_tensor_v1_itemsize(dtype);
+    if ((bytes && !data) || ((uintptr_t)data % width) != 0u) return CETTA_DENSE_TENSOR_V1_VALUE;
+    TensorStorage *storage = calloc(1u, sizeof(*storage));
+    if (!storage) return CETTA_DENSE_TENSOR_V1_NOMEM;
+    atomic_init(&storage->holds, 1u); atomic_init(&storage->hash, UINT64_C(0));
+    storage->bytes = bytes;
+    storage->data = (unsigned char *)data;
+    status = descriptor(storage, dtype, shape, rank, count, out);
+    if (status != CETTA_DENSE_TENSOR_V1_OK) { free(storage); return status; }
+    /* Only a published tensor hands its storage back. */
+    storage->release = release;
+    storage->release_context = context;
+    return CETTA_DENSE_TENSOR_V1_OK;
+}
+
 void cetta_dense_tensor_v1_retain(void *value) {
     CettaDenseTensorV1 *tensor = value;
     if (tensor) {
@@ -221,7 +266,11 @@ void cetta_dense_tensor_v1_release(void *value) {
     free(tensor);
     old = atomic_fetch_sub_explicit(&storage->holds, 1u, memory_order_acq_rel);
     if (!old) abort();
-    if (old == 1u) { free(storage->data); free(storage); }
+    if (old == 1u) {
+        if (storage->release) storage->release(storage->release_context);
+        else free(storage->data);
+        free(storage);
+    }
 }
 
 size_t cetta_dense_tensor_v1_retained_bytes(const CettaDenseTensorV1 *tensor) {
@@ -229,6 +278,8 @@ size_t cetta_dense_tensor_v1_retained_bytes(const CettaDenseTensorV1 *tensor) {
     size_t metadata = sizeof(*tensor) + tensor->rank * sizeof(size_t);
     if (metadata > SIZE_MAX - sizeof(TensorStorage)) return SIZE_MAX;
     metadata += sizeof(TensorStorage);
+    /* External bytes belong to their owner, such as a file's page cache. */
+    if (tensor->storage->release) return metadata;
     if (metadata > SIZE_MAX - tensor->storage->bytes) return SIZE_MAX;
     return metadata + tensor->storage->bytes;
 }
@@ -610,18 +661,23 @@ static CettaDenseTensorV1Status divide_rows(const CettaDenseTensorV1 *matrix,
     const CettaDenseTensorV1 *divisors, CettaDenseTensorV1 **out) {
     if (!out || !matrix || !divisors) return CETTA_DENSE_TENSOR_V1_VALUE;
     *out = NULL;
-    if (matrix->dtype != CETTA_DENSE_TENSOR_V1_F64 || divisors->dtype != CETTA_DENSE_TENSOR_V1_F64)
+    /* An f32 matrix divides its exact f64 values; the quotient is f64. */
+    if ((matrix->dtype != CETTA_DENSE_TENSOR_V1_F64 && matrix->dtype != CETTA_DENSE_TENSOR_V1_F32) ||
+        divisors->dtype != CETTA_DENSE_TENSOR_V1_F64)
         return CETTA_DENSE_TENSOR_V1_DTYPE;
     if (matrix->rank != 2u || divisors->rank != 1u || divisors->count != matrix->shape[0])
         return CETTA_DENSE_TENSOR_V1_SHAPE;
-    CettaDenseTensorV1Status status = allocate(matrix->dtype, matrix->shape, 2u, out);
+    CettaDenseTensorV1Status status = allocate(CETTA_DENSE_TENSOR_V1_F64, matrix->shape, 2u, out);
     if (status != CETTA_DENSE_TENSOR_V1_OK) return status;
     const double *data = (const double *)matrix->storage->data;
+    const float *narrow = (const float *)matrix->storage->data;
+    bool f32 = matrix->dtype == CETTA_DENSE_TENSOR_V1_F32;
     const double *denoms = (const double *)divisors->storage->data;
     double *result = (double *)(*out)->storage->data;
     size_t width = matrix->shape[1];
     for (size_t i = 0; i < matrix->shape[0]; ++i)
-        for (size_t j = 0; j < width; ++j) result[i*width+j] = data[i*width+j] / denoms[i];
+        for (size_t j = 0; j < width; ++j)
+            result[i*width+j] = (f32 ? (double)narrow[i*width+j] : data[i*width+j]) / denoms[i];
     finish_storage(*out);
     return CETTA_DENSE_TENSOR_V1_OK;
 }
@@ -1091,27 +1147,42 @@ CettaDenseTensorV1Status cetta_dense_tensor_v1_int8_rows(const CettaDenseTensorV
     CettaDenseTensorV1 **codes, CettaDenseTensorV1 **record) {
     if (!codes || !record || codes == record || !source) return CETTA_DENSE_TENSOR_V1_VALUE;
     *codes = NULL; *record = NULL;
-    if (source->dtype != CETTA_DENSE_TENSOR_V1_F64) return CETTA_DENSE_TENSOR_V1_DTYPE;
+    /* f32 rows widen exactly to f64, as the reference matvec reads them, so
+     * the same bound covers them. */
+    if (source->dtype != CETTA_DENSE_TENSOR_V1_F64 && source->dtype != CETTA_DENSE_TENSOR_V1_F32)
+        return CETTA_DENSE_TENSOR_V1_DTYPE;
     if (source->rank != 2u) return CETTA_DENSE_TENSOR_V1_SHAPE;
     size_t rows = source->shape[0], width = source->shape[1];
     size_t shape[] = {rows, 4u};
+    bool narrow = source->dtype == CETTA_DENSE_TENSOR_V1_F32;
+    double *widened = narrow && width ? malloc(width * sizeof *widened) : NULL;
+    if (narrow && width && !widened) return CETTA_DENSE_TENSOR_V1_NOMEM;
     CettaDenseTensorV1Status status = allocate(CETTA_DENSE_TENSOR_V1_U8, source->shape, 2u, codes);
-    if (status != CETTA_DENSE_TENSOR_V1_OK) return status;
+    if (status != CETTA_DENSE_TENSOR_V1_OK) { free(widened); return status; }
     status = allocate(CETTA_DENSE_TENSOR_V1_F64, shape, 2u, record);
-    if (status != CETTA_DENSE_TENSOR_V1_OK) { cetta_dense_tensor_v1_release(*codes); *codes = NULL; return status; }
+    if (status != CETTA_DENSE_TENSOR_V1_OK) {
+        cetta_dense_tensor_v1_release(*codes); *codes = NULL; free(widened); return status;
+    }
     const double *data = (const double *)source->storage->data;
+    const float *narrow_data = (const float *)source->storage->data;
     int8_t *out = (int8_t *)(*codes)->storage->data;
     double *meta = (double *)(*record)->storage->data;
     bool admitted = bounds_rounding_admitted() && width <= INT8_SCREEN_WIDTH_LIMIT;
     for (size_t row = 0; row < rows; ++row) {
         double *entry = meta + row * 4u;
-        if (!int8_quantize(width ? data + row * width : NULL, width, width ? out + row * width : NULL,
+        const double *x = width ? data + row * width : NULL;
+        if (narrow && width) {
+            for (size_t j = 0; j < width; ++j) widened[j] = (double)narrow_data[row * width + j];
+            x = widened;
+        }
+        if (!int8_quantize(x, width, width ? out + row * width : NULL,
                 &entry[0], &entry[1], &entry[2], &entry[3])) {
             cetta_dense_tensor_v1_release(*codes); cetta_dense_tensor_v1_release(*record);
-            *codes = NULL; *record = NULL; return CETTA_DENSE_TENSOR_V1_VALUE;
+            *codes = NULL; *record = NULL; free(widened); return CETTA_DENSE_TENSOR_V1_VALUE;
         }
         if (!admitted) entry[1] = INFINITY;
     }
+    free(widened);
     finish_storage(*codes); finish_storage(*record);
     return CETTA_DENSE_TENSOR_V1_OK;
 }
@@ -1433,7 +1504,18 @@ static Atom *element_atom(Arena *arena, const CettaDenseTensorV1 *tensor, size_t
     X(top_k) \
     X(stack) \
     X(row_norms) \
-    X(cosine_rows)
+    X(cosine_rows) \
+    X(file_info) \
+    X(load) \
+    X(map) \
+    X(load_all) \
+    X(map_all) \
+    X(save_npy) \
+    X(save_safetensors) \
+    X(strings) \
+    X(string_count) \
+    X(string_at) \
+    X(string_column)
 
 typedef enum {
     DENSE_TENSOR_OP_NONE,
@@ -1473,9 +1555,19 @@ bool cetta_dense_tensor_v1_owns_head(const Atom *head) {
            dense_tensor_named_operation(head) != DENSE_TENSOR_OP_NONE;
 }
 
+/* Tensor files live in tensor_files_v1.c; a build without it refuses them. */
+Atom *cetta_tensor_files_v1_dispatch(Arena *arena, const char *operation, size_t length,
+    Atom **args, uint32_t nargs) __attribute__((weak));
+
 Atom *cetta_dense_tensor_v1_dispatch(Arena *arena, Atom *head, Atom **args, uint32_t nargs) {
     if (!head || head->kind != ATOM_SYMBOL) return NULL;
     DenseTensorNamedOperation operation = dense_tensor_named_operation(head);
+    if (operation >= DENSE_TENSOR_OP_file_info && operation <= DENSE_TENSOR_OP_string_column) {
+        if (!cetta_tensor_files_v1_dispatch) return failure(arena, CETTA_DENSE_TENSOR_V1_PROVIDER);
+        static const char prefix[] = "__cetta_lib_tensor_";
+        return cetta_tensor_files_v1_dispatch(arena, atom_symbol_bytes(head) + sizeof(prefix) - 1u,
+            atom_symbol_length(head) - (sizeof(prefix) - 1u), args, nargs);
+    }
     CettaDenseTensorV1 *bulk = NULL;
     CettaDenseTensorV1Status bulk_status;
     if ((operation == DENSE_TENSOR_OP_cast)) {
@@ -1639,8 +1731,11 @@ Atom *cetta_dense_tensor_v1_dispatch(Arena *arena, Atom *head, Atom **args, uint
     if (row_norms || cosine_rows) {
         if (nargs!=(row_norms ? 1u : 3u)) return failure(arena,CETTA_DENSE_TENSOR_V1_VALUE);
         CettaDenseTensorV1 *matrix=from_atom(args[0]);
-        if (!matrix || matrix->dtype!=CETTA_DENSE_TENSOR_V1_F64 || matrix->rank!=2)
+        /* f32 rows are read as their exact f64 values. */
+        if (!matrix || (matrix->dtype!=CETTA_DENSE_TENSOR_V1_F64 && matrix->dtype!=CETTA_DENSE_TENSOR_V1_F32) ||
+            matrix->rank!=2)
             return failure(arena,CETTA_DENSE_TENSOR_V1_SHAPE);
+        bool narrow=matrix->dtype==CETTA_DENSE_TENSOR_V1_F32;
         size_t rows=matrix->shape[0], columns=matrix->shape[1];
         CettaDenseTensorV1 *norms=cosine_rows ? from_atom(args[1]) : NULL;
         CettaDenseTensorV1 *query=cosine_rows ? from_atom(args[2]) : NULL;
@@ -1664,7 +1759,8 @@ Atom *cetta_dense_tensor_v1_dispatch(Arena *arena, Atom *head, Atom **args, uint
             double total=0;
             for (size_t j=0;j<columns;++j) {
                 double v,q;
-                memcpy(&v,matrix->storage->data+(i*columns+j)*8,8);
+                if (narrow) { float f;memcpy(&f,matrix->storage->data+(i*columns+j)*4,4);v=f; }
+                else memcpy(&v,matrix->storage->data+(i*columns+j)*8,8);
                 if (cosine_rows) memcpy(&q,query->storage->data+j*8,8);else q=v;
                 volatile double product=v*q;total+=product;
             }

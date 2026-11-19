@@ -2,7 +2,7 @@
 #define CETTA_EXECUTION_CONTRACTS_GENERATED_H
 
 /* Generated from lib/gslt_execution_contracts.metta.
- * Source SHA-256: dcaf85d77f29a6bb3f4c9abe95a27ae296e6484a9567032761cc5299a880ba4e
+ * Source SHA-256: b4aefc56a833a99482c8e26d47de2969a5590438f758c5368914e50ac81712dc
  */
 
 #include <stdbool.h>
@@ -226,6 +226,13 @@ static inline bool cetta_gslt_progress_inline(CettaGsltProgressAdvice progress) 
     X(lib_fs_try_canonical_from_file, CETTA_GSLT_QUERY_EFFECT_RELATIONAL_QUERY) \
     X(lib_fs_try_canonical_under, CETTA_GSLT_QUERY_EFFECT_RELATIONAL_QUERY) \
     X(lib_fs_read_text, CETTA_GSLT_QUERY_EFFECT_RELATIONAL_QUERY) \
+    X(lib_tensor_file_info, CETTA_GSLT_QUERY_EFFECT_RELATIONAL_QUERY) \
+    X(lib_tensor_load, CETTA_GSLT_QUERY_EFFECT_RELATIONAL_QUERY) \
+    X(lib_tensor_map, CETTA_GSLT_QUERY_EFFECT_RELATIONAL_QUERY) \
+    X(lib_tensor_load_all, CETTA_GSLT_QUERY_EFFECT_RELATIONAL_QUERY) \
+    X(lib_tensor_map_all, CETTA_GSLT_QUERY_EFFECT_RELATIONAL_QUERY) \
+    X(lib_tensor_save_npy, CETTA_GSLT_QUERY_EFFECT_WORLD_WRITE) \
+    X(lib_tensor_save_safetensors, CETTA_GSLT_QUERY_EFFECT_WORLD_WRITE) \
     X(lib_fs_write, CETTA_GSLT_QUERY_EFFECT_WORLD_WRITE) \
     X(lib_fs_rename, CETTA_GSLT_QUERY_EFFECT_WORLD_WRITE) \
     X(lib_fs_append_text, CETTA_GSLT_QUERY_EFFECT_WORLD_WRITE) \

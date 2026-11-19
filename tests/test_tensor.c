@@ -1,4 +1,5 @@
 #include "tensor_dense_v1.h"
+#include "tensor_files_v1.h"
 #include "atom_wire.h"
 #include "durable_value.h"
 #include "tests/test_runtime_stats_stubs.h"
@@ -8,6 +9,10 @@
 #include <fenv.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #if (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))
 #include <immintrin.h>
 #define TEST_HAS_MXCSR 1
@@ -330,6 +335,34 @@ static void int8_kernel_reference(void) {
 }
 
 static void int8_screening_reference(void) {
+    /* f32 rows: the screen quantizes their exact f64 values, and the f32
+     * reference scan selects the same rows with the same scores. */
+    {
+        size_t widths[] = {1u, 31u, 64u, 97u, 384u};
+        for (size_t w = 0; w < sizeof widths / sizeof widths[0]; ++w) {
+            size_t shape[] = {200u, widths[w]}, qshape[] = {widths[w]};
+            float *x = malloc(200u * widths[w] * sizeof *x);
+            double *q = malloc(widths[w] * sizeof *q);
+            assert(x && q);
+            uint64_t seed = 0x9e3779b97f4a7c15ull ^ widths[w];
+            for (size_t i = 0; i < 200u * widths[w]; ++i) {
+                seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17;
+                double u = (double)(seed >> 11) * 0x1p-53 * 2.0 - 1.0;
+                x[i] = (float)(i >= widths[w] ? 0.7 * x[(i / widths[w] / 8u) * widths[w] + i % widths[w]] + 0.3 * u : u);
+            }
+            for (size_t j = 0; j < widths[w]; ++j) q[j] = (double)x[37u * widths[w] + j] + 0.01 * (double)(j % 3u);
+            CettaDenseTensorV1 *narrow = make(CETTA_DENSE_TENSOR_V1_F32, shape, 2u, x, 200u * widths[w] * sizeof *x);
+            CettaDenseTensorV1 *query = make(CETTA_DENSE_TENSOR_V1_F64, qshape, 1u, q, widths[w] * sizeof *q);
+            CettaDenseTensorV1 *codes = NULL, *record = NULL;
+            assert(cetta_dense_tensor_v1_int8_rows(narrow, &codes, &record) == OK);
+            size_t ks[] = {1u, 5u, 10u, 200u};
+            for (size_t k = 0; k < 4u; ++k) (void)int8_expect_exact(narrow, codes, record, query, NULL, ks[k]);
+            cetta_dense_tensor_v1_release(codes); cetta_dense_tensor_v1_release(record);
+            cetta_dense_tensor_v1_release(narrow); cetta_dense_tensor_v1_release(query);
+            free(x); free(q);
+        }
+    }
+
     int8_kernel_reference();
     /* Every width to 67 and every k, all rows and every other row. */
     for (size_t width = 0; width <= 67; ++width) {
@@ -732,6 +765,379 @@ static void lazy_hash_reference(void) {
     for (size_t i = 0; i < sizeof all / sizeof all[0]; ++i) cetta_dense_tensor_v1_release(all[i]);
 }
 
+/* Standard tensor files: the fixtures are written by NumPy and safetensors
+ * themselves (tests/support/make_tensor_file_fixtures.py); the expected values
+ * here are stated independently, bit for bit. */
+#define TF "tests/fixtures/tensor_files/"
+static CettaDenseTensorV1 *tf_read(const char *path, const char *name, bool share) {
+    CettaDenseTensorV1 *tensor = NULL;
+    CettaTensorFileError error = {0};
+    if (!cetta_tensor_file_read(path, name, share, &tensor, &error))
+        fprintf(stderr, "%s: %s: %s\n", path, error.reason, error.detail);
+    assert(tensor);
+    return tensor;
+}
+static const char *tf_refusal(const char *path, const char *name, bool share) {
+    static CettaTensorFileError error;
+    memset(&error, 0, sizeof error);
+    CettaDenseTensorV1 *tensor = NULL;
+    assert(!cetta_tensor_file_read(path, name, share, &tensor, &error) && !tensor && error.reason);
+    return error.reason;
+}
+static void tf_expect(const CettaDenseTensorV1 *t, CettaDenseTensorV1DType dtype, size_t rank,
+    const size_t *shape, const void *bytes, size_t n) {
+    assert(cetta_dense_tensor_v1_dtype(t) == dtype && cetta_dense_tensor_v1_rank(t) == rank);
+    for (size_t i = 0; i < rank; ++i) assert(cetta_dense_tensor_v1_shape(t)[i] == shape[i]);
+    assert(cetta_dense_tensor_v1_nbytes(t) == n);
+    assert(!n || memcmp(cetta_dense_tensor_v1_data(t), bytes, n) == 0);
+}
+/* Reads a file both ways: identical values, and only the copy charges its bytes. */
+static void tf_both(const char *path, const char *name, CettaDenseTensorV1DType dtype, size_t rank,
+    const size_t *shape, const void *bytes, size_t n) {
+    CettaDenseTensorV1 *copy = tf_read(path, name, false), *shared = tf_read(path, name, true);
+    tf_expect(copy, dtype, rank, shape, bytes, n);
+    tf_expect(shared, dtype, rank, shape, bytes, n);
+    assert(cetta_dense_tensor_v1_equal(copy, shared) && cetta_dense_tensor_v1_hash(copy) == cetta_dense_tensor_v1_hash(shared));
+    assert(cetta_dense_tensor_v1_retained_bytes(copy) - cetta_dense_tensor_v1_retained_bytes(shared) == n);
+    cetta_dense_tensor_v1_release(copy);
+    cetta_dense_tensor_v1_release(shared);
+}
+static void tf_write(const char *path, const void *bytes, size_t n) {
+    FILE *f = fopen(path, "wb");
+    assert(f && fwrite(bytes, 1u, n, f) == n && fclose(f) == 0);
+}
+static size_t tf_mapped(const char *path) {
+    size_t count = 0u;
+#ifdef __linux__
+    char line[4096];
+    FILE *maps = fopen("/proc/self/maps", "r");
+    assert(maps);
+    while (fgets(line, sizeof line, maps)) if (strstr(line, path)) count++;
+    fclose(maps);
+#else
+    (void)path;
+#endif
+    return count;
+}
+static float tf_half_reference(uint16_t h) {
+#ifdef __FLT16_MANT_DIG__
+    if ((h & 0x7c00u) != 0x7c00u || !(h & 0x3ffu)) {
+        _Float16 half;
+        memcpy(&half, &h, 2u);
+        return (float)half;
+    }
+#endif
+    /* NaN keeps its payload, as NumPy's npy_halfbits_to_floatbits does. */
+    uint32_t bits = (uint32_t)(h & 0x8000u) << 16u | 0x7f800000u | (uint32_t)(h & 0x3ffu) << 13u;
+    float value;
+    if ((h & 0x7c00u) != 0x7c00u) return ldexpf((float)(h & 0x3ffu), -24) * ((h & 0x8000u) ? -1.f : 1.f);
+    memcpy(&value, &bits, 4u);
+    return value;
+}
+
+static void tensor_files_reference(void) {
+    size_t s23[] = {2u, 3u}, s4[] = {4u}, s22[] = {2u, 2u}, s3[] = {3u}, s7[] = {7u}, s12[] = {1u, 2u};
+    size_t s2[] = {2u}, s1[] = {1u}, s03[] = {0u, 3u}, s32[] = {3u, 2u};
+    double f64_23[] = {1.5, -2.0, 0.25, 3.0, -0.0, 1e300};
+    tf_both(TF "f64_2x3.npy", NULL, CETTA_DENSE_TENSOR_V1_F64, 2u, s23, f64_23, sizeof f64_23);
+    float f32_4[] = {1.f, -0.5f, 3.25f, 1e-30f};
+    tf_both(TF "f32_vector.npy", NULL, CETTA_DENSE_TENSOR_V1_F32, 1u, s4, f32_4, sizeof f32_4);
+    int64_t i64_22[] = {-9007199254740993LL, 2, 3, INT64_MAX};
+    tf_both(TF "i64_matrix.npy", NULL, CETTA_DENSE_TENSOR_V1_I64, 2u, s22, i64_22, sizeof i64_22);
+    unsigned char u8_4[] = {0u, 1u, 254u, 255u}, bool_3[] = {1u, 0u, 1u};
+    tf_both(TF "u8_vector.npy", NULL, CETTA_DENSE_TENSOR_V1_U8, 1u, s4, u8_4, sizeof u8_4);
+    tf_both(TF "bool_vector.npy", NULL, CETTA_DENSE_TENSOR_V1_U8, 1u, s3, bool_3, sizeof bool_3);
+    double scalar = 2.5;
+    tf_both(TF "f64_scalar.npy", NULL, CETTA_DENSE_TENSOR_V1_F64, 0u, NULL, &scalar, sizeof scalar);
+    tf_both(TF "f64_empty.npy", NULL, CETTA_DENSE_TENSOR_V1_F64, 2u, s03, NULL, 0u);
+    float f32_12[] = {1.f, 2.f};
+    tf_both(TF "f32_v2.npy", NULL, CETTA_DENSE_TENSOR_V1_F32, 2u, s12, f32_12, sizeof f32_12);
+    tf_both(TF "f32_v3.npy", NULL, CETTA_DENSE_TENSOR_V1_F32, 2u, s12, f32_12, sizeof f32_12);
+
+    /* Conversions copy, and sharing them is refused with the reason. */
+    float f16_7[] = {1.f, -2.5f, 65504.f, 0x1p-24f, 0.f, INFINITY, -INFINITY};
+    CettaDenseTensorV1 *t = tf_read(TF "f16_vector.npy", NULL, false);
+    tf_expect(t, CETTA_DENSE_TENSOR_V1_F32, 1u, s7, f16_7, sizeof f16_7);
+    cetta_dense_tensor_v1_release(t);
+    assert(strcmp(tf_refusal(TF "f16_vector.npy", NULL, true), "unshareable") == 0);
+    double big_3[] = {1.5, -3.0, 1e-300};
+    t = tf_read(TF "f64_big_endian.npy", NULL, false);
+    tf_expect(t, CETTA_DENSE_TENSOR_V1_F64, 1u, s3, big_3, sizeof big_3);
+    cetta_dense_tensor_v1_release(t);
+    assert(strcmp(tf_refusal(TF "f64_big_endian.npy", NULL, true), "unshareable") == 0);
+    int64_t fortran_23[] = {-2, -1, 0, 1, 2, 3};
+    t = tf_read(TF "i32_fortran.npy", NULL, false);
+    tf_expect(t, CETTA_DENSE_TENSOR_V1_I64, 2u, s23, fortran_23, sizeof fortran_23);
+    cetta_dense_tensor_v1_release(t);
+    int64_t u64_2[] = {0, INT64_MAX};
+    t = tf_read(TF "u64_fits.npy", NULL, false);
+    tf_expect(t, CETTA_DENSE_TENSOR_V1_I64, 1u, s2, u64_2, sizeof u64_2);
+    cetta_dense_tensor_v1_release(t);
+    assert(strcmp(tf_refusal(TF "u64_beyond.npy", NULL, false), "value-out-of-range") == 0);
+
+    /* safetensors: names, metadata, every stored type, sharing where stored as CeTTa stores. */
+    CettaTensorFile *file = NULL;
+    CettaTensorFileError error = {0};
+    assert(cetta_tensor_file_inspect(TF "mixed.safetensors", &file, &error));
+    const char *names[] = {"count", "embeddings", "flags", "half", "ids", "mask", "small", "wide"};
+    assert(file->format == CETTA_TENSOR_FILE_SAFETENSORS && file->count == 8u && file->metadata_count == 3u);
+    for (size_t i = 0; i < 8u; ++i) assert(strcmp(file->entries[i].name, names[i]) == 0);
+    assert(strcmp(file->metadata_keys[0], "dimensions") == 0 && strcmp(file->metadata_values[0], "2") == 0);
+    assert(strcmp(file->metadata_keys[2], "note") == 0 && strcmp(file->metadata_values[2], "\xc3\xa9\xe2\x9c\x93") == 0);
+    for (size_t i = 0; i < 8u; ++i) {
+        bool shareable = !file->entries[i].copy_reason;
+        assert(shareable == (i == 1u || i == 2u || i == 4u || i == 5u || i == 7u));
+        if (shareable) assert(file->entries[i].offset % file->entries[i].width == 0u);
+    }
+    cetta_tensor_file_free(file);
+    float embeddings[] = {0.6f, 0.8f, 1.f, 0.f, 0.f, -1.f};
+    tf_both(TF "mixed.safetensors", "embeddings", CETTA_DENSE_TENSOR_V1_F32, 2u, s32, embeddings, sizeof embeddings);
+    int64_t ids[] = {7, -8, 9}, small[] = {-128, 127}, count[] = {65535};
+    tf_both(TF "mixed.safetensors", "ids", CETTA_DENSE_TENSOR_V1_I64, 1u, s3, ids, sizeof ids);
+    tf_both(TF "mixed.safetensors", "flags", CETTA_DENSE_TENSOR_V1_U8, 1u, s3, bool_3, sizeof bool_3);
+    unsigned char mask[] = {1u, 0u};
+    tf_both(TF "mixed.safetensors", "mask", CETTA_DENSE_TENSOR_V1_U8, 1u, s2, mask, sizeof mask);
+    double wide[] = {0x1p-1074, -1.0};
+    tf_both(TF "mixed.safetensors", "wide", CETTA_DENSE_TENSOR_V1_F64, 1u, s2, wide, sizeof wide);
+    float half[] = {0.5f, -1.f}, bf[] = {1.f, -2.f, 0.15625f};
+    t = tf_read(TF "mixed.safetensors", "half", false);
+    tf_expect(t, CETTA_DENSE_TENSOR_V1_F32, 1u, s2, half, sizeof half);
+    cetta_dense_tensor_v1_release(t);
+    t = tf_read(TF "mixed.safetensors", "small", false);
+    tf_expect(t, CETTA_DENSE_TENSOR_V1_I64, 1u, s2, small, sizeof small);
+    cetta_dense_tensor_v1_release(t);
+    t = tf_read(TF "mixed.safetensors", "count", false);
+    tf_expect(t, CETTA_DENSE_TENSOR_V1_I64, 1u, s1, count, sizeof count);
+    cetta_dense_tensor_v1_release(t);
+    assert(strcmp(tf_refusal(TF "mixed.safetensors", "half", true), "unshareable") == 0);
+    assert(strcmp(tf_refusal(TF "mixed.safetensors", NULL, false), "several-tensors") == 0);
+    assert(strcmp(tf_refusal(TF "mixed.safetensors", "absent", false), "missing-tensor") == 0);
+    t = tf_read(TF "bf16.safetensors", NULL, false);
+    tf_expect(t, CETTA_DENSE_TENSOR_V1_F32, 1u, s3, bf, sizeof bf);
+    cetta_dense_tensor_v1_release(t);
+    CettaDenseTensorV1 **all = NULL;
+    assert(cetta_tensor_file_read_all(TF "mixed.safetensors", false, &file, &all, &error) && file->count == 8u);
+    for (size_t i = 0; i < 8u; ++i) cetta_dense_tensor_v1_release(all[i]);
+    free(all);
+    cetta_tensor_file_free(file);
+    assert(!cetta_tensor_file_read_all(TF "mixed.safetensors", true, &file, &all, &error) && !file && !all);
+    assert(strcmp(error.reason, "unshareable") == 0);
+
+    /* CeTTa writes files that it, NumPy and safetensors read, aligned for sharing. */
+    char dir[64];
+    snprintf(dir, sizeof dir, "runtime/tensor-files-test-%ld", (long)getpid());
+    assert(mkdir(dir, 0700) == 0);
+    char path[128], other[128];
+    CettaDenseTensorV1 *written[] = {
+        make(CETTA_DENSE_TENSOR_V1_F64, s23, 2u, f64_23, sizeof f64_23),
+        make(CETTA_DENSE_TENSOR_V1_F32, s4, 1u, f32_4, sizeof f32_4),
+        make(CETTA_DENSE_TENSOR_V1_I64, s22, 2u, i64_22, sizeof i64_22),
+        make(CETTA_DENSE_TENSOR_V1_U8, s4, 1u, u8_4, sizeof u8_4),
+        make(CETTA_DENSE_TENSOR_V1_F64, NULL, 0u, &scalar, sizeof scalar),
+        make(CETTA_DENSE_TENSOR_V1_F64, s03, 2u, NULL, 0u),
+    };
+    for (size_t i = 0; i < 6u; ++i) {
+        snprintf(path, sizeof path, "%s/w%zu.npy", dir, i);
+        uint64_t bytes = 0u;
+        assert(cetta_tensor_file_write_npy(path, written[i], &bytes, &error));
+        struct stat info;
+        assert(stat(path, &info) == 0 && (uint64_t)info.st_size == bytes);
+        assert(cetta_tensor_file_inspect(path, &file, &error) && file->entries[0].offset % 64u == 0u &&
+            !file->entries[0].copy_reason);
+        cetta_tensor_file_free(file);
+        for (int share = 0; share < 2; ++share) {
+            CettaDenseTensorV1 *back = tf_read(path, NULL, share);
+            assert(cetta_dense_tensor_v1_equal(back, written[i]));
+            cetta_dense_tensor_v1_release(back);
+        }
+    }
+    const char *wnames[] = {"vectors \xc3\xa9", "quote\"back\\slash\nline", "ids", "flags", "scalar", "empty"};
+    const char *keys[] = {"format", "note"}, *values[] = {"cetta-test", "\xe2\x9c\x93 \"quoted\""};
+    snprintf(path, sizeof path, "%s/w.safetensors", dir);
+    assert(cetta_tensor_file_write_safetensors(path, 6u, wnames, (const CettaDenseTensorV1 *const *)written, 2u,
+        keys, values, NULL, &error));
+    assert(cetta_tensor_file_read_all(path, true, &file, &all, &error) && file->count == 6u && file->metadata_count == 2u);
+    assert(strcmp(file->metadata_values[1], values[1]) == 0);
+    for (size_t i = 0; i < 6u; ++i) {
+        size_t k = 0u;
+        while (strcmp(file->entries[i].name, wnames[k]) != 0) ++k;
+        assert(cetta_dense_tensor_v1_equal(all[i], written[k]) && !file->entries[i].copy_reason);
+        cetta_dense_tensor_v1_release(all[i]);
+    }
+    free(all);
+    cetta_tensor_file_free(file);
+    const char *dup[] = {"a", "a"};
+    assert(!cetta_tensor_file_write_safetensors(path, 2u, dup, (const CettaDenseTensorV1 *const *)written, 0u,
+        NULL, NULL, NULL, &error) && strcmp(error.reason, "invalid-name") == 0);
+
+    /* A shared tensor holds its mapping; the last view returns it. */
+    snprintf(path, sizeof path, "%s/held.npy", dir);
+    assert(cetta_tensor_file_write_npy(path, written[0], NULL, &error));
+    t = tf_read(path, NULL, true);
+    CettaDenseTensorV1 *view = NULL;
+    size_t s6[] = {6u};
+    assert(cetta_dense_tensor_v1_reshape(t, s6, 1u, &view) == CETTA_DENSE_TENSOR_V1_OK);
+#ifdef __linux__
+    assert(tf_mapped(path) == 1u);
+    cetta_dense_tensor_v1_release(t);
+    assert(tf_mapped(path) == 1u);
+#else
+    cetta_dense_tensor_v1_release(t);
+#endif
+    cetta_dense_tensor_v1_release(view);
+    assert(tf_mapped(path) == 0u);
+    for (size_t i = 0; i < 6u; ++i) cetta_dense_tensor_v1_release(written[i]);
+
+    /* Every binary16 value converts as NumPy converts it. */
+    snprintf(path, sizeof path, "%s/all.npy", dir);
+    {
+        size_t length = 128u + 65536u * 2u;
+        unsigned char *bytes = malloc(length);
+        assert(bytes);
+        static const char dict[] = "{'descr': '<f2', 'fortran_order': False, 'shape': (65536,), }";
+        memcpy(bytes, "\x93NUMPY\x01\x00\x76\x00", 10u);
+        memset(bytes + 10, ' ', 118u);
+        memcpy(bytes + 10, dict, sizeof dict - 1u);
+        bytes[127] = '\n';
+        for (uint32_t h = 0; h < 65536u; ++h) { bytes[128u + 2u * h] = (unsigned char)h; bytes[129u + 2u * h] = (unsigned char)(h >> 8u); }
+        tf_write(path, bytes, length);
+        free(bytes);
+        t = tf_read(path, NULL, false);
+        const float *f = cetta_dense_tensor_v1_data(t);
+        for (uint32_t h = 0; h < 65536u; ++h) {
+            float expected = tf_half_reference((uint16_t)h);
+            assert(memcmp(&f[h], &expected, 4u) == 0);
+        }
+        cetta_dense_tensor_v1_release(t);
+    }
+
+    /* Malformed files are refused with the reason. */
+    static const struct { int major; const char *dict; size_t payload; const char *reason; } npy[] = {
+        {1, "{'descr': '<f8'", 0u, "malformed-header"},
+        {1, "{'descr': '<f8', 'fortran_order': False, 'shape': (3) }\n", 24u, "malformed-header"},
+        {1, "{'descr': '<f8', 'fortran_order': False, 'shape': (3,), 'extra': 1, }\n", 24u, "malformed-header"},
+        {1, "{'descr': [('a', '<f8')], 'fortran_order': False, 'shape': (1,), }\n", 8u, "unsupported-dtype"},
+        {1, "{'descr': '<c16', 'fortran_order': False, 'shape': (1,), }\n", 16u, "unsupported-dtype"},
+        {1, "{'descr': '<f8', 'fortran_order': False, 'shape': (9,), }\n", 16u, "truncated"},
+        {1, "{'descr': '<f8', 'fortran_order': False }\n", 0u, "malformed-header"},
+        {9, "{'descr': '<f8', 'fortran_order': False, 'shape': (0,), }\n", 0u, "unsupported-version"},
+    };
+    for (size_t i = 0; i < sizeof npy / sizeof npy[0]; ++i) {
+        unsigned char bytes[512] = {0};
+        size_t d = strlen(npy[i].dict);
+        memcpy(bytes, "\x93NUMPY", 6u);
+        bytes[6] = (unsigned char)npy[i].major;
+        bytes[8] = (unsigned char)d;
+        memcpy(bytes + 10, npy[i].dict, d);
+        snprintf(path, sizeof path, "%s/bad%zu", dir, i);
+        tf_write(path, bytes, 10u + d + npy[i].payload);
+        const char *reason = tf_refusal(path, NULL, false);
+        if (strcmp(reason, npy[i].reason) != 0) fprintf(stderr, "bad%zu: %s, wanted %s\n", i, reason, npy[i].reason);
+        assert(strcmp(reason, npy[i].reason) == 0);
+    }
+    snprintf(path, sizeof path, "%s/plain", dir);
+    tf_write(path, "not a tensor file at all", 24u);
+    assert(strcmp(tf_refusal(path, NULL, false), "unknown-format") == 0);
+    /* Holes, overlaps and repeated names in safetensors. */
+    static const char *headers[] = {
+        "{\"a\":{\"dtype\":\"U8\",\"shape\":[2],\"data_offsets\":[0,2]}}",
+        "{\"a\":{\"dtype\":\"U8\",\"shape\":[2],\"data_offsets\":[0,2]},\"b\":{\"dtype\":\"U8\",\"shape\":[2],\"data_offsets\":[1,3]}}",
+        "{\"a\":{\"dtype\":\"U8\",\"shape\":[1],\"data_offsets\":[0,1]},\"a\":{\"dtype\":\"U8\",\"shape\":[2],\"data_offsets\":[1,3]}}",
+        "{\"a\":{\"dtype\":\"U8\",\"shape\":[3],\"data_offsets\":[0,2]}}",
+        "{\"a\":{\"dtype\":\"U8\",\"shape\":[3],\"data_offsets\":[0,3],\"extra\":1}}",
+        "{\"\\ud800\":{\"dtype\":\"U8\",\"shape\":[3],\"data_offsets\":[0,3]}}",
+        "{\"__metadata__\":{\"k\":1},\"a\":{\"dtype\":\"U8\",\"shape\":[3],\"data_offsets\":[0,3]}}",
+    };
+    for (size_t i = 0; i < sizeof headers / sizeof headers[0]; ++i) {
+        unsigned char bytes[256];
+        size_t h = strlen(headers[i]);
+        for (size_t k = 0; k < 8u; ++k) bytes[k] = (unsigned char)((uint64_t)h >> (8u * k));
+        memcpy(bytes + 8, headers[i], h);
+        memset(bytes + 8 + h, 7, 3u);
+        snprintf(path, sizeof path, "%s/st%zu", dir, i);
+        tf_write(path, bytes, 8u + h + 3u);
+        const char *reason = tf_refusal(path, "a", false);
+        if (strcmp(reason, "malformed-header") != 0) fprintf(stderr, "st%zu: %s\n", i, reason);
+        assert(strcmp(reason, "malformed-header") == 0);
+    }
+
+    /* An f64 after an odd byte is not aligned: it copies, and sharing says why. */
+    {
+        static const char header[] = "{\"a\":{\"dtype\":\"U8\",\"shape\":[1],\"data_offsets\":[0,1]},"
+            "\"b\":{\"dtype\":\"F64\",\"shape\":[1],\"data_offsets\":[1,9]}}";
+        unsigned char bytes[256];
+        size_t h = sizeof header - 1u, padded = h + (8u - (8u + h) % 8u) % 8u;
+        double value = -7.25;
+        for (size_t k = 0; k < 8u; ++k) bytes[k] = (unsigned char)((uint64_t)padded >> (8u * k));
+        memcpy(bytes + 8, header, h);
+        memset(bytes + 8 + h, ' ', padded - h);
+        bytes[8u + padded] = 3u;
+        memcpy(bytes + 9u + padded, &value, 8u);
+        snprintf(path, sizeof path, "%s/odd.safetensors", dir);
+        tf_write(path, bytes, 17u + padded);
+        t = tf_read(path, "b", false);
+        assert(memcmp(cetta_dense_tensor_v1_data(t), &value, 8u) == 0);
+        cetta_dense_tensor_v1_release(t);
+        assert(strcmp(tf_refusal(path, "b", true), "unshareable") == 0);
+        CettaDenseTensorV1 *a = tf_read(path, "a", true);
+        assert(((const unsigned char *)cetta_dense_tensor_v1_data(a))[0] == 3u);
+        cetta_dense_tensor_v1_release(a);
+        unlink(path);
+    }
+
+    /* String columns hold UTF-8 by offsets, as Arrow does. */
+    const char *strings[] = {"", "a", "\xc3\xa9\xe2\x9c\x93", "x y"};
+    size_t lengths[] = {0u, 1u, 5u, 3u};
+    CettaDenseTensorV1 *offsets = NULL, *bytes = NULL;
+    assert(cetta_tensor_string_column(4u, strings, lengths, &offsets, &bytes, &error));
+    int64_t expected_offsets[] = {0, 0, 1, 6, 9};
+    assert(memcmp(cetta_dense_tensor_v1_data(offsets), expected_offsets, sizeof expected_offsets) == 0);
+    for (size_t i = 0; i < 4u; ++i) {
+        const char *text;
+        size_t n;
+        assert(cetta_tensor_string_at(offsets, bytes, i, &text, &n, &error) && n == lengths[i] &&
+            memcmp(text, strings[i], n) == 0);
+    }
+    const char *text;
+    size_t n;
+    assert(!cetta_tensor_string_at(offsets, bytes, 4u, &text, &n, &error) && strcmp(error.reason, "index-out-of-range") == 0);
+    const char *invalid[] = {"\xff"};
+    size_t one[] = {1u};
+    CettaDenseTensorV1 *o2 = NULL, *b2 = NULL;
+    assert(!cetta_tensor_string_column(1u, invalid, one, &o2, &b2, &error) && strcmp(error.reason, "invalid-string") == 0);
+    /* A whole column is checked string by string, the last as the first. */
+    size_t strings_seen = 0;
+    assert(cetta_tensor_string_count(offsets, bytes, &strings_seen, &error) && strings_seen == 4u);
+    {
+        struct { int64_t offsets[4]; unsigned char bytes[3]; const char *reason; } columns[] = {
+            {{0, 2, 1, 3}, {'a', 'b', 'c'}, "invalid-column"},
+            {{0, 1, 2, 3}, {'a', 'b', 0xff}, "invalid-string"},
+            {{0, 1, 2, 4}, {'a', 'b', 'c'}, "invalid-column"},
+        };
+        size_t four[] = {4u}, three[] = {3u};
+        for (size_t i = 0; i < sizeof columns / sizeof columns[0]; ++i) {
+            CettaDenseTensorV1 *o = make(CETTA_DENSE_TENSOR_V1_I64, four, 1u, columns[i].offsets, sizeof columns[i].offsets);
+            CettaDenseTensorV1 *b = make(CETTA_DENSE_TENSOR_V1_U8, three, 1u, columns[i].bytes, sizeof columns[i].bytes);
+            assert(!cetta_tensor_string_count(o, b, &strings_seen, &error) && strcmp(error.reason, columns[i].reason) == 0);
+            cetta_dense_tensor_v1_release(o);
+            cetta_dense_tensor_v1_release(b);
+        }
+    }
+    cetta_dense_tensor_v1_release(offsets);
+    cetta_dense_tensor_v1_release(bytes);
+
+    /* Clean up the scratch directory. */
+    for (size_t i = 0; i < 6u; ++i) { snprintf(other, sizeof other, "%s/w%zu.npy", dir, i); unlink(other); }
+    for (size_t i = 0; i < sizeof npy / sizeof npy[0]; ++i) { snprintf(other, sizeof other, "%s/bad%zu", dir, i); unlink(other); }
+    snprintf(other, sizeof other, "%s/plain", dir); unlink(other);
+    for (size_t i = 0; i < sizeof headers / sizeof headers[0]; ++i) { snprintf(other, sizeof other, "%s/st%zu", dir, i); unlink(other); }
+    snprintf(other, sizeof other, "%s/w.safetensors", dir); unlink(other);
+    snprintf(other, sizeof other, "%s/held.npy", dir); unlink(other);
+    snprintf(other, sizeof other, "%s/all.npy", dir); unlink(other);
+    assert(rmdir(dir) == 0);
+}
+#undef TF
+
 int main(void) {
     SymbolTable symbols; symbol_table_init(&symbols);
     symbol_table_init_builtins(&symbols, &g_builtin_syms); g_symbols = &symbols;
@@ -858,7 +1264,7 @@ int main(void) {
     assert(cetta_dense_tensor_v1_reduce(tensor, NULL, &sum) == CETTA_DENSE_TENSOR_V1_OK && sum.value.integer == 256);
     cetta_dense_tensor_v1_release(tensor);
     arithmetic_reference();
-    selection_reference(); matrix_reference(); lazy_hash_reference(); compact_screening_reference(); int8_screening_reference(); screening_exponent_reference();
+    selection_reference(); matrix_reference(); lazy_hash_reference(); tensor_files_reference(); compact_screening_reference(); int8_screening_reference(); screening_exponent_reference();
     arena_free(&survivor); symbol_table_free(&symbols);
     puts("PASS: native tensor ownership, alternatives, arithmetic, bounds and codecs");
     return 0;

@@ -748,7 +748,14 @@
     cesta_table_apply_0(lib_system_env_nonempty, "__cetta_lib_system_env_nonempty") \
     cesta_table_apply_0(lib_system_redact_secrets, "__cetta_lib_system_redact_secrets") \
     cesta_table_apply_0(lib_io_http_head, "__cetta_lib_io_http_head") \
-    cesta_table_apply_0(lib_host_io, "__cetta_lib_host_io")
+    cesta_table_apply_0(lib_host_io, "__cetta_lib_host_io") \
+    cesta_table_apply_0(lib_tensor_file_info, "__cetta_lib_tensor_file_info") \
+    cesta_table_apply_0(lib_tensor_load, "__cetta_lib_tensor_load") \
+    cesta_table_apply_0(lib_tensor_map, "__cetta_lib_tensor_map") \
+    cesta_table_apply_0(lib_tensor_load_all, "__cetta_lib_tensor_load_all") \
+    cesta_table_apply_0(lib_tensor_map_all, "__cetta_lib_tensor_map_all") \
+    cesta_table_apply_0(lib_tensor_save_npy, "__cetta_lib_tensor_save_npy") \
+    cesta_table_apply_0(lib_tensor_save_safetensors, "__cetta_lib_tensor_save_safetensors")
 
 #define CETTA_PETTA_ONLY_BUILTIN_SYMBOL_ROWS(cesta_table_apply_0) \
     cesta_table_apply_0(petta_member) \
