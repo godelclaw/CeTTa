@@ -270,21 +270,31 @@ its last view is released, and is charged as its descriptor, not its bytes.
 
 A safetensors file may hold several tensors: name one, or read them all with
 `tensor:load-all`/`tensor:map-all`, whose last part is the file's
-`__metadata__`. `tensor:file-info` describes a file without reading its data:
-each tensor's stored and loaded dtype, shape, and whether loading copies and
-why.
+`__metadata__`. `tensor:open-all` reads them all too, sharing each tensor
+stored as CeTTa holds it and copying the others, so one converted tensor does
+not copy the whole file. `tensor:file-info` describes a file without reading
+its data: each tensor's stored and loaded dtype, shape, and whether loading
+copies and why.
 
 `tensor:save-npy` writes format 1.0, or 2.0 when the header needs it, with the
 data aligned to 64 bytes, so `numpy.load(path, mmap_mode="r")` maps it.
 `tensor:save-safetensors` takes `((name tensor) ...)` and optional string
-metadata. It orders tensors by element width so that each is aligned, and pads
-the header to 8 bytes. Both write a temporary file, sync it and rename it into
+metadata; an entry `(name tensor bool)` stores a u8 tensor of 0 and 1 as BOOL,
+as NumPy and PyTorch store booleans. It orders tensors by element width so
+that each is aligned, and pads the header to 8 bytes. Both write a temporary file, sync it and rename it into
 place.
 
 Strings travel as an Arrow-style column of two tensors: offsets, i64 [n + 1],
 and UTF-8 bytes, u8. `tensor:string-column` builds one from strings;
 `tensor:string-count` checks a whole column and returns n; `tensor:string-at`
-and `tensor:strings` read one string or all of them.
+and `tensor:strings` read one string or all of them, checking what they read.
+`tensor:string-index` builds a hash table of a column's rows, an i64 tensor of
+at least twice as many slots as strings, after checking the column; it refuses
+two equal strings. `tensor:string-find` gives the row of a string through it,
+or -1, comparing every candidate, so a damaged table can miss a string but
+never names a wrong row. `tensor:string-mask` is a u8 mask of the rows equal
+to a string, and `tensor:mask-equal` one of a vector's elements equal to a
+value of its dtype. `tensor:to-booleans` reads a u8 mask as booleans.
 
 `tensor:row-norms`, `tensor:div-rows`, `tensor:normalize-rows`,
 `tensor:cosine-rows` and `tensor:int8-rows` read f32 rows as their exact f64
@@ -295,7 +305,8 @@ Failures are `(TensorFailure (<reason> "<detail>"))`. File reasons are
 `unknown-format`, `unsupported-version`, `malformed-header`,
 `header-too-large`, `truncated`, `unsupported-dtype`, `missing-tensor`,
 `several-tensors`, `value-out-of-range` and `unshareable`. String columns add
-`invalid-column`, `invalid-string` and `index-out-of-range`.
+`invalid-column`, `invalid-string`, `index-out-of-range`, `duplicate-string`
+and `invalid-index`.
 
 `make test-tensor-files-interop TENSOR_FILES_PYTHON=<python with numpy and
 safetensors>` writes every supported dtype, shape, byte order and layout with

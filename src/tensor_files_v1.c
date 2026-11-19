@@ -995,7 +995,9 @@ bool cetta_tensor_file_read(const char *path, const char *name, bool share,
     return ok;
 }
 
-bool cetta_tensor_file_read_all(const char *path, bool share, CettaTensorFile **out_file,
+enum { READ_COPY, READ_SHARE, READ_SHARE_WHERE_STORED };
+
+static bool read_all(const char *path, int mode, CettaTensorFile **out_file,
     CettaDenseTensorV1 ***out_tensors, CettaTensorFileError *e) {
     if (!path || !out_file || !out_tensors) return fail(e, "invalid-argument", "path");
     *out_file = NULL;
@@ -1009,7 +1011,11 @@ bool cetta_tensor_file_read_all(const char *path, bool share, CettaTensorFile **
         tensors = calloc(file->count, sizeof *tensors);
         if (!tensors) ok = fail(e, "out-of-memory", "tensor list");
     }
-    for (size_t i = 0; ok && i < file->count; ++i) ok = load_entry(mapping, &file->entries[i], share, &tensors[i], e);
+    for (size_t i = 0; ok && i < file->count; ++i) {
+        const CettaTensorFileEntry *entry = &file->entries[i];
+        bool share = mode == READ_SHARE || (mode == READ_SHARE_WHERE_STORED && !entry->copy_reason);
+        ok = load_entry(mapping, entry, share, &tensors[i], e);
+    }
     if (!ok) {
         if (tensors) for (size_t i = 0; i < file->count; ++i) cetta_dense_tensor_v1_release(tensors[i]);
         free(tensors);
@@ -1021,6 +1027,16 @@ bool cetta_tensor_file_read_all(const char *path, bool share, CettaTensorFile **
     *out_file = file;
     *out_tensors = tensors;
     return ok;
+}
+
+bool cetta_tensor_file_read_all(const char *path, bool share, CettaTensorFile **file,
+    CettaDenseTensorV1 ***tensors, CettaTensorFileError *e) {
+    return read_all(path, share ? READ_SHARE : READ_COPY, file, tensors, e);
+}
+
+bool cetta_tensor_file_open_all(const char *path, CettaTensorFile **file,
+    CettaDenseTensorV1 ***tensors, CettaTensorFileError *e) {
+    return read_all(path, READ_SHARE_WHERE_STORED, file, tensors, e);
 }
 
 /* -------------------------------------------------------------- writing */
@@ -1158,6 +1174,23 @@ static bool written_before(size_t x, size_t y, const char *const *names, const C
 bool cetta_tensor_file_write_safetensors(const char *path, size_t count, const char *const *names,
     const CettaDenseTensorV1 *const *tensors, size_t metadata_count, const char *const *keys,
     const char *const *values, uint64_t *written, CettaTensorFileError *e) {
+    return cetta_tensor_file_write_safetensors_as(path, count, names, tensors, NULL, metadata_count,
+        keys, values, written, e);
+}
+
+/* A u8 tensor of 0 and 1 may be written as BOOL, as NumPy and PyTorch store
+ * booleans. */
+static bool boolean_values(const CettaDenseTensorV1 *tensor) {
+    if (cetta_dense_tensor_v1_dtype(tensor) != CETTA_DENSE_TENSOR_V1_U8) return false;
+    const unsigned char *data = cetta_dense_tensor_v1_data(tensor);
+    for (size_t i = 0; i < cetta_dense_tensor_v1_count(tensor); ++i)
+        if (data[i] > 1u) return false;
+    return true;
+}
+
+bool cetta_tensor_file_write_safetensors_as(const char *path, size_t count, const char *const *names,
+    const CettaDenseTensorV1 *const *tensors, const bool *booleans, size_t metadata_count,
+    const char *const *keys, const char *const *values, uint64_t *written, CettaTensorFileError *e) {
     if (!path || (count && (!names || !tensors)) || (metadata_count && (!keys || !values)))
         return fail(e, "invalid-argument", "names, tensors or metadata");
     if (!HOST_LITTLE_ENDIAN) return fail(e, "unsupported-host", "big-endian hosts do not write tensor files");
@@ -1166,6 +1199,8 @@ bool cetta_tensor_file_write_safetensors(const char *path, size_t count, const c
         if (strcmp(names[i], "__metadata__") == 0) return fail(e, "invalid-name", "__metadata__ is reserved");
         if (!safetensors_name(cetta_dense_tensor_v1_dtype(tensors[i])))
             return fail(e, "unsupported-dtype", "%s", names[i]);
+        if (booleans && booleans[i] && !boolean_values(tensors[i]))
+            return fail(e, "invalid-value", "%s: BOOL holds a u8 tensor of 0 and 1", names[i]);
         for (size_t k = 0; k < i; ++k)
             if (strcmp(names[k], names[i]) == 0) return fail(e, "invalid-name", "%s appears twice", names[i]);
     }
@@ -1198,8 +1233,9 @@ bool cetta_tensor_file_write_safetensors(const char *path, size_t count, const c
         size_t rank = cetta_dense_tensor_v1_rank(tensor);
         const size_t *shape = cetta_dense_tensor_v1_shape(tensor);
         uint64_t bytes = cetta_dense_tensor_v1_nbytes(tensor);
+        const char *stored = booleans && booleans[order[k]] ? "BOOL" : safetensors_name(cetta_dense_tensor_v1_dtype(tensor));
         ok = (metadata_count || k ? text_put(&t, ",", 1u) : true) && json_quote(&t, names[order[k]], e) &&
-            text_printf(&t, ":{\"dtype\":\"%s\",\"shape\":[", safetensors_name(cetta_dense_tensor_v1_dtype(tensor)));
+            text_printf(&t, ":{\"dtype\":\"%s\",\"shape\":[", stored);
         for (size_t i = 0; ok && i < rank; ++i) ok = text_printf(&t, i ? ",%zu" : "%zu", shape[i]);
         ok = ok && text_printf(&t, "],\"data_offsets\":[%" PRIu64 ",%" PRIu64 "]}", offset, offset + bytes);
         offset += bytes;
@@ -1272,9 +1308,9 @@ static bool column_shape(const CettaDenseTensorV1 *offsets, const CettaDenseTens
     return true;
 }
 
-bool cetta_tensor_string_at(const CettaDenseTensorV1 *offsets, const CettaDenseTensorV1 *bytes, size_t index,
-    const char **text, size_t *length, CettaTensorFileError *e) {
-    if (!column_shape(offsets, bytes, e)) return false;
+/* String index's bytes, after checking the two offsets that bound it. */
+static bool string_span(const CettaDenseTensorV1 *offsets, const CettaDenseTensorV1 *bytes, size_t index,
+    const unsigned char **text, size_t *length, CettaTensorFileError *e) {
     size_t n = cetta_dense_tensor_v1_count(offsets) - 1u;
     if (index >= n) return fail(e, "index-out-of-range", "%zu of %zu strings", index, n);
     int64_t from, to;
@@ -1283,9 +1319,18 @@ bool cetta_tensor_string_at(const CettaDenseTensorV1 *offsets, const CettaDenseT
     memcpy(&to, o + (index + 1u) * 8u, 8u);
     if (from < 0 || to < from || (uint64_t)to > cetta_dense_tensor_v1_count(bytes))
         return fail(e, "invalid-column", "offsets %zu and %zu", index, index + 1u);
-    *text = (const char *)cetta_dense_tensor_v1_data(bytes) + from;
+    *text = (const unsigned char *)cetta_dense_tensor_v1_data(bytes) + from;
     *length = (size_t)(to - from);
-    if (!utf8_valid((const unsigned char *)*text, *length)) return fail(e, "invalid-string", "string %zu is not UTF-8", index);
+    return true;
+}
+
+bool cetta_tensor_string_at(const CettaDenseTensorV1 *offsets, const CettaDenseTensorV1 *bytes, size_t index,
+    const char **text, size_t *length, CettaTensorFileError *e) {
+    if (!column_shape(offsets, bytes, e)) return false;
+    const unsigned char *span;
+    if (!string_span(offsets, bytes, index, &span, length, e)) return false;
+    *text = (const char *)span;
+    if (!utf8_valid(span, *length)) return fail(e, "invalid-string", "string %zu is not UTF-8", index);
     return true;
 }
 
@@ -1301,6 +1346,106 @@ bool cetta_tensor_string_count(const CettaDenseTensorV1 *offsets, const CettaDen
         if (!cetta_tensor_string_at(offsets, bytes, i, &text, &length, e)) return false;
     }
     *count = n;
+    return true;
+}
+
+/* FNV-1a and a 64-bit finalizer. A search compares the strings themselves,
+ * so the hash only decides where it starts. */
+static uint64_t string_hash(const unsigned char *p, size_t n) {
+    uint64_t h = UINT64_C(14695981039346656037);
+    for (size_t i = 0; i < n; ++i) {
+        h ^= p[i];
+        h *= UINT64_C(1099511628211);
+    }
+    h ^= h >> 33;
+    h *= UINT64_C(0xff51afd7ed558ccd);
+    h ^= h >> 33;
+    h *= UINT64_C(0xc4ceb9fe1a85ec53);
+    return h ^ (h >> 33);
+}
+
+bool cetta_tensor_string_index(const CettaDenseTensorV1 *offsets, const CettaDenseTensorV1 *bytes,
+    CettaDenseTensorV1 **out, CettaTensorFileError *e) {
+    *out = NULL;
+    if (!column_shape(offsets, bytes, e)) return false;
+    size_t n = cetta_dense_tensor_v1_count(offsets) - 1u, capacity = 8u;
+    while (capacity / 2u < n) {
+        if (capacity > SIZE_MAX / 2u / sizeof(int64_t)) return fail(e, "out-of-memory", "index of %zu strings", n);
+        capacity *= 2u;
+    }
+    int64_t *slots = malloc(capacity * sizeof *slots);
+    if (!slots) return fail(e, "out-of-memory", "index of %zu strings", n);
+    memset(slots, 0xff, capacity * sizeof *slots); /* -1 marks an empty slot */
+    size_t mask = capacity - 1u;
+    for (size_t i = 0; i < n; ++i) {
+        const char *text;
+        size_t length;
+        if (!cetta_tensor_string_at(offsets, bytes, i, &text, &length, e)) { free(slots); return false; }
+        size_t at = (size_t)string_hash((const unsigned char *)text, length) & mask;
+        for (; slots[at] >= 0; at = (at + 1u) & mask) {
+            const unsigned char *other;
+            size_t size;
+            size_t row = (size_t)slots[at];
+            if (string_span(offsets, bytes, row, &other, &size, e) && size == length && !memcmp(other, text, length)) {
+                free(slots);
+                return fail(e, "duplicate-string", "string %zu equals string %zu", i, row);
+            }
+        }
+        slots[at] = (int64_t)i;
+    }
+    size_t shape = capacity;
+    CettaDenseTensorV1Status status = cetta_dense_tensor_v1_new(CETTA_DENSE_TENSOR_V1_I64, &shape, 1u,
+        slots, capacity * sizeof *slots, out);
+    free(slots);
+    if (status != CETTA_DENSE_TENSOR_V1_OK) return fail(e, "out-of-memory", "index of %zu strings", n);
+    return true;
+}
+
+bool cetta_tensor_string_find(const CettaDenseTensorV1 *index, const CettaDenseTensorV1 *offsets,
+    const CettaDenseTensorV1 *bytes, const char *value, size_t length, int64_t *row, CettaTensorFileError *e) {
+    if (!column_shape(offsets, bytes, e)) return false;
+    size_t n = cetta_dense_tensor_v1_count(offsets) - 1u;
+    size_t capacity = index ? cetta_dense_tensor_v1_count(index) : 0u;
+    if (!index || cetta_dense_tensor_v1_dtype(index) != CETTA_DENSE_TENSOR_V1_I64 ||
+        cetta_dense_tensor_v1_rank(index) != 1u || capacity == 0u || (capacity & (capacity - 1u)) ||
+        capacity / 2u < n)
+        return fail(e, "invalid-index", "an index of %zu strings is i64 [2^k], k > log2(2n), as tensor:string-index builds", n);
+    const unsigned char *slots = cetta_dense_tensor_v1_data(index);
+    size_t mask = capacity - 1u, at = (size_t)string_hash((const unsigned char *)value, length) & mask;
+    for (size_t probe = 0; probe < capacity; ++probe, at = (at + 1u) & mask) {
+        int64_t slot;
+        memcpy(&slot, slots + at * 8u, 8u);
+        if (slot == -1) break;
+        if (slot < 0 || (uint64_t)slot >= n)
+            return fail(e, "invalid-index", "slot %zu names row %" PRId64 " of %zu", at, slot, n);
+        const unsigned char *text;
+        size_t size;
+        if (!string_span(offsets, bytes, (size_t)slot, &text, &size, e)) return false;
+        if (size == length && !memcmp(text, value, length)) {
+            *row = slot;
+            return true;
+        }
+    }
+    *row = -1;
+    return true;
+}
+
+bool cetta_tensor_string_mask(const CettaDenseTensorV1 *offsets, const CettaDenseTensorV1 *bytes,
+    const char *value, size_t length, CettaDenseTensorV1 **out, CettaTensorFileError *e) {
+    *out = NULL;
+    if (!column_shape(offsets, bytes, e)) return false;
+    size_t n = cetta_dense_tensor_v1_count(offsets) - 1u;
+    unsigned char *mask = malloc(n ? n : 1u);
+    if (!mask) return fail(e, "out-of-memory", "mask of %zu strings", n);
+    for (size_t i = 0; i < n; ++i) {
+        const unsigned char *text;
+        size_t size;
+        if (!string_span(offsets, bytes, i, &text, &size, e)) { free(mask); return false; }
+        mask[i] = size == length && !memcmp(text, value, length);
+    }
+    CettaDenseTensorV1Status status = cetta_dense_tensor_v1_new(CETTA_DENSE_TENSOR_V1_U8, &n, 1u, mask, n, out);
+    free(mask);
+    if (status != CETTA_DENSE_TENSOR_V1_OK) return fail(e, "out-of-memory", "mask of %zu strings", n);
     return true;
 }
 
@@ -1384,6 +1529,30 @@ Atom *cetta_tensor_files_v1_dispatch(Arena *arena, const char *operation, size_t
         if (!cetta_tensor_string_count(tensor_of(args[0]), tensor_of(args[1]), &n, &e)) return failure_atom(arena, &e);
         return atom_int(arena, (int64_t)n);
     }
+    if (named(operation, length, "string_index")) {
+        if (nargs != 2u) return refuse(arena, "invalid-argument", "(tensor:string-index offsets bytes)");
+        CettaDenseTensorV1 *index;
+        if (!cetta_tensor_string_index(tensor_of(args[0]), tensor_of(args[1]), &index, &e)) return failure_atom(arena, &e);
+        return tensor_atom(arena, index);
+    }
+    if (named(operation, length, "string_find") || named(operation, length, "string_mask")) {
+        bool find = named(operation, length, "string_find");
+        const char *value;
+        size_t n;
+        if (nargs != (find ? 4u : 3u) || !string_of(args[nargs - 1u], &value, &n))
+            return refuse(arena, "invalid-argument",
+                find ? "(tensor:string-find index offsets bytes string)" : "(tensor:string-mask offsets bytes string)");
+        if (find) {
+            int64_t row;
+            if (!cetta_tensor_string_find(tensor_of(args[0]), tensor_of(args[1]), tensor_of(args[2]), value, n, &row, &e))
+                return failure_atom(arena, &e);
+            return atom_int(arena, row);
+        }
+        CettaDenseTensorV1 *mask;
+        if (!cetta_tensor_string_mask(tensor_of(args[0]), tensor_of(args[1]), value, n, &mask, &e))
+            return failure_atom(arena, &e);
+        return tensor_atom(arena, mask);
+    }
     if (named(operation, length, "strings")) {
         if (nargs != 2u) return refuse(arena, "invalid-argument", "(tensor:strings offsets bytes)");
         const CettaDenseTensorV1 *offsets = tensor_of(args[0]), *bytes = tensor_of(args[1]);
@@ -1458,11 +1627,15 @@ Atom *cetta_tensor_files_v1_dispatch(Arena *arena, const char *operation, size_t
         else if (!cetta_tensor_file_read(path, name, share, &tensor, &e)) answer = failure_atom(arena, &e);
         else answer = tensor_atom(arena, tensor);
         free(name);
-    } else if (named(operation, length, "load_all") || named(operation, length, "map_all")) {
+    } else if (named(operation, length, "load_all") || named(operation, length, "map_all") ||
+               named(operation, length, "open_all")) {
         CettaTensorFile *file;
         CettaDenseTensorV1 **tensors;
+        bool opened = nargs == 1u && (named(operation, length, "open_all")
+            ? cetta_tensor_file_open_all(path, &file, &tensors, &e)
+            : cetta_tensor_file_read_all(path, named(operation, length, "map_all"), &file, &tensors, &e));
         if (nargs != 1u) answer = refuse(arena, "invalid-argument", "(tensor:load-all path)");
-        else if (!cetta_tensor_file_read_all(path, named(operation, length, "map_all"), &file, &tensors, &e))
+        else if (!opened)
             answer = failure_atom(arena, &e);
         else {
             Atom **entries = arena_alloc(arena, (file->count ? file->count : 1u) * sizeof *entries);
@@ -1490,13 +1663,16 @@ Atom *cetta_tensor_files_v1_dispatch(Arena *arena, const char *operation, size_t
             char **names = calloc(n ? n : 1u, sizeof *names), **keys = calloc(m ? m : 1u, sizeof *keys);
             char **values = calloc(m ? m : 1u, sizeof *values);
             const CettaDenseTensorV1 **tensors = calloc(n ? n : 1u, sizeof *tensors);
-            bool ok = names && keys && values && tensors;
+            bool *booleans = calloc(n ? n : 1u, sizeof *booleans);
+            bool ok = names && keys && values && tensors && booleans;
             if (!ok) answer = refuse(arena, "out-of-memory", "entries");
             for (size_t i = 0; ok && i < n; ++i) {
                 Atom *pair = args[1]->expr.elems[i];
-                ok = pair->kind == ATOM_EXPR && pair->expr.len == 2u && (names[i] = c_string(pair->expr.elems[0])) &&
-                    (tensors[i] = tensor_of(pair->expr.elems[1]));
-                if (!ok) answer = refuse(arena, "invalid-argument", "each entry is (name tensor)");
+                ok = pair->kind == ATOM_EXPR && (pair->expr.len == 2u ||
+                        (pair->expr.len == 3u && atom_is_symbol(pair->expr.elems[2], "bool"))) &&
+                    (names[i] = c_string(pair->expr.elems[0])) && (tensors[i] = tensor_of(pair->expr.elems[1]));
+                if (ok) booleans[i] = pair->expr.len == 3u;
+                if (!ok) answer = refuse(arena, "invalid-argument", "each entry is (name tensor) or (name tensor bool)");
             }
             for (size_t i = 0; ok && i < m; ++i) {
                 Atom *pair = args[2]->expr.elems[i];
@@ -1505,14 +1681,14 @@ Atom *cetta_tensor_files_v1_dispatch(Arena *arena, const char *operation, size_t
                 if (!ok) answer = refuse(arena, "invalid-argument", "each metadata entry is (key value), both strings");
             }
             uint64_t written;
-            if (ok && !cetta_tensor_file_write_safetensors(path, n, (const char *const *)names, tensors, m,
+            if (ok && !cetta_tensor_file_write_safetensors_as(path, n, (const char *const *)names, tensors, booleans, m,
                     (const char *const *)keys, (const char *const *)values, &written, &e))
                 answer = failure_atom(arena, &e);
             else if (ok)
                 answer = atom_expr3(arena, atom_symbol(arena, "TensorSaved"), args[0], atom_int(arena, (int64_t)written));
             for (size_t i = 0; names && i < n; ++i) free(names[i]);
             for (size_t i = 0; keys && values && i < m; ++i) { free(keys[i]); free(values[i]); }
-            free(names); free(keys); free(values); free((void *)tensors);
+            free(names); free(keys); free(values); free((void *)tensors); free(booleans);
         }
     } else {
         answer = refuse(arena, "unknown-operation", "tensor file operation");

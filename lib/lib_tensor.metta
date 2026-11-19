@@ -196,6 +196,18 @@
 (= (tensor:mask-not $mask)
    (function (chain (eval (__cetta_lib_tensor_mask_not $mask)) $result (return $result))))
 
+; A u8 mask of a vector's elements equal (==) to a value of its dtype.
+(: __cetta_lib_tensor_mask_equal (-> Atom Atom Atom))
+(: tensor:mask-equal (-> %Undefined% %Undefined% Atom))
+(= (tensor:mask-equal $tensor $value)
+   (function (chain (eval (__cetta_lib_tensor_mask_equal $tensor $value)) $result (return $result))))
+
+; The booleans of a u8 mask, as an expression.
+(: __cetta_lib_tensor_to_booleans (-> Atom Atom))
+(: tensor:to-booleans (-> %Undefined% Atom))
+(= (tensor:to-booleans $mask)
+   (function (chain (eval (__cetta_lib_tensor_to_booleans $mask)) $result (return $result))))
+
 (: __cetta_lib_tensor_nonzero (-> Atom Atom))
 (: tensor:nonzero (-> %Undefined% Atom))
 (= (tensor:nonzero $mask)
@@ -324,9 +336,16 @@
 (: tensor:map-all (-> %Undefined% Atom))
 (= (tensor:map-all $path)
    (function (chain (eval (__cetta_lib_tensor_map_all $path)) $result (return $result))))
+; Every tensor of a file, each shared when CeTTa reads it as stored and
+; copied otherwise.
+(: __cetta_lib_tensor_open_all (-> Atom Atom))
+(: tensor:open-all (-> %Undefined% Atom))
+(= (tensor:open-all $path)
+   (function (chain (eval (__cetta_lib_tensor_open_all $path)) $result (return $result))))
 ; Writing goes through a temporary file renamed into place. NumPy data starts
 ; at a multiple of 64 bytes and safetensors orders tensors by element width,
-; so a reader can share every tensor.
+; so a reader can share every tensor. A safetensors entry (name tensor bool)
+; stores a u8 tensor of 0 and 1 as BOOL.
 (: __cetta_lib_tensor_save_npy (-> Atom Atom Atom))
 (: tensor:save-npy (-> %Undefined% %Undefined% Atom))
 (= (tensor:save-npy $path $tensor)
@@ -357,3 +376,19 @@
 (: tensor:string-at (-> %Undefined% %Undefined% %Undefined% Atom))
 (= (tensor:string-at $offsets $bytes $index)
    (function (chain (eval (__cetta_lib_tensor_string_at $offsets $bytes $index)) $result (return $result))))
+; A column's rows by value. string-index builds a hash table of the rows,
+; after checking the column as string-count does, and refuses two equal
+; strings; string-find gives the row of a string in it, or -1. string-mask is
+; a u8 mask of the rows equal to a string.
+(: __cetta_lib_tensor_string_index (-> Atom Atom Atom))
+(: tensor:string-index (-> %Undefined% %Undefined% Atom))
+(= (tensor:string-index $offsets $bytes)
+   (function (chain (eval (__cetta_lib_tensor_string_index $offsets $bytes)) $result (return $result))))
+(: __cetta_lib_tensor_string_find (-> Atom Atom Atom Atom Atom))
+(: tensor:string-find (-> %Undefined% %Undefined% %Undefined% %Undefined% Atom))
+(= (tensor:string-find $index $offsets $bytes $value)
+   (function (chain (eval (__cetta_lib_tensor_string_find $index $offsets $bytes $value)) $result (return $result))))
+(: __cetta_lib_tensor_string_mask (-> Atom Atom Atom Atom))
+(: tensor:string-mask (-> %Undefined% %Undefined% %Undefined% Atom))
+(= (tensor:string-mask $offsets $bytes $value)
+   (function (chain (eval (__cetta_lib_tensor_string_mask $offsets $bytes $value)) $result (return $result))))

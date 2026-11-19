@@ -730,6 +730,35 @@ CettaDenseTensorV1Status cetta_dense_tensor_v1_mask_not(const CettaDenseTensorV1
     return CETTA_DENSE_TENSOR_V1_OK;
 }
 
+CettaDenseTensorV1Status cetta_dense_tensor_v1_mask_equal(const CettaDenseTensorV1 *values,
+    const unsigned char element[8], CettaDenseTensorV1 **out) {
+    if (!out || !values || !element) return CETTA_DENSE_TENSOR_V1_VALUE;
+    *out = NULL;
+    if (values->rank != 1u) return CETTA_DENSE_TENSOR_V1_SHAPE;
+    size_t width = values->dtype == CETTA_DENSE_TENSOR_V1_U8 ? 1u : values->dtype == CETTA_DENSE_TENSOR_V1_F32 ? 4u : 8u;
+    if (values->dtype != CETTA_DENSE_TENSOR_V1_F64 && values->dtype != CETTA_DENSE_TENSOR_V1_F32 &&
+        values->dtype != CETTA_DENSE_TENSOR_V1_I64 && values->dtype != CETTA_DENSE_TENSOR_V1_U8)
+        return CETTA_DENSE_TENSOR_V1_DTYPE;
+    CettaDenseTensorV1Status status = allocate(CETTA_DENSE_TENSOR_V1_U8, values->shape, 1u, out);
+    if (status != CETTA_DENSE_TENSOR_V1_OK) return status;
+    const unsigned char *data = values->storage->data;
+    unsigned char *mask = (*out)->storage->data;
+    if (values->dtype == CETTA_DENSE_TENSOR_V1_F64) {
+        double wanted, x; memcpy(&wanted, element, 8u);
+        for (size_t i = 0; i < values->count; ++i) { memcpy(&x, data + i * width, 8u); mask[i] = x == wanted; }
+    } else if (values->dtype == CETTA_DENSE_TENSOR_V1_F32) {
+        float wanted, x; memcpy(&wanted, element, 4u);
+        for (size_t i = 0; i < values->count; ++i) { memcpy(&x, data + i * width, 4u); mask[i] = x == wanted; }
+    } else if (values->dtype == CETTA_DENSE_TENSOR_V1_I64) {
+        int64_t wanted, x; memcpy(&wanted, element, 8u);
+        for (size_t i = 0; i < values->count; ++i) { memcpy(&x, data + i * width, 8u); mask[i] = x == wanted; }
+    } else {
+        for (size_t i = 0; i < values->count; ++i) mask[i] = data[i] == element[0];
+    }
+    finish_storage(*out);
+    return CETTA_DENSE_TENSOR_V1_OK;
+}
+
 CettaDenseTensorV1Status cetta_dense_tensor_v1_nonzero(const CettaDenseTensorV1 *mask, CettaDenseTensorV1 **out) {
     if (!out || !mask) return CETTA_DENSE_TENSOR_V1_VALUE;
     *out = NULL;
@@ -1499,6 +1528,8 @@ static Atom *element_atom(Arena *arena, const CettaDenseTensorV1 *tensor, size_t
     X(mask_or) \
     X(mask_and) \
     X(mask_not) \
+    X(mask_equal) \
+    X(to_booleans) \
     X(nonzero) \
     X(top_k_masked) \
     X(top_k) \
@@ -1510,11 +1541,15 @@ static Atom *element_atom(Arena *arena, const CettaDenseTensorV1 *tensor, size_t
     X(map) \
     X(load_all) \
     X(map_all) \
+    X(open_all) \
     X(save_npy) \
     X(save_safetensors) \
     X(strings) \
     X(string_count) \
     X(string_at) \
+    X(string_index) \
+    X(string_find) \
+    X(string_mask) \
     X(string_column)
 
 typedef enum {
@@ -1690,6 +1725,22 @@ Atom *cetta_dense_tensor_v1_dispatch(Arena *arena, Atom *head, Atom **args, uint
         if (nargs != 1u) return failure(arena, CETTA_DENSE_TENSOR_V1_VALUE);
         bulk_status = cetta_dense_tensor_v1_mask_not(from_atom(args[0]), &bulk);
         return publish(arena, bulk_status, bulk);
+    }
+    if ((operation == DENSE_TENSOR_OP_mask_equal)) {
+        const CettaDenseTensorV1 *values = nargs == 2u ? from_atom(args[0]) : NULL;
+        if (!values) return failure(arena, CETTA_DENSE_TENSOR_V1_VALUE);
+        unsigned char element[8];
+        bulk_status = element_from_atom(values->dtype, args[1], element);
+        if (bulk_status != CETTA_DENSE_TENSOR_V1_OK) return failure(arena, bulk_status);
+        bulk_status = cetta_dense_tensor_v1_mask_equal(values, element, &bulk);
+        return publish(arena, bulk_status, bulk);
+    }
+    if ((operation == DENSE_TENSOR_OP_to_booleans)) {
+        const CettaDenseTensorV1 *mask = nargs == 1u ? from_atom(args[0]) : NULL;
+        if (!mask_valid(mask)) return failure(arena, CETTA_DENSE_TENSOR_V1_VALUE);
+        Atom **items = arena_alloc(arena, (mask->count ? mask->count : 1u) * sizeof *items);
+        for (size_t i = 0; i < mask->count; ++i) items[i] = atom_bool(arena, mask->storage->data[i] != 0u);
+        return atom_expr(arena, items, (CettaExprLen)mask->count);
     }
     if ((operation == DENSE_TENSOR_OP_nonzero)) {
         if (nargs != 1u) return failure(arena, CETTA_DENSE_TENSOR_V1_VALUE);

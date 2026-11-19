@@ -126,64 +126,93 @@ them correctly. Row norms and query norm must be finite and positive.
 
 ## Matrix collections
 
-A collection can also be served from a matrix file, without an atom per record
-or a space service. The file is safetensors with `vectors` [n d] (f32 or f64)
-and the row IDs as a string column: `ids.offsets`, i64 [n + 1], and
-`ids.bytes`, UTF-8. A `profile` metadata entry, when present, must match the
-collection's profile. The file is mapped when CeTTa can read it as stored, and
-copied otherwise. Rows of unit length within 1e-5, as normalized f32 embeddings
-are, are used as stored; scores are their inner products with the normalized
-query. Other rows are normalized into an f64 copy. All three scan tiers apply.
-On an f32 matrix the f32 tier is the full scan, since its screen would be the
-matrix itself.
+A collection can also be served from one matrix file, without an atom per
+record or a space service. The file is safetensors, and each column is a
+tensor that NumPy, PyTorch and safetensors read as they are:
+
+| Tensors | Type | Holds |
+|---|---|---|
+| `vectors` | [n d] f32 or f64; f16 and bf16 are copied to f32 | the rows |
+| `ids.offsets`, `ids.bytes` | i64 [n + 1], u8 | the IDs, as an Arrow string column |
+| `documents.offsets`, `documents.bytes` | i64 [n + 1], u8 | documents; `""` without |
+| `revisions` | integers [n] | revisions; 0 without |
+| `metadata.<key>` | integers, floats or BOOL [n] | one metadata key |
+| `metadata.<key>.offsets`, `metadata.<key>.bytes` | i64 [n + 1], u8 | a key of strings |
+| `metadata.<key>.present` | BOOL [n] | the rows that have the key; all without |
+
+A `profile` metadata entry, when present, must match the collection's profile;
+other tensors are ignored. Each tensor is mapped when CeTTa reads it as stored
+and copied otherwise, so an i32 column does not copy the vectors. Rows of unit
+length within 1e-5, as normalized f32 embeddings are, are used as stored;
+scores are their inner products with the normalized query. Other rows are
+normalized into an f64 copy. All three scan tiers apply. On an f32 matrix the
+f32 tier is the full scan, since its screen would be the matrix itself.
+
+Loading checks every ID, refuses two equal IDs and builds a hash table of them
+for `get`. Metadata columns are checked as they load. Documents are checked as
+they are read, so a file of any size opens at once, and only a request that
+reaches a damaged document refuses.
+
+A metadata value has its column's kind: a string, an integer, a float or a
+boolean. `(Eq key value)` selects the rows whose column for the key holds the
+value, of that kind: an integer never equals a float, as records compare.
+`And` and `Or` combine masks of the columns. A hit is
+`(MemoryInfo id revision document metadata)`, with the metadata in key order,
+as records hold it. `get` returns rows by ID and `ids` the IDs a filter
+selects; `records` and `query-reference` refuse a matrix collection, which
+holds no records. A matrix collection takes no writes: `apply` and `load`
+refuse with `matrix-read-only`. Each load replaces the collection only if it
+succeeds; `reset` empties it.
 
 ```python
 from memory_collection import MatrixCollection
 
-collection = MatrixCollection("memories.safetensors", profile, worker_binary,
-                              rows="memories.cact", scan_tier="int8")
+collection = MatrixCollection("memories.safetensors", profile, worker_binary, scan_tier="int8")
 found = collection.query([embedding], n_results=5, where={"kind": "note"})
+rows = collection.get(ids=["first", "second"])
 ```
 
-Documents and metadata come from an optional ACT snapshot of
-`(MemoryInfo id revision document metadata)` atoms, one per ID. The snapshot
-indexes the ID, so a hit's row is found without a scan; without one, hits carry
-IDs only. Opening a snapshot validates all of it. Metadata filters index the
-rows the first time a filter needs them. A matrix collection takes no writes,
-and each load replaces the collection only if it succeeds. `get` returns rows
-by ID from the snapshot; requests that read records (`records`, `ids`,
-`query-reference`) refuse a matrix collection rather than answer empty.
-
-`NativeCollection.export_matrix(path, rows=None)` writes the current view's
-normalized f64 rows and IDs as such a file (format `cetta-memory-matrix-v1`,
-with the profile and dimensions in its metadata), and its rows as an ACT
-snapshot when `rows` names one. Other programs write the file with NumPy and
-safetensors:
+`NativeCollection.export_matrix(path)` writes the current view as such a file
+(format `cetta-memory-matrix-v1`, with the profile and dimensions in its
+metadata): the normalized f64 rows, IDs, documents, revisions and a column per
+metadata key. A key takes one value per row and one kind; a row without it is
+marked absent, and other metadata refuses to export. A matrix collection
+exports the file it serves again, byte for byte. Other programs write the file
+with NumPy and safetensors:
 
 ```python
 import numpy as np
 from safetensors.numpy import save_file
 
-def save_matrix(path, vectors, ids, profile):
-    encoded = [i.encode() for i in ids]
-    offsets = np.zeros(len(ids) + 1, dtype=np.int64)
+def strings(name, values):
+    encoded = [v.encode() for v in values]
+    offsets = np.zeros(len(encoded) + 1, dtype=np.int64)
     offsets[1:] = np.cumsum([len(e) for e in encoded])
-    save_file({"vectors": np.ascontiguousarray(vectors, dtype=np.float32),
-               "ids.offsets": offsets,
-               "ids.bytes": np.frombuffer(b"".join(encoded), dtype=np.uint8)},
-              path, metadata={"profile": profile})
+    return {name + ".offsets": offsets,
+            name + ".bytes": np.frombuffer(b"".join(encoded), dtype=np.uint8)}
+
+def save_matrix(path, vectors, ids, profile, documents=None, metadata=None):
+    """metadata maps each key to one value per row: strings, ints, floats or bools."""
+    tensors = {"vectors": np.ascontiguousarray(vectors, dtype=np.float32), **strings("ids", ids)}
+    if documents is not None:
+        tensors.update(strings("documents", documents))
+    for key, values in (metadata or {}).items():
+        if isinstance(values[0], str):
+            tensors.update(strings("metadata." + key, values))
+        else:
+            tensors["metadata." + key] = np.asarray(values)
+    save_file(tensors, path, metadata={"profile": profile})
 ```
 
 Here `profile` is the collection's profile identity, the first value that
 `profile_identity` in `tools/memory_collection.py` returns. In MeTTa, the
-requests are `(load-matrix-file profile dimensions path)`, with a rows path as
-a fourth argument, and `(load-matrix profile dimensions ids matrix)`, where
-`ids` is `(Ids (id ...))` or `(IdColumn offsets bytes)`, optionally with a
-Space of rows. They answer `(LoadedMatrix n)`. `(export-matrix path)` and
-`(export-matrix path rows-path)` answer `(Exported n bytes)`. `apply` and
-`load` refuse a matrix collection with `matrix-read-only`; `reset` empties it
-and closes its snapshot. `make test-memory-matrix` checks every tier against
-an independent oracle and rejects incorrect policies.
+requests are `(load-matrix-file profile dimensions path)` and
+`(load-matrix profile dimensions ids matrix)`, where `ids` is `(Ids (id ...))`
+or `(IdColumn offsets bytes)`; a fifth argument gives the other columns as a
+file names them, `((name tensor) ...)`, with `(name tensor bool)` for
+booleans. They answer `(LoadedMatrix n)`. `(export-matrix path)` answers
+`(Exported n bytes)`. `make test-memory-matrix` checks every tier and column
+kind against an independent oracle and rejects incorrect policies.
 
 ## Reusable row selectors
 

@@ -106,6 +106,10 @@ CettaDenseTensorV1Status cetta_dense_tensor_v1_mask_indices(size_t length,
 CettaDenseTensorV1Status cetta_dense_tensor_v1_mask_binary(const CettaDenseTensorV1 *left,
     const CettaDenseTensorV1 *right, bool is_or, CettaDenseTensorV1 **out);
 CettaDenseTensorV1Status cetta_dense_tensor_v1_mask_not(const CettaDenseTensorV1 *mask, CettaDenseTensorV1 **out);
+/* A u8 mask of a rank-1 tensor's elements equal (==) to one element of its
+ * dtype: NaN equals nothing, and -0.0 equals 0.0. */
+CettaDenseTensorV1Status cetta_dense_tensor_v1_mask_equal(const CettaDenseTensorV1 *values,
+    const unsigned char element[8], CettaDenseTensorV1 **out);
 CettaDenseTensorV1Status cetta_dense_tensor_v1_nonzero(const CettaDenseTensorV1 *mask, CettaDenseTensorV1 **out);
 /* Sorted descending, with smaller source indices first at equal scores.
  * Enabled nonfinite scores are refused, including when k is zero. */

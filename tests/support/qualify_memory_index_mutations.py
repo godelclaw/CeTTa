@@ -78,8 +78,8 @@ def main():
     source = ROOT / "lib/petta/lib_memory_collection.metta"
     text = source.read_text()
     mutations = {
-        "no-retirement": ("(tensor:mask-and $live (index:mask $stamp $projection $filter))",
-                           "(index:mask $stamp $projection $filter)"),
+        "no-retirement": ("($selected (case (tensor:mask-and $live $selected)",
+                           "($selected (case $selected"),
         "drop-delta": ("(list:append $hits $recent)", "$hits"),
         "retain-stale-delta": (
             "($version (change-state! &memory-view $next))\n          ($delta (change-state! &memory-delta-index Missing))",

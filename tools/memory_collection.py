@@ -309,13 +309,16 @@ class NativeCollection:
                                                queries=len(queries))
             return query_result(batches, include)
 
-    def export_matrix(self, path, rows=None):
-        """Write the current view as a matrix file, and its rows as an ACT
-        snapshot when rows names one; MatrixCollection serves them."""
+    def export_matrix(self, path):
+        """Write the current view as one safetensors matrix file: vectors,
+        IDs, documents, revisions and a column per metadata key.
+        MatrixCollection serves it."""
         with self.lock:
             self._refresh()
-            request = E("export-matrix", str(path)) if rows is None else E("export-matrix", str(path), str(rows))
-            return self._call(request)[1]
+            exported = self._call(E("export-matrix", str(path)))
+            if not (isinstance(exported, tuple) and exported[:1] == (S("Exported"),)):
+                raise ValueError("MeTTa collection refused: " + repr(exported))
+            return exported[1]
 
     def _vector(self, value):
         return query_vector(value, self.dimensions)
@@ -362,10 +365,10 @@ class NativeCollection:
 class MatrixCollection:
     """A read-only collection served from a matrix file.
 
-    The file holds vectors and their IDs (see export_matrix); documents and
-    metadata come from an optional ACT snapshot of rows. The worker maps the
-    file and serves exact queries; no space service is involved."""
-    def __init__(self, path, profile, binary, rows=None, module=None, scan_tier="wide", timeout=300):
+    The file holds vectors, IDs and optionally documents, revisions and
+    metadata columns (see export_matrix and docs/memory/README.md). The worker
+    maps the file and serves exact queries; no space service is involved."""
+    def __init__(self, path, profile, binary, module=None, scan_tier="wide", timeout=300):
         if scan_tier not in ("wide", "f32", "int8"):
             raise ValueError("scan tier must be wide, f32 or int8")
         self.profile, self.dimensions, _ = profile_identity(profile)
@@ -374,9 +377,7 @@ class MatrixCollection:
         try:
             if self.worker.call(E("scan-tier", S(scan_tier))) != E("ScanTier", S(scan_tier)):
                 raise RuntimeError("worker scan tier initialization failed")
-            request = (E("load-matrix-file", self.profile, self.dimensions, str(path)) if rows is None else
-                       E("load-matrix-file", self.profile, self.dimensions, str(path), str(rows)))
-            loaded = self.worker.call(request)
+            loaded = self.worker.call(E("load-matrix-file", self.profile, self.dimensions, str(path)))
             if not (isinstance(loaded, tuple) and len(loaded) == 2 and loaded[0] == S("LoadedMatrix")):
                 raise ValueError("MeTTa collection refused: " + repr(loaded))
             self.size = loaded[1]
@@ -388,6 +389,35 @@ class MatrixCollection:
 
     def count(self):
         return self.size
+
+    def _call(self, request):
+        result = self.worker.call(request)
+        if isinstance(result, tuple) and result[:1] == (S("MemoryFailure"),):
+            raise ValueError("MeTTa collection refused: " + repr(result))
+        return result
+
+    def get(self, ids=None, where=None, include=None, limit=None, offset=0):
+        """Rows by ID or filter, in the file's row order when only a filter
+        is given. A matrix collection serves no embeddings."""
+        include = ["documents", "metadatas"] if include is None else include
+        if "embeddings" in include:
+            raise ValueError("a matrix collection serves no embeddings")
+        with self.lock:
+            if ids is None:
+                selected = list(self._call(E("ids", where_atom(where))))
+            else:
+                selected = list(ids)
+                if where is not None:
+                    keep = set(self._call(E("ids", where_atom(where))))
+                    selected = [i for i in selected if i in keep]
+            selected = selected[offset:] if limit is None else selected[offset:offset+limit]
+            result = {"ids": [], "documents": [], "metadatas": []}
+            for start in range(0, len(selected), 256):
+                for _, item_id, revision, doc, meta in self._call(E("get", tuple(selected[start:start+256]))):
+                    result["ids"].append(item_id)
+                    result["documents"].append(doc)
+                    result["metadatas"].append(metadata_python(meta))
+            return {key: value if key == "ids" or key in include else None for key, value in result.items()}
 
     def query(self, query_embeddings, n_results=10, where=None, include=None):
         if not isinstance(n_results, int) or not 0 < n_results <= 1000:

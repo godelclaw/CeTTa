@@ -82,11 +82,20 @@ bool cetta_tensor_file_read(const char *path, const char *name, bool share,
  * and frees the array and the file description. */
 bool cetta_tensor_file_read_all(const char *path, bool share, CettaTensorFile **file,
     CettaDenseTensorV1 ***tensors, CettaTensorFileError *error);
+/* As read_all, sharing each tensor stored as CeTTa holds it and copying the
+ * others, so one converted tensor does not copy the whole file. */
+bool cetta_tensor_file_open_all(const char *path, CettaTensorFile **file,
+    CettaDenseTensorV1 ***tensors, CettaTensorFileError *error);
 
 bool cetta_tensor_file_write_npy(const char *path, const CettaDenseTensorV1 *tensor,
     uint64_t *written, CettaTensorFileError *error);
 bool cetta_tensor_file_write_safetensors(const char *path, size_t count,
     const char *const *names, const CettaDenseTensorV1 *const *tensors,
+    size_t metadata_count, const char *const *keys, const char *const *values,
+    uint64_t *written, CettaTensorFileError *error);
+/* booleans[i] writes the u8 tensors[i], of 0 and 1, as BOOL. */
+bool cetta_tensor_file_write_safetensors_as(const char *path, size_t count,
+    const char *const *names, const CettaDenseTensorV1 *const *tensors, const bool *booleans,
     size_t metadata_count, const char *const *keys, const char *const *values,
     uint64_t *written, CettaTensorFileError *error);
 
@@ -95,14 +104,29 @@ bool cetta_tensor_file_write_safetensors(const char *path, size_t count,
 bool cetta_tensor_string_column(size_t count, const char *const *strings,
     const size_t *lengths, CettaDenseTensorV1 **offsets, CettaDenseTensorV1 **bytes,
     CettaTensorFileError *error);
-/* Checks only the two offsets it reads. */
+/* Checks every offset and string. */
 bool cetta_tensor_string_count(const CettaDenseTensorV1 *offsets, const CettaDenseTensorV1 *bytes,
     size_t *count, CettaTensorFileError *e);
+/* Checks only the two offsets it reads, and that string's UTF-8. */
 bool cetta_tensor_string_at(const CettaDenseTensorV1 *offsets, const CettaDenseTensorV1 *bytes,
     size_t index, const char **text, size_t *length, CettaTensorFileError *error);
+/* An open-addressing table of the column's rows, i64 [2^k] with at least
+ * twice as many slots as strings and -1 for an empty slot. Checks the column
+ * as string_count does, and refuses two equal strings. */
+bool cetta_tensor_string_index(const CettaDenseTensorV1 *offsets, const CettaDenseTensorV1 *bytes,
+    CettaDenseTensorV1 **index, CettaTensorFileError *error);
+/* The row of the string equal to value, or -1. Every candidate row is
+ * compared, so a damaged index can miss a string but never names a wrong row. */
+bool cetta_tensor_string_find(const CettaDenseTensorV1 *index, const CettaDenseTensorV1 *offsets,
+    const CettaDenseTensorV1 *bytes, const char *value, size_t length, int64_t *row,
+    CettaTensorFileError *error);
+/* A u8 [n] mask, 1 where the string equals value. */
+bool cetta_tensor_string_mask(const CettaDenseTensorV1 *offsets, const CettaDenseTensorV1 *bytes,
+    const char *value, size_t length, CettaDenseTensorV1 **mask, CettaTensorFileError *error);
 
-/* The lib_tensor natives: file_info, load, map, load_all, map_all, save_npy,
- * save_safetensors, strings, string_at and string_column. */
+/* The lib_tensor natives: file_info, load, map, load_all, map_all, open_all,
+ * save_npy, save_safetensors, strings, string_count, string_at, string_index,
+ * string_find, string_mask and string_column. */
 Atom *cetta_tensor_files_v1_dispatch(Arena *arena, const char *operation, size_t length,
     Atom **args, uint32_t nargs);
 

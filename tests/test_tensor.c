@@ -922,6 +922,19 @@ static void tensor_files_reference(void) {
     cetta_tensor_file_free(file);
     assert(!cetta_tensor_file_read_all(TF "mixed.safetensors", true, &file, &all, &error) && !file && !all);
     assert(strcmp(error.reason, "unshareable") == 0);
+    /* open_all shares each tensor stored as CeTTa holds it and copies the
+     * others: a shared tensor retains no bytes of its own. */
+    assert(cetta_tensor_file_open_all(TF "mixed.safetensors", &file, &all, &error) && file->count == 8u);
+    for (size_t i = 0; i < 8u; ++i) {
+        CettaDenseTensorV1 *copy = tf_read(TF "mixed.safetensors", file->entries[i].name, false);
+        size_t held = cetta_dense_tensor_v1_retained_bytes(all[i]), owned = cetta_dense_tensor_v1_retained_bytes(copy);
+        assert(cetta_dense_tensor_v1_equal(all[i], copy));
+        assert(file->entries[i].copy_reason ? held == owned : held + cetta_dense_tensor_v1_nbytes(copy) == owned);
+        cetta_dense_tensor_v1_release(copy);
+        cetta_dense_tensor_v1_release(all[i]);
+    }
+    free(all);
+    cetta_tensor_file_free(file);
 
     /* CeTTa writes files that it, NumPy and safetensors read, aligned for sharing. */
     char dir[64];
@@ -969,6 +982,28 @@ static void tensor_files_reference(void) {
     const char *dup[] = {"a", "a"};
     assert(!cetta_tensor_file_write_safetensors(path, 2u, dup, (const CettaDenseTensorV1 *const *)written, 0u,
         NULL, NULL, NULL, &error) && strcmp(error.reason, "invalid-name") == 0);
+    /* A u8 tensor of 0 and 1 may be stored as BOOL, which reads back shared. */
+    {
+        unsigned char truths[] = {1u, 0u, 1u}, twos[] = {2u, 0u, 1u};
+        size_t three[] = {3u};
+        const CettaDenseTensorV1 *flags[] = {make(CETTA_DENSE_TENSOR_V1_U8, three, 1u, truths, 3u),
+            make(CETTA_DENSE_TENSOR_V1_U8, three, 1u, twos, 3u)};
+        const char *flag[] = {"flag"};
+        bool boolean[] = {true};
+        snprintf(other, sizeof other, "%s/bool.safetensors", dir);
+        assert(cetta_tensor_file_write_safetensors_as(other, 1u, flag, flags, boolean, 0u, NULL, NULL, NULL, &error));
+        assert(cetta_tensor_file_inspect(other, &file, &error) && strcmp(file->entries[0].stored_dtype, "BOOL") == 0 &&
+            !file->entries[0].copy_reason);
+        cetta_tensor_file_free(file);
+        CettaDenseTensorV1 *back = tf_read(other, "flag", true);
+        assert(cetta_dense_tensor_v1_equal(back, flags[0]));
+        cetta_dense_tensor_v1_release(back);
+        assert(!cetta_tensor_file_write_safetensors_as(other, 1u, flag, flags + 1, boolean, 0u, NULL, NULL, NULL, &error) &&
+            strcmp(error.reason, "invalid-value") == 0);
+        unlink(other);
+        cetta_dense_tensor_v1_release((CettaDenseTensorV1 *)flags[0]);
+        cetta_dense_tensor_v1_release((CettaDenseTensorV1 *)flags[1]);
+    }
 
     /* A shared tensor holds its mapping; the last view returns it. */
     snprintf(path, sizeof path, "%s/held.npy", dir);
@@ -1123,8 +1158,90 @@ static void tensor_files_reference(void) {
             cetta_dense_tensor_v1_release(b);
         }
     }
+    /* A hash table of the column's rows finds each string, and only it. */
+    CettaDenseTensorV1 *index = NULL;
+    assert(cetta_tensor_string_index(offsets, bytes, &index, &error) && cetta_dense_tensor_v1_count(index) == 8u);
+    int64_t row = -2;
+    for (size_t i = 0; i < 4u; ++i)
+        assert(cetta_tensor_string_find(index, offsets, bytes, strings[i], lengths[i], &row, &error) && row == (int64_t)i);
+    assert(cetta_tensor_string_find(index, offsets, bytes, "x", 1u, &row, &error) && row == -1);
+    assert(cetta_tensor_string_find(index, offsets, bytes, "x y z", 5u, &row, &error) && row == -1);
+    {
+        /* A damaged index misses strings but never names a wrong row. */
+        int64_t zeros[8] = {0}, beyond[8] = {7, 7, 7, 7, 7, 7, 7, 7};
+        size_t eight[] = {8u}, two[] = {2u};
+        CettaDenseTensorV1 *damaged = make(CETTA_DENSE_TENSOR_V1_I64, eight, 1u, zeros, sizeof zeros);
+        assert(cetta_tensor_string_find(damaged, offsets, bytes, "a", 1u, &row, &error) && row == -1);
+        assert(cetta_tensor_string_find(damaged, offsets, bytes, "", 0u, &row, &error) && row == 0);
+        cetta_dense_tensor_v1_release(damaged);
+        damaged = make(CETTA_DENSE_TENSOR_V1_I64, eight, 1u, beyond, sizeof beyond);
+        assert(!cetta_tensor_string_find(damaged, offsets, bytes, "a", 1u, &row, &error) &&
+            strcmp(error.reason, "invalid-index") == 0);
+        cetta_dense_tensor_v1_release(damaged);
+        damaged = make(CETTA_DENSE_TENSOR_V1_I64, two, 1u, zeros, 2u * sizeof zeros[0]);
+        assert(!cetta_tensor_string_find(damaged, offsets, bytes, "a", 1u, &row, &error) &&
+            strcmp(error.reason, "invalid-index") == 0);
+        cetta_dense_tensor_v1_release(damaged);
+    }
+    cetta_dense_tensor_v1_release(index);
+    {
+        const char *twice[] = {"a", "bb", "a"};
+        size_t sizes[] = {1u, 2u, 1u};
+        CettaDenseTensorV1 *o = NULL, *b = NULL, *repeated = NULL;
+        assert(cetta_tensor_string_column(3u, twice, sizes, &o, &b, &error));
+        assert(!cetta_tensor_string_index(o, b, &repeated, &error) && !repeated &&
+            strcmp(error.reason, "duplicate-string") == 0);
+        cetta_dense_tensor_v1_release(o);
+        cetta_dense_tensor_v1_release(b);
+        /* At least twice as many slots as strings. */
+        const char *five[] = {"a", "b", "c", "d", "e"};
+        size_t ones[] = {1u, 1u, 1u, 1u, 1u};
+        assert(cetta_tensor_string_column(5u, five, ones, &o, &b, &error) && cetta_tensor_string_index(o, b, &repeated, &error));
+        assert(cetta_dense_tensor_v1_count(repeated) == 16u);
+        assert(cetta_tensor_string_find(repeated, o, b, "e", 1u, &row, &error) && row == 4);
+        cetta_dense_tensor_v1_release(repeated);
+        cetta_dense_tensor_v1_release(o);
+        cetta_dense_tensor_v1_release(b);
+    }
+    /* Masks compare whole strings: "x" is not "x y", and only "" is "". */
+    {
+        CettaDenseTensorV1 *mask = NULL;
+        assert(cetta_tensor_string_mask(offsets, bytes, "x", 1u, &mask, &error));
+        assert(memcmp(cetta_dense_tensor_v1_data(mask), (unsigned char[]){0u, 0u, 0u, 0u}, 4u) == 0);
+        cetta_dense_tensor_v1_release(mask);
+        assert(cetta_tensor_string_mask(offsets, bytes, "", 0u, &mask, &error));
+        assert(memcmp(cetta_dense_tensor_v1_data(mask), (unsigned char[]){1u, 0u, 0u, 0u}, 4u) == 0);
+        cetta_dense_tensor_v1_release(mask);
+    }
     cetta_dense_tensor_v1_release(offsets);
     cetta_dense_tensor_v1_release(bytes);
+    /* An equality mask: NaN equals nothing, -0.0 equals 0.0. */
+    {
+        size_t four[] = {4u}, square[] = {2u, 2u};
+        double reals[] = {0.0, -0.0, NAN, 2.5}, zero = 0.0, nan = NAN;
+        float singles[] = {1.5f, 2.0f, 1.5f, -1.5f}, single = 1.5f;
+        int64_t integers[] = {3, -3, 3, 0}, three = 3;
+        unsigned char bits[] = {1u, 0u, 1u, 1u};
+        unsigned char element[8] = {0};
+        struct { CettaDenseTensorV1 *values; const void *wanted; size_t width; unsigned char mask[4]; } cases[] = {
+            {make(CETTA_DENSE_TENSOR_V1_F64, four, 1u, reals, sizeof reals), &zero, 8u, {1u, 1u, 0u, 0u}},
+            {make(CETTA_DENSE_TENSOR_V1_F64, four, 1u, reals, sizeof reals), &nan, 8u, {0u, 0u, 0u, 0u}},
+            {make(CETTA_DENSE_TENSOR_V1_F32, four, 1u, singles, sizeof singles), &single, 4u, {1u, 0u, 1u, 0u}},
+            {make(CETTA_DENSE_TENSOR_V1_I64, four, 1u, integers, sizeof integers), &three, 8u, {1u, 0u, 1u, 0u}},
+            {make(CETTA_DENSE_TENSOR_V1_U8, four, 1u, bits, sizeof bits), &bits[0], 1u, {1u, 0u, 1u, 1u}},
+        };
+        for (size_t i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+            CettaDenseTensorV1 *mask = NULL;
+            memcpy(element, cases[i].wanted, cases[i].width);
+            assert(cetta_dense_tensor_v1_mask_equal(cases[i].values, element, &mask) == CETTA_DENSE_TENSOR_V1_OK);
+            assert(memcmp(cetta_dense_tensor_v1_data(mask), cases[i].mask, 4u) == 0);
+            cetta_dense_tensor_v1_release(mask);
+            cetta_dense_tensor_v1_release(cases[i].values);
+        }
+        CettaDenseTensorV1 *matrix = make(CETTA_DENSE_TENSOR_V1_F64, square, 2u, reals, sizeof reals), *mask = NULL;
+        assert(cetta_dense_tensor_v1_mask_equal(matrix, element, &mask) == CETTA_DENSE_TENSOR_V1_SHAPE && !mask);
+        cetta_dense_tensor_v1_release(matrix);
+    }
 
     /* Clean up the scratch directory. */
     for (size_t i = 0; i < 6u; ++i) { snprintf(other, sizeof other, "%s/w%zu.npy", dir, i); unlink(other); }

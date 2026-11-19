@@ -96,6 +96,25 @@ def main():
                  '(("f64" (tensor:from f64 (2 2) (1.5 -2 0.25 1e300))) ("f32" (tensor:from f32 (3) (0.5 -1 2))) '
                  '("i64" (tensor:from i64 (2) (-9223372036854775808 9223372036854775807))) ("u8" (tensor:from u8 (2 1) (0 255)))) '
                  '(("producer" "cetta") ("note" "é")))')
+    # A matrix file written by the documented NumPy writer opens with each
+    # column as stored; CeTTa writes it back with its booleans as BOOL.
+    readme = (ROOT / "docs/memory/README.md").read_text()
+    snippet = next(block for block in readme.split("```python\n")[1:] if "def save_matrix" in block)
+    writer = {}
+    exec(snippet.split("```")[0], writer)
+    matrix_ids = ["a", "bé", "", "d", "e"]
+    matrix_meta = {"lang": ["cs", "en", "cs", "", "de"], "rank": [3, -1, 0, 7, 2 ** 40],
+                   "score": [0.5, -2.0, 1e-300, 3.0, 0.0], "flag": [True, False, False, True, True]}
+    writer["save_matrix"](str(work / "in" / "matrix.safetensors"), rng.standard_normal((5, 3)), matrix_ids, "p",
+                          documents=[f"text {i}" for i in range(5)], metadata=matrix_meta)
+    opened = f'(tensor:open-all "{work / "in" / "matrix.safetensors"}")'
+    lines.append(f'!(let (TensorFile $f $entries $m) {opened} (tensor:save-safetensors "{work / "out" / "matrix.safetensors"}" '
+                 '(collapse (let ($name $t) (superpose $entries) (if (== $name "metadata.flag") ($name $t bool) ($name $t))))))')
+    pick = '(car-atom (collapse (let ($name $t) (superpose $entries) (if (== $name "{}") $t (empty)))))'
+    lines.append(f'!(let (TensorFile $f $entries $m) {opened} (let* (($o {pick.format("ids.offsets")}) '
+                 f'($b {pick.format("ids.bytes")}) ($index (tensor:string-index $o $b)) '
+                 f'($row (tensor:string-find $index $o $b "d"))) (tensor:save-npy "{work / "out" / "find.npy"}" '
+                 '(tensor:from i64 (1) ($row)))))')
     program = work / "program.metta"
     program.write_text("\n".join(lines) + "\n")
     result = subprocess.run([str(args.cetta), "--lang", "petta", str(program)], cwd=ROOT,
@@ -131,6 +150,15 @@ def main():
         if f.metadata() != {"producer": "cetta", "note": "é"}:
             print(f"FAIL: metadata {f.metadata()!r}")
             return 1
+    original, back = load_file(str(work / "in" / "matrix.safetensors")), load_file(str(work / "out" / "matrix.safetensors"))
+    if set(original) != set(back) or back["metadata.flag"].dtype != np.bool_ or \
+            any(not same_bits(back[key], value) for key, value in original.items()):
+        print(f"FAIL: a matrix file read back as {back!r}")
+        return 1
+    if np.load(work / "out" / "find.npy").tolist() != [3]:
+        print("FAIL: tensor:string-find in a NumPy string column")
+        return 1
+    checked += 1
     mapped = np.load(work / "out" / "0.npy", mmap_mode="r")
     if mapped.offset % 64:
         print("FAIL: a CeTTa .npy file's data is not 64-byte aligned")
