@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 
 
 @dataclass
@@ -226,7 +227,7 @@ def library_spellings(binary: Path, root: Path, *, check: bool, tracked_only=Fal
                 raise ValueError("invalid Prime library replacement")
             prime_replacements.setdefault(name, []).append((old, new))
         from petta_prime_guest_v1 import compile_library_group
-        for index, group in enumerate(dialects["groups"]):
+        for group in dialects["groups"]:
             if group.get("dialect") != "petta" or group.get("generator") != "petta-prime-guest-v1":
                 raise ValueError("unrecognized library dialect generator")
             sources = []
@@ -240,9 +241,11 @@ def library_spellings(binary: Path, root: Path, *, check: bool, tracked_only=Fal
                     raise ValueError("declared library source is not versioned: " + name)
                 declared[name] = None
                 sources.append(root / relative)
-            generated = compile_library_group(sources, binary,
-                root.parent / "tmp" / "library-dialect-spellings" / str(index),
-                sort_values=group.get("sort_values"))
+            runtime = root.parent / "runtime"
+            runtime.mkdir(exist_ok=True)
+            with tempfile.TemporaryDirectory(dir=runtime, prefix="library-dialect-spellings-") as work:
+                generated = compile_library_group(sources, binary, Path(work),
+                                                  sort_values=group.get("sort_values"))
             for source, (text, inventory) in generated.items():
                 declared[str(source.relative_to(root))] = (text, inventory)
     for source in sorted(root.rglob("*.metta")):
