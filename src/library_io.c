@@ -893,6 +893,14 @@ static bool io_response_append(CettaIoRequest *request,
 }
 #endif
 
+/* Used by every build: an HTTP head can report a reflected credential. */
+static Atom *io_http_text_error(Arena *arena, CettaIoRequest *request,
+                                const char *reason) {
+    return atom_error(arena, io_http_source(arena, request),
+        atom_expr2(arena, atom_symbol(arena, "http:error"),
+                   atom_symbol(arena, reason)));
+}
+
 #if CETTA_BUILD_HTTP_PROVIDER_CURL
 
 static bool io_http_start(CettaIoRuntime *runtime, CettaIoRequest *request,
@@ -1247,13 +1255,6 @@ static bool io_http_inspect(CettaIoRuntime *runtime, CettaIoRequest *request,
         cetta_http_read_free(&part);
     }
     return true;
-}
-
-static Atom *io_http_text_error(Arena *arena, CettaIoRequest *request,
-                                const char *reason) {
-    return atom_error(arena, io_http_source(arena, request),
-        atom_expr2(arena, atom_symbol(arena, "http:error"),
-                   atom_symbol(arena, reason)));
 }
 
 /* Credential withholding is counted in raw bytes and can land inside an
