@@ -27,7 +27,7 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--work-dir", type=Path)
     parser.add_argument("--module", type=Path)
-    parser.add_argument("--scan-tier", choices=("wide", "f32"), default="wide")
+    parser.add_argument("--scan-tier", choices=("wide", "f32", "int8"), default="wide")
     args = parser.parse_args()
     receipt = {"status": "failed", "checks": [], "programme_complete": False}
     def check(name, condition):

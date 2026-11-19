@@ -114,6 +114,37 @@ CettaDenseTensorV1Status cetta_dense_tensor_v1_matvec_bounds(const CettaDenseTen
  * This returns a candidate superset, never a final approximate ranking. */
 CettaDenseTensorV1Status cetta_dense_tensor_v1_top_k_candidates(const CettaDenseTensorV1 *lower,
     const CettaDenseTensorV1 *upper, size_t k, CettaDenseTensorV1 **out);
+/* Certified 8-bit screen (Mettapedia/Algebra/CertifiedInt8Screening.lean).
+ * int8_rows: per row of an f64 matrix, u8 storage holding two's-complement codes in
+ * [-127, 127] at one scale, and an f64 (rows, 4) record: scale, an upper bound on
+ * |row - scale * codes|, an upper bound on |scale * codes|, an upper bound on |row|.
+ * A rounding environment outside the admitted fragment records an infinite error. */
+CettaDenseTensorV1Status cetta_dense_tensor_v1_int8_rows(const CettaDenseTensorV1 *source,
+    CettaDenseTensorV1 **codes, CettaDenseTensorV1 **record);
+/* Exact integer dot product of two code rows, codes in [-127, 127], width <= 2^17.
+ * The screen uses the best available kernel; every kernel returns the same value. */
+typedef enum {
+    CETTA_INT8_KERNEL_SCALAR,
+    CETTA_INT8_KERNEL_AVX2,
+    CETTA_INT8_KERNEL_AVX512_VNNI
+} CettaDenseTensorV1Int8Kernel;
+bool cetta_dense_tensor_v1_int8_kernel_available(CettaDenseTensorV1Int8Kernel kernel);
+CettaDenseTensorV1Status cetta_dense_tensor_v1_int8_dot(CettaDenseTensorV1Int8Kernel kernel,
+    const int8_t *a, const int8_t *b, size_t width, int32_t *out);
+/* int8_bounds: quantize the f64 query the reference scan uses and bound, per selected
+ * row, the reference lane4 f64 dot of that row and query, using an exact int32 dot of
+ * the codes. The bounds cover both quantizations, this evaluation's rounding and the
+ * reference's rounding. A rounding environment outside the admitted fragment, or an
+ * unusable record entry, yields [-inf, inf]. NULL indices selects all rows. */
+CettaDenseTensorV1Status cetta_dense_tensor_v1_int8_bounds(const CettaDenseTensorV1 *codes,
+    const CettaDenseTensorV1 *record, const CettaDenseTensorV1 *query, const CettaDenseTensorV1 *indices,
+    CettaDenseTensorV1 **lower, CettaDenseTensorV1 **upper);
+/* int8_candidates: int8_bounds, then top_k_candidates, as selected row identifiers in
+ * the given order. The reference top k of the returned rows equals that of all
+ * selected rows, ties included. */
+CettaDenseTensorV1Status cetta_dense_tensor_v1_int8_candidates(const CettaDenseTensorV1 *codes,
+    const CettaDenseTensorV1 *record, const CettaDenseTensorV1 *query,
+    const CettaDenseTensorV1 *indices, size_t k, CettaDenseTensorV1 **out);
 /* CTN1: dtype:u8, rank:u32 LE, dimensions:u64 LE, ordered element bits LE.
  * Encoding is pointer-free, lossless and portable for the supported dtypes. */
 CettaDenseTensorV1Status cetta_dense_tensor_v1_encoded_size(const CettaDenseTensorV1 *tensor, size_t *size);

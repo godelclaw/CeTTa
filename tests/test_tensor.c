@@ -213,6 +213,248 @@ static void compact_screening_reference(void) {
     cetta_dense_tensor_v1_release(source); cetta_dense_tensor_v1_release(copy); cetta_dense_tensor_v1_release(decoded); free(bytes);
 }
 
+#define OK CETTA_DENSE_TENSOR_V1_OK
+static uint64_t int8_state = 88172645463325252u;
+static double int8_widest = 0;
+static double int8_uniform(void) {
+    int8_state ^= int8_state << 13; int8_state ^= int8_state >> 7; int8_state ^= int8_state << 17;
+    return (double)(int8_state >> 11) / 9007199254740992. * 2. - 1.;
+}
+/* The f64 reference top k over the int8 candidates equals the reference top k over
+ * the whole selection: the same rows, in the same order, with the same scores. */
+static size_t int8_expect_exact(CettaDenseTensorV1 *wide, CettaDenseTensorV1 *codes,
+    CettaDenseTensorV1 *record, CettaDenseTensorV1 *query, CettaDenseTensorV1 *indices, size_t k) {
+    CettaDenseTensorV1 *candidates = NULL, *all = NULL, *target = NULL, *ids = NULL, *scores = NULL;
+    CettaDenseTensorV1 *local = NULL, *mapped = NULL, *expected = NULL, *actual = NULL, *lo = NULL, *hi = NULL;
+    assert(cetta_dense_tensor_v1_int8_candidates(codes, record, query, indices, k, &candidates) == OK);
+    assert(cetta_dense_tensor_v1_matvec(wide, query, indices, &all) == OK);
+    /* Every selected row's reference score lies inside its bounds. */
+    assert(cetta_dense_tensor_v1_int8_bounds(codes, record, query, indices, &lo, &hi) == OK);
+    const double *l = cetta_dense_tensor_v1_data(lo), *h = cetta_dense_tensor_v1_data(hi), *r = cetta_dense_tensor_v1_data(all);
+    for (size_t i = 0; i < cetta_dense_tensor_v1_count(all); ++i) {
+        assert(l[i] <= r[i] && r[i] <= h[i]);
+        double below = r[i] - l[i], above = h[i] - r[i];
+        if (below > int8_widest) int8_widest = below;
+        if (above > int8_widest) int8_widest = above;
+    }
+    cetta_dense_tensor_v1_release(lo); cetta_dense_tensor_v1_release(hi);
+    assert(cetta_dense_tensor_v1_top_k(all, NULL, k, &target) == OK);
+    if (indices) assert(cetta_dense_tensor_v1_gather(indices, target, &ids) == OK);
+    else { ids = target; cetta_dense_tensor_v1_retain(ids); }
+    assert(cetta_dense_tensor_v1_matvec(wide, query, candidates, &scores) == OK);
+    assert(cetta_dense_tensor_v1_top_k(scores, NULL, k, &local) == OK);
+    assert(cetta_dense_tensor_v1_gather(candidates, local, &mapped) == OK);
+    assert(cetta_dense_tensor_v1_equal(ids, mapped));
+    assert(cetta_dense_tensor_v1_gather(all, target, &expected) == OK);
+    assert(cetta_dense_tensor_v1_gather(scores, local, &actual) == OK);
+    assert(cetta_dense_tensor_v1_equal(expected, actual));
+    /* Candidates keep the selection's order and come from it. */
+    size_t kept = cetta_dense_tensor_v1_count(candidates);
+    const int64_t *c = cetta_dense_tensor_v1_data(candidates);
+    const int64_t *chosen = indices ? cetta_dense_tensor_v1_data(indices) : NULL;
+    size_t available = indices ? cetta_dense_tensor_v1_count(indices) : cetta_dense_tensor_v1_shape(wide)[0];
+    for (size_t i = 0, j = 0; i < kept; ++i) {
+        while (j < available && (chosen ? chosen[j] : (int64_t)j) != c[i]) ++j;
+        assert(j < available); ++j;
+    }
+    cetta_dense_tensor_v1_release(candidates); cetta_dense_tensor_v1_release(all); cetta_dense_tensor_v1_release(target);
+    cetta_dense_tensor_v1_release(ids); cetta_dense_tensor_v1_release(scores); cetta_dense_tensor_v1_release(local);
+    cetta_dense_tensor_v1_release(mapped); cetta_dense_tensor_v1_release(expected); cetta_dense_tensor_v1_release(actual);
+    return kept;
+}
+static void int8_rows_of(CettaDenseTensorV1 *wide, CettaDenseTensorV1 **codes, CettaDenseTensorV1 **record) {
+    assert(cetta_dense_tensor_v1_int8_rows(wide, codes, record) == OK);
+    const size_t *shape = cetta_dense_tensor_v1_shape(wide);
+    assert(cetta_dense_tensor_v1_dtype(*codes) == CETTA_DENSE_TENSOR_V1_U8);
+    assert(cetta_dense_tensor_v1_shape(*codes)[0] == shape[0] && cetta_dense_tensor_v1_shape(*codes)[1] == shape[1]);
+    assert(cetta_dense_tensor_v1_shape(*record)[0] == shape[0] && cetta_dense_tensor_v1_shape(*record)[1] == 4);
+    const int8_t *code = cetta_dense_tensor_v1_data(*codes);
+    for (size_t i = 0; i < shape[0] * shape[1]; ++i) assert(code[i] >= -127 && code[i] <= 127);
+}
+static CettaDenseTensorV1 *int8_unit_rows(size_t rows, size_t width, double *data) {
+    for (size_t i = 0; i < rows; ++i) {
+        double total = 0;
+        for (size_t j = 0; j < width; ++j) total += data[i*width+j] * data[i*width+j];
+        for (size_t j = 0; j < width && total > 0; ++j) data[i*width+j] /= sqrt(total);
+    }
+    size_t shape[] = {rows, width};
+    return make(CETTA_DENSE_TENSOR_V1_F64, shape, 2, data, rows*width*8);
+}
+
+/* Every available kernel equals the scalar sum, at every block boundary and at the
+ * widest admitted width with every product at its extreme. */
+static void int8_kernel_reference(void) {
+    static int8_t a[(1u << 17) + 1], b[(1u << 17) + 1];
+    const CettaDenseTensorV1Int8Kernel kernels[] = {CETTA_INT8_KERNEL_AVX2, CETTA_INT8_KERNEL_AVX512_VNNI};
+    size_t widths[300], count = 0;
+    for (size_t w = 0; w <= 260; ++w) widths[count++] = w;
+    const size_t larger[] = {511, 512, 513, 1023, 1024, 1025, 4096, 4159, 1u << 17};
+    for (size_t i = 0; i < sizeof(larger)/sizeof(larger[0]); ++i) widths[count++] = larger[i];
+    for (unsigned pattern = 0; pattern < 4; ++pattern) {
+        for (size_t j = 0; j < (1u << 17); ++j) {
+            int random_a = (int)(int8_uniform() * 127.5), random_b = (int)(int8_uniform() * 127.5);
+            if (random_a > 127) random_a = 127;
+            if (random_a < -127) random_a = -127;
+            if (random_b > 127) random_b = 127;
+            if (random_b < -127) random_b = -127;
+            a[j] = (int8_t)(pattern == 0 ? random_a : pattern == 1 ? 127 : pattern == 2 ? (j % 3 ? -127 : 127) : (j % 2 ? 0 : -127));
+            b[j] = (int8_t)(pattern == 0 ? random_b : pattern == 1 ? 127 : pattern == 2 ? -127 : (j % 5 ? 127 : -1));
+        }
+        for (size_t i = 0; i < count; ++i) {
+            int32_t expected = 0, actual = 0;
+            assert(cetta_dense_tensor_v1_int8_dot(CETTA_INT8_KERNEL_SCALAR, a, b, widths[i], &expected) == OK);
+            int64_t wide = 0;
+            for (size_t j = 0; j < widths[i]; ++j) wide += (int64_t)a[j] * b[j];
+            assert(wide == expected);
+            for (size_t k = 0; k < 2; ++k) {
+                if (!cetta_dense_tensor_v1_int8_kernel_available(kernels[k])) {
+                    assert(cetta_dense_tensor_v1_int8_dot(kernels[k], a, b, widths[i], &actual) == CETTA_DENSE_TENSOR_V1_PROVIDER);
+                    continue;
+                }
+                assert(cetta_dense_tensor_v1_int8_dot(kernels[k], a, b, widths[i], &actual) == OK && actual == expected);
+                /* Unaligned rows too. */
+                if (widths[i] && widths[i] < (1u << 17)) {
+                    assert(cetta_dense_tensor_v1_int8_dot(kernels[k], a + 1, b + 1, widths[i], &actual) == OK);
+                    int32_t shifted = 0;
+                    assert(cetta_dense_tensor_v1_int8_dot(CETTA_INT8_KERNEL_SCALAR, a + 1, b + 1, widths[i], &shifted) == OK);
+                    assert(actual == shifted);
+                }
+            }
+        }
+    }
+    int32_t out = 0;
+    a[3] = INT8_MIN;
+    assert(cetta_dense_tensor_v1_int8_dot(CETTA_INT8_KERNEL_SCALAR, a, b, 8, &out) == CETTA_DENSE_TENSOR_V1_VALUE);
+    assert(cetta_dense_tensor_v1_int8_dot(CETTA_INT8_KERNEL_SCALAR, a, b, (1u << 17) + 1, &out) == CETTA_DENSE_TENSOR_V1_OVERFLOW);
+    assert(cetta_dense_tensor_v1_int8_dot(CETTA_INT8_KERNEL_SCALAR, a, b, 8, NULL) == CETTA_DENSE_TENSOR_V1_VALUE);
+}
+
+static void int8_screening_reference(void) {
+    int8_kernel_reference();
+    /* Every width to 67 and every k, all rows and every other row. */
+    for (size_t width = 0; width <= 67; ++width) {
+        double data[37*67], q[67];
+        for (size_t j = 0; j < width; ++j) q[j] = (double)((int)(j*13 % 37)-18) / 19.;
+        for (size_t i = 0; i < 37; ++i) for (size_t j = 0; j < width; ++j)
+            data[i*width+j] = sin((double)((i+1)*(j+3))) * .25;
+        if (width) { data[0] = .5; data[width] = nextafter(.5, INFINITY); }
+        size_t shape[] = {37, width};
+        CettaDenseTensorV1 *wide = make(CETTA_DENSE_TENSOR_V1_F64, shape, 2, data, 37*width*8);
+        CettaDenseTensorV1 *query = make(CETTA_DENSE_TENSOR_V1_F64, &width, 1, q, width*8);
+        CettaDenseTensorV1 *codes = NULL, *record = NULL;
+        int8_rows_of(wide, &codes, &record);
+        size_t half = 19; int64_t even[19];
+        for (size_t i = 0; i < half; ++i) even[i] = (int64_t)(2*i);
+        CettaDenseTensorV1 *indices = make(CETTA_DENSE_TENSOR_V1_I64, &half, 1, even, sizeof(even));
+        for (size_t k = 0; k <= 38; ++k) {
+            size_t kept = int8_expect_exact(wide, codes, record, query, NULL, k);
+            assert(k ? kept >= (k < 37 ? k : 37) : kept == 0);
+            kept = int8_expect_exact(wide, codes, record, query, indices, k);
+            assert(kept <= half);
+        }
+        cetta_dense_tensor_v1_release(wide); cetta_dense_tensor_v1_release(query);
+        cetta_dense_tensor_v1_release(codes); cetta_dense_tensor_v1_release(record); cetta_dense_tensor_v1_release(indices);
+    }
+    /* Exact ties: eight vectors, five copies each; boundary ties follow row order. */
+    {
+        size_t rows = 40, width = 24; double data[40*24], q[24];
+        for (size_t v = 0; v < 8; ++v) for (size_t j = 0; j < width; ++j) {
+            double value = cos((double)((v+2)*(j+1)));
+            for (size_t c = 0; c < 5; ++c) data[(c*8+v)*width+j] = value;
+        }
+        CettaDenseTensorV1 *wide = int8_unit_rows(rows, width, data), *codes = NULL, *record = NULL;
+        int8_rows_of(wide, &codes, &record);
+        for (size_t trial = 0; trial < 6; ++trial) {
+            for (size_t j = 0; j < width; ++j) q[j] = int8_uniform();
+            CettaDenseTensorV1 *query = make(CETTA_DENSE_TENSOR_V1_F64, &width, 1, q, sizeof(q));
+            for (size_t k = 1; k <= 12; ++k) {
+                size_t kept = int8_expect_exact(wide, codes, record, query, NULL, k);
+                assert(kept % 5 == 0);
+            }
+            cetta_dense_tensor_v1_release(query);
+        }
+        cetta_dense_tensor_v1_release(wide); cetta_dense_tensor_v1_release(codes); cetta_dense_tensor_v1_release(record);
+    }
+    /* Extreme codes: every entry at the row's peak, widths with and without a tail. */
+    for (size_t width = 31; width <= 97; width += 33) {
+        size_t rows = 50; double data[50*97], q[97];
+        for (size_t i = 0; i < rows; ++i) for (size_t j = 0; j < width; ++j)
+            data[i*width+j] = int8_uniform() < 0 ? -1. : 1.;
+        for (size_t j = 0; j < width; ++j) q[j] = j % 3 ? -1. : 1.;
+        CettaDenseTensorV1 *wide = int8_unit_rows(rows, width, data), *codes = NULL, *record = NULL;
+        int8_rows_of(wide, &codes, &record);
+        CettaDenseTensorV1 *query = make(CETTA_DENSE_TENSOR_V1_F64, &width, 1, q, width*8);
+        for (size_t k = 1; k <= 7; ++k) (void)int8_expect_exact(wide, codes, record, query, NULL, k);
+        cetta_dense_tensor_v1_release(wide); cetta_dense_tensor_v1_release(codes);
+        cetta_dense_tensor_v1_release(record); cetta_dense_tensor_v1_release(query);
+    }
+    /* An embedding-sized store: exact, and the screen keeps few rows. */
+    {
+        size_t rows = 1500, width = 384;
+        double *data = malloc(rows*width*8), q[384];
+        assert(data);
+        for (size_t i = 0; i < rows*width; ++i) data[i] = int8_uniform();
+        CettaDenseTensorV1 *wide = int8_unit_rows(rows, width, data), *codes = NULL, *record = NULL;
+        free(data);
+        int8_rows_of(wide, &codes, &record);
+        for (size_t trial = 0; trial < 8; ++trial) {
+            double total = 0;
+            for (size_t j = 0; j < width; ++j) { q[j] = int8_uniform(); total += q[j]*q[j]; }
+            for (size_t j = 0; j < width; ++j) q[j] /= sqrt(total);
+            CettaDenseTensorV1 *query = make(CETTA_DENSE_TENSOR_V1_F64, &width, 1, q, sizeof(q));
+            int8_widest = 0;
+            assert(int8_expect_exact(wide, codes, record, query, NULL, 5) < 150);
+            assert(int8_expect_exact(wide, codes, record, query, NULL, 10) < 300);
+            assert(int8_widest > 0 && int8_widest < .05);
+            cetta_dense_tensor_v1_release(query);
+        }
+        /* Outside the admitted rounding fragment every row is a candidate. */
+        double unit = 1; for (size_t j = 0; j < width; ++j) q[j] = j ? 0 : unit;
+        CettaDenseTensorV1 *query = make(CETTA_DENSE_TENSOR_V1_F64, &width, 1, q, sizeof(q));
+        int old = fegetround(); assert(fesetround(FE_DOWNWARD) == 0);
+        CettaDenseTensorV1 *all = NULL, *codes_down = NULL, *record_down = NULL;
+        assert(cetta_dense_tensor_v1_int8_candidates(codes, record, query, NULL, 5, &all) == OK);
+        assert(cetta_dense_tensor_v1_count(all) == rows); cetta_dense_tensor_v1_release(all);
+        assert(cetta_dense_tensor_v1_int8_rows(wide, &codes_down, &record_down) == OK);
+        assert(fesetround(old) == 0);
+        assert(cetta_dense_tensor_v1_int8_candidates(codes_down, record_down, query, NULL, 5, &all) == OK);
+        assert(cetta_dense_tensor_v1_count(all) == rows); cetta_dense_tensor_v1_release(all);
+        cetta_dense_tensor_v1_release(codes_down); cetta_dense_tensor_v1_release(record_down);
+#if TEST_HAS_MXCSR
+        unsigned csr = _mm_getcsr();
+        for (unsigned mode = 0; mode < 2; ++mode) {
+            _mm_setcsr(csr | (mode ? (1u << 6) : (1u << 15)));
+            all = NULL;
+            assert(cetta_dense_tensor_v1_int8_candidates(codes, record, query, NULL, 5, &all) == OK);
+            _mm_setcsr(csr);
+            assert(cetta_dense_tensor_v1_count(all) == rows); cetta_dense_tensor_v1_release(all);
+        }
+#endif
+        /* Refusals: wrong dtypes, shapes and indices, non-finite input. */
+        CettaDenseTensorV1 *out = NULL;
+        assert(cetta_dense_tensor_v1_int8_candidates(wide, record, query, NULL, 5, &out) == CETTA_DENSE_TENSOR_V1_DTYPE && !out);
+        assert(cetta_dense_tensor_v1_int8_candidates(codes, codes, query, NULL, 5, &out) == CETTA_DENSE_TENSOR_V1_DTYPE && !out);
+        size_t short_width = 383;
+        CettaDenseTensorV1 *narrow = make(CETTA_DENSE_TENSOR_V1_F64, &short_width, 1, q, 383*8);
+        assert(cetta_dense_tensor_v1_int8_candidates(codes, record, narrow, NULL, 5, &out) == CETTA_DENSE_TENSOR_V1_SHAPE && !out);
+        size_t one = 1; int64_t beyond = (int64_t)rows;
+        CettaDenseTensorV1 *outside = make(CETTA_DENSE_TENSOR_V1_I64, &one, 1, &beyond, 8);
+        assert(cetta_dense_tensor_v1_int8_candidates(codes, record, query, outside, 5, &out) == CETTA_DENSE_TENSOR_V1_INDEX && !out);
+        q[3] = NAN;
+        CettaDenseTensorV1 *invalid = make(CETTA_DENSE_TENSOR_V1_F64, &width, 1, q, sizeof(q));
+        assert(cetta_dense_tensor_v1_int8_candidates(codes, record, invalid, NULL, 5, &out) == CETTA_DENSE_TENSOR_V1_VALUE && !out);
+        size_t pair[] = {2, 2}; double bad_rows[] = {1, 0, INFINITY, 0};
+        CettaDenseTensorV1 *bad = make(CETTA_DENSE_TENSOR_V1_F64, pair, 2, bad_rows, sizeof(bad_rows)), *bad_codes = NULL, *bad_record = NULL;
+        assert(cetta_dense_tensor_v1_int8_rows(bad, &bad_codes, &bad_record) == CETTA_DENSE_TENSOR_V1_VALUE && !bad_codes && !bad_record);
+        assert(cetta_dense_tensor_v1_int8_rows(query, &bad_codes, &bad_record) == CETTA_DENSE_TENSOR_V1_SHAPE);
+        assert(cetta_dense_tensor_v1_int8_rows(wide, &bad_codes, &bad_codes) == CETTA_DENSE_TENSOR_V1_VALUE);
+        cetta_dense_tensor_v1_release(narrow); cetta_dense_tensor_v1_release(outside);
+        cetta_dense_tensor_v1_release(invalid); cetta_dense_tensor_v1_release(bad); cetta_dense_tensor_v1_release(query);
+        cetta_dense_tensor_v1_release(wide); cetta_dense_tensor_v1_release(codes); cetta_dense_tensor_v1_release(record);
+    }
+}
+#undef OK
+
 static void screening_exponent_reference(void) {
     /* Exercise cancellation, f32 underflow, extreme query/scale exponents,
      * and repeated/permuted selectors. Unsafe arithmetic must keep all rows.
@@ -564,7 +806,7 @@ int main(void) {
     assert(cetta_dense_tensor_v1_reduce(tensor, NULL, &sum) == CETTA_DENSE_TENSOR_V1_OK && sum.value.integer == 256);
     cetta_dense_tensor_v1_release(tensor);
     arithmetic_reference();
-    selection_reference(); matrix_reference(); compact_screening_reference(); screening_exponent_reference();
+    selection_reference(); matrix_reference(); compact_screening_reference(); int8_screening_reference(); screening_exponent_reference();
     arena_free(&survivor); symbol_table_free(&symbols);
     puts("PASS: native tensor ownership, alternatives, arithmetic, bounds and codecs");
     return 0;

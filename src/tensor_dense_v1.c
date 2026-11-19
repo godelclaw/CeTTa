@@ -870,41 +870,330 @@ CettaDenseTensorV1Status cetta_dense_tensor_v1_matvec_bounds(const CettaDenseTen
     return CETTA_DENSE_TENSOR_V1_OK;
 }
 
+/* Rows whose upper bound reaches the k-th largest lower bound, as selected row
+ * identifiers (or positions when selected is NULL). Ties at the threshold stay. */
+static CettaDenseTensorV1Status bounds_candidates(const double *lo, const double *hi, size_t count,
+    size_t k, const int64_t *selected, CettaDenseTensorV1 **out) {
+    *out = NULL;
+    if (count > INT64_MAX) return CETTA_DENSE_TENSOR_V1_OVERFLOW;
+    for (size_t i = 0; i < count; ++i)
+        if (isnan(lo[i]) || isnan(hi[i]) || lo[i] > hi[i]) return CETTA_DENSE_TENSOR_V1_VALUE;
+    size_t capacity = k < count ? k : count, held = 0;
+    if (capacity > SIZE_MAX / sizeof(double)) return CETTA_DENSE_TENSOR_V1_OVERFLOW;
+    double *heap = capacity ? malloc(capacity * sizeof(double)) : NULL;
+    if (capacity && !heap) return CETTA_DENSE_TENSOR_V1_NOMEM;
+    /* A min-heap of the largest lower bounds seen; its root is the threshold. */
+    for (size_t i = 0; capacity && i < count; ++i) {
+        if (held < capacity) {
+            size_t child = held++; heap[child] = lo[i];
+            while (child) {
+                size_t parent = (child - 1u) / 2u;
+                if (!(heap[parent] > heap[child])) break;
+                double old = heap[parent]; heap[parent] = heap[child]; heap[child] = old; child = parent;
+            }
+        } else if (lo[i] > heap[0]) {
+            heap[0] = lo[i];
+            for (size_t root = 0;;) {
+                size_t left = 2u * root + 1u, right = left + 1u, least = root;
+                if (left < held && heap[left] < heap[least]) least = left;
+                if (right < held && heap[right] < heap[least]) least = right;
+                if (least == root) break;
+                double old = heap[root]; heap[root] = heap[least]; heap[least] = old; root = least;
+            }
+        }
+    }
+    double threshold = held ? heap[0] : INFINITY;
+    free(heap);
+    size_t kept = 0;
+    if (capacity) for (size_t i = 0; i < count; ++i) if (hi[i] >= threshold) ++kept;
+    CettaDenseTensorV1Status status = allocate(CETTA_DENSE_TENSOR_V1_I64, &kept, 1u, out);
+    if (status != CETTA_DENSE_TENSOR_V1_OK) return status;
+    int64_t *values = (int64_t *)(*out)->storage->data;
+    size_t j = 0;
+    if (capacity) for (size_t i = 0; i < count; ++i)
+        if (hi[i] >= threshold) values[j++] = selected ? selected[i] : (int64_t)i;
+    finish_storage(*out);
+    return CETTA_DENSE_TENSOR_V1_OK;
+}
+
 CettaDenseTensorV1Status cetta_dense_tensor_v1_top_k_candidates(const CettaDenseTensorV1 *lower,
     const CettaDenseTensorV1 *upper, size_t k, CettaDenseTensorV1 **out) {
     if (!out || !lower || !upper) return CETTA_DENSE_TENSOR_V1_VALUE;
     *out = NULL;
     if (lower->dtype != CETTA_DENSE_TENSOR_V1_F64 || upper->dtype != CETTA_DENSE_TENSOR_V1_F64) return CETTA_DENSE_TENSOR_V1_DTYPE;
     if (lower->rank != 1u || !same_shape(lower, upper)) return CETTA_DENSE_TENSOR_V1_SHAPE;
-    if (lower->count > INT64_MAX) return CETTA_DENSE_TENSOR_V1_OVERFLOW;
-    const double *lo = (const double *)lower->storage->data, *hi = (const double *)upper->storage->data;
-    size_t capacity = k < lower->count ? k : lower->count, count = 0;
-    if (capacity > SIZE_MAX / sizeof(size_t)) return CETTA_DENSE_TENSOR_V1_OVERFLOW;
-    size_t *heap = capacity ? malloc(capacity*sizeof(size_t)) : NULL;
-    if (capacity && !heap) return CETTA_DENSE_TENSOR_V1_NOMEM;
-    for (size_t i = 0; i < lower->count; ++i) {
-        if (isnan(lo[i]) || isnan(hi[i]) || lo[i] > hi[i]) { free(heap); return CETTA_DENSE_TENSOR_V1_VALUE; }
-        if (!capacity) continue;
-        if (count < capacity) {
-            size_t child = count++; heap[child] = i;
-            while (child) {
-                size_t parent = (child-1u)/2u;
-                if (!score_better(lower, heap[parent], heap[child])) break;
-                size_t old = heap[parent]; heap[parent] = heap[child]; heap[child] = old; child = parent;
-            }
-        } else if (score_better(lower, i, heap[0])) { heap[0] = i; heap_down(lower, heap, count, 0); }
+    return bounds_candidates((const double *)lower->storage->data, (const double *)upper->storage->data,
+                             lower->count, k, NULL, out);
+}
+
+/* Certified 8-bit screen; the model and its exactness theorem are
+ * Mettapedia/Algebra/CertifiedInt8Screening.lean. Codes stay in [-127, 127], so every
+ * partial int32 sum is exact for widths up to 2^17, and an AVX2 pair sum of
+ * |x| * sign(y, x) never exceeds 2 * 127 * 127 < 2^15. */
+#define INT8_SCREEN_WIDTH_LIMIT ((size_t)1 << 17)
+/* One row or query: codes, an upper bound on |x - scale * codes|, an upper bound on
+ * |scale * codes| and an upper bound on |x|. Returns false for non-finite input.
+ * The codes need not be nearest: the bounds are computed from the codes chosen.
+ * Sums of squares run in plain binary64 and are widened once: for n terms,
+ * sum (x_j - fl(scale c_j))^2 <= (computed + n m) / (1 - u)^(n + 2), and
+ * 1 / (1 - u)^(n + 2) <= 1 + 2 (n + 2) u; likewise for sum x_j^2. Then
+ * |x - scale c| <= |x - fl(scale c)| + u |scale c| + sqrt(n) m. */
+static bool int8_quantize(const double *x, size_t width, int8_t *codes, double *scale_out,
+    double *error_out, double *copy_out, double *norm_out) {
+    double peak = 0;
+    for (size_t j = 0; j < width; ++j) {
+        if (!isfinite(x[j])) return false;
+        if (fabs(x[j]) > peak) peak = fabs(x[j]);
     }
-    double threshold = count ? lo[heap[0]] : INFINITY;
-    free(heap);
-    count = 0;
-    if (capacity) for (size_t i = 0; i < lower->count; ++i) if (hi[i] >= threshold) ++count;
-    CettaDenseTensorV1Status status = allocate(CETTA_DENSE_TENSOR_V1_I64, &count, 1u, out);
-    if (status == CETTA_DENSE_TENSOR_V1_OK) {
-        int64_t *values = (int64_t *)(*out)->storage->data;
-        size_t j = 0;
-        if (capacity) for (size_t i = 0; i < lower->count; ++i) if (hi[i] >= threshold) values[j++] = (int64_t)i;
-        finish_storage(*out);
+    double scale = peak / 127.0, inverse = scale > 0 ? 1.0 / scale : 0;
+    if (!isfinite(inverse)) inverse = 0;
+    double residual = 0, magnitude = 0;
+    int64_t squares = 0;
+    for (size_t j = 0; j < width; ++j) {
+        double code = nearbyint(x[j] * inverse);
+        if (code > 127) code = 127;
+        if (code < -127) code = -127;
+        codes[j] = (int8_t)code;
+        squares += (int64_t)code * (int64_t)code;
+        double gap = x[j] - scale * code;
+        residual += gap * gap;
+        magnitude += x[j] * x[j];
     }
+    double n = (double)width;
+    double widening = add_up(1., mul_up(mul_up(2., add_up(n, 2.)), DBL_EPSILON / 2.));
+    double slack = mul_up(n, DBL_TRUE_MIN);
+    double copy = mul_up(scale, step_up(sqrt((double)squares)));
+    double distance = step_up(sqrt(mul_up(add_up(residual, slack), widening)));
+    *scale_out = scale;
+    *copy_out = copy;
+    *norm_out = step_up(sqrt(mul_up(add_up(magnitude, slack), widening)));
+    *error_out = add_up(add_up(distance, mul_up(DBL_EPSILON, copy)), slack);
+    return true;
+}
+/* Kernels take the correction 128 * sum of b over whole 64-byte blocks, modulo
+ * 2^32; only the biased kernel uses it. It depends on the query alone. */
+typedef int32_t (*Int8Dot)(const int8_t *, const int8_t *, size_t, uint32_t);
+static uint32_t int8_block_correction(const int8_t *b, size_t width) {
+    uint32_t sum = 0;
+    for (size_t j = 0; j < width - width % 64u; ++j) sum += (uint32_t)(int32_t)b[j];
+    return 128u * sum;
+}
+static int32_t int8_dot_scalar(const int8_t *a, const int8_t *b, size_t width, uint32_t correction) {
+    (void)correction;
+    int32_t total = 0;
+    for (size_t j = 0; j < width; ++j) total += (int32_t)a[j] * (int32_t)b[j];
+    return total;
+}
+#if CETTA_HAS_AVX4
+/* |x| times y with the sign of x: pairs stay below 2 * 127 * 127 < 2^15. */
+__attribute__((target("avx2")))
+static int32_t int8_dot_avx2(const int8_t *a, const int8_t *b, size_t width, uint32_t correction) {
+    (void)correction;
+    __m256i lanes = _mm256_setzero_si256();
+    const __m256i ones = _mm256_set1_epi16(1);
+    size_t j = 0;
+    for (; width - j >= 32u; j += 32u) {
+        __m256i x = _mm256_loadu_si256((const __m256i *)(a + j));
+        __m256i y = _mm256_loadu_si256((const __m256i *)(b + j));
+        __m256i pairs = _mm256_maddubs_epi16(_mm256_sign_epi8(x, x), _mm256_sign_epi8(y, x));
+        lanes = _mm256_add_epi32(lanes, _mm256_madd_epi16(pairs, ones));
+    }
+    __m128i half = _mm_add_epi32(_mm256_castsi256_si128(lanes), _mm256_extracti128_si256(lanes, 1));
+    half = _mm_hadd_epi32(half, half);
+    half = _mm_hadd_epi32(half, half);
+    int32_t total = _mm_cvtsi128_si32(half);
+    for (; j < width; ++j) total += (int32_t)a[j] * (int32_t)b[j];
+    return total;
+}
+/* Flipping each byte's sign bit gives x + 128 as an unsigned byte, so
+ * sum (x + 128) y - 128 sum y = sum x y. A lane never exceeds 4 * 255 * 127
+ * per block; the total adds modulo 2^32 and the exact result fits in int32. */
+__attribute__((target("avx512f,avx512bw,avx512vnni")))
+static int32_t int8_dot_avx512_vnni(const int8_t *a, const int8_t *b, size_t width, uint32_t correction) {
+    __m512i lanes = _mm512_setzero_si512();
+    const __m512i flip = _mm512_set1_epi8((char)0x80);
+    size_t j = 0;
+    for (; width - j >= 64u; j += 64u) {
+        __m512i x = _mm512_loadu_si512((const void *)(a + j));
+        __m512i y = _mm512_loadu_si512((const void *)(b + j));
+        lanes = _mm512_dpbusd_epi32(lanes, _mm512_xor_si512(x, flip), y);
+    }
+    /* The add intrinsics wrap; a signed reduction would overflow on extreme codes. */
+    __m256i half = _mm256_add_epi32(_mm512_castsi512_si256(lanes), _mm512_extracti64x4_epi64(lanes, 1));
+    __m128i quarter = _mm_add_epi32(_mm256_castsi256_si128(half), _mm256_extracti128_si256(half, 1));
+    quarter = _mm_add_epi32(quarter, _mm_shuffle_epi32(quarter, _MM_SHUFFLE(1, 0, 3, 2)));
+    quarter = _mm_add_epi32(quarter, _mm_shuffle_epi32(quarter, _MM_SHUFFLE(2, 3, 0, 1)));
+    uint32_t total = (uint32_t)_mm_cvtsi128_si32(quarter) - correction;
+    for (; j < width; ++j) total += (uint32_t)((int32_t)a[j] * (int32_t)b[j]);
+    return (int32_t)total;
+}
+#endif
+bool cetta_dense_tensor_v1_int8_kernel_available(CettaDenseTensorV1Int8Kernel kernel) {
+    if (kernel == CETTA_INT8_KERNEL_SCALAR) return true;
+#if CETTA_HAS_AVX4
+    if (kernel == CETTA_INT8_KERNEL_AVX2) return __builtin_cpu_supports("avx2") != 0;
+    if (kernel == CETTA_INT8_KERNEL_AVX512_VNNI)
+        return __builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw") &&
+               __builtin_cpu_supports("avx512vnni");
+#endif
+    return false;
+}
+static Int8Dot int8_kernel(CettaDenseTensorV1Int8Kernel kernel) {
+#if CETTA_HAS_AVX4
+    if (kernel == CETTA_INT8_KERNEL_AVX512_VNNI) return int8_dot_avx512_vnni;
+    if (kernel == CETTA_INT8_KERNEL_AVX2) return int8_dot_avx2;
+#endif
+    (void)kernel;
+    return int8_dot_scalar;
+}
+static Int8Dot int8_best_kernel(void) {
+    if (cetta_dense_tensor_v1_int8_kernel_available(CETTA_INT8_KERNEL_AVX512_VNNI)) return int8_kernel(CETTA_INT8_KERNEL_AVX512_VNNI);
+    if (cetta_dense_tensor_v1_int8_kernel_available(CETTA_INT8_KERNEL_AVX2)) return int8_kernel(CETTA_INT8_KERNEL_AVX2);
+    return int8_dot_scalar;
+}
+CettaDenseTensorV1Status cetta_dense_tensor_v1_int8_dot(CettaDenseTensorV1Int8Kernel kernel,
+    const int8_t *a, const int8_t *b, size_t width, int32_t *out) {
+    if (!out || (width && (!a || !b))) return CETTA_DENSE_TENSOR_V1_VALUE;
+    if (!cetta_dense_tensor_v1_int8_kernel_available(kernel)) return CETTA_DENSE_TENSOR_V1_PROVIDER;
+    if (width > INT8_SCREEN_WIDTH_LIMIT) return CETTA_DENSE_TENSOR_V1_OVERFLOW;
+    for (size_t j = 0; j < width; ++j)
+        if (a[j] == INT8_MIN || b[j] == INT8_MIN) return CETTA_DENSE_TENSOR_V1_VALUE;
+    *out = width ? int8_kernel(kernel)(a, b, width, int8_block_correction(b, width)) : 0;
+    return CETTA_DENSE_TENSOR_V1_OK;
+}
+
+CettaDenseTensorV1Status cetta_dense_tensor_v1_int8_rows(const CettaDenseTensorV1 *source,
+    CettaDenseTensorV1 **codes, CettaDenseTensorV1 **record) {
+    if (!codes || !record || codes == record || !source) return CETTA_DENSE_TENSOR_V1_VALUE;
+    *codes = NULL; *record = NULL;
+    if (source->dtype != CETTA_DENSE_TENSOR_V1_F64) return CETTA_DENSE_TENSOR_V1_DTYPE;
+    if (source->rank != 2u) return CETTA_DENSE_TENSOR_V1_SHAPE;
+    size_t rows = source->shape[0], width = source->shape[1];
+    size_t shape[] = {rows, 4u};
+    CettaDenseTensorV1Status status = allocate(CETTA_DENSE_TENSOR_V1_U8, source->shape, 2u, codes);
+    if (status != CETTA_DENSE_TENSOR_V1_OK) return status;
+    status = allocate(CETTA_DENSE_TENSOR_V1_F64, shape, 2u, record);
+    if (status != CETTA_DENSE_TENSOR_V1_OK) { cetta_dense_tensor_v1_release(*codes); *codes = NULL; return status; }
+    const double *data = (const double *)source->storage->data;
+    int8_t *out = (int8_t *)(*codes)->storage->data;
+    double *meta = (double *)(*record)->storage->data;
+    bool admitted = bounds_rounding_admitted() && width <= INT8_SCREEN_WIDTH_LIMIT;
+    for (size_t row = 0; row < rows; ++row) {
+        double *entry = meta + row * 4u;
+        if (!int8_quantize(width ? data + row * width : NULL, width, width ? out + row * width : NULL,
+                &entry[0], &entry[1], &entry[2], &entry[3])) {
+            cetta_dense_tensor_v1_release(*codes); cetta_dense_tensor_v1_release(*record);
+            *codes = NULL; *record = NULL; return CETTA_DENSE_TENSOR_V1_VALUE;
+        }
+        if (!admitted) entry[1] = INFINITY;
+    }
+    finish_storage(*codes); finish_storage(*record);
+    return CETTA_DENSE_TENSOR_V1_OK;
+}
+
+static CettaDenseTensorV1Status int8_screen_check(const CettaDenseTensorV1 *codes,
+    const CettaDenseTensorV1 *record, const CettaDenseTensorV1 *query, const CettaDenseTensorV1 *indices) {
+    if (!codes || !record || !query) return CETTA_DENSE_TENSOR_V1_VALUE;
+    if (codes->dtype != CETTA_DENSE_TENSOR_V1_U8 || record->dtype != CETTA_DENSE_TENSOR_V1_F64 ||
+        query->dtype != CETTA_DENSE_TENSOR_V1_F64) return CETTA_DENSE_TENSOR_V1_DTYPE;
+    if (codes->rank != 2u || record->rank != 2u || record->shape[0] != codes->shape[0] ||
+        record->shape[1] != 4u || query->rank != 1u || query->count != codes->shape[1])
+        return CETTA_DENSE_TENSOR_V1_SHAPE;
+    if (indices && !indices_valid(indices, codes->shape[0])) return CETTA_DENSE_TENSOR_V1_INDEX;
+    return CETTA_DENSE_TENSOR_V1_OK;
+}
+
+/* Bounds for the checked inputs, one pair per selected row. */
+static CettaDenseTensorV1Status int8_screen_fill(const CettaDenseTensorV1 *codes,
+    const CettaDenseTensorV1 *record, const CettaDenseTensorV1 *query, const CettaDenseTensorV1 *indices,
+    double *lower, double *upper) {
+    size_t width = codes->shape[1];
+    size_t count = indices ? indices->count : codes->shape[0];
+    int8_t *qcodes = width ? malloc(width) : NULL;
+    if (width && !qcodes) return CETTA_DENSE_TENSOR_V1_NOMEM;
+    double qscale = 0, qerror = INFINITY, qcopy = 0, qnorm = INFINITY;
+    if (!int8_quantize((const double *)query->storage->data, width, qcodes, &qscale, &qerror, &qcopy, &qnorm)) {
+        free(qcodes); return CETTA_DENSE_TENSOR_V1_VALUE;
+    }
+    /* For a row x, its copy x' = scale * codes and the query's copy q':
+     *   |ref - a| <= |ref - <x,q>| + |x - x'| |q| + |x'| |q - q'| + |a - <x',q'>|,
+     * where a = fl(fl(scale * qscale) * D) for the exact integer dot D. The reference
+     * is the lane4 f64 dot of this query, bounded as for the f32 screen by
+     * (8 d + 64) eps |x| |q| plus underflow; a is within 8u |a| of <x',q'> plus
+     * |D| + 1 minimum subnormals, and |D| <= 127^2 d. */
+    double operations = add_up(mul_up(8., (double)width), 64.);
+    double relative = mul_up(operations, DBL_EPSILON);
+    double reference = mul_up(relative, qnorm);
+    double underflow = add_up(mul_up(mul_up(2., operations), DBL_TRUE_MIN),
+                              mul_up(DBL_TRUE_MIN, add_up(mul_up(127. * 127., (double)width), 1.)));
+    const double relative_a = 4. * DBL_EPSILON, widen = 1. + 0x1p-48;
+    bool admitted = bounds_rounding_admitted() && width <= INT8_SCREEN_WIDTH_LIMIT && relative < .125 &&
+        isfinite(qnorm) && isfinite(qerror) && isfinite(reference) && isfinite(underflow);
+    Int8Dot dot = int8_best_kernel();
+    uint32_t correction = int8_block_correction(qcodes, width);
+    const int8_t *data = (const int8_t *)codes->storage->data;
+    const double *meta = (const double *)record->storage->data;
+    const int64_t *selected = indices ? (const int64_t *)indices->storage->data : NULL;
+    for (size_t i = 0; i < count; ++i) {
+        size_t row = selected ? (size_t)selected[i] : i;
+        const double *entry = meta + row * 4u;
+        double scale = entry[0], error = entry[1], copy = entry[2], norm = entry[3];
+        if (!admitted || !(scale >= 0) || !isfinite(scale) || !(error >= 0) || !isfinite(error) ||
+            !(copy >= 0) || !(norm >= 0)) {
+            lower[i] = -INFINITY; upper[i] = INFINITY; continue;
+        }
+        int32_t integer = width ? dot(data + row * width, qcodes, width, correction) : 0;
+        double approximate = (scale * qscale) * (double)integer;
+        /* Every term is non-negative, so this evaluation is within (1 - u)^-4 of
+         * the real sum plus four product underflows; the widening covers both. */
+        double radius = ((error * qnorm + norm * reference) + (copy * qerror + relative_a * fabs(approximate))) + underflow;
+        radius = radius * widen + 8. * DBL_TRUE_MIN;
+        if (!isfinite(approximate) || !isfinite(radius)) { lower[i] = -INFINITY; upper[i] = INFINITY; continue; }
+        lower[i] = step_down(approximate - radius);
+        upper[i] = step_up(approximate + radius);
+    }
+    free(qcodes);
+    return CETTA_DENSE_TENSOR_V1_OK;
+}
+
+CettaDenseTensorV1Status cetta_dense_tensor_v1_int8_bounds(const CettaDenseTensorV1 *codes,
+    const CettaDenseTensorV1 *record, const CettaDenseTensorV1 *query, const CettaDenseTensorV1 *indices,
+    CettaDenseTensorV1 **lower, CettaDenseTensorV1 **upper) {
+    if (!lower || !upper || lower == upper) return CETTA_DENSE_TENSOR_V1_VALUE;
+    *lower = NULL; *upper = NULL;
+    CettaDenseTensorV1Status status = int8_screen_check(codes, record, query, indices);
+    if (status != CETTA_DENSE_TENSOR_V1_OK) return status;
+    size_t count = indices ? indices->count : codes->shape[0];
+    status = allocate(CETTA_DENSE_TENSOR_V1_F64, &count, 1u, lower);
+    if (status == CETTA_DENSE_TENSOR_V1_OK) status = allocate(CETTA_DENSE_TENSOR_V1_F64, &count, 1u, upper);
+    if (status == CETTA_DENSE_TENSOR_V1_OK)
+        status = int8_screen_fill(codes, record, query, indices,
+                                  (double *)(*lower)->storage->data, (double *)(*upper)->storage->data);
+    if (status != CETTA_DENSE_TENSOR_V1_OK) {
+        cetta_dense_tensor_v1_release(*lower); cetta_dense_tensor_v1_release(*upper);
+        *lower = NULL; *upper = NULL; return status;
+    }
+    finish_storage(*lower); finish_storage(*upper);
+    return CETTA_DENSE_TENSOR_V1_OK;
+}
+
+/* The bounds stay private arrays here: they never become values. */
+CettaDenseTensorV1Status cetta_dense_tensor_v1_int8_candidates(const CettaDenseTensorV1 *codes,
+    const CettaDenseTensorV1 *record, const CettaDenseTensorV1 *query,
+    const CettaDenseTensorV1 *indices, size_t k, CettaDenseTensorV1 **out) {
+    if (!out) return CETTA_DENSE_TENSOR_V1_VALUE;
+    *out = NULL;
+    CettaDenseTensorV1Status status = int8_screen_check(codes, record, query, indices);
+    if (status != CETTA_DENSE_TENSOR_V1_OK) return status;
+    size_t count = indices ? indices->count : codes->shape[0];
+    if (count > SIZE_MAX / (2u * sizeof(double))) return CETTA_DENSE_TENSOR_V1_OVERFLOW;
+    double *bounds = count ? malloc(2u * count * sizeof(double)) : NULL;
+    if (count && !bounds) return CETTA_DENSE_TENSOR_V1_NOMEM;
+    status = int8_screen_fill(codes, record, query, indices, bounds, bounds + count);
+    if (status == CETTA_DENSE_TENSOR_V1_OK)
+        status = bounds_candidates(bounds, bounds + count, count, k,
+                                   indices ? (const int64_t *)indices->storage->data : NULL, out);
+    free(bounds);
     return status;
 }
 
@@ -1098,6 +1387,9 @@ static Atom *element_atom(Arena *arena, const CettaDenseTensorV1 *tensor, size_t
     X(row_error_bounds) \
     X(matvec_bounds_selected) \
     X(top_k_candidates) \
+    X(int8_rows) \
+    X(int8_bounds) \
+    X(int8_candidates) \
     X(matvec_provider) \
     X(matvec_selected_with) \
     X(matvec_with) \
@@ -1188,6 +1480,30 @@ Atom *cetta_dense_tensor_v1_dispatch(Arena *arena, Atom *head, Atom **args, uint
         size_t k;
         if (nargs != 3u || !natural(args[2], &k)) return failure(arena, CETTA_DENSE_TENSOR_V1_VALUE);
         bulk_status = cetta_dense_tensor_v1_top_k_candidates(from_atom(args[0]), from_atom(args[1]), k, &bulk);
+        return publish(arena, bulk_status, bulk);
+    }
+    if ((operation == DENSE_TENSOR_OP_int8_rows)) {
+        if (nargs != 1u) return failure(arena, CETTA_DENSE_TENSOR_V1_VALUE);
+        CettaDenseTensorV1 *record = NULL;
+        bulk_status = cetta_dense_tensor_v1_int8_rows(from_atom(args[0]), &bulk, &record);
+        if (bulk_status != CETTA_DENSE_TENSOR_V1_OK) return failure(arena, bulk_status);
+        Atom *pair[] = {publish(arena, CETTA_DENSE_TENSOR_V1_OK, bulk), publish(arena, CETTA_DENSE_TENSOR_V1_OK, record)};
+        return atom_expr(arena, pair, 2u);
+    }
+    if ((operation == DENSE_TENSOR_OP_int8_bounds)) {
+        if (nargs != 4u || !from_atom(args[3])) return failure(arena, CETTA_DENSE_TENSOR_V1_VALUE);
+        CettaDenseTensorV1 *upper = NULL;
+        bulk_status = cetta_dense_tensor_v1_int8_bounds(from_atom(args[0]), from_atom(args[1]),
+            from_atom(args[2]), from_atom(args[3]), &bulk, &upper);
+        if (bulk_status != CETTA_DENSE_TENSOR_V1_OK) return failure(arena, bulk_status);
+        Atom *pair[] = {publish(arena, CETTA_DENSE_TENSOR_V1_OK, bulk), publish(arena, CETTA_DENSE_TENSOR_V1_OK, upper)};
+        return atom_expr(arena, pair, 2u);
+    }
+    if ((operation == DENSE_TENSOR_OP_int8_candidates)) {
+        size_t k;
+        if (nargs != 5u || !natural(args[4], &k) || !from_atom(args[3])) return failure(arena, CETTA_DENSE_TENSOR_V1_VALUE);
+        bulk_status = cetta_dense_tensor_v1_int8_candidates(from_atom(args[0]), from_atom(args[1]),
+            from_atom(args[2]), from_atom(args[3]), k, &bulk);
         return publish(arena, bulk_status, bulk);
     }
     if ((operation == DENSE_TENSOR_OP_matvec_provider)) {

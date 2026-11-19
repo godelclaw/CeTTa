@@ -232,6 +232,25 @@
 (= (tensor:top-k-candidates $lower $upper $k)
    (function (chain (eval (__cetta_lib_tensor_top_k_candidates $lower $upper $k)) $result (return $result))))
 
+; Certified 8-bit copy of an f64 matrix: (codes record), codes as two's-complement u8.
+(: __cetta_lib_tensor_int8_rows (-> Atom Atom))
+(: tensor:int8-rows (-> %Undefined% Atom))
+(= (tensor:int8-rows $source)
+   (function (chain (eval (__cetta_lib_tensor_int8_rows $source)) $result (return $result))))
+
+; Bounds on each selected row's f64 score from the int8 copy: (lower upper).
+(: __cetta_lib_tensor_int8_bounds (-> Atom Atom Atom Atom Atom))
+(: tensor:int8-bounds (-> %Undefined% %Undefined% %Undefined% %Undefined% Atom))
+(= (tensor:int8-bounds $codes $record $query $indices)
+   (function (chain (eval (__cetta_lib_tensor_int8_bounds $codes $record $query $indices)) $result (return $result))))
+
+; Selected row identifiers whose exact f64 scores may reach the top k, ties included.
+; Codes and record must come from tensor:int8-rows of the matrix that reranks.
+(: __cetta_lib_tensor_int8_candidates (-> Atom Atom Atom Atom Atom Atom))
+(: tensor:int8-candidates (-> %Undefined% %Undefined% %Undefined% %Undefined% %Undefined% Atom))
+(= (tensor:int8-candidates $codes $record $query $indices $k)
+   (function (chain (eval (__cetta_lib_tensor_int8_candidates $codes $record $query $indices $k)) $result (return $result))))
+
 ; Bounds and compact storage must belong to the same immutable source view.
 ; Returned indices are candidates, including every ambiguous boundary tie.
 (= (tensor:screen-candidates $compact $certificate $query $indices $k)

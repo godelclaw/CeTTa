@@ -67,8 +67,8 @@ def where_atom(where):
 
 class NativeCollection:
     def __init__(self, socket, name, profile, binary, module=None, profile_requests=False, scan_tier="wide"):
-        if scan_tier not in ("wide", "f32"):
-            raise ValueError("scan tier must be wide or f32")
+        if scan_tier not in ("wide", "f32", "int8"):
+            raise ValueError("scan tier must be wide, f32 or int8")
         self.client = Client(str(socket), timeout=30)
         if S("tensor-ctn1-native") not in self.client.hello()[5][1:]:
             raise RuntimeError("space service does not advertise native tensors")

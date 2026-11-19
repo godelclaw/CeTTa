@@ -87,11 +87,17 @@ def main():
          "arena_account_external_bytes(a, cetta_dense_tensor_v1_retained_bytes(value));",
          "/* omitted allocation charge */"),
         ("screening-drops-boundary-tie", "src/tensor_dense_v1.c",
-         "double threshold = count ? lo[heap[0]] : INFINITY;",
-         "double threshold = count ? nextafter(lo[heap[0]], INFINITY) : INFINITY;"),
+         "double threshold = held ? heap[0] : INFINITY;",
+         "double threshold = held ? nextafter(heap[0], INFINITY) : INFINITY;"),
         ("screening-ignores-error", "src/tensor_dense_v1.c",
          "double radius = add_up(mul_up(multiplier, add_up(error, mul_up(relative, magnitude))), underflow);",
          "double radius = 0 * (multiplier + error + relative + magnitude + underflow);"),
+        ("int8-screen-ignores-query-error", "src/tensor_dense_v1.c",
+         "(copy * qerror + relative_a * fabs(approximate))",
+         "(relative_a * fabs(approximate))"),
+        ("int8-dot-drops-last-code", "src/tensor_dense_v1.c",
+         "    for (size_t j = 0; j < width; ++j) total += (int32_t)a[j] * (int32_t)b[j];",
+         "    for (size_t j = 0; j + 1 < width; ++j) total += (int32_t)a[j] * (int32_t)b[j];"),
     )
     for label, name, old, replacement in controls:
         original = (ROOT / name).read_text()

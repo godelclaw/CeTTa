@@ -50929,7 +50929,10 @@ test-native-store-scopes: $(SPACE_SERVICE_BIN) $(BIN) $(VALUE_WORKER_BIN)
 		--cetta ./$(BIN) --worker $(VALUE_WORKER_BIN) \
 		--lean-project "$(NATIVE_STORE_LEAN_PROJECT)" --output "$(NATIVE_STORE_TRACE_DIR)/scoped"
 test-memory-collection: $(SPACE_SERVICE_BIN) $(VALUE_WORKER_BIN)
-	python3 tests/test_memory_collection.py --server $(SPACE_SERVICE_BIN) --worker $(VALUE_WORKER_BIN) --output runtime/memory-qualification-$(BUILD_OBJ_TAG).json
+	@set -e; for tier in wide f32 int8; do \
+		python3 tests/test_memory_collection.py --server $(SPACE_SERVICE_BIN) --worker $(VALUE_WORKER_BIN) \
+			--scan-tier $$tier --output runtime/memory-qualification-$$tier-$(BUILD_OBJ_TAG).json; \
+	done
 test-memory-index-mutations: $(VALUE_WORKER_BIN)
 	python3 tests/support/qualify_memory_index_mutations.py --worker $(VALUE_WORKER_BIN) \
 		--output runtime/memory-index-mutations-$(BUILD_OBJ_TAG).json
