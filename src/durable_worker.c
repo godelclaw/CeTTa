@@ -355,6 +355,33 @@ CettaDurableStatus cetta_worker_endpoint_wait_io(CettaWorkerEndpoint *e,
     int n=poll(fds,e->peer_capacity+3u,(int)timeout_ms);
     return n<0 && errno!=EINTR?DURABLE_IO:DURABLE_OK;
 }
+uint64_t cetta_worker_endpoint_next_deadline_ms(const CettaWorkerEndpoint *e) {
+    if (!e) return UINT64_MAX;
+    uint64_t best = UINT64_MAX;
+    for (size_t i = 0; i < e->peer_capacity; ++i) {
+        const Peer *p = &e->peers[i];
+        if (p->fd < 0) continue;
+        uint64_t due = p->waiting ? p->due : (p->touched <= UINT64_MAX - 30000 ? p->touched + 30000 : UINT64_MAX);
+        if (due < best) best = due;
+    }
+    return best;
+}
+CettaDurableStatus cetta_worker_endpoint_wait_extra(CettaWorkerEndpoint *e,
+        const struct pollfd *extra, size_t extra_count, unsigned timeout_ms) {
+    if (!e || (extra_count && !extra) || timeout_ms > 60000) return DURABLE_INVALID;
+    size_t total = 1u + e->peer_capacity + extra_count;
+    struct pollfd stack_fds[64];
+    struct pollfd *fds = total <= 64u ? stack_fds : malloc(total * sizeof(*fds));
+    if (!fds) return DURABLE_NOMEM;
+    fds[0] = (struct pollfd){e->listener, POLLIN, 0};
+    for (size_t i = 0; i < e->peer_capacity; ++i)
+        fds[1u + i] = (struct pollfd){e->peers[i].fd, e->peers[i].reply ? POLLOUT : POLLIN, 0};
+    for (size_t i = 0; i < extra_count; ++i) fds[1u + e->peer_capacity + i] = extra[i];
+    int n = poll(fds, (nfds_t)total, (int)timeout_ms);
+    int err = errno;
+    if (fds != stack_fds) free(fds);
+    return n < 0 && err != EINTR ? DURABLE_IO : DURABLE_OK;
+}
 static CettaDurableStatus result(CettaWorkerEndpoint *e, Peer *p, const char *id,
                                 const unsigned char *body, size_t size, bool receipt) {
     char name[130], input[138]; key(name,e->worker,id);

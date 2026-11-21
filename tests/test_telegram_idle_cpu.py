@@ -30,6 +30,7 @@ HISTORY = int(os.environ.get('CETTA_TELEGRAM_IDLE_HISTORY', '60000'))
 TIMERS = int(os.environ.get('CETTA_TELEGRAM_IDLE_TIMERS', '128'))
 WINDOW = float(os.environ.get('CETTA_TELEGRAM_IDLE_SECONDS', '8'))
 LIMIT = float(os.environ.get('CETTA_TELEGRAM_IDLE_PERCENT', '3'))
+MAX_WAKEUPS = float(os.environ.get('CETTA_TELEGRAM_IDLE_MAX_WAKEUPS', '5'))
 POLL = float(os.environ.get('CETTA_TELEGRAM_IDLE_POLL_SECONDS', '3'))
 WAIT_MS = int(os.environ.get('CETTA_TELEGRAM_IDLE_WAIT_MS', '10000'))
 COMMANDS = '''
@@ -48,7 +49,7 @@ class LongPoll(Peer):
             time.sleep(min(float(json.loads(body).get('timeout', 0)), POLL, 25))
             return 200, [], b'{"ok":true,"result":[]}'
         if name == 'getMe':
-            return 200, [], b'{"ok":true,"result":{"id":1,"is_bot":true,"first_name":"Ada","username":"ada_bot"}}'
+            return 200, [], b'{"ok":true,"result":{"id":123456789,"is_bot":true,"first_name":"Ada","username":"ada_bot"}}'
         return 200, [], b'{"ok":true,"result":true}'
 
 
@@ -93,6 +94,20 @@ def history(path, count, timers):
 def cpu_seconds(pid):
     fields = pathlib.Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
     return (int(fields[11]) + int(fields[12])) / os.sysconf('SC_CLK_TCK')
+
+
+def voluntary_switches(pid):
+    total = 0
+    for task in pathlib.Path(f'/proc/{pid}/task').iterdir():
+        try:
+            text = (task / 'status').read_text()
+        except OSError:
+            continue
+        for line in text.splitlines():
+            if line.startswith('voluntary_ctxt_switches:'):
+                total += int(line.split(':', 1)[1].strip())
+                break
+    return total
 
 
 def waiting_agent(path, stop, replies):
@@ -148,9 +163,10 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-idle-') as temp:
                 time.sleep(.05)
             assert len(replies) >= 1, 'the agent never received a token'
             time.sleep(POLL + 1)
-            before, started = cpu_seconds(proc.pid), time.monotonic()
+            idle_threads = len(list(pathlib.Path(f'/proc/{proc.pid}/task').iterdir()))
+            before, before_cs, started = cpu_seconds(proc.pid), voluntary_switches(proc.pid), time.monotonic()
             time.sleep(WINDOW)
-            used, elapsed = cpu_seconds(proc.pid) - before, time.monotonic() - started
+            used, wakeups, elapsed = cpu_seconds(proc.pid) - before, voluntary_switches(proc.pid) - before_cs, time.monotonic() - started
             assert proc.poll() is None, proc.communicate()
         finally:
             stop.set()
@@ -165,7 +181,11 @@ with tempfile.TemporaryDirectory(prefix='cetta-telegram-idle-') as temp:
                 listener.close()
         assert TOKEN.split(':')[1] not in out + err
         percent = 100 * used / elapsed
-        print('(TelegramIdleCpuV2 history %d timers %d poll %.1f wait-ms %d seconds %.1f cpu-percent %.2f limit %.1f)'
-              % (HISTORY, TIMERS, POLL, WAIT_MS, elapsed, percent, LIMIT))
+        wakeups_per_sec = wakeups / elapsed
+        print('(TelegramIdleCpuV2 history %d timers %d poll %.1f wait-ms %d seconds %.1f cpu-percent %.2f limit %.1f vol-cs-per-sec %.2f max-wakeups %.1f threads %d)'
+              % (HISTORY, TIMERS, POLL, WAIT_MS, elapsed, percent, LIMIT, wakeups_per_sec, MAX_WAKEUPS, idle_threads))
         assert percent < LIMIT, 'an idle channel service with %d rows of history and %d finished timers used %.2f%% CPU' % (
             HISTORY, TIMERS, percent)
+        assert wakeups_per_sec < MAX_WAKEUPS, (
+            'an idle channel service woke %.2f times/s (limit %.1f/s)' % (wakeups_per_sec, MAX_WAKEUPS))
+        assert idle_threads <= 2, 'an idle channel service retained %d threads (expected <= 2)' % idle_threads

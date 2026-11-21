@@ -673,7 +673,7 @@ static void *owner(void *context) {
                                       j->request.idle_timeout_ms))) { retry=true; break; }
         pthread_mutex_unlock(&w->mutex);
         int events;
-        if (curl_multi_poll(multi,NULL,0,retry?100:1000,&events)!=CURLM_OK) {
+        if (curl_multi_poll(multi,NULL,0,retry?100:10000,&events)!=CURLM_OK) {
             /* A broken polling backend must not spin or keep accepting work. */
             pthread_mutex_lock(&w->mutex); w->stopping=true; changed(w); pthread_mutex_unlock(&w->mutex);
         }

@@ -73,6 +73,8 @@ CettaDurableStatus cetta_dispatch_cancel(CettaDurableDispatch *dispatcher,
 bool cetta_dispatch_resume(CettaDurableDispatch *dispatcher, const char *outbox_key);
 uint64_t cetta_dispatch_wait(CettaDurableDispatch *dispatcher,
                             uint64_t generation, uint32_t timeout_ms);
+void cetta_dispatch_set_wakeup_fd(CettaDurableDispatch *dispatcher, int fd);
+bool cetta_dispatch_poll_active(CettaDurableDispatch *dispatcher, const char *source);
 /* Stop/join before closing store or credentials. Returns unrecorded jobs;
  * persisted claims recover as uncertain on the next service start. */
 size_t cetta_dispatch_free(CettaDurableDispatch *dispatcher);

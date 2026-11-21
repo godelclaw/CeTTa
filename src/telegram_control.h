@@ -1,6 +1,8 @@
 #ifndef CETTA_TELEGRAM_CONTROL_H
 #define CETTA_TELEGRAM_CONTROL_H
 #include "telegram_agent.h"
+#include <poll.h>
+#include <stdint.h>
 #include <sys/types.h>
 
 typedef struct CettaTelegramControl CettaTelegramControl;
@@ -21,6 +23,8 @@ CettaDurableStatus cetta_telegram_control_new(CettaDurableStore *store,
  * Storage faults propagate; the owner must stop/recover instead of retrying
  * an ambiguous commit. Invalid clients do not stop the service. */
 CettaDurableStatus cetta_telegram_control_step(CettaTelegramControl *control);
+size_t cetta_telegram_control_pollfds(const CettaTelegramControl *control,
+    struct pollfd *out, size_t capacity, uint64_t now_ms, uint64_t *next_wait_ms);
 void cetta_telegram_control_free(CettaTelegramControl *control);
 bool cetta_telegram_control_lane(const CettaTelegramAgent *agent, const char *lane);
 #endif

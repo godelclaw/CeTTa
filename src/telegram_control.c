@@ -196,6 +196,22 @@ CettaDurableStatus cetta_telegram_control_step(CettaTelegramControl *c) {
     }
     return DURABLE_OK;
 }
+size_t cetta_telegram_control_pollfds(const CettaTelegramControl *c,
+        struct pollfd *out, size_t capacity, uint64_t now, uint64_t *next_wait_ms) {
+    if (!c || !out || !capacity) return 0;
+    size_t count = 0;
+    out[count++] = (struct pollfd){c->listener, POLLIN, 0};
+    for (size_t i = 0; i < PEERS && count < capacity; ++i) {
+        const Peer *p = &c->peers[i];
+        if (p->fd < 0) continue;
+        out[count++] = (struct pollfd){p->fd, p->size ? POLLOUT : POLLIN, 0};
+        if (next_wait_ms) {
+            uint64_t rem = (now >= p->since && now - p->since < 5000) ? (5000 - (now - p->since)) : 0;
+            if (rem < *next_wait_ms) *next_wait_ms = rem;
+        }
+    }
+    return count;
+}
 void cetta_telegram_control_free(CettaTelegramControl *c) {
     if (!c) return;
     for (size_t i=0;i<PEERS;++i) close_peer(&c->peers[i]);

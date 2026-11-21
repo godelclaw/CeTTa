@@ -7,6 +7,7 @@
 typedef struct {
     CettaServiceSource config;
     uint64_t next_admit;
+    uint64_t next_wake_ms;
     int64_t parked_revision;
 } Source;
 struct CettaDurableService {
@@ -94,17 +95,36 @@ static CettaDurableStatus poll_source(CettaDurableService *s, Source *source, Ce
     CettaTelegramIntake *t=NULL;
     CettaDurableStatus status=cetta_telegram_intake_begin(s->store,c->poll.source,c->program->version,&t);
     if (status==DURABLE_PRECONDITION) {
-        if (now.monotonic_ms<source->next_admit) return DURABLE_OK;
+        if (cetta_dispatch_poll_active(s->dispatch,c->poll.source)) {
+            source->next_wake_ms=UINT64_MAX;
+            return DURABLE_OK;
+        }
+        if (now.monotonic_ms<source->next_admit) {
+            source->next_wake_ms=source->next_admit;
+            return DURABLE_OK;
+        }
         /* Even an instantly empty or faulty mock/provider cannot cause a tight
          * request loop. Durable retry deadlines impose their stronger bound. */
         source->next_admit=now.monotonic_ms+100;
         status=cetta_dispatch_poll_at(s->dispatch,&c->poll,now.utc_ms);
-        if (status==DURABLE_BUSY || status==DURABLE_PRECONDITION) return DURABLE_OK;
+        if (status==DURABLE_OK || status==DURABLE_BUSY) {
+            source->next_wake_ms=UINT64_MAX;
+            return DURABLE_OK;
+        }
+        if (status==DURABLE_PRECONDITION) {
+            source->next_admit=now.monotonic_ms+500;
+            source->next_wake_ms=source->next_admit;
+            return DURABLE_OK;
+        }
         return status;
     }
     if (status!=DURABLE_OK) return status;
     int64_t revision=cetta_telegram_intake_revision(t);
-    if (source->parked_revision==revision) { cetta_telegram_intake_free(t); return DURABLE_OK; }
+    if (source->parked_revision==revision) {
+        source->next_wake_ms=UINT64_MAX;
+        cetta_telegram_intake_free(t);
+        return DURABLE_OK;
+    }
     bool held=cetta_telegram_intake_held(t);
     if (held) status=DURABLE_PRECONDITION;
     else status=cetta_telegram_intake_evaluate(t,c->program,c->policy,c->fuel);
@@ -122,7 +142,10 @@ static CettaDurableStatus poll_source(CettaDurableService *s, Source *source, Ce
         }
     }
     if (status!=DURABLE_OK && status!=DURABLE_CONFLICT && !fatal(status)) {
-        source->parked_revision=revision; report(s,held?"poll-held":"poll-policy",status); status=DURABLE_OK;
+        source->parked_revision=revision; source->next_wake_ms=UINT64_MAX;
+        report(s,held?"poll-held":"poll-policy",status); status=DURABLE_OK;
+    } else {
+        source->next_wake_ms=source->next_admit;
     }
     cetta_telegram_intake_free(t);
     return status==DURABLE_CONFLICT?DURABLE_OK:status;
@@ -134,6 +157,7 @@ CettaDurableStatus cetta_service_step(CettaDurableService *s, unsigned max_wait)
     CettaDurableStatus status=cetta_worker_endpoint_step(s->worker,max_wait,&requests);
     if (status!=DURABLE_OK) return fail(s,"worker",status);
     add(&s->stats.worker_requests,requests); add(&s->stats.steps,1);
+    if (requests) s->next_timer=0;
     CettaClockSample now;
     if (!cetta_clock_sample(&now)) return fail(s,"clock",DURABLE_IO);
     if (now.monotonic_ms>=s->next_timer) {
@@ -142,7 +166,13 @@ CettaDurableStatus cetta_service_step(CettaDurableService *s, unsigned max_wait)
         if (status!=DURABLE_OK) return fail(s,"timer",status);
         if (s->failed!=DURABLE_OK) return s->failed;
         add(&s->stats.timer_events,tick.emitted);
-        s->next_timer=now.monotonic_ms+(tick.more_due?0:cetta_timer_wait_ms(tick.next_deadline_ms,&now,now.monotonic_ms));
+        if (tick.more_due) s->next_timer=0;
+        else if (tick.next_deadline_ms<0) s->next_timer=UINT64_MAX;
+        else {
+            uint64_t rem=tick.next_deadline_ms>now.utc_ms?(uint64_t)(tick.next_deadline_ms-now.utc_ms):0;
+            if (rem>10000) rem=10000;
+            s->next_timer=now.monotonic_ms+rem;
+        }
     }
     if (s->config.source_count) {
         Source *source=&s->sources[s->next_source];
@@ -171,6 +201,36 @@ bool cetta_service_binding(const CettaDurableService *s, const char *source,
     return false;
 }
 void cetta_service_changed(CettaDurableService *s) { if (s) s->next_timer=0; }
+void cetta_service_set_wakeup_fd(CettaDurableService *s, int fd) {
+    if (s && s->dispatch) cetta_dispatch_set_wakeup_fd(s->dispatch,fd);
+}
+uint64_t cetta_service_next_wait_ms(CettaDurableService *s, uint64_t now_mono_ms, uint64_t cap_ms) {
+    if (!s || s->failed!=DURABLE_OK) return 0;
+    uint64_t wait=cap_ms;
+    if (s->next_timer!=UINT64_MAX) {
+        uint64_t rem=s->next_timer>now_mono_ms?s->next_timer-now_mono_ms:0;
+        if (rem<wait) wait=rem;
+    }
+    uint64_t wd=cetta_worker_endpoint_next_deadline_ms(s->worker);
+    if (wd!=UINT64_MAX) {
+        uint64_t rem=wd>now_mono_ms?wd-now_mono_ms:0;
+        if (rem<wait) wait=rem;
+    }
+    for (size_t i=0;i<s->config.source_count;++i) {
+        const Source *src=&s->sources[i];
+        if (src->next_wake_ms!=UINT64_MAX) {
+            uint64_t rem=src->next_wake_ms>now_mono_ms?src->next_wake_ms-now_mono_ms:0;
+            if (rem<wait) wait=rem;
+        }
+    }
+    return wait;
+}
+CettaDurableStatus cetta_service_wait(CettaDurableService *s,
+        const struct pollfd *extra, size_t extra_count, unsigned timeout_ms) {
+    if (!s) return DURABLE_INVALID;
+    if (s->failed!=DURABLE_OK) return s->failed;
+    return cetta_worker_endpoint_wait_extra(s->worker,extra,extra_count,timeout_ms);
+}
 CettaDurableStatus cetta_service_submit(CettaDurableService *s, const char *key) {
     return !s?DURABLE_INVALID:s->failed!=DURABLE_OK?s->failed:cetta_dispatch_submit(s->dispatch,key);
 }

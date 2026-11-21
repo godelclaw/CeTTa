@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,7 +39,18 @@ typedef struct {
     bool run, check, channel, program_seen, offset_seen, allow_private;
 } Config;
 static volatile sig_atomic_t stopped;
-static void stop(int sig) { (void)sig; stopped=1; }
+static volatile sig_atomic_t stop_wakeup_fd = -1;
+static void stop(int sig) {
+    (void)sig;
+    stopped = 1;
+    int fd = (int)stop_wakeup_fd;
+    if (fd >= 0) { ssize_t ignored = write(fd, "s", 1); (void)ignored; }
+}
+static void drain_wakeup(int fd) {
+    if (fd < 0) return;
+    char buf[64];
+    while (read(fd, buf, sizeof(buf)) > 0) {}
+}
 static void fault(void *unused, const char *component, CettaDurableStatus s) {
     (void)unused; fprintf(stderr,"cetta-telegram: %s: %s\n",component,cetta_durable_status_name(s));
 }
@@ -131,11 +143,13 @@ static bool load_commands(const char *path, Arena *arena, Space *program) {
 typedef struct {
     CettaHttpWorker *worker;
     uint64_t job, retry_ms;
+    int wakeup_fd;
     bool pending, known, reported;
 } Identity;
 static void identity_ask(Identity *d, const CettaTelegramCredential *credential, uint64_t now_ms) {
     CettaHttpWorkerLimits limits=cetta_http_worker_default_limits();
     if (!d->worker && cetta_http_worker_new(&limits,NULL,&d->worker)!=HTTP_WORKER_OK) d->worker=NULL;
+    if (d->worker && d->wakeup_fd>=0) cetta_http_worker_set_wakeup_fd(d->worker,d->wakeup_fd);
     d->pending=d->worker && cetta_telegram_submit_effect(credential,d->worker,++d->job,"getMe",
         "application/json","{}",2,10000,65536)==HTTP_WORKER_OK;
     if (!d->pending) d->retry_ms=now_ms+60000;
@@ -171,6 +185,11 @@ static void identity_step(Identity *d, const CettaTelegramCredential *credential
         eval_outcome_free(&o); free(text);
     }
     cetta_http_result_free(&r);
+    if (d->worker) {
+        cetta_http_worker_set_wakeup_fd(d->worker,-1);
+        cetta_http_worker_free(d->worker);
+        d->worker=NULL;
+    }
     if (!d->known && !d->reported) { fputs("cetta-telegram: bot username not yet known\n",stderr); d->reported=true; }
 }
 static void usage(void) {
@@ -380,7 +399,8 @@ int main(int argc,char **argv) {
     cetta_eval_session_init_he_extended(&context.session); eval_set_library_context(&context);
     int result=CONFIG; Atom *import_error=NULL; CettaDurableStore *store=NULL;
     CettaDurableService *service=NULL; CettaTelegramScheduler *scheduler=NULL;
-    CettaTelegramControl *control=NULL; Identity identity={0};
+    CettaTelegramControl *control=NULL; Identity identity={.wakeup_fd=-1};
+    int wakeup[2]={-1,-1};
     Space *commands_space=NULL;
     if (!he_library_tables_init()) { error("HE library types",CONFIG); goto done; }
     stdlib_load(&program,&persistent);
@@ -439,11 +459,22 @@ int main(int argc,char **argv) {
         if (s==DURABLE_OK) c.operator_fd=-1;
     }
     if (s!=DURABLE_OK) { fault(NULL,"startup",s); result=FAILURE; goto done; }
+    if (pipe2(wakeup,O_NONBLOCK|O_CLOEXEC)) { fault(NULL,"wakeup-pipe",DURABLE_IO); result=FAILURE; goto done; }
+    stop_wakeup_fd=wakeup[1];
+    identity.wakeup_fd=wakeup[1];
+    cetta_service_set_wakeup_fd(service,wakeup[1]);
     puts("cetta-telegram: ready"); fflush(stdout);
     identity.known=!c.channel || !c.commands || commands_name_bot;
-    uint64_t maintenance=0; CettaDurableLimits limits=storage_limits;
+    uint64_t maintenance=0; int64_t maint_rev=-1; CettaDurableLimits limits=storage_limits;
+    unsigned idle_spins=0;
     while (!stopped) {
-        s=cetta_service_step(service,25);
+        drain_wakeup(wakeup[0]);
+        char ep_before[33], ep_after[33];
+        int64_t rev_before=-1, rev_after=-1;
+        CettaServiceStats st_before, st_after;
+        cetta_service_stats(service,&st_before);
+        s=cetta_durable_position(store,ep_before,&rev_before);
+        if (s==DURABLE_OK) s=cetta_service_step(service,0);
         if (stopped) break;
         if (s==DURABLE_OK && control) s=cetta_telegram_control_step(control);
         if (s==DURABLE_OK) s=cetta_telegram_scheduler_step(scheduler,8);
@@ -451,19 +482,57 @@ int main(int argc,char **argv) {
         if (s==DURABLE_OK && !cetta_clock_sample(&now)) s=DURABLE_IO;
         if (s==DURABLE_OK) identity_step(&identity,credential,source_id,&context,&program,commands_space,&scratch,&persistent,
             &registry,now.monotonic_ms);
-        if (s==DURABLE_OK && now.monotonic_ms>=maintenance) {
-            maintenance=now.monotonic_ms+1000; CettaDurableUsage u;
+        if (s==DURABLE_OK) s=cetta_durable_position(store,ep_after,&rev_after);
+        if (s==DURABLE_OK && rev_after!=maint_rev && now.monotonic_ms>=maintenance) {
+            maintenance=now.monotonic_ms+1000; maint_rev=rev_after; CettaDurableUsage u;
             s=cetta_durable_usage(store,&u);
-            if (s==DURABLE_OK && u.history_bytes>=(int64_t)(limits.history_bytes/2)) s=cetta_durable_checkpoint(store);
+            if (s==DURABLE_OK && u.history_bytes>=(int64_t)(limits.history_bytes/2)) {
+                s=cetta_durable_checkpoint(store);
+                if (s==DURABLE_OK) {
+                    s=cetta_durable_position(store,ep_after,&rev_after);
+                    maint_rev=rev_after;
+                }
+            }
         }
         if (s!=DURABLE_OK) { fault(NULL,"runtime",s); break; }
+        if (stopped) break;
+        cetta_service_stats(service,&st_after);
+        bool moved=rev_after!=rev_before ||
+            st_after.worker_requests!=st_before.worker_requests ||
+            st_after.poll_batches!=st_before.poll_batches ||
+            st_after.timer_events!=st_before.timer_events;
+        bool sched_idle=cetta_telegram_scheduler_idle(scheduler);
+        if (moved) { idle_spins=0; continue; }
+        if (!sched_idle && ++idle_spins<4) continue;
+        uint64_t wait_ms=cetta_service_next_wait_ms(service,now.monotonic_ms,sched_idle?10000:25);
+        if (!identity.known && !identity.pending) {
+            uint64_t rem=identity.retry_ms>now.monotonic_ms?identity.retry_ms-now.monotonic_ms:0;
+            if (rem<wait_ms) wait_ms=rem;
+        }
+        if (rev_after!=maint_rev) {
+            uint64_t rem=maintenance>now.monotonic_ms?maintenance-now.monotonic_ms:0;
+            if (rem<wait_ms) wait_ms=rem;
+        }
+        struct pollfd extra[16];
+        size_t extra_n=0;
+        extra[extra_n++]=(struct pollfd){wakeup[0],POLLIN,0};
+        if (control) extra_n+=cetta_telegram_control_pollfds(control,extra+extra_n,16-extra_n,now.monotonic_ms,&wait_ms);
+        if (wait_ms>0 && !stopped) {
+            idle_spins=0;
+            s=cetta_service_wait(service,extra,extra_n,(unsigned)wait_ms);
+            if (s!=DURABLE_OK) { fault(NULL,"wait",s); break; }
+        }
     }
     result=s==DURABLE_OK?0:FAILURE;
  done:
-    if (identity.worker) cetta_http_worker_free(identity.worker);
+    stop_wakeup_fd=-1;
+    if (service) cetta_service_set_wakeup_fd(service,-1);
+    if (identity.worker) { cetta_http_worker_set_wakeup_fd(identity.worker,-1); cetta_http_worker_free(identity.worker); }
     cetta_telegram_control_free(control);
     cetta_telegram_scheduler_free(scheduler);
     if (cetta_service_free(service)) { error("unrecorded transport observations",FAILURE); result=FAILURE; }
+    if (wakeup[0]>=0) close(wakeup[0]);
+    if (wakeup[1]>=0) close(wakeup[1]);
     if (c.run && c.listener>=0) close(c.listener);
     if (c.run && c.operator_fd>=0) close(c.operator_fd);
     cetta_durable_close(store); cetta_telegram_credential_free(credential);

@@ -316,6 +316,17 @@ CettaDurableStatus cetta_telegram_scheduler_step(CettaTelegramScheduler *s, unsi
 void cetta_telegram_scheduler_stats(const CettaTelegramScheduler *s, CettaTelegramSchedulerStats *out) {
     if (out) *out=s?s->stats:(CettaTelegramSchedulerStats){0};
 }
+bool cetta_telegram_scheduler_idle(const CettaTelegramScheduler *s) {
+    if (!s || s->failed!=DURABLE_OK) return false;
+    if (!s->inbox || s->inputs_behind) return false;
+    if (s->workers_waiting && !s->ready) return false;
+    if (s->effects_behind && s->effect_ready.count<=s->config.pending_effects*3/4) return false;
+    for (CettaReadyLink *p=s->input_ready.first;p;p=p->next)
+        if (!((const Entry *)p)->watch) return false;
+    for (CettaReadyLink *p=s->effect_ready.first;p;p=p->next)
+        if (!((const Entry *)p)->watch) return false;
+    return true;
+}
 void cetta_telegram_scheduler_free(CettaTelegramScheduler *s) {
     if (!s) return;
     while (s->input_ready.first) remove_entry(s,(Entry *)s->input_ready.first);

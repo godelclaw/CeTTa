@@ -33,5 +33,6 @@ CettaDurableStatus cetta_telegram_scheduler_step(CettaTelegramScheduler *schedul
                                                unsigned visits);
 void cetta_telegram_scheduler_stats(const CettaTelegramScheduler *scheduler,
                                   CettaTelegramSchedulerStats *out);
+bool cetta_telegram_scheduler_idle(const CettaTelegramScheduler *scheduler);
 void cetta_telegram_scheduler_free(CettaTelegramScheduler *scheduler);
 #endif

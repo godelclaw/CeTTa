@@ -370,6 +370,15 @@ bool cetta_dispatch_resume(CettaDurableDispatch *d, const char *key) {
 uint64_t cetta_dispatch_wait(CettaDurableDispatch *d, uint64_t generation, uint32_t ms) {
     return d?cetta_http_worker_wait(d->worker,generation,ms):generation;
 }
+void cetta_dispatch_set_wakeup_fd(CettaDurableDispatch *d, int fd) {
+    if (d && d->worker) cetta_http_worker_set_wakeup_fd(d->worker,fd);
+}
+bool cetta_dispatch_poll_active(CettaDurableDispatch *d, const char *source) {
+    if (!d || !source || !*source) return false;
+    char key[96];
+    int n=snprintf(key,sizeof(key),"poll/%s",source);
+    return n>0 && (size_t)n<sizeof(key) && handle(d,key)!=0;
+}
 size_t cetta_dispatch_free(CettaDurableDispatch *d) {
     if (!d) return 0;
     pthread_mutex_lock(&d->mutex); d->stopping=true; pthread_mutex_unlock(&d->mutex);

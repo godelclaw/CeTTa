@@ -1,7 +1,9 @@
 #ifndef CETTA_DURABLE_WORKER_H
 #define CETTA_DURABLE_WORKER_H
 #include "durable_store.h"
+#include <poll.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/types.h>
 
 #define CETTA_WORKER_BODY_MAX 65536u
@@ -60,6 +62,13 @@ CettaDurableStatus cetta_worker_endpoint_wait(CettaWorkerEndpoint *endpoint,
  * -1 omits either descriptor. The caller owns nonblocking output buffering. */
 CettaDurableStatus cetta_worker_endpoint_wait_io(CettaWorkerEndpoint *endpoint,
     int intake_fd, int output_fd, unsigned timeout_ms);
+/* Earliest monotonic deadline (ms) for waiting peers or 30s idle-peer expiry;
+ * returns UINT64_MAX when no peers are connected. */
+uint64_t cetta_worker_endpoint_next_deadline_ms(const CettaWorkerEndpoint *endpoint);
+/* Event-loop wait over listener, active peers and caller-supplied extra fds.
+ * timeout_ms is 0..60000 ms. */
+CettaDurableStatus cetta_worker_endpoint_wait_extra(CettaWorkerEndpoint *endpoint,
+    const struct pollfd *extra, size_t extra_count, unsigned timeout_ms);
 
 /* Packet: "CWP1", code byte, ID-length byte, ID bytes, remaining body bytes.
  * One packet per seqpacket message. NEXT has no ID/body; RESULT requires both;

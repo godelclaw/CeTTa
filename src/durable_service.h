@@ -59,6 +59,11 @@ bool cetta_service_binding(const CettaDurableService *service, const char *sourc
  * eligibility and retry policy; the loop never blindly dispatches the outbox.
  * Publish accepted worker intents with cetta_worker_register. */
 void cetta_service_changed(CettaDurableService *service);
+void cetta_service_set_wakeup_fd(CettaDurableService *service, int fd);
+uint64_t cetta_service_next_wait_ms(CettaDurableService *service,
+    uint64_t now_mono_ms, uint64_t cap_ms);
+CettaDurableStatus cetta_service_wait(CettaDurableService *service,
+    const struct pollfd *extra, size_t extra_count, unsigned timeout_ms);
 CettaDurableStatus cetta_service_submit(CettaDurableService *service, const char *outbox_key);
 CettaDurableStatus cetta_service_cancel(CettaDurableService *service, const char *outbox_key);
 /* Stops IPC, then joins the HTTP owner before the store/credentials may close.
