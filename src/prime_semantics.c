@@ -16590,6 +16590,10 @@ Atom *prime_semantics_scope_activation(Arena *arena, Atom *term, Atom *space) {
 
 Atom *prime_semantics_dispatch(Arena *a, Atom *head, Atom **args,
                                uint32_t nargs) {
+    if (eval_current_language_id() != CETTA_LANGUAGE_PRIME ||
+        !head || head->kind != ATOM_SYMBOL) {
+        return NULL;
+    }
     CettaPrimeInterpretation *interpretation = prime_interpretation_capture_current();
     if (!interpretation) {
         eval_native_interrupt(CETTA_EVAL_INCOMPLETE_HOST_FAILURE);

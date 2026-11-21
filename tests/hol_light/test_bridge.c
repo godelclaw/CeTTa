@@ -249,7 +249,7 @@ int main(int argc, char **argv) {
     CHECK(tag(call("admits-at", (Atom *[]){other_env, at_old}, 2), "hol:refused"));
     CHECK(tag(call("check-dag-at", (Atom *[]){sym("forged-environment"), one_row, seven}, 3), "hol:error"));
 
-    SECTION("equal surface names do not identify different definition histories");
+    SECTION("equal spelling names do not identify different definition histories");
     CHECK(atom_is_symbol(call("restore", (Atom *[]){k, checkpoint}, 2), "hol:ok"));
     Atom *branch_name = two("v", str("branch_identity"), bb);
     Atom *eq_bb_type = atom_expr(&arena, (Atom *[]){sym("T"), str("fun"), bb,

@@ -55,7 +55,7 @@ failure to data. Atom-typed holding positions leave source unexecuted;
 holding alone does not complete it. Return, identity, declared Atom/Expression
 outputs, substitution and extraction preserve each occurrence's origin.
 They never catch an authored failure merely by returning it. A source Error
-that surfaces as an authored result raises even if its declared type is Atom.
+that arrives as an authored result raises even if its declared type is Atom.
 An admitted Error datum passed through the same function remains data.
 
 HE data admission protects diagnostic occurrences, recursively, using private
@@ -67,14 +67,14 @@ still ignore value marks, and a stored term is admitted anew on readback.
 Variable-alias renaming preserves a diagnostic's own data barrier too.
 
 Constructors admit only a new diagnostic root. A new Box around written
-Error syntax keeps its source child; extracting that child surfaces a failure.
+Error syntax keeps its source child; extracting that child raises a failure.
 The same Box around a caught Error keeps its data child. Constructing a new
 Error root from parts produces diagnostic data, with existing child roles
 preserved. This differs from observers, storage readback and fresh native
 VALUE receipts, which admit their observed data as a whole.
 
 Native PRESERVED_VALUE completes a projection without fresh admission or
-re-evaluating its children. A surfaced source Error root raises; a data root
+re-evaluating its children. A returned source Error root raises; a data root
 stays data. The projection property is declared in builtin_symbols.data:
 car-atom, cdr-atom, decons-atom/decons, index-atom and trace! transport existing
 values, along with sealed's renaming, if-equal's selected arm and list/tuple

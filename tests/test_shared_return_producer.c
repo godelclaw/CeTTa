@@ -4,6 +4,7 @@
 #include "grounded.h"
 #include "he_typing.h"
 #include "foreign.h"
+#include "lib_prolog.h"
 #include "library.h"
 #include "parser.h"
 #include "prepared_pure_machine.h"
@@ -3199,6 +3200,8 @@ static void test_ai_native_return_boundary(CettaLanguageId language) {
             assert(result.completion == CETTA_EVAL_COMPLETE && native_calls == 1u);
             eval_outcome_free(&result);
         }
+        bool delayed_provider = language != CETTA_LANGUAGE_PETTA ||
+            cetta_lib_prolog_runtime_available(context->lib_prolog);
         const unsigned terminal_modes[] = {3u, 4u, 5u, 6u, 7u, 10u, 11u, 12u, 13u, 18u, 23u, 24u};
         for (unsigned i = 0u; i < sizeof(terminal_modes) / sizeof(*terminal_modes); i++) {
             native_mode = terminal_modes[i];
@@ -3207,16 +3210,20 @@ static void test_ai_native_return_boundary(CettaLanguageId language) {
             eval_top_with_registry_outcome(&space, &arena, &arena, &registry,
                 ai_native_source(&arena, "(readln!)", language), &result, NULL, NULL);
             /* The canonical native adapter validates the entire packet
-             * before publication, including a malformed suffix. */
+             * before publication, including a malformed suffix. In PeTTa
+             * without a Prolog runtime, waking a Prolog delayed goal exhausts
+             * the branch (matching test_native_conditional_context). */
             bool prefix = false;
+            bool empty_mode = native_mode == 3u || native_mode == 13u ||
+                (native_mode == 18u && !delayed_provider);
             bool matches = native_mode == 6u
                 ? result.results.len == 1u && result.completion == CETTA_EVAL_COMPLETE &&
                     atom_eq(result.results.items[0], atom_int(&arena, 9))
-                : native_mode == 3u || native_mode == 13u
+                : empty_mode
                 ? result.results.len == 0u && result.completion == CETTA_EVAL_COMPLETE
                 : result.results.len == (prefix ? 2u : 1u) &&
                     result.completion != CETTA_EVAL_COMPLETE;
-            if (matches && native_mode != 3u && native_mode != 6u && native_mode != 13u) {
+            if (matches && native_mode != 6u && !empty_mode) {
                 if (prefix)
                     matches = atom_eq(result.results.items[0],
                         parse(&arena, "(function (return (readln!)))"));

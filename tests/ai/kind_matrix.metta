@@ -1,4 +1,4 @@
-; Independent context substitution tests. The predicted surface result comes
+; Independent context substitution tests. The predicted visible result comes
 ; from the observation contract, not from either evaluator's output.
 !(import! &self (library proc))
 !(import! &self (library str))

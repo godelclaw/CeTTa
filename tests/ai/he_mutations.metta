@@ -56,8 +56,8 @@
 (HMReplace "match" "#include \"match.h\"" "#include \"match.h\"\n#include \"ai_failure.h\"" 1)
 (HMReplace "machine" "                bool scheduled = activation_supported"
  "                if (cetta_ai_audit_mutant(\"choice-capture\") && machine->host.failure_values && atom_is_error(result) && !atom_is_he_evaluated(result)) return petta_machine_raise_error(machine, result);\n                bool scheduled = activation_supported" 1)
-(HMReplace "machine" "    /* Selection may precede the choice's continuation snapshot. Surface a"
- "    if (cetta_ai_audit_mutant(\"raw-output\") && machine->host.failure_values && !evaluate_result && atom_is_error(result) && !atom_is_he_evaluated(result)) return petta_push_unify(machine, atom_he_evaluated_deep_copy(&machine->heap, result), expected, barrier);\n    /* Selection may precede the choice's continuation snapshot. Surface a" 1)
+(HMReplace "machine" "    /* Selection may precede the choice's continuation snapshot. Raise a"
+ "    if (cetta_ai_audit_mutant(\"raw-output\") && machine->host.failure_values && !evaluate_result && atom_is_error(result) && !atom_is_he_evaluated(result)) return petta_push_unify(machine, atom_he_evaluated_deep_copy(&machine->heap, result), expected, barrier);\n    /* Selection may precede the choice's continuation snapshot. Raise a" 1)
 (HMReplace "eval" "eval_atom_type_demand(arena, value, expected) == HE_TYPE_INTERPRET"
  "(eval_atom_type_demand(arena, value, expected) == HE_TYPE_INTERPRET || cetta_ai_audit_mutant(\"typed-activation\"))" 1)
 (HMReplace "grounded" "bool grounded_op_preserves_result_origin(SymbolId id) {"

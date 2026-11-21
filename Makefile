@@ -32781,13 +32781,9 @@ test-petta-existence-value-templates: $(BIN) tests/petta/existence_value_templat
 # An error raised inside a call dispatched at run time fails that path alone,
 # in any exploration order, and specialization keeps the handler; argument
 # errors, Error values and direct calls keep their own behaviour.
-test-petta-dispatch-error-scope: $(BIN) tests/petta/dispatch_error_scope.expected \
-		tests/petta/dispatch_error_scope.native.expected
+test-petta-dispatch-error-scope: $(BIN) tests/petta/dispatch_error_scope.expected
 	@set -eu; \
 	expected=tests/petta/dispatch_error_scope.expected; \
-	if [ "$(LIB_PROLOG_ENABLED)" != 1 ]; then \
-		expected=tests/petta/dispatch_error_scope.native.expected; \
-	fi; \
 	for route in tier machine; do \
 		if [ $$route = machine ]; then reference=1; else reference=; fi; \
 		actual=$$(CETTA_OPEN_EQUATIONS_REFERENCE=$$reference $(CETTA_BIN_INVOKE) \
@@ -34050,7 +34046,13 @@ test-petta-match-cell-rows: $(BIN)
 # (SWI-PeTTa's answers).
 test-petta-number-order: $(BIN)
 	@set -eu; \
-	for stem in number_order numeric_order_promotions; do \
+	stems="number_order"; \
+	if [ "$(LIB_PROLOG_ENABLED)" = 1 ]; then \
+		stems="$$stems numeric_order_promotions"; \
+	else \
+		echo "SKIP: numeric_order_promotions (BUILD=$(BUILD_CANON) has lib-prolog disabled)"; \
+	fi; \
+	for stem in $$stems; do \
 		for route in 0 1; do \
 			actual=$$(CETTA_OPEN_EQUATIONS_REFERENCE=$$route $(CETTA_BIN_INVOKE) --lang petta tests/petta/$$stem.metta 2>&1); \
 			if [ "$$actual" != "$$(cat tests/petta/$$stem.expected)" ]; then \

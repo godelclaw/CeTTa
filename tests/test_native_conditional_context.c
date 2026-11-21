@@ -4423,7 +4423,7 @@ typedef struct {
 
 static bool prepared_plan_equation_source(void *opaque, Space *space,
         SymbolId head, size_t ordinal, SpaceEquationOccurrenceId occurrence,
-        const Atom *equation, const void **body) {
+        const Atom *equation, const void **body, Atom **execution_out) {
     (void)occurrence;
     PreparedPlanSource *context = opaque;
     if (space != context->space || head != context->head)
@@ -4431,6 +4431,8 @@ static bool prepared_plan_equation_source(void *opaque, Space *space,
     assert(ordinal == 0u && equation && equation->kind == ATOM_EXPR &&
         equation->expr.len == 3u);
     *body = context->body;
+    if (execution_out)
+        *execution_out = (Atom *)equation;
     return true;
 }
 

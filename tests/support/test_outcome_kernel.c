@@ -135,8 +135,9 @@ static void ownership(CettaLibraryContext *ctx, Space *space, Arena *a) {
     assert(!fail_calloc);
     kind(ctx, space, a, refused, "incomplete");
     kind(ctx, space, a, prior, "value");
-    Atom forbidden = {.kind = ATOM_GROUNDED, .ground.gkind = GV_STATE};
-    Atom *unowned = event(ctx, space, a, g_builtin_syms.lib_outcome_value, &forbidden);
+    Atom *forbidden = atom_state(a, NULL);
+    assert(forbidden != NULL);
+    Atom *unowned = event(ctx, space, a, g_builtin_syms.lib_outcome_value, forbidden);
     kind(ctx, space, a, unowned, "incomplete");
 }
 

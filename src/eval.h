@@ -547,6 +547,7 @@ bool eval_current_uses_failure_values(void) __attribute__((weak));
 /* Called only on a producer's native raised edge, before legacy projection.
  * An explicit dynamic observer may retain that edge for its own handler. */
 bool eval_outcome_kernel_native_raise(Atom *diagnostic) __attribute__((weak));
+bool eval_outcome_kernel_capture_active(void) __attribute__((weak));
 /* The type stamp store (space.c) keeps typings across inferences where the
  * evaluator vouches for an atom's arena.  eval_type_stamp_scope says whether
  * the current evaluation may, and names the language and profile it types

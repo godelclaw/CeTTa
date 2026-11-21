@@ -3982,7 +3982,7 @@ static Atom *grounded_dispatch_open(Arena *a, Atom *head, Atom **args,
         Atom *const *elems;
         CettaExprLen len;
         bool to_list = head_id == g_builtin_syms.lib_list_from_expression;
-        Atom *value = args[0];
+        Atom *value = atom_prime_held_payload(args[0]);
         if (grounded_current_language_is_petta() &&
             petta_semantics_is_open_cons_value(value))
             value = petta_semantics_materialize_closed_logical_list(a, value);

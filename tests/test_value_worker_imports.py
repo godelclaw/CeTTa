@@ -51,18 +51,24 @@ def main():
                     raise AssertionError((language, mode, cli.returncode, cli.stdout, cli.stderr))
                 checks += 1
         worker = Worker(args.worker.resolve(), entry, "worker-imports:run", language="petta")
-        explicit = Worker(args.worker.resolve(), entry, "worker-imports:run",
-                          language="petta", import_mode="upstream")
         try:
-            # Corrected stable's default resolves at the source file. The
-            # explicit working-directory compatibility override is separate.
+            # Corrected stable's default resolves at the source file.
             if worker.call(41) != 42:
                 raise AssertionError("corrected stable default is not source-relative")
-            if encode(explicit.call(41)) != encode(E("worker-imports:leaf", 41)):
-                raise AssertionError("explicit working-directory override changed")
-            checks += 2
+            checks += 1
         finally:
-            worker.close(); explicit.close()
+            worker.close()
+        # Explicit working-directory compatibility mode cannot resolve a
+        # source-relative transitive import, so module loading raises an
+        # existence error rather than serving a partially loaded module.
+        upstream_fail = subprocess.run(
+            [str(args.worker.resolve()), "--lang", "petta", "--import-mode", "upstream",
+             str(entry), "worker-imports:run"],
+            capture_output=True, text=True, timeout=60,
+        )
+        if upstream_fail.returncode == 0:
+            raise AssertionError("explicit working-directory override silently ignored missing transitive import")
+        checks += 1
         default_cli = subprocess.run([str(args.binary.resolve()), "--lang", "petta", str(driver)],
                                      capture_output=True, text=True, timeout=60)
         if default_cli.returncode or [line for line in default_cli.stdout.splitlines()
@@ -77,9 +83,23 @@ def main():
         above.write_text('!(import! &self "./leaf.metta")\n')
         entry.write_text('!(import! &self ' + json.dumps(str(above)) + ')\n'
                          '(= (worker-imports:run $value) (worker-imports:leaf $value))\n')
-        cases = (("petta", "relative", E("worker-imports:leaf", 41),
-                  "(RESULT (worker-imports:leaf 41))"),
-                 ("petta", "ancestor-walk", 42, "(RESULT 42)"),
+        relative_worker_fail = subprocess.run(
+            [str(args.worker.resolve()), "--lang", "petta", "--import-mode", "relative",
+             str(entry), "worker-imports:run"],
+            capture_output=True, text=True, timeout=60,
+        )
+        if relative_worker_fail.returncode == 0:
+            raise AssertionError("petta relative worker silently ignored missing parent-dir leaf")
+        checks += 1
+        relative_cli_fail = subprocess.run(
+            [str(args.binary.resolve()), "--lang", "petta", "--import-mode", "relative",
+             str(driver)],
+            capture_output=True, text=True, timeout=60,
+        )
+        if relative_cli_fail.returncode == 0:
+            raise AssertionError("petta relative CLI silently ignored missing parent-dir leaf")
+        checks += 1
+        cases = (("petta", "ancestor-walk", 42, "(RESULT 42)"),
                  ("prime", "ancestor-walk", 42, "(RESULT 42)"))
         for language, mode, expected, printed in cases:
             worker = Worker(args.worker.resolve(), entry, "worker-imports:run",

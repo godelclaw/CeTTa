@@ -137,12 +137,17 @@ static Mm0Options options_of(const Call *c) {
 /* ---- arguments ----------------------------------------------------------- */
 
 static Atom *unquote(Atom *x) {
-    if (x && x->kind == ATOM_EXPR && x->expr.len == 2 && atom_is_symbol(x->expr.elems[0], "quote"))
+    x = atom_prime_held_payload(x);
+    if (atom_is_prime_meta(x) && atom_is_prime_braces(x->expr.elems[2]) &&
+        atom_is_quotation(x->expr.elems[1]))
+        x = x->expr.elems[1];
+    if (atom_is_quotation(x))
         return x->expr.elems[1];
     return x;
 }
 
 static const char *name_arg(Atom *x) {
+    x = atom_prime_held_payload(x);
     if (!x) return NULL;
     if (x->kind == ATOM_SYMBOL) return atom_name_cstr(x);
     if (x->kind == ATOM_GROUNDED && x->ground.gkind == GV_STRING &&

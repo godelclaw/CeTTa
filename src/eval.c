@@ -3277,6 +3277,10 @@ bool __attribute__((noinline)) eval_outcome_kernel_native_raise(Atom *diagnostic
     return g_outcome_kernel_capture_depth || g_outcome_kernel_invoke_depth;
 }
 
+bool eval_outcome_kernel_capture_active(void) {
+    return g_outcome_kernel_capture_depth != 0u;
+}
+
 static Atom *petta_eval_take_raise(void) {
     Atom *error = g_petta_pending_raise;
     g_petta_pending_raise = NULL;
@@ -8918,10 +8922,10 @@ static Atom *ai_type_diagnostic(Arena *arena, Atom *error) {
         return error;
     Atom *reason = error->expr.elems[2];
     if (reason && reason->kind == ATOM_EXPR && reason->expr.len == 2u &&
-        (atom_is_symbol(reason->expr.elems[0], "Unsolvable") ||
-         atom_is_symbol(reason->expr.elems[0], "Forbidden") ||
-         atom_is_symbol(reason->expr.elems[0], "Incomplete") ||
-         atom_is_symbol(reason->expr.elems[0], "Fault")))
+        (atom_is_symbol_id(reason->expr.elems[0], symbol_intern_cstr(g_symbols, "Unsolvable")) ||
+         atom_is_symbol_id(reason->expr.elems[0], symbol_intern_cstr(g_symbols, "Forbidden")) ||
+         atom_is_symbol_id(reason->expr.elems[0], symbol_intern_cstr(g_symbols, "Incomplete")) ||
+         atom_is_symbol_id(reason->expr.elems[0], symbol_intern_cstr(g_symbols, "Fault"))))
         return error;
     Atom *diagnostic = atom_expr3(arena, error->expr.elems[0], error->expr.elems[1],
         atom_expr2(arena, atom_symbol(arena, "Unsolvable"), reason));
@@ -8981,7 +8985,7 @@ static Atom *he_admit_data(Arena *arena, Atom *value) {
     return data;
 }
 
-/* Authored results preserve origin. A source diagnostic surfaces as a raise;
+/* Authored results preserve origin. A source diagnostic raises directly;
  * a returned datum stays data regardless of the declared result type. */
 static __attribute__((noinline)) bool ai_publish_authored_result(Arena *arena,
     const Outcome *source, Atom *value, const Bindings *outer,
@@ -94149,17 +94153,17 @@ static bool prime_need_call_gc_movable_outcomes(PrimeNeedCallGcAudit *audit,
     return true;
 }
 static bool prime_need_call_gc_registered_worlds(PrimeNeedCallGcAudit *audit) {
-#define PRIME_CALL_GC_ROOT_SLOT(name) \
-    if(payload->name && !prime_need_call_gc_span(audit,payload->name,sizeof(*payload->name))) return false;
-#define PRIME_CALL_GC_ROOT_SPAN(name) \
-    if(payload->name.len && !prime_need_call_gc_array(audit,payload->name.items,payload->name.len,sizeof(*payload->name.items))) return false;
-#define PRIME_CALL_GC_ROOT_BINDING(name) \
-    if(payload->name && !prime_need_call_gc_bindings(audit,payload->name,true)) return false;
-#define PRIME_CALL_GC_ROOT_OUTCOMES(name) \
-    if(!prime_need_call_gc_movable_outcomes(audit,payload->name)) return false;
-#define PRIME_CALL_GC_ROOT_VARIANT(name) (void)payload->name;
-#define PRIME_CALL_GC_ROOT_EPHEMERON(name) \
-    if(payload->name.visit || payload->name.context) return prime_need_call_gc_refuse(audit,"UnqualifiedRootEphemeron");
+#define PRIME_CALL_GC_ROOT_SLOT(field) \
+    if(payload->field && !prime_need_call_gc_span(audit,payload->field,sizeof(*payload->field))) return false;
+#define PRIME_CALL_GC_ROOT_SPAN(field) \
+    if(payload->field.len && !prime_need_call_gc_array(audit,payload->field.items,payload->field.len,sizeof(*payload->field.items))) return false;
+#define PRIME_CALL_GC_ROOT_BINDING(field) \
+    if(payload->field && !prime_need_call_gc_bindings(audit,payload->field,true)) return false;
+#define PRIME_CALL_GC_ROOT_OUTCOMES(field) \
+    if(!prime_need_call_gc_movable_outcomes(audit,payload->field)) return false;
+#define PRIME_CALL_GC_ROOT_VARIANT(field) (void)payload->field;
+#define PRIME_CALL_GC_ROOT_EPHEMERON(field) \
+    if(payload->field.visit || payload->field.context) return prime_need_call_gc_refuse(audit,"UnqualifiedRootEphemeron");
     for(const EvalGcRootFrame *root=g_eval_gc.roots;root;root=root->previous) {
         switch(root->kind) {
 #define PRIME_CALL_GC_ROOT_AUDIT(kind,upper) \
@@ -94207,9 +94211,9 @@ static bool prime_need_call_gc_registered_root(const PrimeNeedCallGcAudit *audit
             prime_need_call_gc_outcomes_contains(&equation->publication,bindings) ||
             prime_need_call_gc_outcomes_contains(&equation->forced_worlds,bindings))) return true;
     }
-#define PRIME_CALL_GC_IGNORE(name) (void)payload->name;
-#define PRIME_CALL_GC_BINDING(name) if(payload->name==bindings) return true;
-#define PRIME_CALL_GC_OUTCOMES(name) if(prime_need_call_gc_outcomes_contains(payload->name,bindings)) return true;
+#define PRIME_CALL_GC_IGNORE(field) (void)payload->field;
+#define PRIME_CALL_GC_BINDING(field) if(payload->field==bindings) return true;
+#define PRIME_CALL_GC_OUTCOMES(field) if(prime_need_call_gc_outcomes_contains(payload->field,bindings)) return true;
     for(const EvalGcRootFrame *root=g_eval_gc.roots;root;root=root->previous) {
         switch(root->kind) {
 #define PRIME_CALL_GC_ROOT_CASE(kind,upper) \
@@ -99687,7 +99691,8 @@ static __attribute__((noinline)) MettaDispatchResult metta_storage_dispatch(
         if (spec || has_library_reference) {
             dest = resolve_import_destination(a, import_dest, &error);
         }
-        if (!spec && !has_library_reference && !error) {
+        bool non_module_name_spec = !spec && !has_library_reference && !error;
+        if (non_module_name_spec) {
             error = atom_symbol(a, "import! expects a module name");
         }
         bool imported = false;
@@ -99871,6 +99876,12 @@ static __attribute__((noinline)) MettaDispatchResult metta_storage_dispatch(
             } else if (language_id != CETTA_LANGUAGE_PETTA ||
                 has_library_reference) {
                 ai_publish_error(a, os, atom_error(a, (*call), error), empty);
+            } else if (non_module_name_spec ||
+                       (error->kind == ATOM_SYMBOL &&
+                        strstr(atom_name_cstr(error),
+                               "python foreign modules require a Python-enabled build") != NULL)) {
+                /* Non-module-name specs fail empty in SWI-PeTTa (metta.pl:340),
+                 * and disabled-Python builds keep foreign .py imports inert. */
             } else {
                 /* An error raised while the module loaded reaches the
                  * importer unchanged, as the reference loader rethrows it.
@@ -106023,7 +106034,7 @@ tail_call: ;
     }
 
     if (language_id == CETTA_LANGUAGE_PRIME) {
-        if (atom_is_symbol(head, "std:definitions") && nargs == 1u) {
+        if (atom_is_symbol_id(head, symbol_intern_cstr(g_symbols, "std:definitions")) && nargs == 1u) {
             Atom *name = prime_public_bound_operand_syntax(a, expr_arg(atom, 0u), CURRENT_ENV);
             PrimeStandardHead *standard = name && name->kind == ATOM_SYMBOL
                 ? prime_standard_head(atom_symbol_current_id(name)) : NULL;
@@ -111939,7 +111950,7 @@ static void eval_top_with_registry_core(
      * effects hidden in query data. Both hosts use the same session state. */
     if (cetta_session_allows_experiments(active_eval_session()) && expr &&
         expr->kind == ATOM_EXPR && expr->expr.len &&
-        atom_is_symbol(expr->expr.elems[0], "ai:experiment")) {
+        atom_is_symbol_id(expr->expr.elems[0], symbol_intern_cstr(g_symbols, "ai:experiment"))) {
         CettaExperimentAdmission admission = expr->expr.len == 2u &&
             expr->expr.elems[1]->kind == ATOM_SYMBOL
             ? cetta_session_enable_experiment(active_eval_session(),

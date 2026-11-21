@@ -13941,7 +13941,7 @@ static bool petta_push_equation_result(
     uint32_t barrier, bool evaluate_result,
     bool translate_result, bool count_collection_result,
     const PettaPlanNode *plan, bool result_fully_resolved) {
-    /* Selection may precede the choice's continuation snapshot. Surface a
+    /* Selection may precede the choice's continuation snapshot. Raise a
      * source diagnostic only when this ordinary goal runs, after the sibling
      * alternatives and their continuation have been retained. */
     if (machine->host.failure_values && atom_is_error(result) &&
