@@ -541,6 +541,8 @@ tests/test_he_streamed_relations.metta	he	metta	extended	main	native	test	golden
 tests/test_he_swap_removal_index.metta	he	metta	extended	main	native	test	golden	-
 tests/test_he_typing_derivations.metta	he	metta	extended	main	native	test	golden	-
 tests/test_he_word_tokens.metta	he	metta	extended	main	native	test	golden	-
+tests/test_host_terminal_protocol.metta	he	metta	extended	main	native	test	diagnostic	diagnostic witness without golden oracle
+tests/test_host_text_layout.metta	he	metta	extended	main	native	test	diagnostic	diagnostic witness without golden oracle
 tests/test_hyperpose.metta	he	metta	extended	main	native	test	golden	-
 tests/test_hyperpose_arity.metta	he	metta	extended	main	native	test	golden	-
 tests/test_hyperpose_bang_name_regression.metta	he	metta	extended	main	native	test	golden	-
