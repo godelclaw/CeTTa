@@ -1,0 +1,16 @@
+; Upserting a row equal to the stored one keeps it. remove-atom removes every
+; copy, so an add followed by the removal of the stored rows deleted it.
+!(import! &self (library lib_memory_collection))
+!(import! &self (library tensor))
+!(let* (($v (tensor:from f64 (3) (1.0 2.0 3.0)))
+        ($row (Memory m1 r1 prof $v "doc" ()))
+        ($newer (Memory m1 r2 prof $v "doc" ()))
+        ($_ (memory:dispatch (reset)))
+        ($_ (memory:dispatch (load prof 3 ())))
+        ($_ (memory:dispatch (apply (memory:dispatch (upsert prof 3 $row)))))
+        ($_ (memory:dispatch (apply (memory:dispatch (upsert prof 3 $row)))))
+        ($same (collapse (memory:record m1)))
+        ($_ (memory:dispatch (apply (memory:dispatch (upsert prof 3 $newer)))))
+        ($replaced (collapse (memory:record m1))))
+   (println! (upsert-identical (size-atom $same) upsert-newer (size-atom $replaced)
+              (case $replaced ((((Memory $_ $rev $_ $_ $_ $_)) $rev) ($other none))))))

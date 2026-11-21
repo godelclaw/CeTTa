@@ -759,7 +759,9 @@
        (case (memory:validate $profile $dimensions $row)
          ((Valid (case $row
            (((Memory $id $rev $p $v $doc $meta)
-             (cons-atom (add $row) (collapse (remove (memory:record $id))))))))
+             ; remove-atom removes every copy, so the stored rows go first:
+             ; adding before removing would delete a row equal to $row.
+             (list:append (collapse (remove (memory:record $id))) ((add $row)))))))
           ($failure $failure))))
       ((insert $profile $dimensions $row)
        (case $row
