@@ -27152,6 +27152,21 @@ else
 endif
 
 .PHONY: test-petta-search-machine
+.PHONY: test-lib-dict-profiles
+test-lib-dict-profiles: $(BIN)
+	@set -e; \
+	fixture=tests/lib_dict_profiles.metta; \
+	expected=$$(cat tests/lib_dict_profiles.petta.expected); \
+	for args in "--lang petta" "--lang petta --profile extended"; do \
+		actual=$$(timeout 60 ./$(BIN) $$args --quiet "$$fixture" 2>&1 | grep -v '^true$$' || true); \
+		if [ "$$actual" != "$$expected" ]; then \
+			echo "FAIL: dictionary answers differ under $$args"; \
+			printf '%s\n' "$$actual"; exit 1; \
+		fi; \
+	done; \
+	echo "PASS: dictionaries keep their semantics in every PeTTa profile"
+SUITE_CORRECTNESS_GATES += test-lib-dict-profiles
+
 test-lib-prolog: $(BIN)
 	@set -e; \
 	he_actual=$$(mktemp runtime/lib-prolog-he.XXXXXX); \
