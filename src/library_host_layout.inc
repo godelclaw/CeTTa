@@ -149,3 +149,342 @@ static Atom *terminal_commit(Arena *a, int64_t cursor_up, Atom *lines_atom,
     memcpy(out + pos, trailer, sizeof(trailer) - 1u); pos += sizeof(trailer) - 1u;
     return atom_string_n(a, out, pos);
 }
+
+/* ---- Styled text wrapping (UAX #29/#11 grapheme-cluster aware) ---- */
+
+typedef struct {
+    Atom **items;
+    size_t len, cap;
+    bool oom;
+} LayoutVec;
+
+static void layout_vec_push(LayoutVec *v, Atom *item) {
+    if (v->oom || !item) { v->oom = true; return; }
+    if (v->len == v->cap) {
+        size_t next = v->cap ? v->cap * 2u : 16u;
+        Atom **grown = realloc(v->items, next * sizeof(*grown));
+        if (!grown) { v->oom = true; return; }
+        v->items = grown; v->cap = next;
+    }
+    v->items[v->len++] = item;
+}
+
+static Atom *layout_make_row(Arena *a, const char *prefix, size_t prefix_len,
+                             const char *body, size_t body_len,
+                             const char *suffix, size_t suffix_len,
+                             size_t src_start, size_t src_end, size_t cells_count) {
+    size_t total = prefix_len + body_len + suffix_len;
+    char *out = arena_alloc(a, total ? total : 1u);
+    size_t pos = 0;
+    if (prefix_len) { memcpy(out + pos, prefix, prefix_len); pos += prefix_len; }
+    if (body_len) { memcpy(out + pos, body, body_len); pos += body_len; }
+    if (suffix_len) { memcpy(out + pos, suffix, suffix_len); pos += suffix_len; }
+    return term(a, "TextRow", (Atom *[]){
+        atom_string_n(a, out, pos),
+        atom_int(a, (int64_t)src_start),
+        atom_int(a, (int64_t)src_end),
+        atom_int(a, (int64_t)cells_count)
+    }, 4u);
+}
+
+static bool cluster_is_ascii_ws(const char *s, size_t start, size_t end) {
+    return (end == start + 1u) && (s[start] == ' ' || s[start] == '\t');
+}
+
+static Atom *text_wrap(Arena *a, const char *src, size_t src_len, size_t width,
+                       const char *indent, size_t indent_len,
+                       const char *hanging, size_t hanging_len,
+                       const char *mode,
+                       const char *ellipsis, size_t ellipsis_len) {
+    int mode_id = !strcmp(mode, "word") ? 0
+                : !strcmp(mode, "fold") ? 1
+                : !strcmp(mode, "none") ? 2
+                : !strcmp(mode, "crop") ? 3 : -1;
+    if (mode_id < 0 || width < 1u || width > 65535u) return failure(a, "text-wrap", EINVAL);
+    size_t indent_cells = 0, hanging_cells = 0, ellipsis_cells = 0;
+    if (!cetta_measure_cells(indent, indent_len, 0u, &indent_cells) ||
+        !cetta_measure_cells(hanging, hanging_len, 0u, &hanging_cells) ||
+        !cetta_measure_cells(ellipsis, ellipsis_len, 0u, &ellipsis_cells) ||
+        !utf8(src, src_len)) {
+        return failure(a, "text-wrap", EILSEQ);
+    }
+
+    LayoutVec rows = {0};
+    size_t p = 0;
+    for (;;) {
+        size_t p_start = p;
+        while (p < src_len && src[p] != '\n') ++p;
+        size_t p_end = (p > p_start && src[p - 1u] == '\r') ? p - 1u : p;
+        bool has_next_para = (p < src_len && src[p] == '\n');
+        if (has_next_para) ++p;
+
+        if (mode_id == 2) {
+            /* none: single logical row per paragraph (copy-safe) */
+            size_t body_cells = 0;
+            (void)cetta_measure_cells(src + p_start, p_end - p_start, indent_cells, &body_cells);
+            layout_vec_push(&rows, layout_make_row(a, indent, indent_len,
+                src + p_start, p_end - p_start, "", 0u, p_start, p_end, indent_cells + body_cells));
+        } else if (mode_id == 3) {
+            /* crop: single row clipped at grapheme boundary with ellipsis */
+            size_t at = p_start, col = indent_cells;
+            size_t fit_end = p_start, fit_cells = indent_cells;
+            size_t budget = (width >= ellipsis_cells) ? (width - ellipsis_cells) : 0u;
+            bool overflow = false;
+            while (at < p_end) {
+                size_t next_at = 0, w = 0;
+                (void)cetta_grapheme_next(src, p_end, at, col, &next_at, &w);
+                if (col + w > width) { overflow = true; break; }
+                col += w; at = next_at;
+                if (col <= budget) { fit_end = at; fit_cells = col; }
+            }
+            if (!overflow) {
+                layout_vec_push(&rows, layout_make_row(a, indent, indent_len,
+                    src + p_start, p_end - p_start, "", 0u, p_start, p_end, col));
+            } else if (indent_cells + ellipsis_cells <= width) {
+                layout_vec_push(&rows, layout_make_row(a, indent, indent_len,
+                    src + p_start, fit_end - p_start, ellipsis, ellipsis_len,
+                    p_start, fit_end, fit_cells + ellipsis_cells));
+            } else {
+                layout_vec_push(&rows, layout_make_row(a, indent, indent_len,
+                    "", 0u, "", 0u, p_start, p_start, indent_cells));
+            }
+        } else if (p_start == p_end) {
+            layout_vec_push(&rows, layout_make_row(a, indent, indent_len,
+                "", 0u, "", 0u, p_start, p_start, indent_cells));
+        } else if (mode_id == 1) {
+            /* fold: hard grapheme-boundary wrap */
+            size_t at = p_start;
+            bool first_row = true;
+            while (at < p_end) {
+                const char *pref = first_row ? indent : hanging;
+                size_t pref_len = first_row ? indent_len : hanging_len;
+                size_t col = first_row ? indent_cells : hanging_cells;
+                size_t row_start = at;
+                while (at < p_end) {
+                    size_t next_at = 0, w = 0;
+                    (void)cetta_grapheme_next(src, p_end, at, col, &next_at, &w);
+                    if (at > row_start && col + w > width) break;
+                    col += w; at = next_at;
+                }
+                layout_vec_push(&rows, layout_make_row(a, pref, pref_len,
+                    src + row_start, at - row_start, "", 0u, row_start, at, col));
+                first_row = false;
+            }
+        } else {
+            /* word: wrap at whitespace, hyphens, or CJK wide clusters; fallback to grapheme fold */
+            size_t at = p_start;
+            bool first_row = true;
+            while (at < p_end) {
+                const char *pref = first_row ? indent : hanging;
+                size_t pref_len = first_row ? indent_len : hanging_len;
+                size_t col = first_row ? indent_cells : hanging_cells;
+                size_t row_start = at;
+                bool seen_nonws = false, in_ws = false, has_break = false;
+                size_t ws_start = at, ws_cells = col;
+                size_t break_end = at, break_next = at, break_cells = col;
+                bool overflow = false;
+
+                while (at < p_end) {
+                    size_t next_at = 0, w = 0;
+                    (void)cetta_grapheme_next(src, p_end, at, col, &next_at, &w);
+                    bool is_ws = cluster_is_ascii_ws(src, at, next_at);
+                    if (col + w > width) {
+                        if (is_ws && (at > row_start || in_ws)) {
+                            size_t emit_end = in_ws ? ws_start : at;
+                            size_t emit_cells = in_ws ? ws_cells : col;
+                            size_t skip = next_at;
+                            while (skip < p_end) {
+                                size_t sn = 0, sw = 0;
+                                (void)cetta_grapheme_next(src, p_end, skip, 0u, &sn, &sw);
+                                if (!cluster_is_ascii_ws(src, skip, sn)) break;
+                                skip = sn;
+                            }
+                            layout_vec_push(&rows, layout_make_row(a, pref, pref_len,
+                                src + row_start, emit_end - row_start, "", 0u,
+                                row_start, emit_end, emit_cells));
+                            at = skip;
+                        } else if (in_ws && ws_start > row_start) {
+                            layout_vec_push(&rows, layout_make_row(a, pref, pref_len,
+                                src + row_start, ws_start - row_start, "", 0u,
+                                row_start, ws_start, ws_cells));
+                        } else if (has_break && break_end > row_start) {
+                            layout_vec_push(&rows, layout_make_row(a, pref, pref_len,
+                                src + row_start, break_end - row_start, "", 0u,
+                                row_start, break_end, break_cells));
+                            at = break_next;
+                        } else {
+                            size_t emit_end = (at > row_start) ? at : next_at;
+                            size_t emit_cells = (at > row_start) ? col : (col + w);
+                            layout_vec_push(&rows, layout_make_row(a, pref, pref_len,
+                                src + row_start, emit_end - row_start, "", 0u,
+                                row_start, emit_end, emit_cells));
+                            at = emit_end;
+                        }
+                        overflow = true;
+                        break;
+                    }
+                    if (is_ws) {
+                        if (seen_nonws && !in_ws) {
+                            in_ws = true; ws_start = at; ws_cells = col;
+                        }
+                    } else {
+                        if (in_ws) {
+                            has_break = true; break_end = ws_start; break_next = at; break_cells = ws_cells;
+                            in_ws = false;
+                        }
+                        bool prev_nonws = seen_nonws;
+                        seen_nonws = true;
+                        if ((prev_nonws && next_at == at + 1u && src[at] == '-') || w == 2u) {
+                            has_break = true; break_end = next_at; break_next = next_at; break_cells = col + w;
+                        }
+                    }
+                    col += w; at = next_at;
+                }
+                if (!overflow) {
+                    layout_vec_push(&rows, layout_make_row(a, pref, pref_len,
+                        src + row_start, p_end - row_start, "", 0u, row_start, p_end, col));
+                    at = p_end;
+                }
+                first_row = false;
+            }
+        }
+        if (!has_next_para) break;
+    }
+
+    Atom *result = rows.oom ? failure(a, "text-wrap", ENOMEM)
+                            : atom_expr(a, rows.items, (uint32_t)rows.len);
+    free(rows.items);
+    return result;
+}
+
+/* ---- Styled spans -> ANSI 16-color SGR + OSC 8 emitter (NO_COLOR aware) ---- */
+
+static int sgr_style_code(const char *name) {
+    if (!name) return -1;
+    if (!strcmp(name, "bold")) return 1;
+    if (!strcmp(name, "dim")) return 2;
+    if (!strcmp(name, "italic")) return 3;
+    if (!strcmp(name, "underline")) return 4;
+    if (!strcmp(name, "reverse")) return 7;
+    if (!strcmp(name, "strike")) return 9;
+    return -1;
+}
+
+static int sgr_color_code(const char *name, bool background) {
+    if (!name || !strcmp(name, "none") || !strcmp(name, "default")) return 0;
+    int base = background ? 40 : 30;
+    int bright = background ? 100 : 90;
+    if (!strcmp(name, "black")) return base + 0;
+    if (!strcmp(name, "red")) return base + 1;
+    if (!strcmp(name, "green")) return base + 2;
+    if (!strcmp(name, "yellow")) return base + 3;
+    if (!strcmp(name, "blue")) return base + 4;
+    if (!strcmp(name, "magenta")) return base + 5;
+    if (!strcmp(name, "cyan")) return base + 6;
+    if (!strcmp(name, "white")) return base + 7;
+    if (!strcmp(name, "bright-black")) return bright + 0;
+    if (!strcmp(name, "bright-red")) return bright + 1;
+    if (!strcmp(name, "bright-green")) return bright + 2;
+    if (!strcmp(name, "bright-yellow")) return bright + 3;
+    if (!strcmp(name, "bright-blue")) return bright + 4;
+    if (!strcmp(name, "bright-magenta")) return bright + 5;
+    if (!strcmp(name, "bright-cyan")) return bright + 6;
+    if (!strcmp(name, "bright-white")) return bright + 7;
+    return -1;
+}
+
+typedef struct {
+    char *data;
+    size_t len, cap;
+    bool oom;
+} LayoutStr;
+
+static void layout_str_append(LayoutStr *b, const char *s, size_t n) {
+    if (b->oom || !n) return;
+    if (n > (size_t)67108864u - b->len) { b->oom = true; return; }
+    if (b->len + n > b->cap) {
+        size_t next = b->cap ? b->cap * 2u : 128u;
+        while (next < b->len + n) next *= 2u;
+        char *grown = realloc(b->data, next);
+        if (!grown) { b->oom = true; return; }
+        b->data = grown; b->cap = next;
+    }
+    memcpy(b->data + b->len, s, n);
+    b->len += n;
+}
+
+static Atom *text_render_spans(Arena *a, Atom *spans_atom, const char *color_mode) {
+    if (!spans_atom || spans_atom->kind != ATOM_EXPR || !color_mode)
+        return failure(a, "text-render-spans", EINVAL);
+    bool no_color = false;
+    if (!strcmp(color_mode, "no-color")) no_color = true;
+    else if (!strcmp(color_mode, "ansi16")) no_color = false;
+    else if (!strcmp(color_mode, "auto")) {
+        const char *nc = getenv("NO_COLOR");
+        no_color = (nc != NULL && nc[0] != '\0');
+    } else return failure(a, "text-render-spans", EINVAL);
+
+    LayoutStr out = {0};
+    for (uint32_t i = 0; i < spans_atom->expr.len; ++i) {
+        Atom *sp = spans_atom->expr.elems[i];
+        const char *txt = NULL; size_t txt_len = 0;
+        if (!sp || sp->kind != ATOM_EXPR || sp->expr.len != 6u ||
+            !atom_is_symbol(sp->expr.elems[0], "TextSpan") ||
+            !string_bytes(sp->expr.elems[1], &txt, &txt_len) ||
+            sp->expr.elems[2]->kind != ATOM_EXPR) {
+            free(out.data);
+            return failure(a, "text-render-spans", EINVAL);
+        }
+        int codes[16]; size_t ncodes = 0;
+        Atom *styles = sp->expr.elems[2];
+        for (uint32_t j = 0; j < styles->expr.len; ++j) {
+            int sc = sgr_style_code(text(styles->expr.elems[j]));
+            if (sc < 0) { free(out.data); return failure(a, "text-render-spans", EINVAL); }
+            if (ncodes < 14u) codes[ncodes++] = sc;
+        }
+        int fg = sgr_color_code(text(sp->expr.elems[3]), false);
+        int bg = sgr_color_code(text(sp->expr.elems[4]), true);
+        if (fg < 0 || bg < 0) { free(out.data); return failure(a, "text-render-spans", EINVAL); }
+        if (fg > 0) codes[ncodes++] = fg;
+        if (bg > 0) codes[ncodes++] = bg;
+
+        const char *url = NULL; size_t url_len = 0;
+        bool has_url = false;
+        if (sp->expr.elems[5]->kind == ATOM_SYMBOL && atom_is_symbol(sp->expr.elems[5], "none")) {
+            has_url = false;
+        } else if (string_bytes(sp->expr.elems[5], &url, &url_len)) {
+            has_url = (url_len > 0u);
+        } else {
+            free(out.data); return failure(a, "text-render-spans", EINVAL);
+        }
+
+        size_t clean_url_len = has_url ? sanitize_osc_url(url, url_len, NULL) : 0u;
+        if (clean_url_len) {
+            layout_str_append(&out, "\033]8;;", 5u);
+            char *clean_url = malloc(clean_url_len);
+            if (!clean_url) { free(out.data); return failure(a, "text-render-spans", ENOMEM); }
+            (void)sanitize_osc_url(url, url_len, clean_url);
+            layout_str_append(&out, clean_url, clean_url_len);
+            free(clean_url);
+            layout_str_append(&out, "\033\\", 2u);
+        }
+        bool opened_sgr = (!no_color && ncodes > 0u);
+        if (opened_sgr) {
+            char seq[96]; size_t pos = 0;
+            seq[pos++] = '\033'; seq[pos++] = '[';
+            for (size_t k = 0; k < ncodes; ++k) {
+                if (k) seq[pos++] = ';';
+                pos += (size_t)snprintf(seq + pos, sizeof(seq) - pos, "%d", codes[k]);
+            }
+            seq[pos++] = 'm';
+            layout_str_append(&out, seq, pos);
+        }
+        layout_str_append(&out, txt, txt_len);
+        if (opened_sgr) layout_str_append(&out, "\033[0m", 4u);
+        if (clean_url_len) layout_str_append(&out, "\033]8;;\033\\", 7u);
+    }
+    Atom *result = out.oom ? failure(a, "text-render-spans", ENOMEM)
+                           : atom_string_n(a, out.data ? out.data : "", out.len);
+    free(out.data);
+    return result;
+}

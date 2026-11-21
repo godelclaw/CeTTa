@@ -5,10 +5,10 @@
 #include "native_handle.h"
 #include "effect_policy.h"
 #include "utf8.h"
+#include "unicode_text_layout.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <locale.h>
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
@@ -25,7 +25,6 @@
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
-#include <wchar.h>
 
 typedef enum { HOST_STREAM, HOST_LISTENER, HOST_TERMINAL, HOST_STDIO, HOST_WATCH } HostFdKind;
 typedef struct {
@@ -530,26 +529,10 @@ static Atom *wait_reply(CettaLibraryContext *ctx, Arena *a, Atom *listener_atom,
     (void)cetta_native_handle_use_release(&listener_use);
     free(fds); free(uses); free(ready); return answer;
 }
-static pthread_once_t width_once = PTHREAD_ONCE_INIT;
-static locale_t width_locale;
-static void initialize_width(void) { width_locale = newlocale(LC_CTYPE_MASK, "C.UTF-8", (locale_t)0); }
 static int character_cells(uint32_t cp, size_t column) {
     if (cp == '\t') return 8 - (int)(column % 8u);
     if (cp < 32u || cp == 127u) return 0;
-    pthread_once(&width_once, initialize_width);
-    locale_t previous = width_locale ? uselocale(width_locale) : (locale_t)0;
-    int width = wcwidth((wchar_t)cp);
-    if (width_locale) (void)uselocale(previous);
-    return width < 0 ? 1 : width;
-}
-static Atom *cells(Arena *a, const char *bytes, size_t length) {
-    size_t column = 0;
-    for (size_t at = 0; at < length;) {
-        uint32_t cp, width;
-        if (!cetta_utf8_decode_one((const uint8_t *)bytes, length, at, &cp, &width)) return failure(a, "cells", EILSEQ);
-        column += (size_t)character_cells(cp, column); at += width;
-    }
-    return atom_int(a, (int64_t)column);
+    return (int)CETTA_UL_WIDTH(cetta_unicode_layout_props(cp));
 }
 /* Validate a file without constructing its strings or arrays. Encoding follows
  * Python's binary JSON reader; non-finite literals remain compatibility data.
@@ -688,6 +671,7 @@ static Atom *edit_command(Arena *a, HostBuffer *b, const char *command) {
 #include "library_host_text.inc"
 #include "library_host_input.inc"
 #include "library_host_layout.inc"
+#include "library_host_markdown.inc"
 #include "library_host_json_cursor.inc"
 
 bool cetta_host_io_call(CettaLibraryContext *ctx, Arena *a, Atom *head, Atom **args,
@@ -773,6 +757,23 @@ bool cetta_host_io_call(CettaLibraryContext *ctx, Arena *a, Atom *head, Atom **a
         const char *redraw; size_t redraw_len;
         if (string_bytes(args[3], &redraw, &redraw_len))
             answer = terminal_commit(a, value, args[2], redraw, redraw_len);
+    } else if (!strcmp(operation, "graphemes") && nargs == 2u) {
+        const char *bytes; size_t length;
+        if (string_bytes(args[1], &bytes, &length)) answer = graphemes_text(a, bytes, length);
+    } else if (!strcmp(operation, "text-wrap") && nargs == 7u && number(args[2], 1, 65535, &value) && text(args[5])) {
+        const char *src, *ind, *hang, *ell;
+        size_t src_len, ind_len, hang_len, ell_len;
+        if (string_bytes(args[1], &src, &src_len) &&
+            string_bytes(args[3], &ind, &ind_len) &&
+            string_bytes(args[4], &hang, &hang_len) &&
+            string_bytes(args[6], &ell, &ell_len)) {
+            answer = text_wrap(a, src, src_len, (size_t)value, ind, ind_len, hang, hang_len, text(args[5]), ell, ell_len);
+        }
+    } else if (!strcmp(operation, "text-render-spans") && nargs == 3u && text(args[2])) {
+        answer = text_render_spans(a, args[1], text(args[2]));
+    } else if (!strcmp(operation, "markdown-parse") && nargs == 2u) {
+        const char *bytes; size_t length;
+        if (string_bytes(args[1], &bytes, &length)) answer = markdown_parse(a, bytes, length);
     } else if (!strcmp(operation, "buffer-new") && nargs == 3u &&
                number(args[1], 1, INT_MAX, &value) && text(args[2])) {
         const char *mode = text(args[2]);

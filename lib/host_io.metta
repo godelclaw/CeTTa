@@ -5,7 +5,7 @@
 ; listen refuses an existing endpoint; listen-recover may remove a refused,
 ; same-user stale socket and requires the caller's exclusive endpoint admission.
 ; Terminal mode is restored by close or resource cleanup. resize readiness is
-; acknowledged by terminal:size. cells uses the host C.UTF-8 terminal widths.
+; acknowledged by terminal:size. cells uses Unicode 16.0 UAX #29/#11 grapheme widths.
 (: __cetta_lib_host_io (-> Atom Atom Atom))
 (: __cetta_lib_host_io (-> Atom Atom))
 (: host:identity (-> Atom))
@@ -14,6 +14,8 @@
 (: __cetta_lib_host_io (-> Atom Atom Atom Atom))
 (: __cetta_lib_host_io (-> Atom Atom Atom Atom Atom))
 (: __cetta_lib_host_io (-> Atom Atom Atom Atom Atom Atom))
+(: __cetta_lib_host_io (-> Atom Atom Atom Atom Atom Atom Atom))
+(: __cetta_lib_host_io (-> Atom Atom Atom Atom Atom Atom Atom Atom))
 (: host:signals (-> Atom))
 (: host:signal (-> %Undefined% Atom))
 (: host:json-file (-> %Undefined% Atom))
@@ -51,6 +53,10 @@
 (: terminal:hyperlink (-> %Undefined% %Undefined% Atom))
 (: terminal:clipboard (-> %Undefined% Atom))
 (: terminal:commit (-> %Undefined% %Undefined% %Undefined% Atom))
+(: terminal:graphemes (-> %Undefined% Atom))
+(: text:wrap (-> %Undefined% %Undefined% %Undefined% %Undefined% %Undefined% %Undefined% Atom))
+(: text:render-spans (-> %Undefined% %Undefined% Atom))
+(: markdown:parse (-> %Undefined% Atom))
 (: buffer:viewport (-> %Undefined% %Undefined% %Undefined% Atom))
 (: buffer:input-event (-> %Undefined% %Undefined% Atom))
 (: buffer:new (-> %Undefined% %Undefined% Atom))
@@ -93,6 +99,10 @@
 (= (terminal:hyperlink $url $label) (function (chain (eval (__cetta_lib_host_io "terminal-hyperlink" $url $label)) $r (return $r))))
 (= (terminal:clipboard $text) (function (chain (eval (__cetta_lib_host_io "terminal-clipboard" $text)) $r (return $r))))
 (= (terminal:commit $cursor-up $lines $redraw) (function (chain (eval (__cetta_lib_host_io "terminal-commit" $cursor-up $lines $redraw)) $r (return $r))))
+(= (terminal:graphemes $text) (function (chain (eval (__cetta_lib_host_io "graphemes" $text)) $r (return $r))))
+(= (text:wrap $text $width $indent $hanging $mode $ellipsis) (function (chain (eval (__cetta_lib_host_io "text-wrap" $text $width $indent $hanging $mode $ellipsis)) $r (return $r))))
+(= (text:render-spans $spans $color-mode) (function (chain (eval (__cetta_lib_host_io "text-render-spans" $spans $color-mode)) $r (return $r))))
+(= (markdown:parse $text) (function (chain (eval (__cetta_lib_host_io "markdown-parse" $text)) $r (return $r))))
 (= (buffer:viewport $owner $width $rows) (function (chain (eval (__cetta_lib_host_io "buffer-viewport" $owner $width $rows)) $r (return $r))))
 (= (buffer:input-event $owner $flush) (function (chain (eval (__cetta_lib_host_io "buffer-input-event" $owner $flush)) $r (return $r))))
 (= (buffer:new $maximum $mode) (function (chain (eval (__cetta_lib_host_io "buffer-new" $maximum $mode)) $r (return $r))))
