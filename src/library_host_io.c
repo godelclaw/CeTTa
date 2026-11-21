@@ -687,6 +687,7 @@ static Atom *edit_command(Arena *a, HostBuffer *b, const char *command) {
 
 #include "library_host_text.inc"
 #include "library_host_input.inc"
+#include "library_host_layout.inc"
 #include "library_host_json_cursor.inc"
 
 bool cetta_host_io_call(CettaLibraryContext *ctx, Arena *a, Atom *head, Atom **args,
@@ -753,6 +754,25 @@ bool cetta_host_io_call(CettaLibraryContext *ctx, Arena *a, Atom *head, Atom **a
     } else if (!strcmp(operation, "clip") && nargs == 3u && number(args[2], 0, INT_MAX, &value)) {
         const char *bytes; size_t length;
         if (string_bytes(args[1], &bytes, &length)) answer = clip_text(a, bytes, length, (size_t)value);
+    } else if (!strcmp(operation, "terminal-cpr-request") && nargs == 1u) {
+        answer = terminal_cpr_request(a);
+    } else if (!strcmp(operation, "terminal-cpr-parse") && nargs == 2u) {
+        const char *bytes; size_t length;
+        if (string_bytes(args[1], &bytes, &length)) answer = terminal_cpr_parse(a, bytes, length);
+    } else if (!strcmp(operation, "terminal-sync") && nargs == 2u) {
+        const char *bytes; size_t length;
+        if (string_bytes(args[1], &bytes, &length)) answer = terminal_sync(a, bytes, length);
+    } else if (!strcmp(operation, "terminal-hyperlink") && nargs == 3u) {
+        const char *url, *label; size_t url_len, label_len;
+        if (string_bytes(args[1], &url, &url_len) && string_bytes(args[2], &label, &label_len))
+            answer = terminal_hyperlink(a, url, url_len, label, label_len);
+    } else if (!strcmp(operation, "terminal-clipboard") && nargs == 2u) {
+        const char *bytes; size_t length;
+        if (string_bytes(args[1], &bytes, &length)) answer = terminal_clipboard(a, bytes, length);
+    } else if (!strcmp(operation, "terminal-commit") && nargs == 4u && number(args[1], 0, 65535, &value)) {
+        const char *redraw; size_t redraw_len;
+        if (string_bytes(args[3], &redraw, &redraw_len))
+            answer = terminal_commit(a, value, args[2], redraw, redraw_len);
     } else if (!strcmp(operation, "buffer-new") && nargs == 3u &&
                number(args[1], 1, INT_MAX, &value) && text(args[2])) {
         const char *mode = text(args[2]);

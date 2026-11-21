@@ -15,6 +15,23 @@ static void input_drop(HostBuffer *b, size_t bytes) {
     if (length > bytes) memmove(b->bytes, b->bytes + bytes, length - bytes);
     b->first = length - bytes; b->last = b->capacity; b->scan = 0;
 }
+static bool parse_cpr_params(const unsigned char *bytes, size_t length, unsigned *out_row, unsigned *out_col) {
+    if (length < 3u || length > 15u) return false;
+    size_t at = 0;
+    unsigned row = 0, col = 0, row_digits = 0, col_digits = 0;
+    while (at < length && bytes[at] >= '0' && bytes[at] <= '9') {
+        if (++row_digits > 6u) return false;
+        row = row * 10u + (unsigned)(bytes[at++] - '0');
+    }
+    if (!row_digits || !row || at >= length || bytes[at++] != ';') return false;
+    while (at < length && bytes[at] >= '0' && bytes[at] <= '9') {
+        if (++col_digits > 6u) return false;
+        col = col * 10u + (unsigned)(bytes[at++] - '0');
+    }
+    if (!col_digits || !col || at != length) return false;
+    *out_row = row; *out_col = col;
+    return true;
+}
 static Atom *input_event(Arena *a, HostBuffer *b, bool flush_escape) {
     if (b->text) return failure(a, "input-event", EINVAL);
     size_t length = buffer_length(b); buffer_seek(b, length);
@@ -42,6 +59,16 @@ static Atom *input_event(Arena *a, HostBuffer *b, bool flush_escape) {
             while (take < length && (b->bytes[take] < 0x40 || b->bytes[take] > 0x7e)) ++take;
             if (take == length && !flush_escape) return atom_symbol(a, "HostPending");
             if (take < length) ++take;
+            if (b->bytes[1] == '[' && take >= 6u && b->bytes[take - 1u] == 'R') {
+                unsigned row = 0, col = 0;
+                if (parse_cpr_params(b->bytes + 2u, take - 3u, &row, &col)) {
+                    char payload[32];
+                    int n = snprintf(payload, sizeof(payload), "%u;%u", row, col);
+                    input_drop(b, take);
+                    return term(a, "HostInput", (Atom *[]){atom_string(a, "cursor-position"),
+                        atom_string_n(a, payload, n > 0 ? (size_t)n : 0u)}, 2u);
+                }
+            }
         }
         input_drop(b, take);
         return term(a, "HostInput", (Atom *[]){atom_string(a, take == 1 ? "escape" : "unknown"), atom_string(a, "")}, 2u);
