@@ -20,6 +20,7 @@
    (let $_6 (tl:check cells-vs15-heart (== (terminal:cells "❤︎") 1))
    (let $_7 (tl:check cells-skin-tone (== (terminal:cells "👍🏽") 2))
    (let $_8 (tl:check cells-keycap (== (terminal:cells "1️⃣") 2))
+   (let $_8b (tl:check cells-keycap-text-no-vs16 (== (terminal:cells "#⃣") 1))
 
    ;; 2. terminal:graphemes (exact clusters, byte offsets, widths)
    (let $gs (terminal:graphemes "a👨‍👩‍👧‍👦🇨🇿")
@@ -28,10 +29,31 @@
    (let $_11 (tl:check graphemes-second (== (index-atom $gs 1) (HostGrapheme "👨‍👩‍👧‍👦" 1 26 2)))
    (let $_12 (tl:check graphemes-third (== (index-atom $gs 2) (HostGrapheme "🇨🇿" 26 34 2)))
 
-   ;; 3. Grapheme-safe terminal:clip (never splits inside a grapheme cluster)
+   ;; 3. Grapheme-safe terminal:clip (never splits inside a grapheme cluster,
+   ;;    including ZWJ, combining sequences, VS16 heart, keycap, and flags
+   ;;    landing exactly on the limit or overflowing by 1 cell)
    (let $_13 (tl:check clip-fits-zwj-with-ellipsis (== (terminal:clip "a👨‍👩‍👧‍👦bc" 4) "a👨‍👩‍👧‍👦…"))
    (let $_14 (tl:check clip-never-splits-zwj (== (terminal:clip "a👨‍👩‍👧‍👦b" 3) "a…"))
+   (let $_14a (tl:check clip-zwj-exact-on-limit (== (terminal:clip "👨‍👩‍👧‍👦" 2) "👨‍👩‍👧‍👦"))
+   (let $_14b (tl:check clip-zwj-exact-with-prefix (== (terminal:clip "a👨‍👩‍👧‍👦" 3) "a👨‍👩‍👧‍👦"))
+   (let $_14c (tl:check clip-zwj-below-limit (== (terminal:clip "👨‍👩‍👧‍👦" 1) "…"))
+   (let $_14d (tl:check clip-zwj-overflow-at-2 (== (terminal:clip "👨‍👩‍👧‍👦x" 2) "…"))
+   (let $_14e (tl:check clip-zwj-prefix-below-limit (== (terminal:clip "a👨‍👩‍👧‍👦" 2) "a…"))
    (let $_15 (tl:check clip-never-splits-combining (== (terminal:clip "éx" 2) "éx"))
+   (let $_15a (tl:check clip-combining-exact-on-limit (== (terminal:clip "é" 1) "é"))
+   (let $_15b (tl:check clip-combining-overflow-at-1 (== (terminal:clip "éx" 1) "…"))
+   (let $_15c (tl:check clip-combining-overflow-at-2 (== (terminal:clip "aéx" 2) "a…"))
+   (let $_15d (tl:check clip-combining-exact-at-2 (== (terminal:clip "aé" 2) "aé"))
+   (let $_15e (tl:check clip-stacked-combining-exact (== (terminal:clip "á̈" 1) "á̈"))
+   (let $_15f (tl:check clip-stacked-combining-overflow (== (terminal:clip "xá̈y" 2) "x…"))
+   (let $_15g (tl:check clip-heart-vs16-exact (== (terminal:clip "a❤️" 3) "a❤️"))
+   (let $_15h (tl:check clip-heart-vs16-overflow (== (terminal:clip "a❤️x" 3) "a…"))
+   (let $_15i (tl:check clip-keycap-exact (== (terminal:clip "a1️⃣" 3) "a1️⃣"))
+   (let $_15j (tl:check clip-keycap-overflow (== (terminal:clip "a1️⃣x" 3) "a…"))
+   (let $_15k (tl:check clip-flag-exact (== (terminal:clip "a🇨🇿" 3) "a🇨🇿"))
+   (let $_15l (tl:check clip-flag-overflow (== (terminal:clip "a🇨🇿x" 3) "a…"))
+   (let $_15m (tl:check clip-preserves-full-cluster-at-4 (== (terminal:graphemes (terminal:clip "a👨‍👩‍👧‍👦bc" 4))
+                ((HostGrapheme "a" 0 1 1) (HostGrapheme "👨‍👩‍👧‍👦" 1 26 2) (HostGrapheme "…" 26 29 1))))
    (let $_16 (tl:check clip-exact-zero (== (terminal:clip "hello" 0) ""))
 
    ;; 4. text:wrap: word mode with indent and hanging indent + exact byte offsets
@@ -75,6 +97,13 @@
    (let $_24 (tl:check spans-ansi-osc8 (not (== (str:find $ansi (str:concat $esc "]8;;https://example.org")) (TextNotFound (str:concat $esc "]8;;https://example.org")))))
    (let $_25 (tl:check spans-no-color-no-sgr (== (str:find $plain (str:concat $esc "[")) (TextNotFound (str:concat $esc "["))))
    (let $_26 (tl:check spans-no-color-keeps-text (== (terminal:clean $plain) "ERR: doc"))
+   ;; 9b. text:render-spans strips ESC and BEL inside span text (prevents SGR/OSC escape injection)
+   (let $bel (str:from-python-codepoints (7))
+   (let $dirty-span ((TextSpan (str:join "" ("ok" $esc "]52;c;AAAA" $bel "tail")) ("bold") "red" none "https://example.org"))
+   (let $rendered-dirty (text:render-spans $dirty-span "ansi16")
+   (let $_26a (tl:check spans-strips-bel (== (str:find $rendered-dirty $bel) (TextNotFound $bel)))
+   (let $_26b (tl:check spans-strips-osc52 (== (str:find $rendered-dirty "]52") (TextNotFound "]52")))
+   (let $_26c (tl:check spans-keeps-clean-text (== (terminal:clean $rendered-dirty) "oktail"))
 
    ;; 10. markdown:parse: headings, emphasis, strong, snake_case preservation,
    ;;     code spans, links, verbatim fenced code blocks, lists, blockquotes, rules
@@ -117,7 +146,7 @@
                                 (MdCodeBlock "" "raw_indent()\n")
                                 (MdList ordered 3 ((MdItem ((MdParagraph ((MdText "alpha*star") (MdHardBreak) (MdText "next ") (MdLink "https://x.y" "" ((MdText "https://x.y")))))))))))))
 
-   True)))))))))))))))))))))))))))))))))))))))))))))))))
+   True))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
 
 !(let $ans (collapse (tl:run))
    (if (== $ans (True)) (println! HOST_TEXT_LAYOUT_OK) (system:exit 1)))

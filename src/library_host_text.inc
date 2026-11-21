@@ -107,7 +107,7 @@ static bool cetta_grapheme_next(const char *bytes, size_t length, size_t start,
     if (cp_count == 1u && first_cp == '\t') cl_cells = 8u - (column % 8u);
     else if (first_cp == '\r' || first_cp == '\n') cl_cells = 0u;
     else if (ri_count >= 2u) cl_cells = 2u;
-    else if (has_keycap) cl_cells = 2u;
+    else if (has_keycap && has_vs16) cl_cells = 2u;
     else if (has_zwj && has_ext_pict) cl_cells = 2u;
     else if (has_vs16 && has_emoji) cl_cells = 2u;
     else if (has_vs15 && has_emoji) cl_cells = 1u;

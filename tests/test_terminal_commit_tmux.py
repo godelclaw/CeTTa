@@ -158,6 +158,104 @@ def run_tmux_cpr_check(cetta_bin: Path, repo_root: Path) -> None:
                            capture_output=True, text=True)
 
 
+def run_tmux_width_comparison(cetta_bin: Path, repo_root: Path) -> None:
+    """Compare real tmux 3.6 cell count and 64-column wrap boundaries against
+    CeTTa's terminal:cells for ZWJ family, heart+VS16, keycap, and baseline
+    clusters."""
+    socket_name = f"cetta-width-test-{os.getpid()}"
+    samples = [
+        ("ascii_a", "a", 1),
+        ("cjk_snow", "雪", 2),
+        ("combining_e_acute", "e\u0301", 1),
+        ("zwj_family", "\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466", 2),
+        ("heart_vs16", "\u2764\uFE0F", 2),
+        ("heart_vs15", "\u2764\uFE0E", 1),
+        ("heart_bare", "\u2764", 1),
+        ("keycap_1", "1\uFE0F\u20E3", 2),
+        ("keycap_hash_novs", "#\u20E3", 1),
+        ("flag_cz", "\U0001F1E8\U0001F1FF", 2),
+    ]
+
+    # Measure CeTTa's terminal:cells for every sample.
+    exprs = " ".join(
+        f'({name} (terminal:cells "{s}"))' for name, s, _ in samples
+    )
+    cetta_out = subprocess.check_output(
+        [str(cetta_bin), "--quiet", "--lang", "petta", "--profile", "extended",
+         "-e", f"!(import! &self (library host_io)) !(println! ({exprs}))"],
+        cwd=str(repo_root), text=True, timeout=30
+    )
+    cetta_widths = {}
+    for name, _, _ in samples:
+        marker = f"({name} "
+        idx = cetta_out.find(marker)
+        assert idx >= 0, f"missing {name} in CeTTa output: {cetta_out!r}"
+        end = cetta_out.find(")", idx + len(marker))
+        cetta_widths[name] = int(cetta_out[idx + len(marker):end])
+
+    def tm(*args: str) -> str:
+        return subprocess.check_output(["tmux", "-L", socket_name, *args], text=True)
+
+    try:
+        subprocess.run(
+            ["tmux", "-L", socket_name, "-f", "/dev/null",
+             "new-session", "-d", "-x", "64", "-y", "24", "sh", "-c", "sleep 60"],
+            cwd=str(repo_root), check=True, capture_output=True, text=True
+        )
+        time.sleep(0.25)
+        pw, ph, pty = tm("display-message", "-p", "#{pane_width} #{pane_height} #{pane_tty}").strip().split()
+        assert pw == "64", f"expected 64-col pane, got {pw}x{ph}"
+
+        # 1. Exact single-cluster cell width parity with tmux.
+        for name, glyph, expected in samples:
+            with open(pty, "wb", buffering=0) as f:
+                f.write(b"\x1b[2J\x1b[H" + glyph.encode("utf-8"))
+            time.sleep(0.06)
+            cx, cy = (int(v) for v in tm("display-message", "-p", "#{cursor_x} #{cursor_y}").strip().split())
+            assert cy == 0, f"{name}: unexpected row wrap cy={cy}"
+            assert cx == expected, f"{name}: tmux cursor_x={cx}, expected {expected}"
+            assert cetta_widths[name] == cx, (
+                f"{name}: terminal:cells={cetta_widths[name]} disagrees with tmux cursor_x={cx}"
+            )
+
+        # 2. Exact 64-column wrap boundary for the three 2-cell sequences:
+        #    - prefix 61 + 2-cell glyph + 'Z' = 64 cells -> fits on row 0 (cursor_x=64, cursor_y=0)
+        #    - prefix 62 + 2-cell glyph + 'Z' = 65 cells -> glyph fills cols 62..63, 'Z' wraps to (1, 1)
+        #    - prefix 63 + ZWJ family + 'Z' -> entire 2-cell ZWJ cluster wraps cleanly to row 1 (3, 1)
+        for name, glyph in (
+            ("zwj_family", "\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466"),
+            ("heart_vs16", "\u2764\uFE0F"),
+            ("keycap_1", "1\uFE0F\u20E3"),
+        ):
+            for prefix_len, want_xy, want_row1 in (
+                (61, (64, 0), ""),
+                (62, (1, 1), "Z"),
+            ):
+                with open(pty, "wb", buffering=0) as f:
+                    f.write(b"\x1b[2J\x1b[H" + (b"A" * prefix_len) + glyph.encode("utf-8") + b"Z")
+                time.sleep(0.06)
+                cx, cy = (int(v) for v in tm("display-message", "-p", "#{cursor_x} #{cursor_y}").strip().split())
+                rows = tm("capture-pane", "-p", "-S", "0", "-E", "1").splitlines()
+                r1 = rows[1].rstrip(" ") if len(rows) > 1 else ""
+                assert (cx, cy) == want_xy and r1 == want_row1, (
+                    f"{name} N={prefix_len}: got end=({cx},{cy}) row1={r1!r}, want {want_xy} {want_row1!r}"
+                )
+            if name == "zwj_family":
+                with open(pty, "wb", buffering=0) as f:
+                    f.write(b"\x1b[2J\x1b[H" + (b"A" * 63) + glyph.encode("utf-8") + b"Z")
+                time.sleep(0.06)
+                cx, cy = (int(v) for v in tm("display-message", "-p", "#{cursor_x} #{cursor_y}").strip().split())
+                rows = tm("capture-pane", "-p", "-S", "0", "-E", "1").splitlines()
+                r1 = rows[1].rstrip(" ") if len(rows) > 1 else ""
+                assert (cx, cy) == (3, 1) and r1 == glyph + "Z", (
+                    f"zwj_family N=63: got end=({cx},{cy}) row1={r1!r}"
+                )
+        print("PASS tmux 64-col width & wrap parity for ZWJ family, heart+VS16, keycap, and baseline clusters")
+    finally:
+        subprocess.run(["tmux", "-L", socket_name, "kill-server"],
+                       capture_output=True, text=True)
+
+
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
     cetta_bin = (Path(sys.argv[1]) if len(sys.argv) > 1 else repo_root / "cetta").resolve()
@@ -165,6 +263,7 @@ def main() -> int:
     for cols in (40, 80, 200):
         run_tmux_commit_check(cetta_bin, repo_root, cols)
     run_tmux_cpr_check(cetta_bin, repo_root)
+    run_tmux_width_comparison(cetta_bin, repo_root)
     print("TMUX_TERMINAL_COMMIT_AND_CPR_OK")
     return 0
 

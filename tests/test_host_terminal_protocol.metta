@@ -76,13 +76,21 @@
      (let $_19 (tp:check sync-open (str:starts-with $synced (str:concat $esc1 "[?2026hFRAME")))
      (let $_20 (tp:check sync-close (str:ends-with $synced (str:concat $esc1 "[?2026l")))
 
-     ;; 8. terminal:hyperlink (OSC 8 + C0/ESC injection stripping + empty URL passthrough)
+     ;; 8. terminal:hyperlink (OSC 8 + C0/ESC/BEL injection stripping in URL AND label + empty URL passthrough)
+     (let $bel (str:from-python-codepoints (7))
+     (let $c1-csi (str:from-python-codepoints (155))
      (let $link (terminal:hyperlink "https://example.org/a" "click")
      (let $expected-link (str:concat $esc1 (str:concat "]8;;https://example.org/a" (str:concat $esc1 (str:concat "\\click" (str:concat $esc1 (str:concat "]8;;" (str:concat $esc1 "\\")))))))
      (let $_21 (tp:check osc8-basic (== $link $expected-link))
      (let $bad-url (str:concat "https://ok" (str:concat $esc1 "]52;c;AAAA"))
      (let $safe-link (terminal:hyperlink $bad-url "lbl")
      (let $_22 (tp:check osc8-strips-esc-injection (== (str:find $safe-link (str:concat $esc1 "]52")) (TextNotFound (str:concat $esc1 "]52"))))
+     (let $bad-label (str:join "" ("hi" $esc1 "]52;c;AAAA" $bel "mid" $esc1 "[2J" $c1-csi "31m" $bel $esc1 "end"))
+     (let $safe-label-link (terminal:hyperlink "https://example.org/b" $bad-label)
+     (let $expected-safe-label (str:join "" ($esc1 "]8;;https://example.org/b" $esc1 "\\himidend" $esc1 "]8;;" $esc1 "\\"))
+     (let $_22b (tp:check osc8-label-strips-esc-bel-c1 (== $safe-label-link $expected-safe-label))
+     (let $_22c (tp:check osc8-label-no-bel (== (str:find $safe-label-link $bel) (TextNotFound $bel)))
+     (let $_22d (tp:check osc8-empty-url-sanitizes-label (== (terminal:hyperlink "" $bad-label) "himidend"))
      (let $_23 (tp:check osc8-empty-url (== (terminal:hyperlink "" "plain") "plain"))
 
      ;; 9. terminal:clipboard (OSC 52 base64 RFC 4648 vectors: "", "f", "fo", "foo", "Hello!")
@@ -106,8 +114,23 @@
      (let $_31 (tp:check commit-up3-enables-autowrap (not (== (str:find $c3 (str:concat $esc1 "[?7hcmd --long\r\nLIVE")) (TextNotFound (str:concat $esc1 "[?7hcmd --long\r\nLIVE")))))
      (let $_32 (tp:check commit-bad-line-rejected
                  (case (terminal:commit 0 (123) "") (((HostFailure "terminal-commit" $_c2 $_m2) True) ($other False))))
+     ;; 10b. terminal:commit sanitizes hostile ESC/BEL/non-SGR CSI/non-OSC-8 sequences inside committed
+     ;;      lines while preserving valid SGR, valid ST-terminated OSC 8, tabs, and auto-closing unclosed OSC 8.
+     (let $hostile-line (str:join "" ("pre" $esc1 "[?2026l" $esc1 "[?7l" $esc1 "[2J" $esc1 "]52;c;AAAA" $bel "mid" $bel $esc1 "post"))
+     (let $styled-line (str:join "" ($esc1 "[1;32mok" $esc1 "[0m\t" (terminal:hyperlink "https://example.org/p" "path")))
+     (let $bel-osc8-line (str:join "" ("x" $esc1 "]8;;https://bad.test" $bel "y" $esc1 "]8;;" $bel "z"))
+     (let $unclosed-osc8 (str:join "" ($esc1 "]8;;https://open.test" $esc1 "\\open"))
+     (let $c-san (terminal:commit 0 ($hostile-line $styled-line $bel-osc8-line $unclosed-osc8) "PROMPT> ")
+     (let $expect-san (str:join "" ($esc1 "[?2026h" $esc1 "[?25l\r" $esc1 "[2K" $esc1 "[1C" $esc1 "[J\r" $esc1 "[?7h"
+                                    "premidpost\r\n"
+                                    $styled-line "\r\n"
+                                    "xyz\r\n"
+                                    $esc1 "]8;;https://open.test" $esc1 "\\open" $esc1 "]8;;" $esc1 "\\\r\n"
+                                    "PROMPT> " $esc1 "[?25h" $esc1 "[?2026l"))
+     (let $_33 (tp:check commit-sanitizes-esc-bel-and-keeps-sgr-osc8 (== $c-san $expect-san))
+     (let $_34 (tp:check commit-sanitized-no-bel (== (str:find $c-san $bel) (TextNotFound $bel)))
 
-     (let $_close (host:close $buf) True)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+     (let $_close (host:close $buf) True)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
 
 !(let $ans (collapse (tp:run))
    (if (== $ans (True)) (println! HOST_TERMINAL_PROTOCOL_OK) (system:exit 1)))

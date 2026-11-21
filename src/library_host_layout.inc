@@ -53,22 +53,199 @@ static size_t sanitize_osc_url(const char *url, size_t url_len, char *dst) {
     return written;
 }
 
+/* Advance past an arbitrary CSI (after ESC [ or U+009B). */
+static size_t skip_csi_body(const char *s, size_t len, size_t at) {
+    while (at < len) {
+        unsigned char c = (unsigned char)s[at++];
+        if (c >= 0x40u && c <= 0x7Eu) break;
+    }
+    return at;
+}
+
+/* Advance past an arbitrary OSC/DCS/SOS/PM/APC string (after introducer)
+ * terminated by BEL (0x07), ST (ESC \), C1 ST (U+009C), or end of input. */
+static size_t skip_string_seq_body(const char *s, size_t len, size_t at) {
+    while (at < len) {
+        unsigned char c = (unsigned char)s[at];
+        if (c == 0x07u) return at + 1u;
+        if (c == 0x1Bu && at + 1u < len && s[at + 1u] == '\\') return at + 2u;
+        if (c == 0xC2u && at + 1u < len && (unsigned char)s[at + 1u] == 0x9Cu) return at + 2u;
+        ++at;
+    }
+    return at;
+}
+
+/* Sanitize a plain inline terminal label (hyperlink label / styled span text):
+ * strips full CSI/OSC/DCS/SOS/PM/APC escape sequences and any remaining C0
+ * (< 0x20, including ESC and BEL), DEL (0x7F), C1 (U+0080..U+009F), and
+ * invalid UTF-8 bytes so neither escape sequences nor raw ESC/BEL survive. */
+static size_t sanitize_plain_terminal_text(const char *src, size_t len, char *dst, bool keep_tab) {
+    size_t written = 0;
+    for (size_t at = 0; at < len;) {
+        unsigned char b = (unsigned char)src[at];
+        if (b == 0x1Bu) {
+            if (at + 1u < len) {
+                unsigned char nxt = (unsigned char)src[at + 1u];
+                if (nxt == '[') { at = skip_csi_body(src, len, at + 2u); continue; }
+                if (nxt == ']' || nxt == 'P' || nxt == 'X' || nxt == '^' || nxt == '_') {
+                    at = skip_string_seq_body(src, len, at + 2u);
+                    continue;
+                }
+            }
+            ++at;
+            continue;
+        }
+        uint32_t cp = 0, width = 0;
+        if (!cetta_utf8_decode_one((const uint8_t *)src, len, at, &cp, &width)) {
+            ++at;
+            continue;
+        }
+        if (cp == 0x9Bu) { at = skip_csi_body(src, len, at + width); continue; }
+        if (cp == 0x90u || cp == 0x98u || cp == 0x9Du || cp == 0x9Eu || cp == 0x9Fu) {
+            at = skip_string_seq_body(src, len, at + width);
+            continue;
+        }
+        if ((keep_tab && cp == '\t') ||
+            (cp >= 0x20u && cp != 0x7Fu && !(cp >= 0x80u && cp <= 0x9Fu))) {
+            if (dst) memcpy(dst + written, src + at, width);
+            written += width;
+        }
+        at += width;
+    }
+    return written;
+}
+
+/* Validate a strict SGR sequence at src[at..len): ESC '[' [0-9;:]* 'm'. */
+static bool match_strict_sgr(const char *src, size_t len, size_t at, size_t *out_end) {
+    if (at + 2u >= len || src[at] != '\033' || src[at + 1u] != '[') return false;
+    size_t p = at + 2u;
+    while (p < len) {
+        unsigned char c = (unsigned char)src[p];
+        if ((c >= '0' && c <= '9') || c == ';' || c == ':') { ++p; continue; }
+        if (c == 'm') { *out_end = p + 1u; return true; }
+        return false;
+    }
+    return false;
+}
+
+/* Validate a strict ST-terminated OSC 8 sequence at src[at..len):
+ *   ESC ']' '8' ';' <clean params> ';' <clean url> ESC '\'
+ * Rejects BEL termination and any embedded C0/DEL/C1/invalid UTF-8.
+ * Sets *out_has_url = true when opening a link (non-empty URL), false on close. */
+static bool match_strict_osc8(const char *src, size_t len, size_t at,
+                              size_t *out_end, bool *out_has_url) {
+    if (at + 6u > len || src[at] != '\033' || src[at + 1u] != ']' ||
+        src[at + 2u] != '8' || src[at + 3u] != ';') return false;
+    size_t p = at + 4u;
+    bool seen_second_semi = false;
+    size_t url_start = 0;
+    while (p < len) {
+        unsigned char b = (unsigned char)src[p];
+        if (b == 0x1Bu) {
+            if (seen_second_semi && p + 1u < len && src[p + 1u] == '\\') {
+                *out_end = p + 2u;
+                *out_has_url = (p > url_start);
+                return true;
+            }
+            return false;
+        }
+        if (b == 0x07u) return false;
+        uint32_t cp = 0, width = 0;
+        if (!cetta_utf8_decode_one((const uint8_t *)src, len, p, &cp, &width)) return false;
+        if (cp < 0x20u || cp == 0x7Fu || (cp >= 0x80u && cp <= 0x9Fu)) return false;
+        if (!seen_second_semi && cp == ';') {
+            seen_second_semi = true;
+            url_start = p + 1u;
+        }
+        p += width;
+    }
+    return false;
+}
+
+/* Sanitize a logical scrollback line for terminal:commit:
+ * - Preserves printable UTF-8, '\t', strict SGR (CSI [0-9;:]* m), and strict
+ *   ST-terminated OSC 8 hyperlinks (ESC ] 8 ; params ; url ESC \).
+ * - Strips BEL (0x07), non-SGR CSI (e.g. ?2026l, ?7l, 2J, cursor moves),
+ *   non-OSC-8 or BEL-terminated OSC (e.g. OSC 52), DCS/SOS/PM/APC, bare ESC,
+ *   CR/LF/other C0, DEL, C1, and invalid UTF-8.
+ * - Auto-closes any OSC 8 hyperlink left open at end of line. */
+static size_t sanitize_commit_line(const char *src, size_t len, char *dst) {
+    size_t written = 0;
+    bool osc8_open = false;
+    for (size_t at = 0; at < len;) {
+        unsigned char b = (unsigned char)src[at];
+        if (b == 0x1Bu) {
+            size_t seq_end = 0;
+            bool opens_link = false;
+            if (match_strict_sgr(src, len, at, &seq_end)) {
+                if (dst) memcpy(dst + written, src + at, seq_end - at);
+                written += seq_end - at;
+                at = seq_end;
+                continue;
+            }
+            if (match_strict_osc8(src, len, at, &seq_end, &opens_link)) {
+                if (dst) memcpy(dst + written, src + at, seq_end - at);
+                written += seq_end - at;
+                osc8_open = opens_link;
+                at = seq_end;
+                continue;
+            }
+            if (at + 1u < len) {
+                unsigned char nxt = (unsigned char)src[at + 1u];
+                if (nxt == '[') { at = skip_csi_body(src, len, at + 2u); continue; }
+                if (nxt == ']' || nxt == 'P' || nxt == 'X' || nxt == '^' || nxt == '_') {
+                    at = skip_string_seq_body(src, len, at + 2u);
+                    continue;
+                }
+            }
+            ++at;
+            continue;
+        }
+        uint32_t cp = 0, width = 0;
+        if (!cetta_utf8_decode_one((const uint8_t *)src, len, at, &cp, &width)) {
+            ++at;
+            continue;
+        }
+        if (cp == 0x9Bu) { at = skip_csi_body(src, len, at + width); continue; }
+        if (cp == 0x90u || cp == 0x98u || cp == 0x9Du || cp == 0x9Eu || cp == 0x9Fu) {
+            at = skip_string_seq_body(src, len, at + width);
+            continue;
+        }
+        if (cp == '\t' || (cp >= 0x20u && cp != 0x7Fu && !(cp >= 0x80u && cp <= 0x9Fu))) {
+            if (dst) memcpy(dst + written, src + at, width);
+            written += width;
+        }
+        at += width;
+    }
+    if (osc8_open) {
+        static const char osc8_close[] = "\033]8;;\033\\";
+        if (dst) memcpy(dst + written, osc8_close, sizeof(osc8_close) - 1u);
+        written += sizeof(osc8_close) - 1u;
+    }
+    return written;
+}
+
 static Atom *terminal_hyperlink(Arena *a, const char *url, size_t url_len,
                                 const char *label, size_t label_len) {
     if (url_len > (size_t)65536u || label_len > (size_t)16777216u) return failure(a, "hyperlink", EFBIG);
-    size_t clean_len = sanitize_osc_url(url, url_len, NULL);
-    if (!clean_len) return atom_string_n(a, label, label_len);
+    size_t clean_url_len = sanitize_osc_url(url, url_len, NULL);
+    size_t clean_label_len = sanitize_plain_terminal_text(label, label_len, NULL, false);
+    if (!clean_url_len) {
+        char *plain = arena_alloc(a, clean_label_len ? clean_label_len : 1u);
+        if (clean_label_len) (void)sanitize_plain_terminal_text(label, label_len, plain, false);
+        return atom_string_n(a, plain, clean_label_len);
+    }
     static const char osc_open[] = "\033]8;;";
     static const char osc_st[] = "\033\\";
     static const char osc_close[] = "\033]8;;\033\\";
-    size_t total = (sizeof(osc_open) - 1u) + clean_len + (sizeof(osc_st) - 1u) +
-                   label_len + (sizeof(osc_close) - 1u);
+    size_t total = (sizeof(osc_open) - 1u) + clean_url_len + (sizeof(osc_st) - 1u) +
+                   clean_label_len + (sizeof(osc_close) - 1u);
     char *out = arena_alloc(a, total ? total : 1u);
     size_t pos = 0;
     memcpy(out + pos, osc_open, sizeof(osc_open) - 1u); pos += sizeof(osc_open) - 1u;
     pos += sanitize_osc_url(url, url_len, out + pos);
     memcpy(out + pos, osc_st, sizeof(osc_st) - 1u); pos += sizeof(osc_st) - 1u;
-    if (label_len) { memcpy(out + pos, label, label_len); pos += label_len; }
+    if (clean_label_len) pos += sanitize_plain_terminal_text(label, label_len, out + pos, false);
     memcpy(out + pos, osc_close, sizeof(osc_close) - 1u); pos += sizeof(osc_close) - 1u;
     return atom_string_n(a, out, pos);
 }
@@ -131,9 +308,12 @@ static Atom *terminal_commit(Arena *a, int64_t cursor_up, Atom *lines_atom,
         const char *lb; size_t ll;
         if (!string_bytes(lines_atom->expr.elems[i], &lb, &ll))
             return failure(a, "terminal-commit", EINVAL);
-        if (ll > (size_t)67108864u || total > (size_t)67108864u - ll - 2u)
+        if (ll > (size_t)67108864u)
             return failure(a, "terminal-commit", EFBIG);
-        total += ll + 2u;
+        size_t clean_ll = sanitize_commit_line(lb, ll, NULL);
+        if (clean_ll > (size_t)67108864u || total > (size_t)67108864u - clean_ll - 2u)
+            return failure(a, "terminal-commit", EFBIG);
+        total += clean_ll + 2u;
     }
     char *out = arena_alloc(a, total ? total : 1u);
     size_t pos = 0;
@@ -141,7 +321,7 @@ static Atom *terminal_commit(Arena *a, int64_t cursor_up, Atom *lines_atom,
     for (uint32_t i = 0; i < lines_atom->expr.len; ++i) {
         const char *lb = NULL; size_t ll = 0;
         if (string_bytes(lines_atom->expr.elems[i], &lb, &ll) && ll) {
-            memcpy(out + pos, lb, ll); pos += ll;
+            pos += sanitize_commit_line(lb, ll, out + pos);
         }
         out[pos++] = '\r'; out[pos++] = '\n';
     }
@@ -479,7 +659,14 @@ static Atom *text_render_spans(Arena *a, Atom *spans_atom, const char *color_mod
             seq[pos++] = 'm';
             layout_str_append(&out, seq, pos);
         }
-        layout_str_append(&out, txt, txt_len);
+        size_t clean_txt_len = sanitize_plain_terminal_text(txt, txt_len, NULL, true);
+        if (clean_txt_len) {
+            char *clean_txt = malloc(clean_txt_len);
+            if (!clean_txt) { free(out.data); return failure(a, "text-render-spans", ENOMEM); }
+            (void)sanitize_plain_terminal_text(txt, txt_len, clean_txt, true);
+            layout_str_append(&out, clean_txt, clean_txt_len);
+            free(clean_txt);
+        }
         if (opened_sgr) layout_str_append(&out, "\033[0m", 4u);
         if (clean_url_len) layout_str_append(&out, "\033]8;;\033\\", 7u);
     }
