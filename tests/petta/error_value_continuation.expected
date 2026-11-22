@@ -1,10 +1,7 @@
-after-caught
 after-literal
 after-built
 after-passed
 done
-(Error foo)
-true
 (Error foo bar)
 true
 (Error 5 oops)

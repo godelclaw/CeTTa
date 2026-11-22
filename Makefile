@@ -30254,8 +30254,8 @@ PETTA_SEMANTIC_EXACT_STREAM_STEMS = \
 	empty_occurrence_continuation source_argument_value_demand stream_ops \
 	foldall_order_oracle list_length parse_data metatype_intrinsics \
 	type_failure_is_empty println_string unknown_head_quote \
-	library_descriptor library_absolute_path library_standard_compat \
-	library_standard_missing_descriptor library_path_relation empty_symbol \
+	library_descriptor library_standard_compat \
+	library_standard_missing_descriptor empty_symbol \
 	git_import_zero_arity hyperpose_shared_space_concurrent_add \
 	hyperpose_shared_space_indirect_add hyperpose_shared_space_read_write \
 	hyperpose_shared_space_sloppy_update hyperpose_shared_space_transactions \
@@ -30265,8 +30265,8 @@ PETTA_SEMANTIC_EXACT_STREAM_STEMS = \
 	search_machine_relational_head_phases search_machine_relational_output_phases \
 	search_machine_pinned_removal_visibility search_machine_admission_revisions \
 	stream_alpha_unique root_builtin_argument_demand computed_value_arguments \
-	translate_predicate_prolog_goals float_layout string_layout \
-	swrite_text prolog_exception_values negative_zero numeric_equality \
+	float_layout string_layout \
+	negative_zero numeric_equality \
 	prolog_arithmetic_parity error_value_continuation \
 	builtin_data_vocabulary car_cdr_total empty_is_data \
 	collapse_copies_answers open_lists library_metta_suffix \
@@ -30278,6 +30278,14 @@ PETTA_SEMANTIC_EXACT_STREAM_STEMS = \
 	lambda_pattern_parameters lambda_parameter_scope \
 	specialized_partial_values closure_values activation_cons_let \
 	partial_argument_values inequality_values native_atom_text native_copy_term native_term_hash
+PETTA_SEMANTIC_PROLOG_EXACT_STREAM_STEMS = \
+	library_absolute_path library_path_relation \
+	translate_predicate_prolog_goals swrite_text prolog_exception_values \
+	numeric_equality_prolog prolog_arithmetic_parity_prolog \
+	error_value_continuation_prolog
+ifeq ($(LIB_PROLOG_ENABLED),1)
+PETTA_SEMANTIC_EXACT_STREAM_STEMS += $(PETTA_SEMANTIC_PROLOG_EXACT_STREAM_STEMS)
+endif
 PETTA_SEMANTIC_OCCURRENCE_BAG_STEMS = semantic_counter_equations \
 	search_machine_specializer_negative_mutation \
 	search_machine_partial_head_observation search_machine_query_field_composition
@@ -34548,6 +34556,11 @@ test-petta-semantics: $(BIN) test-petta-once-first-witness test-petta-relational
 			exit 1; \
 		fi; \
 	done; \
+	if [ "$(LIB_PROLOG_ENABLED)" != "1" ]; then \
+		for stem in $(PETTA_SEMANTIC_PROLOG_EXACT_STREAM_STEMS); do \
+			printf 'SKIP: tests/petta/%s.metta (Prolog interop) requires libswipl (ENABLE_LIB_PROLOG=1)\n' "$$stem"; \
+		done; \
+	fi; \
 	status=0; \
 	CETTA_PETTA_SEARCH_MACHINE=1 ./$(BIN) --lang petta tests/petta/test_failure_exit.metta \
 		>runtime/test-petta-failure-exit.out 2>&1 || status=$$?; \

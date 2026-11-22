@@ -1,0 +1,3 @@
+after-caught
+(Error foo)
+true

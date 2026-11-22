@@ -1,0 +1,9 @@
+(nan true true false false false)
+(rationals (1r2 true false true true) (7r22 false 7))
+(shared-nan true)
+(infinity true true false)
+true
+true
+true
+infinity-enabled
+true
