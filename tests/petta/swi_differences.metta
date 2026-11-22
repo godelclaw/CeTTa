@@ -232,15 +232,21 @@
 ;     internal symbol IDs), counting depth by MeTTa expression nesting rather
 ;     than Prolog cons-cell spines, while preserving SWI's contract: a
 ;     deterministic non-negative integer for ground terms (in [0, 2^32 - 1]
-;     for /1 and [0, Range - 1] for /3), a fresh unbound variable when a
-;     variable is reached within the inspected depth, and matching domain/type/
-;     instantiation errors for invalid depth or range.  Because SWI-PeTTa's
-;     term_hash/2 and term_hash/4 expose SWI's internal MurmurHash2 over Prolog
-;     terms, the exact integer digests differ from SWI-PeTTa.
+;     for /1 and [0, Range - 1] for /3 with 1 <= Range <= INT32_MAX), a fresh
+;     unbound variable when a variable is reached within the inspected depth,
+;     and matching representation/domain/type/instantiation errors.  Because
+;     SWI-PeTTa's term_hash/2 and term_hash/4 expose SWI's internal
+;     MurmurHash2 over Prolog terms, the exact integer digests differ from
+;     SWI-PeTTa.  In addition, when Range < 1 (and within int32_t), native
+;     term_hash/3 reports the offending Range atom as the culprit in
+;     domain_error(not_less_than_one, Range), whereas SWI-Prolog 10.1.9 has
+;     an upstream bug passing the Depth argument (A2) instead of Range (A3)
+;     (e.g. domain_error(not_less_than_one, 7) for term_hash(foo, 7, 0, H)).
 ;     Decided: Oruzi, 2026-11-22 (native PeTTa stdlib parity without libswipl).
-; SWI-PeTTa: 2481857053, 598
+; SWI-PeTTa: 2481857053, 598, (Error (domain_error not_less_than_one 7) (context (: system (/ term_hash 4)) $V0))
 !(term_hash (a 1))
 !(term_hash (a (b 1)) 2 1000)
+!(catch (term_hash foo 7 0))
 
 ; Python boolean interchange (qualified separately by test-python-objects,
 ; since this fixture also runs without Python): true/false argument values

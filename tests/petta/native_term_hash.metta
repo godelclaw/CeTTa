@@ -47,5 +47,8 @@
 !(catch (term_hash (a 1) $d 100))
 !(catch (term_hash (a 1) 2 0))
 !(catch (term_hash (a 1) 2 -5))
+!(let $h (term_hash foo 1 2147483647) (and (>= $h 0) (< $h 2147483647)))
+!(catch (term_hash foo 1 2147483648))
+!(catch (term_hash foo 1 -2147483649))
 !(catch (term_hash (a 1) 2 foo))
 !(catch (term_hash (a 1) 2 $r))

@@ -30052,7 +30052,11 @@ test-petta-search-machine: $(PETTA_SEARCH_MACHINE_TEST_BIN) $(BIN) test-search-c
 	fi; \
 	result=$$(CETTA_PETTA_SEARCH_MACHINE=1 $(CETTA_BIN_INVOKE) --lang petta \
 		tests/petta/search_machine_translate_predicate.metta 2>&1); \
-	expected=$$(cat tests/petta/search_machine_translate_predicate.expected); \
+	if [ "$(LIB_PROLOG_ENABLED)" = "1" ]; then \
+		expected=$$(cat tests/petta/search_machine_translate_predicate.expected); \
+	else \
+		expected=$$(cat tests/petta/search_machine_translate_predicate_pure.expected); \
+	fi; \
 	if [ "$$result" != "$$expected" ]; then \
 		echo "FAIL: native PeTTa predicate bridge and inert extension boundary"; \
 		diff <(printf '%s\n' "$$expected") \

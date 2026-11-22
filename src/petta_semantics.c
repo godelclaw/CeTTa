@@ -1993,7 +1993,6 @@ Atom *petta_semantics_term_hash(Arena *arena, Atom *term, Atom *depth_atom,
 
     int64_t max_depth = -1;
     bool has_range = (depth_atom != NULL || range_atom != NULL);
-    bool range_unbounded = false;
     uint64_t range = UINT64_C(4294967296); /* 2^32 for term_hash/1 */
 
     if (has_range) {
@@ -2050,6 +2049,16 @@ Atom *petta_semantics_term_hash(Arena *arena, Atom *term, Atom *depth_atom,
         }
         if (range_atom->kind == ATOM_GROUNDED &&
             range_atom->ground.gkind == GV_INT) {
+            if (range_atom->ground.ival < (int64_t)INT32_MIN ||
+                range_atom->ground.ival > (int64_t)INT32_MAX) {
+                if (error_out) {
+                    Atom *formal = atom_expr2(
+                        arena, atom_symbol(arena, "representation_error"),
+                        atom_symbol(arena, "int"));
+                    *error_out = petta_term_hash_error(arena, formal);
+                }
+                return NULL;
+            }
             if (range_atom->ground.ival < 1) {
                 if (error_out) {
                     Atom *formal = atom_expr3(
@@ -2062,19 +2071,13 @@ Atom *petta_semantics_term_hash(Arena *arena, Atom *term, Atom *depth_atom,
             range = (uint64_t)range_atom->ground.ival;
         } else if (range_atom->kind == ATOM_GROUNDED &&
                    range_atom->ground.gkind == GV_BIGINT) {
-            const char *digits = atom_bigint_cstr(range_atom);
-            if (!digits)
-                return NULL;
-            if (digits[0] == '-' || strcmp(digits, "0") == 0) {
-                if (error_out) {
-                    Atom *formal = atom_expr3(
-                        arena, atom_symbol(arena, "domain_error"),
-                        atom_symbol(arena, "not_less_than_one"), range_atom);
-                    *error_out = petta_term_hash_error(arena, formal);
-                }
-                return NULL;
+            if (error_out) {
+                Atom *formal = atom_expr2(
+                    arena, atom_symbol(arena, "representation_error"),
+                    atom_symbol(arena, "int"));
+                *error_out = petta_term_hash_error(arena, formal);
             }
-            range_unbounded = true;
+            return NULL;
         } else {
             if (error_out) {
                 Atom *formal = atom_expr3(
@@ -2289,8 +2292,6 @@ th_done:
     uint64_t digest = petta_th_finalize(state);
     if (!has_range)
         return atom_int(arena, (int64_t)(digest & UINT64_C(0xFFFFFFFF)));
-    if (range_unbounded)
-        return atom_int(arena, (int64_t)(digest & UINT64_C(0x7FFFFFFFFFFFFFFF)));
     return atom_int(arena, (int64_t)(digest % range));
 }
 
