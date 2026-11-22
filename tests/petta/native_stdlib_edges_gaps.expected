@@ -1,2 +1,0 @@
-(Error (domain_error not_less_than_one 1) (context (: system (/ term_hash 4)) $V0))
-(Error (representation_error int) (context (: system (/ term_hash 4)) $V0))

@@ -53,3 +53,7 @@
 !(== (term_hash (foo a b) 4 2147483647) (term_hash (foo a c) 4 2147483647))
 !(== (term_hash (foo a b) -1 2147483647) (term_hash (foo a c) -1 2147483647))
 !(== (term_hash (foo a b) 2 2147483647) (term_hash (foo x b) 2 2147483647))
+
+; Range must fit a C int, as in SWI. A Range below one is reported with the
+; Range itself; SWI 10.1.9 reports the Depth there (swi_differences entry 20).
+!(catch (term_hash foo 1 2147483648))
