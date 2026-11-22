@@ -202,7 +202,7 @@ ENABLE_PRIME_NEED_CLOSURE_CAPTURE ?= 0
 # Automatic continuation entry for unrestricted Prime calls. Bounded consumers
 # and explicitly retained operations use the common engine in either setting.
 ENABLE_PRIME_EVAL_STACK ?= 1
-ENABLE_LIB_PROLOG ?= auto
+ENABLE_LIB_PROLOG ?= 0
 ENABLE_HTTP ?= 0
 ENABLE_SIWC ?= 0
 SIWC_TEST ?= 0

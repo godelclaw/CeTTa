@@ -138,17 +138,21 @@ sudo apt install build-essential pkg-config python3-dev python3-venv libgmp-dev
 
 Optional:
 
-- SWI-Prolog: when `pkg-config` finds `swipl`, the build links the Prolog
-  interoperation library automatically (`ENABLE_LIB_PROLOG=auto`)
+- SWI-Prolog: opt-in Prolog interoperation library (`make ENABLE_LIB_PROLOG=1`
+  when `pkg-config` finds `swipl`, or `ENABLE_LIB_PROLOG=auto` to auto-detect).
+  Pure-C PeTTa (`ENABLE_LIB_PROLOG=0`) is the default.
 - libcurl: `make ENABLE_HTTP=1` enables the HTTP operations
 - Native Sign in with ChatGPT: `ENABLE_HTTP=1 ENABLE_SIWC=1` with cJOSE,
   Jansson and OpenSSL; see [native sign-in](docs/siwc/README.md)
 - Rust/Cargo and `MORK` and `PathMap` checkouts, for the bridge builds below
 
-The Prolog library supplies some PeTTa primitives in addition to the native
-ones; it is separate from Python support. With `ENABLE_LIB_PROLOG=0`, an
-unregistered operation stays uninterpreted. Optimized execution follows the
-same availability rule as ordinary execution.
+The core PeTTa standard library runs in pure C by default (`ENABLE_LIB_PROLOG=0`).
+The optional Prolog library (`ENABLE_LIB_PROLOG=1`) adds explicit SWI-Prolog
+interoperation predicates (`callPredicate`, `translatePredicate`,
+`import_prolog_function`, `assertaPredicate`, `assertzPredicate`,
+`retractPredicate`) and is separate from Python support. Without it, an
+unregistered Prolog operation stays uninterpreted. Optimized execution follows
+the same availability rule as ordinary execution.
 
 ## Build
 
