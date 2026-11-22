@@ -28596,7 +28596,6 @@ test-petta-activation-scalar-argument-segment: $(BIN)
 	@set -eu; \
 	fixture=tests/petta/search_machine_activation_scalar_argument_segment.metta; \
 	expected_file=tests/petta/search_machine_activation_scalar_argument_segment.expected; \
-	if [ "$(LIB_PROLOG_ENABLED)" != 1 ]; then expected_file=tests/petta/search_machine_activation_scalar_argument_segment.native.expected; fi; \
 	expected=$$(cat "$$expected_file"); \
 	status=0; \
 	optimized=$$($(CETTA_BIN_INVOKE) --lang petta --quiet "$$fixture" 2>&1) || \
@@ -28624,7 +28623,6 @@ ifeq ($(ENABLE_RUNTIME_STATS),1)
 	@set -eu; \
 	fixture=tests/petta/search_machine_activation_scalar_argument_segment.metta; \
 	expected_file=tests/petta/search_machine_activation_scalar_argument_segment.expected; \
-	if [ "$(LIB_PROLOG_ENABLED)" != 1 ]; then expected_file=tests/petta/search_machine_activation_scalar_argument_segment.native.expected; fi; \
 	expected=$$(cat "$$expected_file"); \
 	status=0; \
 	optimized=$$($(CETTA_BIN_INVOKE) --emit-runtime-stats --lang petta --quiet \
@@ -34446,7 +34444,7 @@ test-petta-constraints: $(BIN)
 # The register of every place where plain PeTTa on CeTTa deliberately answers
 # differently from SWI-PeTTa, each with SWI-PeTTa's answer, its reason and its
 # decision.  A registered difference that drifts fails here.
-test-petta-swi-differences: $(BIN)
+test-petta-swi-differences: $(BIN) tests/petta/swi_differences.metta tests/petta/swi_differences.expected tests/petta/swi_differences_prolog.metta tests/petta/swi_differences_prolog.expected
 	@set -eu; \
 	for route in tier machine; do \
 		if [ $$route = machine ]; then reference=1; else reference=; fi; \
@@ -34459,6 +34457,21 @@ test-petta-swi-differences: $(BIN)
 			exit 1; \
 		fi; \
 	done; \
+	if [ "$(LIB_PROLOG_ENABLED)" = "1" ]; then \
+		for route in tier machine; do \
+			if [ $$route = machine ]; then reference=1; else reference=; fi; \
+			actual=$$(CETTA_OPEN_EQUATIONS_REFERENCE=$$reference $(CETTA_BIN_INVOKE) \
+				--lang petta tests/petta/swi_differences_prolog.metta 2>&1); \
+			if [ "$$actual" != "$$(cat tests/petta/swi_differences_prolog.expected)" ]; then \
+				echo "FAIL: registered Prolog SWI-PeTTa differences on the $$route route"; \
+				diff <(cat tests/petta/swi_differences_prolog.expected) \
+					<(printf '%s\n' "$$actual") | head -20; \
+				exit 1; \
+			fi; \
+		done; \
+	else \
+		printf '%s\n' 'SKIP: tests/petta/swi_differences_prolog.metta (entries 11b/12/13 translatePredicate cyclic terms) requires libswipl (ENABLE_LIB_PROLOG=1)'; \
+	fi; \
 	echo "PASS: the registered differences from SWI-PeTTa hold, on the tier and in the machine"
 
 test-petta-semantics: $(BIN) test-petta-once-first-witness test-petta-relational-append-open test-petta-multifile test-petta-eval-in-space test-petta-list-values test-petta-value-occurrences test-petta-dispatch-error-scope test-petta-list-building-linear test-petta-runtime-heads test-petta-keyed-selection test-petta-tier-lists test-petta-tier-fold-dispatch test-petta-tier-spelled-cells test-petta-tier-repra test-petta-tier-head-occurrences test-petta-tier-list-natives test-petta-tier-value-observations test-petta-tier-let-patterns test-petta-match-conjunction-order test-petta-foldall-native-steps test-petta-tier-equation-cut test-petta-projection-grown-frames test-petta-metatype-registered-functions test-petta-tier-views-over-kept-storage test-petta-tier-tail-superpose test-petta-prepared-decons-views test-petta-tier-list-heads test-petta-open-term-walks test-petta-hyperpose-program-cache test-petta-tier-head-index test-petta-tier-session-programs test-petta-case-default-retire test-petta-tier-existence test-petta-tier-value-if test-petta-session-match-decisions test-petta-tier-small-space-rows test-petta-prepared-code test-petta-prepared-return-checks test-petta-foreign-holds test-petta-libpl-registered-arities test-petta-number-order test-petta-specialization-after-import test-petta-special-form-arities test-petta-swi-differences
@@ -50139,8 +50152,7 @@ test-petta-imported-host-bridges: $(BIN) \
 	echo "PASS: imported Prolog eval and swrite host bridges"
 else
 test-petta-imported-host-bridges:
-	@echo "test-petta-imported-host-bridges requires ENABLE_LIB_PROLOG=1" >&2
-	@exit 1
+	@echo "SKIP: test-petta-imported-host-bridges (import_prolog_function/libpl) requires libswipl (ENABLE_LIB_PROLOG=1)"
 endif
 
 .PHONY: test-petta-imported-python-host-bridge
