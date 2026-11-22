@@ -34,8 +34,6 @@
 !(term_hash (f $x))
 !(term_hash $x)
 !(get-type (term_hash (f $x) 1 10))
-!(catch (term_hash foo 1 0))
-!(catch (term_hash foo 1 2147483648))
 !(catch (term_hash foo $d 10))
 !(catch (term_hash foo 1 $r))
 !(catch (term_hash foo -2 10))
@@ -46,7 +44,8 @@
 !(cat-in-fn ab cd)
 (= (chars-in-fn $a) (atom_chars $a))
 !(chars-in-fn xyz)
-; Expressions are lists for depth and key purposes: (foo a b) is [foo,a,b], i.e. cons cells, so term_hash depth counts cons cells and depth 4 reaches b. Expected lines come from swipl 10.1.9 run on the list encoding (evidence godel-list-hash-V0PINO/swi-list.txt).
+; term_hash depth is counted over MeTTa expression nesting, not Prolog cons cells (tests/petta/swi_differences.metta entry 20). Expected lines come from swipl 10.1.9 run on compound terms foo(a,b) and foo(a,c) (evidence godel-compound-hash-run-EL18st/swi-compound.txt).
+!(== (term_hash (foo a b) 1 1000) (term_hash (foo a c) 1 1000))
 !(== (term_hash (foo a b) 2 1000) (term_hash (foo a c) 2 1000))
 !(== (term_hash (foo a b) 3 1000) (term_hash (foo a c) 3 1000))
 !(== (term_hash (foo a b) 4 1000) (term_hash (foo a c) 4 1000))

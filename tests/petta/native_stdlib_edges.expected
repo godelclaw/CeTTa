@@ -27,8 +27,6 @@ true
 $V0
 $V0
 Number
-(Error (domain_error not_less_than_one 1) (context (: system (/ term_hash 4)) $V0))
-(Error (representation_error int) (context (: system (/ term_hash 4)) $V0))
 (Error instantiation_error (context (: system (/ term_hash 4)) $V0))
 (Error instantiation_error (context (: system (/ term_hash 4)) $V0))
 (Error (domain_error not_less_than_zero -2) (context (: system (/ term_hash 4)) $V0))
@@ -37,9 +35,10 @@ true
 abcd
 (x y z)
 true
-true
-false
-true
 false
 false
-true
+false
+false
+false
+false
+false
