@@ -227,6 +227,10 @@ typedef struct {
      * equation, and selection passes over it (prepared_pure_skip_refuted).
      * PREPARED_PURE_NO_DECONS_GUARD otherwise. */
     uint32_t decons_guard_argument;
+    /* The local slot of that destructured variable wherever the head binds
+     * it, nested in an argument pattern too (`(f (box $x))`), or
+     * PREPARED_PURE_NO_DECONS_GUARD. */
+    uint32_t decons_guard_slot;
 } PreparedPureEquation;
 
 typedef enum {
@@ -8059,31 +8063,38 @@ static void prepared_pure_compile_context_reads(
     equation->first_context_read = (uint32_t)first;
 }
 
-/* The head argument a PeTTa body destructures first with decons-atom, as
+/* The variable $x a PeTTa body destructures first with decons-atom, as
  * `(let PATTERN (decons-atom $x) ...)` with a pattern of variables (so no
- * call runs before the value) and $x a head argument; else
- * PREPARED_PURE_NO_DECONS_GUARD. */
-static uint32_t prepared_pure_decons_guard_argument(Atom *lhs, Atom *rhs) {
-    if (!lhs || !rhs || lhs->kind != ATOM_EXPR || rhs->kind != ATOM_EXPR ||
-        rhs->expr.len != 4u ||
+ * call runs before the value); else NULL. */
+static Atom *prepared_pure_decons_guard_var(Atom *rhs) {
+    if (!rhs || rhs->kind != ATOM_EXPR || rhs->expr.len != 4u ||
         !atom_is_symbol_id(rhs->expr.elems[0], g_builtin_syms.let))
-        return PREPARED_PURE_NO_DECONS_GUARD;
+        return NULL;
     Atom *pattern = rhs->expr.elems[1];
     if (pattern->kind == ATOM_EXPR) {
         for (CettaExprIndex i = 0u; i < pattern->expr.len; i++)
             if (pattern->expr.elems[i]->kind != ATOM_VAR)
-                return PREPARED_PURE_NO_DECONS_GUARD;
+                return NULL;
     } else if (pattern->kind != ATOM_VAR) {
-        return PREPARED_PURE_NO_DECONS_GUARD;
+        return NULL;
     }
     Atom *value = rhs->expr.elems[2];
     if (value->kind != ATOM_EXPR || value->expr.len != 2u ||
         !atom_is_symbol_id(value->expr.elems[0], g_builtin_syms.decons_atom) ||
         value->expr.elems[1]->kind != ATOM_VAR)
+        return NULL;
+    return value->expr.elems[1];
+}
+
+/* The head argument that destructured variable is; else
+ * PREPARED_PURE_NO_DECONS_GUARD. */
+static uint32_t prepared_pure_decons_guard_argument(Atom *lhs, Atom *rhs) {
+    Atom *var = prepared_pure_decons_guard_var(rhs);
+    if (!lhs || lhs->kind != ATOM_EXPR || !var)
         return PREPARED_PURE_NO_DECONS_GUARD;
     for (CettaExprIndex i = 1u; i < lhs->expr.len; i++)
         if (lhs->expr.elems[i]->kind == ATOM_VAR &&
-            atom_eq(lhs->expr.elems[i], value->expr.elems[1]))
+            atom_eq(lhs->expr.elems[i], var))
             return (uint32_t)(i - 1u);
     return PREPARED_PURE_NO_DECONS_GUARD;
 }
@@ -8304,7 +8315,17 @@ static bool prepared_pure_compile_head(
             .context_hole = prepared_pure_context_hole(program, root),
             .decons_guard_argument = prepared_pure_decons_guard_argument(
                 occurrence.lhs, occurrence.rhs),
+            .decons_guard_slot = PREPARED_PURE_NO_DECONS_GUARD,
         };
+        {
+            PreparedPureEquation *placed =
+                &program->equations[program->equation_len - 1u];
+            Atom *guarded = prepared_pure_decons_guard_var(occurrence.rhs);
+            uint32_t guarded_slot = 0u;
+            if (guarded && prepared_pure_equation_var_slot(
+                    program, placed, guarded->var_id, &guarded_slot))
+                placed->decons_guard_slot = guarded_slot;
+        }
         prepared_pure_compile_context_reads(
             program, &program->equations[program->equation_len - 1u]);
         prepared_pure_context_release(&context);
@@ -9116,6 +9137,78 @@ prepared_pure_run_match_ops(
     }
     return prepared_pure_count_match(
         PREPARED_PURE_MATCH_MATCHED, PREPARED_PURE_MISMATCH_HEAD);
+}
+
+/* Match ready `arguments` against an equation's compiled head as selection
+ * would on trying it: the checks of prepared_pure_run_match_ops, in its
+ * order, over scratch registers, binding nothing and counting nothing.
+ * MISMATCH is the mismatch selection would meet; MATCHED stores the value
+ * bound to local `slot` (when it binds one) in *bound; ERROR decides nothing:
+ * a head without a match program, one comparing bound variables, or a list
+ * left to the language. */
+static PreparedPureMatchState prepared_pure_head_dry_match(
+    const CettaPreparedPureProgram *program,
+    const PreparedPureEquation *equation, Atom *const *arguments,
+    uint32_t slot, Atom **bound) {
+    *bound = NULL;
+    if (!equation->compiled_match || equation->variable_arguments ||
+        equation->repeated_variables ||
+        equation->arity > PREPARED_PURE_MATCH_MAX_REGISTERS ||
+        equation->match_register_count > PREPARED_PURE_MATCH_MAX_REGISTERS)
+        return PREPARED_PURE_MATCH_ERROR;
+    Atom *registers[PREPARED_PURE_MATCH_MAX_REGISTERS];
+    for (uint32_t i = 0u; i < equation->arity; i++) {
+        if (!arguments[i])
+            return PREPARED_PURE_MATCH_ERROR;
+        registers[i] = arguments[i];
+    }
+    const PreparedPureMatchOp *first =
+        &program->match_ops[equation->first_match_op];
+    const PreparedPureMatchOp *end = first + equation->match_op_count;
+    for (const PreparedPureMatchOp *op = first; op < end; op++) {
+        Atom *value = registers[op->source];
+        if (!value)
+            return PREPARED_PURE_MATCH_ERROR;
+        switch ((PreparedPureMatchOpKind)op->kind) {
+        case PREPARED_PURE_MATCH_OP_BIND:
+            if (op->operand == slot)
+                *bound = value;
+            break;
+        case PREPARED_PURE_MATCH_OP_ATOM:
+            if (!op->literal ||
+                !((value->kind == op->literal->kind &&
+                   atom_eq(op->literal, value)) ||
+                  cetta_he_promoted_numbers_equal(op->literal, value)))
+                return PREPARED_PURE_MATCH_MISMATCH;
+            break;
+        case PREPARED_PURE_MATCH_OP_EXPR: {
+            bool equal =
+                atom_petta_decomposition_compatible(op->literal, value) &&
+                value->kind == ATOM_EXPR &&
+                atom_authored_len(value) == op->length;
+            if ((!equal || op->length == 3u) &&
+                prepared_pure_is_list_carrier(value)) {
+                PreparedPureMatchState read =
+                    prepared_pure_read_list_carrier(
+                        value, op->length, &registers[op->operand]);
+                if (read != PREPARED_PURE_MATCH_MATCHED)
+                    return read == PREPARED_PURE_MATCH_MISMATCH
+                        ? PREPARED_PURE_MATCH_MISMATCH
+                        : PREPARED_PURE_MATCH_ERROR;
+                break;
+            }
+            if (!equal)
+                return PREPARED_PURE_MATCH_MISMATCH;
+            if (op->length > 0u)
+                memcpy(&registers[op->operand], value->expr.elems,
+                       sizeof(*registers) * op->length);
+            break;
+        }
+        default:
+            return PREPARED_PURE_MATCH_ERROR;
+        }
+    }
+    return PREPARED_PURE_MATCH_MATCHED;
 }
 
 /* Match a call's arguments against an equation's head, binding into
@@ -18618,10 +18711,13 @@ bool cetta_prepared_pure_answer_cursor_resume_native(
 }
 
 /* Pass over the equations after the selected one that cannot answer the
- * call: those of another arity, and PeTTa equations whose body begins by
- * destructuring an argument decons-atom has no answer for, whose heads take
- * any arguments.  Neither can answer or act, so a call whose remaining
- * equations all fall that way has no alternative behind its answer, as the
+ * call: those of another arity; in PeTTa, those whose compiled head fails on
+ * the call's arguments, as trying them would find (nothing matched them);
+ * and PeTTa equations whose body begins by destructuring, with decons-atom,
+ * a head variable bound to a value it has no answer for -- a head argument
+ * of a head of variables, or one a compiled head binds anywhere (they
+ * matched).  None can answer or act, so a call whose remaining equations
+ * all fall that way has no alternative behind its answer, as the
  * open-equation machine's entry guard leaves none. */
 static void prepared_pure_skip_refuted(
     const CettaPreparedPureProgram *program, const PreparedPureHead *head,
@@ -18631,20 +18727,43 @@ static void prepared_pure_skip_refuted(
     while (frame->next_equation < head->equation_count) {
         const PreparedPureEquation *equation =
             &program->equations[head->first_equation + frame->next_equation];
-        if (equation->arity == frame->arity &&
-            (!petta || equation->decons_guard_argument >= equation->arity ||
-             !equation->variable_arguments || equation->repeated_variables ||
-             equation->scalar_guard != PREPARED_PURE_NO_SCALAR_GUARD ||
-             !arguments[equation->decons_guard_argument] ||
-             !prepared_pure_petta_decons_refutes(
-                 arguments[equation->decons_guard_argument])))
+        if (equation->arity != frame->arity) {
+            frame->next_equation++;
+            continue;
+        }
+        if (!petta)
             return;
-        if (equation->arity == frame->arity) {
+        if (equation->decons_guard_argument < equation->arity &&
+            equation->variable_arguments && !equation->repeated_variables &&
+            equation->scalar_guard == PREPARED_PURE_NO_SCALAR_GUARD &&
+            arguments[equation->decons_guard_argument] &&
+            prepared_pure_petta_decons_refutes(
+                arguments[equation->decons_guard_argument])) {
             frame->matched_equation = true;
             cetta_runtime_stats_inc(
                 CETTA_RUNTIME_COUNTER_PREPARED_PURE_ENTRY_GUARD_REFUTED);
+            frame->next_equation++;
+            continue;
         }
-        frame->next_equation++;
+        Atom *guarded = NULL;
+        PreparedPureMatchState dry = prepared_pure_head_dry_match(
+            program, equation, arguments, equation->decons_guard_slot,
+            &guarded);
+        if (dry == PREPARED_PURE_MATCH_MISMATCH) {
+            frame->next_equation++;
+            continue;
+        }
+        if (dry == PREPARED_PURE_MATCH_MATCHED &&
+            equation->decons_guard_slot != PREPARED_PURE_NO_DECONS_GUARD &&
+            equation->scalar_guard == PREPARED_PURE_NO_SCALAR_GUARD &&
+            guarded && prepared_pure_petta_decons_refutes(guarded)) {
+            frame->matched_equation = true;
+            cetta_runtime_stats_inc(
+                CETTA_RUNTIME_COUNTER_PREPARED_PURE_ENTRY_GUARD_REFUTED);
+            frame->next_equation++;
+            continue;
+        }
+        return;
     }
 }
 

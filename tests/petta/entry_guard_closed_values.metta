@@ -41,3 +41,9 @@
 (= (tick) (and True (case (leaves) ((0 True) ($other False)))))
 (= (loop $n) (if (== $n 0) done (let $_ (tick) (loop (- $n 1)))))
 !(println! (loop 200))
+; The destructured variable may be bound inside a head pattern: once
+; (unwrap (box ())) has answered, (unwrap (box $xs)) is refuted by its guard
+; too, so this loop also keeps a constant choice depth.
+(= (utick) (and True (case (catch (unwrap (box ()))) ((none True) ($other False)))))
+(= (uloop $n) (if (== $n 0) done (let $_ (utick) (uloop (- $n 1)))))
+!(println! (uloop 200))
