@@ -99,6 +99,8 @@ int main(void) {
     args[3] = atom_int(&input,8388608);
     args[2] = atom_string_n(&input,"\xff",1); assert(tagged(decode(&out,args),"llm:v1:error","stream-invalid-text"));
     args[2] = atom_string(&input,"data: {}\n\n"); assert(tagged(decode(&out,args),"llm:v1:error",NULL));
+    args[2] = atom_string(&input,"data: {\"error\":{\"message\":\"overloaded\"}}\n\n");
+    assert(tagged(decode(&out,args),"llm:v1:error","stream-provider-error"));
     args[0] = atom_string(&input,"anthropic");
     const char *anthropic =
         "data: {\"type\":\"message_start\",\"message\":{\"id\":\"m\",\"role\":\"assistant\",\"content\":[],\"usage\":{\"input_tokens\":1}}}\n\n"
@@ -108,6 +110,19 @@ int main(void) {
         "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":2}}\n\n"
         "data: {\"type\":\"message_stop\"}\n\n";
     args[2] = atom_string(&input,anthropic); assert(tagged(decode(&out,args),"llm:v1:ok",NULL)); sweep(&out,args);
+    /* A stream the provider ends with an error event is named by its type,
+     * not reported as merely incomplete. */
+    const char *overloaded =
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"m\",\"role\":\"assistant\",\"content\":[],\"usage\":{\"input_tokens\":1}}}\n\n"
+        "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n\n";
+    args[2] = atom_string(&input,overloaded); assert(tagged(decode(&out,args),"llm:v1:error","stream-overloaded"));
+    const char *api_error =
+        "data: {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"Internal\"}}\n\n";
+    args[2] = atom_string(&input,api_error); assert(tagged(decode(&out,args),"llm:v1:error","stream-api-error"));
+    const char *other_error = "data: {\"type\":\"error\",\"error\":{\"type\":\"something_new\"}}\n\n";
+    args[2] = atom_string(&input,other_error); assert(tagged(decode(&out,args),"llm:v1:error","stream-provider-error"));
+    args[2] = atom_string_n(&input,anthropic,strlen(anthropic)-strlen("data: {\"type\":\"message_stop\"}\n\n"));
+    assert(tagged(decode(&out,args),"llm:v1:error","stream-incomplete"));
     size_t event_len = strlen("data: {\"type\":\"ping\"}\n\n"), count = 65537;
     char *many = malloc(event_len * count); assert(many);
     for (size_t i = 0; i < count; ++i) memcpy(many+i*event_len,"data: {\"type\":\"ping\"}\n\n",event_len);

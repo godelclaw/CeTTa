@@ -225,8 +225,11 @@ static bool stream_chat_event(StreamState *s, const char *kind, size_t kind_len,
     if (s->done) return false;
     if (len == 6u && !memcmp(data, "[DONE]", 6u)) { s->done = true; return true; }
     Atom *value;
-    if (!stream_parse(s, data, len, &value) || !stream_pairs(value) ||
-        (kind_len == 5u && !memcmp(kind, "error", 5u)) || stream_get(value, "error")) return false;
+    if (!stream_parse(s, data, len, &value) || !stream_pairs(value)) return false;
+    if ((kind_len == 5u && !memcmp(kind, "error", 5u)) || stream_get(value, "error")) {
+        s->error = "stream-provider-error";
+        return false;
+    }
     Atom *identity = stream_get(value, "id"); const char *id; size_t id_len;
     if (!stream_string(identity, &id, &id_len) || !id_len) return false;
     if (!s->identity.len) { if (!stream_bytes_add(&s->identity, id, id_len)) return false; }
@@ -289,7 +292,17 @@ static bool stream_anthropic_event(StreamState *s, const char *kind, size_t kind
     Atom *type = stream_get(value, "type"); const char *type_text; size_t type_len;
     bool named = stream_string(type, &type_text, &type_len);
     if (kind_len && (!named || type_len != kind_len || memcmp(kind, type_text, kind_len))) return false;
-    if (stream_string_is(type, "error")) return false;
+    if (stream_string_is(type, "error")) {
+        /* The provider ended the stream with an error event (a 200 response
+         * whose stream reports, for instance, overload); name it. */
+        Atom *error = stream_get(value, "error");
+        Atom *error_type = error ? stream_get(error, "type") : NULL;
+        s->error = stream_string_is(error_type, "overloaded_error") ? "stream-overloaded"
+                 : stream_string_is(error_type, "rate_limit_error") ? "stream-rate-limited"
+                 : stream_string_is(error_type, "api_error") ? "stream-api-error"
+                 : "stream-provider-error";
+        return false;
+    }
     if (stream_string_is(type, "ping")) return true;
     if (stream_string_is(type, "message_start")) {
         if (s->started) return false;
