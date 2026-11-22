@@ -44757,8 +44757,12 @@ static bool petta_try_is_alpha_member(
 static bool petta_try_msort(
     Space *s, Arena *a, Atom *call, PeTTaForm form, int fuel,
     const Bindings *current_env, OutcomeSet *outcomes) {
+    bool is_unary_sort = call && call->kind == ATOM_EXPR &&
+        call->expr.len == 2u &&
+        call->expr.elems[0]->kind == ATOM_SYMBOL &&
+        petta_semantics_is_sort(atom_symbol_current_id(call->expr.elems[0]));
     if (eval_current_language_id() != CETTA_LANGUAGE_PETTA ||
-        form != PETTA_FORM_MSORT) {
+        (form != PETTA_FORM_MSORT && !is_unary_sort)) {
         return false;
     }
 
@@ -44799,11 +44803,13 @@ static bool petta_try_msort(
             continue;
         bool type_error = false;
         Atom *value = tuple->expr.elems[0];
-        Atom *sorted = petta_semantics_sort_value(
-            a, value,
-            call->expr.elems[0]->kind == ATOM_SYMBOL &&
-                atom_symbol_current_id(call->expr.elems[0]) == g_builtin_syms.sort_atom,
-            &type_error);
+        Atom *sorted = is_unary_sort
+            ? petta_semantics_sort_unique_value(a, value, &type_error)
+            : petta_semantics_sort_value(
+                  a, value,
+                  call->expr.elems[0]->kind == ATOM_SYMBOL &&
+                      atom_symbol_current_id(call->expr.elems[0]) == g_builtin_syms.sort_atom,
+                  &type_error);
         if (sorted) {
             outcome_set_add(
                 outcomes, sorted, &tuples.items[index].env);
@@ -77333,6 +77339,8 @@ static PettaMachineHostMode petta_eval_machine_classify_host(
         form == PETTA_FORM_STREAM_SUBTRACTION ||
         form == PETTA_FORM_LENGTH ||
         form == PETTA_FORM_MSORT ||
+        (expression->expr.len == 2u && head->kind == ATOM_SYMBOL &&
+         petta_semantics_is_sort(atom_symbol_current_id(head))) ||
         form == PETTA_FORM_SECOND_FROM_PAIR ||
         form == PETTA_FORM_IS_ALPHA_MEMBER ||
         form == PETTA_FORM_LAMBDA) {

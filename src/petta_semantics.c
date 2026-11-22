@@ -67,6 +67,8 @@ CettaInvocationPlan petta_semantics_elaborate_invocation(
         return (CettaInvocationPlan){(body), (first), (last)};
     CETTA_PETTA_INVOCATION_FORM_ROWS(CETTA_PETTA_INVOCATION_FORM)
 #undef CETTA_PETTA_INVOCATION_FORM
+    if (arity == 1u && petta_semantics_is_sort(head))
+        return (CettaInvocationPlan){CETTA_INVOCATION_LIST_UNARY, 0u, 1u};
     CettaInvocationPlan plan = {0};
     cetta_invocation_plan_decode(head, arity, &plan, &g_builtin_syms);
     return plan;
@@ -1004,6 +1006,8 @@ Atom *petta_semantics_list_error(Arena *arena, SymbolId operation,
         context = petta_error_predicate_context(arena, NULL, "length", 2);
     else if (form == PETTA_FORM_MSORT)
         context = petta_error_predicate_context(arena, "system", "msort", 2);
+    else if (petta_semantics_is_sort(operation))
+        context = petta_error_predicate_context(arena, "system", "sort", 2);
     else if (form == PETTA_FORM_LIST_TO_SET || form == PETTA_FORM_APPEND)
         context = petta_error_unbound_context(arena);
     else

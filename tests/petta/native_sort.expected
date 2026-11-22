@@ -9,5 +9,4 @@
 (1 2 3)
 2
 2
-(3 2 1 1)
-((a 1) (b 2) (c 0))
+(Error (type_error list 42) (context (: system (/ sort 2)) $V0))

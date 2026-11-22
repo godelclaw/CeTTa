@@ -6967,9 +6967,16 @@ test-ai-boundaries: $(BIN) $(wildcard tests/ai/*.metta)
 	printf '%s\n' 'PASS: AI value, activation, substitution and sharing boundaries'
 test-ai-suite: $(BIN) $(wildcard tests/ai/*.metta tests/ai/*.expected)
 	@set -eu; actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
-		"!(import! &self \"./tests/ai/suite.metta\") !(ais:run \"$(abspath $(BIN))\" \"$(CURDIR)\")"); \
-	expected=$$(printf 'true\n(AISuitePass 12 1984 27)'); \
+		"!(import! &self \"./tests/ai/suite.metta\") !(ais:run-with-prolog \"$(abspath $(BIN))\" \"$(CURDIR)\" $(LIB_PROLOG_ENABLED))"); \
+	if [ "$(LIB_PROLOG_ENABLED)" = 1 ]; then \
+		expected=$$(printf 'true\n(AISuitePass 12 1984 27)'); \
+	else \
+		expected=$$(printf 'true\n(AISuitePass 12 1984 27 SkippedProlog)'); \
+	fi; \
 	if [ "$$actual" != "$$expected" ]; then printf '%s\n' "$$actual"; exit 1; fi; \
+	if [ "$(LIB_PROLOG_ENABLED)" != 1 ]; then \
+		printf '%s\n' 'SKIP: tests/ai/review_regressions_prolog.metta (translatePredicate dif) requires libswipl (ENABLE_LIB_PROLOG=1)'; \
+	fi; \
 	printf '%s\n' 'PASS: native PeTTa AI suite: 12 fixture jobs, 1984 composition observations and 27 CLI controls'
 test-ai-he-suite: $(BIN) $(wildcard tests/ai/*.metta)
 	@set -eu; actual=$$($(CETTA_BIN_INVOKE) --lang petta --profile extended -e \
@@ -28897,7 +28904,7 @@ endif
 
 .PHONY: test-petta-native-sort
 test-petta-search-machine: test-petta-native-sort
-test-petta-native-sort: $(BIN) tests/petta/native_sort.metta tests/petta/native_sort.expected
+test-petta-native-sort: $(BIN) tests/petta/native_sort.metta tests/petta/native_sort.expected tests/petta/native_sort_prolog.metta tests/petta/native_sort_prolog.expected
 	@set -eu; \
 	fixture=tests/petta/native_sort.metta; \
 	expected=tests/petta/native_sort.expected; \
@@ -28905,6 +28912,14 @@ test-petta-native-sort: $(BIN) tests/petta/native_sort.metta tests/petta/native_
 		env $$route=1 $(call cetta_exec,./$(BIN)) --lang petta $$fixture > runtime/test-native-sort.out 2>&1; \
 		diff -u $$expected runtime/test-native-sort.out; \
 	done; \
+	if [ "$(LIB_PROLOG_ENABLED)" = "1" ]; then \
+		for route in X CETTA_OPEN_EQUATIONS_REFERENCE CETTA_PREPARED_PURE_REFERENCE; do \
+			env $$route=1 $(call cetta_exec,./$(BIN)) --lang petta tests/petta/native_sort_prolog.metta > runtime/test-native-sort-prolog.out 2>&1; \
+			diff -u tests/petta/native_sort_prolog.expected runtime/test-native-sort-prolog.out; \
+		done; \
+	else \
+		printf '%s\n' 'SKIP: tests/petta/native_sort_prolog.metta (arity-3 sort/4) requires libswipl (ENABLE_LIB_PROLOG=1)'; \
+	fi; \
 	declined=$$(CETTA_OPEN_EQUATIONS_DEBUG=1 $(call cetta_exec,./$(BIN)) --lang petta $$fixture 2>&1 >/dev/null | \
 		grep -c 'decline sorted-\|decline memo-sorted' || true); \
 	if [ "$$declined" != 0 ]; then \
@@ -52026,7 +52041,7 @@ SUITE_CORRECTNESS_GATES += test-petta-builtin-registry test-petta-builtin-contra
 test-petta-builtin-registry: $(PETTA_BUILTIN_REGISTRY_TEST_BIN)
 	@$(call cetta_exec,./$(PETTA_BUILTIN_REGISTRY_TEST_BIN))
 test-petta-builtin-contracts: $(BIN)
-	@python3 tests/support/check_petta_builtin_contracts.py $(BIN)
+	@python3 tests/support/check_petta_builtin_contracts.py $(BIN) --lib-prolog $(LIB_PROLOG_ENABLED)
 
 
 .PHONY: test-work-observers

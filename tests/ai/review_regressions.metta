@@ -22,8 +22,6 @@
 !(foldall ar:add (superpose (1 (ar:fail) 3)) 0)
 !(let $c (collapse (superpose (1 (ar:fail) 3))) (Pair (length $c) (size-atom $c)))
 !(collapse (superpose ($x $y)))
-; The atom-only directive cannot export the machine's pending solver owner.
-!(collapse (let $_ (translatePredicate (dif $x 1)) (Box $x)))
 (: ARList (-> Type Type))
 (: ARNil (ARList $a))
 (: ARCons (-> $a (ARList $a) (ARList $a)))

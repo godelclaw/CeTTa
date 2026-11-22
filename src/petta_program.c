@@ -1872,6 +1872,7 @@ bool petta_program_head_is_intrinsic(SymbolId head) {
          head == ids->max ||
          head == ids->transaction ||
          head == ids->with_mutex ||
+         petta_semantics_is_sort(head) ||
          petta_semantics_is_mm2_exec(head));
     /* `data` is shared with historical extended PeTTa.  Live `make-list`
      * and `the` forms are owned only by typecheck-v2; extended erases `the`
@@ -8637,13 +8638,14 @@ static bool petta_table_safety_primitive(
     }
 
     const PettaIntrinsicNameIds *ids = petta_intrinsic_name_ids();
-    return ids->table &&
-           (head == ids->empty ||
-            head == ids->member ||
-            head == ids->last ||
-            head == ids->reverse ||
-            head == ids->min ||
-            head == ids->max);
+    return (arity == 1u && petta_semantics_is_sort(head)) ||
+           (ids->table &&
+            (head == ids->empty ||
+             head == ids->member ||
+             head == ids->last ||
+             head == ids->reverse ||
+             head == ids->min ||
+             head == ids->max));
 }
 
 /* A trace request is process-constant.  Read the environment once per

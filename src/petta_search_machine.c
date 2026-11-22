@@ -15463,6 +15463,7 @@ static bool petta_machine_is_rigid_data(
             head == g_builtin_syms.petta_member ||
             head == g_builtin_syms.petta_last ||
             head == g_builtin_syms.reverse ||
+            (atom->expr.len == 2u && petta_semantics_is_sort(head)) ||
             petta_semantics_numeric_extremum(head) ||
             head == g_builtin_syms.if_text ||
             form != PETTA_FORM_NONE ||
@@ -15568,6 +15569,7 @@ static bool petta_machine_contains_callable(
              head == g_builtin_syms.petta_member ||
              head == g_builtin_syms.petta_last ||
              head == g_builtin_syms.reverse ||
+             (atom->expr.len == 2u && petta_semantics_is_sort(head)) ||
              petta_semantics_numeric_extremum(head) ||
              head == g_builtin_syms.if_text ||
              form != PETTA_FORM_NONE ||
@@ -42468,7 +42470,8 @@ static bool petta_machine_dispatch_goal(
             return pair && petta_machine_unify(machine, pair, second);
         }
         if (operation == g_builtin_syms.petta_msort ||
-            operation == g_builtin_syms.sort_atom) {
+            operation == g_builtin_syms.sort_atom ||
+            petta_semantics_is_sort(operation)) {
             bool type_error = false;
             Atom *value = petta_machine_apply_bindings(machine,
                 search_context_bindings(&machine->search),
@@ -42476,11 +42479,15 @@ static bool petta_machine_dispatch_goal(
             bool list_value = value && atom_is_list(value);
             if (list_value)
                 value = petta_machine_list_elements(machine, value);
-            Atom *sorted = value
-                ? petta_semantics_sort_value(
-                      &machine->heap, value,
-                      operation == g_builtin_syms.sort_atom, &type_error)
-                : NULL;
+            Atom *sorted = NULL;
+            if (value) {
+                sorted = petta_semantics_is_sort(operation)
+                    ? petta_semantics_sort_unique_value(
+                          &machine->heap, value, &type_error)
+                    : petta_semantics_sort_value(
+                          &machine->heap, value,
+                          operation == g_builtin_syms.sort_atom, &type_error);
+            }
             if (list_value && sorted && sorted->kind == ATOM_EXPR)
                 sorted = atom_list(&machine->heap, sorted->expr.elems,
                                    sorted->expr.len);

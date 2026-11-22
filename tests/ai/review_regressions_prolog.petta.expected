@@ -1,0 +1,2 @@
+()
+(Error (collapse (let $V0 (translatePredicate (dif $V1 1)) (Box $V1))) (Incomplete (UnresolvedNativeConditions ((Box $V2)) (($V2) (((dif $V2 1) $V2))))))

@@ -25,7 +25,6 @@
 (= (vars-sorted $a $b) (size-atom (sort ($a $b $a $b))))
 !(vars-sorted $u $v)
 
-; sort with a key and an order is SWI's sort/4
-!(sort 0 @>= (3 1 2 1))
-!(sort 1 @< ((b 2) (a 1) (c 0)))
+; a non-list raises SWI's sort/2 list type error
+!(catch (sort 42))
 

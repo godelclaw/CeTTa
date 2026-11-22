@@ -12,6 +12,7 @@ def main():
     parser.add_argument('--fixtures', type=Path,
                         default=Path(__file__).resolve().parents[1] /
                         'petta/language_versions/builtins')
+    parser.add_argument('--lib-prolog', type=int, choices=(0, 1), default=1)
     args = parser.parse_args()
     binary, fixtures = args.cetta.resolve(), args.fixtures.resolve()
     profiles = [(['--lang', 'petta'], False),
@@ -19,15 +20,20 @@ def main():
                 (['--lang', 'petta', '--profile', 'typecheck-v2'], True),
                 (['--lang', 'petta', '--profile', 'typecheck-v3'], True)]
     observations = 0
+    if not args.lib_prolog:
+        print('SKIP: declarations.metta (import_prolog_function add_builtin_signatures) '
+              'requires libswipl (ENABLE_LIB_PROLOG=1)')
     for options, modern in profiles:
-        expected = {
-            'declarations': (fixtures / 'declarations.expected').read_text(),
+        expected = {}
+        if args.lib_prolog:
+            expected['declarations'] = (fixtures / 'declarations.expected').read_text()
+        expected.update({
             'declarations_not_imported': '(add_builtin_signatures &self)\n0\n',
             'empty_car': (
                 '(Error car_atom_empty car-atom)\nleft\n()\n()\n'
                 '(Error car_atom_empty car-atom)\n(Error car_atom_empty car-atom)\n'
                 if modern else '()\nleft\n()\n()\nreached\n(before)\n'),
-        }
+        })
         for machine in ('0', '1'):
             environment = dict(os.environ, CETTA_PETTA_SEARCH_MACHINE=machine)
             for case, stdout in expected.items():
