@@ -242,7 +242,7 @@
 ;     domain_error(not_less_than_one, Range), whereas SWI-Prolog 10.1.9 has
 ;     an upstream bug passing the Depth argument (A2) instead of Range (A3)
 ;     (e.g. domain_error(not_less_than_one, 7) for term_hash(foo, 7, 0, H)).
-;     Decided: Oruzi, 2026-11-22 (native PeTTa stdlib parity without libswipl).
+;     Decided: 2026-11-22 (native PeTTa stdlib parity without libswipl).
 ; SWI-PeTTa: 2481857053, 598, (Error (domain_error not_less_than_one 7) (context (: system (/ term_hash 4)) $V0))
 !(term_hash (a 1))
 !(term_hash (a (b 1)) 2 1000)
