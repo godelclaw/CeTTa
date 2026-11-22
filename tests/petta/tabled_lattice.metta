@@ -4,7 +4,6 @@
 ;; Against SWI's mode-directed tabling (min, max, lattice(J/3)), on fixed and
 ;; seeded random graphs, the same arcs asserted to both.
 !(import! &self (library lib_tabling))
-!(callPredicate (Predicate (consult "tests/petta/fixtures/tabled_lattice.pl")))
 
 (= (arc a) (b 1))
 (= (arc a) (c 4))
@@ -41,46 +40,5 @@
 (= (reach $x) (let ($y $w) (arc $x) (reach $y)))
 !(msort (collapse (let $s (reach $x) ($x $s))))
 
-;; seeded random graphs, cyclic (min) and acyclic (max), against SWI
-(= (lcg $s) (% (* $s 48271) 2147483647))
-(= (add-arcs $g $n $m $s $dag)
-   (if (== $m 0) $s
-     (let* (($s1 (lcg $s)) ($s2 (lcg $s1)) ($s3 (lcg $s2))
-            ($a (% $s1 $n)) ($b (% $s2 $n)) ($w (+ 1 (% $s3 9)))
-            (($x $y) (if $dag (if (< $a $b) ($a $b) ($b $a)) ($a $b))))
-       (if (if $dag (== $x $y) False) (add-arcs $g $n $m $s3 $dag)
-         (let $added (add-arc $g $x $y $w $dag)
-           (add-arcs $g $n (- $m 1) $s3 $dag))))))
-(= (add-arc $g $x $y $w False)
-   (let $e (add-atom &self (= (rarc $g $x) ($y $w)))
-     (assertzPredicate (Predicate (lattice_arc $g $x $y $w)))))
-(= (add-arc $g $x $y $w True)
-   (let $e (add-atom &self (= (rdarc $g $x) ($y $w)))
-     (assertzPredicate (Predicate (lattice_dag_arc $g $x $y $w)))))
-!(tabled-lattice (rshort $g $x $y) min)
-(= (rshort $g $x $y) (let ($y $w) (rarc $g $x) $w))
-(= (rshort $g $x $y) (let ($z $w) (rarc $g $x) (let $d (rshort $g $z $y) (+ $w $d))))
-!(tabled-lattice (rlong $g $x $y) max)
-(= (rlong $g $x $y) (let ($y $w) (rdarc $g $x) $w))
-(= (rlong $g $x $y) (let ($z $w) (rdarc $g $x) (let $d (rlong $g $z $y) (+ $w $d))))
-(= (ours-short $g) (msort (collapse (let $c (rshort $g $x $y) ($x $y $c)))))
-(= (theirs-short $g) (msort (collapse (let $_ (callPredicate (Predicate (lattice_short $g $x $y $c))) ($x $y $c)))))
-!(tabled-lattice (rreach $g $x) sunion)
-(= (rreach $g $x) (let ($y $w) (rarc $g $x) ($y)))
-(= (rreach $g $x) (let ($y $w) (rarc $g $x) (rreach $g $y)))
-(= (ours-reach $g) (msort (collapse (let $s (rreach $g $x) ($x $s)))))
-(= (theirs-reach $g) (msort (collapse (let $_ (callPredicate (Predicate (lattice_reach $g $x $s))) ($x $s)))))
-(= (ours-long $g) (msort (collapse (let $c (rlong $g $x $y) ($x $y $c)))))
-(= (theirs-long $g) (msort (collapse (let $_ (callPredicate (Predicate (lattice_long $g $x $y $c))) ($x $y $c)))))
-(= (graph $g $n $m $seed)
-   (let* (($s1 (add-arcs $g $n $m $seed False))
-          ($s2 (add-arcs $g $n $m $s1 True))
-          ($os (ours-short $g)) ($ts (theirs-short $g))
-          ($ol (ours-long $g)) ($tl (theirs-long $g))
-          ($or (ours-reach $g)) ($tr (theirs-reach $g)))
-     (if (and (== $os $ts) (and (== $ol $tl) (== $or $tr))) (size-atom $os) (differs $g $os $ts $ol $tl $or $tr))))
-(= (graphs $g $count $acc)
-   (if (== $g $count) $acc
-     (let $r (graph $g (+ 3 (% $g 6)) (+ 4 (* 2 (% $g 7))) (+ 17 (* 7919 $g)))
-       (if (== (get-metatype $r) Expression) $r (graphs (+ $g 1) $count (+ $acc $r))))))
-!(graphs 0 40 0)
+;; Seeded random-graph differential checks against SWI mode-directed tabling
+;; live in tabled_lattice_prolog.metta (gated on ENABLE_LIB_PROLOG=1).

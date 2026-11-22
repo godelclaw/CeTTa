@@ -28837,10 +28837,17 @@ test-petta-tabled-shared-and-runtime: $(BIN)
 # or max) inside the fixpoint, against SWI's mode-directed tabling through the
 # embedded Prolog on 40 seeded graphs.
 .PHONY: test-petta-tabled-lattice
-test-petta-tabled-lattice: $(BIN)
+test-petta-tabled-lattice: $(BIN) tests/petta/tabled_lattice.metta tests/petta/tabled_lattice.expected tests/petta/tabled_lattice_prolog.metta tests/petta/tabled_lattice_prolog.expected
 	@actual=runtime/test-petta-tabled-lattice.out; \
 	./$(BIN) --lang petta tests/petta/tabled_lattice.metta >"$$actual" 2>&1; \
 	diff -u tests/petta/tabled_lattice.expected "$$actual"
+	@if [ "$(LIB_PROLOG_ENABLED)" = "1" ]; then \
+		actual=runtime/test-petta-tabled-lattice-prolog.out; \
+		./$(BIN) --lang petta tests/petta/tabled_lattice_prolog.metta >"$$actual" 2>&1; \
+		diff -u tests/petta/tabled_lattice_prolog.expected "$$actual"; \
+	else \
+		printf '%s\n' 'SKIP: tests/petta/tabled_lattice_prolog.metta (40 seeded graphs vs SWI tabled_lattice.pl) requires libswipl (ENABLE_LIB_PROLOG=1)'; \
+	fi
 	@actual=runtime/test-petta-tabled-lattice-join-error.out; \
 	if ./$(BIN) --lang petta tests/petta/tabled_lattice_join_error.metta >"$$actual" 2>&1; then \
 		echo "FAIL: a join giving two values was not reported"; exit 1; fi; \
@@ -31406,7 +31413,7 @@ test-native-query: $(BIN) tests/support/check_native_query.py \
 		done; \
 	done; \
 	echo "PASS: let bodies, nested columns, removals of rows holding variables and matches read afresh after effects answer alike on the native and ordinary paths"
-	@for stem in native_open_joins dense_relations_set_once native_guard_kept_facts native_guard_reads native_filter native_guard_spellings native_comparison_redefined native_guard_conjunctions native_order_filters saturation_region native_count_relations relaxation_region native_filtered_match native_scalar_fold saturation_dead_rules native_grouped_counts native_listed_match; do \
+	@for stem in native_open_joins dense_relations_set_once native_guard_kept_facts native_guard_reads native_filter native_guard_spellings native_guard_conjunctions native_order_filters saturation_region native_count_relations relaxation_region native_filtered_match native_scalar_fold saturation_dead_rules native_grouped_counts native_listed_match; do \
 		for route in "" CETTA_SPACE_DENSE=eager CETTA_NATIVE_QUERY_REFERENCE=1 \
 				"CETTA_SPACE_DENSE=eager CETTA_NATIVE_QUERY_REFERENCE=1"; do \
 			answers=$$(env $$route $(CETTA_BIN_INVOKE) --profile extended \
@@ -31418,6 +31425,20 @@ test-native-query: $(BIN) tests/support/check_native_query.py \
 			fi; \
 		done; \
 	done; \
+	if [ "$(LIB_PROLOG_ENABLED)" = "1" ]; then \
+		for route in "" CETTA_SPACE_DENSE=eager CETTA_NATIVE_QUERY_REFERENCE=1 \
+				"CETTA_SPACE_DENSE=eager CETTA_NATIVE_QUERY_REFERENCE=1"; do \
+			answers=$$(env $$route $(CETTA_BIN_INVOKE) --profile extended \
+				--lang petta tests/petta/native_comparison_redefined.metta 2>&1); \
+			if [ "$$answers" != "$$(cat tests/petta/native_comparison_redefined.expected)" ]; then \
+				echo "FAIL: native_comparison_redefined [$${route:-native}]"; \
+				diff tests/petta/native_comparison_redefined.expected <(printf '%s\n' "$$answers"); \
+				exit 1; \
+			fi; \
+		done; \
+	else \
+		printf '%s\n' 'SKIP: tests/petta/native_comparison_redefined.metta (callPredicate consult native_comparison_redefined.pl) requires libswipl (ENABLE_LIB_PROLOG=1)'; \
+	fi; \
 	echo "PASS: joins over facts holding variables, read from relations of deep facts, sets holding each fact once, guards over facts a relation holds, guards in the spellings programs use, filters on values, matches running a branch for the solutions filters pass, folds over scalars, regions with rules that cannot fire, grouped counts and lists spread over matches answer as the ordinary path does"
 
 # Defects in the joins over facts holding variables, each caught by the open
@@ -32453,7 +32474,7 @@ endif
 # evaluations, in SWI's foldall/4 order: the step's declaration governs it,
 # reduce/2 takes an error the step raises, and effects interleave.
 test-petta-semantics: test-petta-foldall-steps
-test-petta-foldall-steps: $(BIN) tests/petta/foldall_steps.metta tests/petta/foldall_steps.expected
+test-petta-foldall-steps: $(BIN) tests/petta/foldall_steps.metta tests/petta/foldall_steps.expected tests/petta/foldall_steps_prolog.metta tests/petta/foldall_steps_prolog.expected
 	@set -eu; \
 	for route in tier machine; do \
 		if [ $$route = machine ]; then reference=1; else reference=; fi; \
@@ -32466,6 +32487,21 @@ test-petta-foldall-steps: $(BIN) tests/petta/foldall_steps.metta tests/petta/fol
 			exit 1; \
 		fi; \
 	done; \
+	if [ "$(LIB_PROLOG_ENABLED)" = "1" ]; then \
+		for route in tier machine; do \
+			if [ $$route = machine ]; then reference=1; else reference=; fi; \
+			actual=$$(CETTA_OPEN_EQUATIONS_REFERENCE=$$reference $(CETTA_BIN_INVOKE) \
+				--lang petta tests/petta/foldall_steps_prolog.metta 2>&1); \
+			if [ "$$actual" != "$$(cat tests/petta/foldall_steps_prolog.expected)" ]; then \
+				echo "FAIL: foldall's Prolog-constrained steps run as PeTTa evaluations, on the $$route route"; \
+				diff <(cat tests/petta/foldall_steps_prolog.expected) \
+					<(printf '%s\n' "$$actual") | head -20; \
+				exit 1; \
+			fi; \
+		done; \
+	else \
+		printf '%s\n' 'SKIP: tests/petta/foldall_steps_prolog.metta (CLP(FD) #+ / translatePredicate #<) requires libswipl (ENABLE_LIB_PROLOG=1)'; \
+	fi; \
 	echo "PASS: foldall's generator and steps run as PeTTa evaluations, in SWI's order, on the tier and in the machine"
 
 .PHONY: test-petta-list-cells-in-bodies
@@ -33846,6 +33882,7 @@ test-petta-semantics: test-petta-nan-equality
 # PeTTa's == compares numbers by exact value, and every NaN equals every NaN
 # and nothing else (SWI-PeTTa's answers).
 test-petta-nan-equality: $(BIN)
+ifeq ($(LIB_PROLOG_ENABLED),1)
 	@set -eu; \
 	for route in tier machine; do \
 		if [ $$route = machine ]; then reference=1; else reference=; fi; \
@@ -33859,6 +33896,9 @@ test-petta-nan-equality: $(BIN)
 		fi; \
 	done; \
 	echo "PASS: PeTTa's == takes every NaN as one value, on the tier and in the machine"
+else
+	@echo "SKIP: tests/petta/nan_equality.metta (translatePredicate is nan/inf) requires libswipl (ENABLE_LIB_PROLOG=1)"
+endif
 
 .PHONY: test-petta-error-outcomes
 test-petta-semantics: test-petta-error-outcomes
@@ -34361,7 +34401,7 @@ test-petta-rational-terms: $(BIN)
 .PHONY: test-petta-hyperpose-answers
 test-petta-semantics: test-petta-hyperpose-answers test-petta-hyperpose-named-state test-petta-identity-forwarding
 .PHONY: test-petta-identity-forwarding
-test-petta-identity-forwarding: $(BIN)
+test-petta-identity-forwarding: $(BIN) tests/petta/identity_forwarding.metta tests/petta/identity_forwarding.expected tests/petta/identity_forwarding_prolog.metta tests/petta/identity_forwarding_prolog.expected
 	@set -eu; \
 	for route in tier machine; do \
 		if [ $$route = machine ]; then reference=1; else reference=; fi; \
@@ -34372,6 +34412,19 @@ test-petta-identity-forwarding: $(BIN)
 			diff -u tests/petta/identity_forwarding.expected <(printf '%s\n' "$$actual"); exit 1; \
 		fi; \
 	done; \
+	if [ "$(LIB_PROLOG_ENABLED)" = "1" ]; then \
+		for route in tier machine; do \
+			if [ $$route = machine ]; then reference=1; else reference=; fi; \
+			actual=$$(CETTA_OPEN_EQUATIONS_REFERENCE=$$reference $(CETTA_BIN_INVOKE) \
+				--lang petta tests/petta/identity_forwarding_prolog.metta 2>&1); \
+			if [ "$$actual" != "$$(cat tests/petta/identity_forwarding_prolog.expected)" ]; then \
+				echo "FAIL: identity forwarding Prolog cases ($$route)"; \
+				diff -u tests/petta/identity_forwarding_prolog.expected <(printf '%s\n' "$$actual"); exit 1; \
+			fi; \
+		done; \
+	else \
+		printf '%s\n' 'SKIP: tests/petta/identity_forwarding_prolog.metta (CLP(FD) #> / translatePredicate dif/freeze / callPredicate throw) requires libswipl (ENABLE_LIB_PROLOG=1)'; \
+	fi; \
 	echo "PASS: identity forwarding retains aliases, effects, constraints, handlers, cuts and occurrences"
 .PHONY: test-petta-hyperpose-named-state
 test-petta-hyperpose-named-state: $(BIN)
@@ -34423,6 +34476,7 @@ test-petta-semantics: test-petta-constraints
 # takes its constraints with it, a collection's answers take theirs along,
 # and delayed goals survive collection (SWI-PeTTa's answers and effects).
 test-petta-constraints: $(BIN)
+ifeq ($(LIB_PROLOG_ENABLED),1)
 	@set -eu; \
 	for route in tier machine core; do \
 		if [ $$route = tier ]; then reference=; else reference=1; fi; \
@@ -34439,6 +34493,9 @@ test-petta-constraints: $(BIN)
 		done; \
 	done; \
 	echo "PASS: constraints and delayed goals wake, publish aliases, veto, roll back, cross collections and survive collection, on the tier and in the machine"
+else
+	@echo "SKIP: test-petta-constraints (CLP(FD) / translatePredicate / callPredicate) requires libswipl (ENABLE_LIB_PROLOG=1)"
+endif
 
 .PHONY: test-petta-swi-differences
 # The register of every place where plain PeTTa on CeTTa deliberately answers
@@ -37730,27 +37787,40 @@ test-petta-search-machine: test-petta-late-foreign-continuation
 test-petta-late-foreign-continuation: $(BIN)
 	@set -eu; \
 	for reference in 0 1; do \
-		for fixture in late_foreign_continuation late_foreign_scopes \
-			late_foreign_rejected_calls late_foreign_ready_calls oem_tail_transfer \
-			completed_host_controls completed_host_collection late_foreign_translation; do \
-			actual=$$(CETTA_OPEN_EQUATIONS_REFERENCE=$$reference $(CETTA_BIN_INVOKE) \
-				--lang petta tests/petta/$$fixture.metta 2>&1); \
-			if [ "$$actual" != "$$(cat tests/petta/$$fixture.expected)" ]; then \
-				echo "FAIL: $$fixture (reference $$reference)"; \
-				diff -u tests/petta/$$fixture.expected <(printf '%s\n' "$$actual"); \
-				exit 1; \
-			fi; \
-		done; \
-	done; \
-	for reference in 0 1; do \
 		actual=$$(CETTA_OPEN_EQUATIONS_REFERENCE=$$reference $(CETTA_BIN_INVOKE) \
-			--lang petta --profile extended tests/petta/late_foreign_bounded.metta 2>&1); \
-		if [ "$$actual" != "$$(cat tests/petta/late_foreign_bounded.expected)" ]; then \
-			echo "FAIL: bounded late collection (reference $$reference)"; \
-			diff -u tests/petta/late_foreign_bounded.expected <(printf '%s\n' "$$actual"); \
+			--lang petta tests/petta/oem_tail_transfer.metta 2>&1); \
+		if [ "$$actual" != "$$(cat tests/petta/oem_tail_transfer.expected)" ]; then \
+			echo "FAIL: oem_tail_transfer (reference $$reference)"; \
+			diff -u tests/petta/oem_tail_transfer.expected <(printf '%s\n' "$$actual"); \
 			exit 1; \
 		fi; \
 	done; \
+	if [ "$(LIB_PROLOG_ENABLED)" = "1" ]; then \
+		for reference in 0 1; do \
+			for fixture in late_foreign_continuation late_foreign_scopes \
+				late_foreign_rejected_calls late_foreign_ready_calls \
+				completed_host_controls completed_host_collection late_foreign_translation; do \
+				actual=$$(CETTA_OPEN_EQUATIONS_REFERENCE=$$reference $(CETTA_BIN_INVOKE) \
+					--lang petta tests/petta/$$fixture.metta 2>&1); \
+				if [ "$$actual" != "$$(cat tests/petta/$$fixture.expected)" ]; then \
+					echo "FAIL: $$fixture (reference $$reference)"; \
+					diff -u tests/petta/$$fixture.expected <(printf '%s\n' "$$actual"); \
+					exit 1; \
+				fi; \
+			done; \
+		done; \
+		for reference in 0 1; do \
+			actual=$$(CETTA_OPEN_EQUATIONS_REFERENCE=$$reference $(CETTA_BIN_INVOKE) \
+				--lang petta --profile extended tests/petta/late_foreign_bounded.metta 2>&1); \
+			if [ "$$actual" != "$$(cat tests/petta/late_foreign_bounded.expected)" ]; then \
+				echo "FAIL: bounded late collection (reference $$reference)"; \
+				diff -u tests/petta/late_foreign_bounded.expected <(printf '%s\n' "$$actual"); \
+				exit 1; \
+			fi; \
+		done; \
+	else \
+		printf '%s\n' 'SKIP: test-petta-late-foreign-continuation (8 consult .pl / import_prolog_function fixtures) requires libswipl (ENABLE_LIB_PROLOG=1)'; \
+	fi; \
 	echo "PASS: late registration preserves aliases, delayed constraints, collection, commitment, recovery and older alternatives"
 
 .PHONY: test-petta-tier-composition

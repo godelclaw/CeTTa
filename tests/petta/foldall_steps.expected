@@ -10,7 +10,3 @@ g2
 3
 120
 (Pair (baz) (Pair (foo bar) init))
-(ok)
-()
-4
-(4)

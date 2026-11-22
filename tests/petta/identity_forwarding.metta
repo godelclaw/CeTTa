@@ -18,11 +18,8 @@
 !(let $r (hyperpose ((chain 3 $x $x))) (pair $r $x))
 !(let $r (hyperpose ((let $x 3 $x))) (pair $r $x))
 !(let $r (collapse (chain 3 $x $x)) (pair $r $x))
-; Delayed goals on the binder wake when it gets its value.
-!(collapse (let $c (#> $x 2) (chain 1 $x $x)))
-!(collapse (let $c (#> $x 2) (chain 5 $x $x)))
-!(collapse (let $u (translatePredicate (dif $x 1)) (chain 1 $x $x)))
-!(let $u (translatePredicate (freeze $x (Predicate (writeln woke)))) (let $d (chain (+ 0 1) $x $x) $d))
+; Delayed goals on the binder (#>, translatePredicate dif/freeze) live in
+; identity_forwarding_prolog.metta (gated on ENABLE_LIB_PROLOG=1).
 ; A bound binder filters.
 !(collapse (let $x 5 (let $r (let $x 3 $x) $r)))
 !(collapse (let $x 5 (let $r (chain 3 $x $x) $r)))
@@ -42,9 +39,8 @@
 ; A query-level identity form.
 !(chain 3 $x $x)
 
-; Forwarding preserves an escaped exception's enclosing handler.
-!(catch (chain (callPredicate (Predicate (throw identity-forward-fault))) $v $v))
-!(catch (let $v (callPredicate (Predicate (throw identity-forward-fault))) $v))
+; Prolog callPredicate throw handler cases live in
+; identity_forwarding_prolog.metta (gated on ENABLE_LIB_PROLOG=1).
 
 ; The source's cut keeps the same call boundary and answer multiplicity.
 (= (forward-cut $x) (chain (let $u (cut) (superpose ($x $x))) $v $v))
