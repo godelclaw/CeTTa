@@ -74,6 +74,8 @@ CettaInvocationPlan petta_semantics_elaborate_invocation(
         return (CettaInvocationPlan){CETTA_INVOCATION_LIST_SET, 0u, 2u};
     if (arity == 1u && petta_semantics_is_atom_chars(head))
         return (CettaInvocationPlan){CETTA_INVOCATION_LIST_UNARY, 0u, 1u};
+    if (arity == 1u && petta_semantics_is_copy_term(head))
+        return (CettaInvocationPlan){CETTA_INVOCATION_LIST_UNARY, 0u, 1u};
     CettaInvocationPlan plan = {0};
     cetta_invocation_plan_decode(head, arity, &plan, &g_builtin_syms);
     return plan;
@@ -146,6 +148,7 @@ typedef struct {
     SymbolId sort;
     SymbolId atom_concat;
     SymbolId atom_chars;
+    SymbolId copy_term;
     SymbolId first_from_pair;
     SymbolId first;
     SymbolId second_from_pair;
@@ -475,6 +478,7 @@ static const PeTTaSymbolIds *petta_symbol_ids_refresh(void) {
         ids.sort = symbol_intern_cstr(g_symbols, "sort");
         ids.atom_concat = symbol_intern_cstr(g_symbols, "atom_concat");
         ids.atom_chars = symbol_intern_cstr(g_symbols, "atom_chars");
+        ids.copy_term = symbol_intern_cstr(g_symbols, "copy_term");
         ids.first_from_pair =
             symbol_intern_cstr(g_symbols, "first-from-pair");
         ids.first = symbol_intern_cstr(g_symbols, "first");
@@ -1437,10 +1441,15 @@ bool petta_semantics_is_atom_chars(SymbolId head) {
     return head != SYMBOL_ID_NONE && head == petta_symbol_ids()->atom_chars;
 }
 
+bool petta_semantics_is_copy_term(SymbolId head) {
+    return head != SYMBOL_ID_NONE && head == petta_symbol_ids()->copy_term;
+}
+
 bool petta_semantics_is_native_stdlib_call(SymbolId head, CettaExprLen arity) {
     return (arity == 1u && petta_semantics_is_sort(head)) ||
            (arity == 2u && petta_semantics_is_atom_concat(head)) ||
-           (arity == 1u && petta_semantics_is_atom_chars(head));
+           (arity == 1u && petta_semantics_is_atom_chars(head)) ||
+           (arity == 1u && petta_semantics_is_copy_term(head));
 }
 
 static bool petta_atomic_text_span(Arena *arena, const Atom *value,
@@ -1608,6 +1617,15 @@ Atom *petta_semantics_atom_chars(Arena *arena, Atom *value, Atom **error_out) {
         pos += step;
     }
     return atom_expr(arena, elems, (CettaExprLen)count);
+}
+
+Atom *petta_semantics_copy_term(Arena *arena, Atom *value) {
+    if (!arena || !value)
+        return NULL;
+    if (!atom_has_vars(value))
+        return value;
+    Atom *unit = atom_unit(arena);
+    return unit ? rename_vars_except(arena, value, unit) : NULL;
 }
 
 Atom *petta_semantics_materialize_closed_logical_list(

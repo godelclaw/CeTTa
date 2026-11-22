@@ -42481,6 +42481,15 @@ static bool petta_machine_dispatch_goal(
                 return petta_machine_raise_error(machine, error);
             return chars && petta_machine_unify(machine, chars, second);
         }
+        if (petta_semantics_is_copy_term(operation)) {
+            Atom *value = petta_machine_apply_bindings(machine,
+                search_context_bindings(&machine->search),
+                &machine->heap, items);
+            Atom *copied = value
+                ? petta_semantics_copy_term(&machine->heap, value)
+                : NULL;
+            return copied && petta_machine_unify(machine, copied, second);
+        }
         if (operation == g_builtin_syms.petta_msort ||
             operation == g_builtin_syms.sort_atom ||
             petta_semantics_is_sort(operation)) {

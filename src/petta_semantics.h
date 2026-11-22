@@ -395,12 +395,17 @@ bool petta_semantics_is_sort(SymbolId head);
  * matching SWI Error term. */
 bool petta_semantics_is_atom_concat(SymbolId head);
 bool petta_semantics_is_atom_chars(SymbolId head);
+bool petta_semantics_is_copy_term(SymbolId head);
 /* Whether `(head a1 ... a_arity)` is a PeTTa stdlib predicate owned natively
  * at this exact arity (independent of libswipl). */
 bool petta_semantics_is_native_stdlib_call(SymbolId head, CettaExprLen arity);
 Atom *petta_semantics_atom_concat(Arena *arena, Atom *left, Atom *right,
                                   Atom **error_out);
 Atom *petta_semantics_atom_chars(Arena *arena, Atom *value, Atom **error_out);
+/* PeTTa's `copy_term/1` (SWI copy_term/2): deep-copy `value`, replacing every
+ * distinct unbound variable with a fresh variable while preserving internal
+ * sharing; ground terms return unchanged. */
+Atom *petta_semantics_copy_term(Arena *arena, Atom *value);
 /* The errors the reference raises, as its catch gives them: Prolog's
  * error(Formal, Context) reads (Error Formal Context), and an unbound
  * context is a fresh variable.

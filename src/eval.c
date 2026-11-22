@@ -44835,7 +44835,7 @@ static bool petta_try_msort(
     return true;
 }
 
-static bool petta_try_atom_text_ops(
+static bool petta_try_native_stdlib_ops(
     Space *s, Arena *a, Atom *call, int fuel,
     const Bindings *current_env, OutcomeSet *outcomes) {
     if (eval_current_language_id() != CETTA_LANGUAGE_PETTA ||
@@ -44844,13 +44844,14 @@ static bool petta_try_atom_text_ops(
         return false;
     }
     SymbolId head = atom_symbol_current_id(call->expr.elems[0]);
-    bool is_concat = call->expr.len == 3u && petta_semantics_is_atom_concat(head);
-    bool is_chars = call->expr.len == 2u && petta_semantics_is_atom_chars(head);
-    if (!is_concat && !is_chars)
+    CettaExprLen nargs = call->expr.len - 1u;
+    bool is_concat = nargs == 2u && petta_semantics_is_atom_concat(head);
+    bool is_chars = nargs == 1u && petta_semantics_is_atom_chars(head);
+    bool is_copy = nargs == 1u && petta_semantics_is_copy_term(head);
+    if (!is_concat && !is_chars && !is_copy)
         return false;
 
-    CettaExprLen nargs = is_concat ? 2u : 1u;
-    Atom *evaluated[2] = {NULL, NULL};
+    Atom *evaluated[3] = {NULL, NULL, NULL};
     Bindings base;
     bindings_init(&base);
     if (current_env && !bindings_copy(&base, current_env))
@@ -44881,11 +44882,16 @@ static bool petta_try_atom_text_ops(
                 &tuples.items[index].env, a, tuple->expr.elems[1]);
             if (left && right)
                 result = petta_semantics_atom_concat(a, left, right, &error);
-        } else {
+        } else if (is_chars) {
             Atom *value = bindings_apply_if_vars(
                 &tuples.items[index].env, a, tuple->expr.elems[0]);
             if (value)
                 result = petta_semantics_atom_chars(a, value, &error);
+        } else {
+            Atom *value = bindings_apply_if_vars(
+                &tuples.items[index].env, a, tuple->expr.elems[0]);
+            if (value)
+                result = petta_semantics_copy_term(a, value);
         }
         if (result) {
             outcome_set_add(outcomes, result, &tuples.items[index].env);
@@ -77242,6 +77248,8 @@ static PettaMachineHostMode petta_eval_machine_classify_host(
         !grounded_op_is_type_pure(atom_symbol_current_id(head)) &&
         !grounded_op_is_pattern(atom_symbol_current_id(head)) &&
         !petta_semantics_is_mm2_exec(atom_symbol_current_id(head)) &&
+        !petta_semantics_is_native_stdlib_call(
+            atom_symbol_current_id(head), expression->expr.len - 1u) &&
         !petta_eval_machine_preserves_mixed_data_call(expression))
         return PETTA_MACHINE_HOST_NONE;
 
@@ -98214,6 +98222,7 @@ static bool petta_eval_open_head_callable(
            head == g_builtin_syms.if_text ||
            petta_semantics_boolean_relation_arity(head, NULL) ||
            petta_semantics_form(head) != PETTA_FORM_NONE ||
+           petta_semantics_is_native_stdlib_call(head, supplied) ||
            petta_semantics_intrinsic_partial_arity(head, &intrinsic) ||
            eval_space_has_equations(space, head) ||
            petta_eval_machine_native_named_arity(
@@ -100944,7 +100953,7 @@ static __attribute__((noinline)) MettaDispatchResult metta_petta_dispatch(
             return METTA_DISPATCH_HANDLED;
         }
 
-        if (petta_try_atom_text_ops(
+        if (petta_try_native_stdlib_ops(
                 s, a, (*call), fuel, CURRENT_ENV, os)) {
             return METTA_DISPATCH_HANDLED;
         }
@@ -107664,7 +107673,7 @@ prime_need_next_strict_argument: ;
             return;
         }
 
-        if (petta_try_atom_text_ops(
+        if (petta_try_native_stdlib_ops(
                 s, a, atom, fuel, CURRENT_ENV, os)) {
             return;
         }

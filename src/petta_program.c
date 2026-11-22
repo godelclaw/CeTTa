@@ -1875,6 +1875,7 @@ bool petta_program_head_is_intrinsic(SymbolId head) {
          petta_semantics_is_sort(head) ||
          petta_semantics_is_atom_concat(head) ||
          petta_semantics_is_atom_chars(head) ||
+         petta_semantics_is_copy_term(head) ||
          petta_semantics_is_mm2_exec(head));
     /* `data` is shared with historical extended PeTTa.  Live `make-list`
      * and `the` forms are owned only by typecheck-v2; extended erases `the`
