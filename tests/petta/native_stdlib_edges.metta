@@ -46,3 +46,11 @@
 !(cat-in-fn ab cd)
 (= (chars-in-fn $a) (atom_chars $a))
 !(chars-in-fn xyz)
+; Expressions are lists for depth and key purposes: (foo a b) is [foo,a,b], i.e. cons cells, so term_hash depth counts cons cells and depth 4 reaches b. Expected lines come from swipl 10.1.9 run on the list encoding (evidence godel-list-hash-V0PINO/swi-list.txt).
+!(== (term_hash (foo a b) 2 1000) (term_hash (foo a c) 2 1000))
+!(== (term_hash (foo a b) 3 1000) (term_hash (foo a c) 3 1000))
+!(== (term_hash (foo a b) 4 1000) (term_hash (foo a c) 4 1000))
+!(== (term_hash (foo a b) 3 2147483647) (term_hash (foo a c) 3 2147483647))
+!(== (term_hash (foo a b) 4 2147483647) (term_hash (foo a c) 4 2147483647))
+!(== (term_hash (foo a b) -1 2147483647) (term_hash (foo a c) -1 2147483647))
+!(== (term_hash (foo a b) 2 2147483647) (term_hash (foo x b) 2 2147483647))
