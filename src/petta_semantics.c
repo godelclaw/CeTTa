@@ -1,4 +1,5 @@
 #include "petta_semantics.h"
+#include "petta_numeric.h"
 #include "tensor_dense_v1.h"
 
 int cetta_dense_tensor_v1_compare(const CettaDenseTensorV1 *, const CettaDenseTensorV1 *) __attribute__((weak));
@@ -68,6 +69,10 @@ CettaInvocationPlan petta_semantics_elaborate_invocation(
     CETTA_PETTA_INVOCATION_FORM_ROWS(CETTA_PETTA_INVOCATION_FORM)
 #undef CETTA_PETTA_INVOCATION_FORM
     if (arity == 1u && petta_semantics_is_sort(head))
+        return (CettaInvocationPlan){CETTA_INVOCATION_LIST_UNARY, 0u, 1u};
+    if (arity == 2u && petta_semantics_is_atom_concat(head))
+        return (CettaInvocationPlan){CETTA_INVOCATION_LIST_SET, 0u, 2u};
+    if (arity == 1u && petta_semantics_is_atom_chars(head))
         return (CettaInvocationPlan){CETTA_INVOCATION_LIST_UNARY, 0u, 1u};
     CettaInvocationPlan plan = {0};
     cetta_invocation_plan_decode(head, arity, &plan, &g_builtin_syms);
@@ -139,6 +144,8 @@ typedef struct {
     SymbolId msort;
     SymbolId sort_atom;
     SymbolId sort;
+    SymbolId atom_concat;
+    SymbolId atom_chars;
     SymbolId first_from_pair;
     SymbolId first;
     SymbolId second_from_pair;
@@ -466,6 +473,8 @@ static const PeTTaSymbolIds *petta_symbol_ids_refresh(void) {
         ids.msort = symbol_intern_cstr(g_symbols, "msort");
         ids.sort_atom = symbol_intern_cstr(g_symbols, "sort-atom");
         ids.sort = symbol_intern_cstr(g_symbols, "sort");
+        ids.atom_concat = symbol_intern_cstr(g_symbols, "atom_concat");
+        ids.atom_chars = symbol_intern_cstr(g_symbols, "atom_chars");
         ids.first_from_pair =
             symbol_intern_cstr(g_symbols, "first-from-pair");
         ids.first = symbol_intern_cstr(g_symbols, "first");
@@ -1418,6 +1427,187 @@ Atom *petta_semantics_sort_unique_value(Arena *arena, Atom *value,
                                         bool *type_error) {
     Atom *sorted = petta_semantics_sort_value(arena, value, false, type_error);
     return sorted ? petta_sorted_unique(arena, sorted) : NULL;
+}
+
+bool petta_semantics_is_atom_concat(SymbolId head) {
+    return head != SYMBOL_ID_NONE && head == petta_symbol_ids()->atom_concat;
+}
+
+bool petta_semantics_is_atom_chars(SymbolId head) {
+    return head != SYMBOL_ID_NONE && head == petta_symbol_ids()->atom_chars;
+}
+
+bool petta_semantics_is_native_stdlib_call(SymbolId head, CettaExprLen arity) {
+    return (arity == 1u && petta_semantics_is_sort(head)) ||
+           (arity == 2u && petta_semantics_is_atom_concat(head)) ||
+           (arity == 1u && petta_semantics_is_atom_chars(head));
+}
+
+static bool petta_atomic_text_span(Arena *arena, const Atom *value,
+                                   const char **bytes_out, size_t *len_out) {
+    if (!arena || !value || !bytes_out || !len_out)
+        return false;
+    if (value->kind == ATOM_SYMBOL) {
+        *bytes_out = atom_symbol_bytes(value);
+        *len_out = atom_symbol_length(value);
+        return true;
+    }
+    if (value->kind != ATOM_GROUNDED)
+        return false;
+    switch (value->ground.gkind) {
+    case GV_STRING:
+        *bytes_out = value->ground.sval ? value->ground.sval : "";
+        *len_out = value->ground.slen;
+        return true;
+    case GV_BOOL:
+        *bytes_out = value->ground.bval ? "true" : "false";
+        *len_out = value->ground.bval ? 4u : 5u;
+        return true;
+    case GV_INT:
+    case GV_FLOAT:
+    case GV_BIGINT:
+    case GV_RATIONAL: {
+        char *rendered = cetta_petta_number_to_string(arena, value);
+        if (!rendered)
+            return false;
+        *bytes_out = rendered;
+        *len_out = strlen(rendered);
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+
+static size_t petta_utf8_codepoint_len(const char *bytes, size_t pos,
+                                       size_t len) {
+    unsigned char lead = (unsigned char)bytes[pos];
+    if ((lead & 0x80u) == 0u)
+        return 1u;
+    if ((lead & 0xE0u) == 0xC0u && pos + 2u <= len &&
+        ((unsigned char)bytes[pos + 1u] & 0xC0u) == 0x80u)
+        return 2u;
+    if ((lead & 0xF0u) == 0xE0u && pos + 3u <= len &&
+        ((unsigned char)bytes[pos + 1u] & 0xC0u) == 0x80u &&
+        ((unsigned char)bytes[pos + 2u] & 0xC0u) == 0x80u)
+        return 3u;
+    if ((lead & 0xF8u) == 0xF0u && pos + 4u <= len &&
+        ((unsigned char)bytes[pos + 1u] & 0xC0u) == 0x80u &&
+        ((unsigned char)bytes[pos + 2u] & 0xC0u) == 0x80u &&
+        ((unsigned char)bytes[pos + 3u] & 0xC0u) == 0x80u)
+        return 4u;
+    return 1u;
+}
+
+Atom *petta_semantics_atom_concat(Arena *arena, Atom *left, Atom *right,
+                                  Atom **error_out) {
+    if (error_out)
+        *error_out = NULL;
+    if (!arena || !left || !right)
+        return NULL;
+    Atom *args[2] = {left, right};
+    const char *spans[2] = {NULL, NULL};
+    size_t lens[2] = {0u, 0u};
+    for (int i = 0; i < 2; i++) {
+        if (args[i]->kind == ATOM_VAR) {
+            if (error_out) {
+                *error_out = petta_error_term(
+                    arena, atom_symbol(arena, "instantiation_error"),
+                    petta_error_predicate_context(arena, "system",
+                                                  "atom_concat", 3));
+            }
+            return NULL;
+        }
+        if (!petta_atomic_text_span(arena, args[i], &spans[i], &lens[i])) {
+            if (error_out) {
+                const char *expected =
+                    (args[i]->kind == ATOM_EXPR && args[i]->expr.len == 0u)
+                        ? "atom" : "atomic";
+                Atom *formal = atom_expr3(arena, atom_symbol(arena, "type_error"),
+                                          atom_symbol(arena, expected), args[i]);
+                *error_out = petta_error_term(
+                    arena, formal,
+                    petta_error_predicate_context(arena, "system",
+                                                  "atom_concat", 3));
+            }
+            return NULL;
+        }
+    }
+    if (lens[0] > (size_t)UINT32_MAX - lens[1])
+        return NULL;
+    size_t total = lens[0] + lens[1];
+    if (total == 0u) {
+        SymbolId empty = symbol_intern_bytes(g_symbols, (const uint8_t *)"", 0u);
+        return empty != SYMBOL_ID_NONE ? atom_symbol_id(arena, empty) : NULL;
+    }
+    char stack_buf[256];
+    char *joined = total <= sizeof(stack_buf)
+        ? stack_buf
+        : (char *)arena_alloc(arena, total);
+    if (!joined)
+        return NULL;
+    if (lens[0] > 0u)
+        memcpy(joined, spans[0], lens[0]);
+    if (lens[1] > 0u)
+        memcpy(joined + lens[0], spans[1], lens[1]);
+    SymbolId id = symbol_intern_bytes(g_symbols, (const uint8_t *)joined,
+                                      (uint32_t)total);
+    return id != SYMBOL_ID_NONE ? atom_symbol_id(arena, id) : NULL;
+}
+
+Atom *petta_semantics_atom_chars(Arena *arena, Atom *value, Atom **error_out) {
+    if (error_out)
+        *error_out = NULL;
+    if (!arena || !value)
+        return NULL;
+    if (value->kind == ATOM_VAR) {
+        if (error_out) {
+            *error_out = petta_error_term(
+                arena, atom_symbol(arena, "instantiation_error"),
+                petta_error_predicate_context(arena, "system",
+                                              "atom_chars", 2));
+        }
+        return NULL;
+    }
+    const char *bytes = NULL;
+    size_t len = 0u;
+    if (!petta_atomic_text_span(arena, value, &bytes, &len)) {
+        if (error_out) {
+            Atom *formal = atom_expr3(arena, atom_symbol(arena, "type_error"),
+                                      atom_symbol(arena, "atom"), value);
+            *error_out = petta_error_term(
+                arena, formal,
+                petta_error_predicate_context(arena, NULL, "atom_chars", 2));
+        }
+        return NULL;
+    }
+    if (len == 0u)
+        return atom_unit(arena);
+    size_t count = 0u;
+    for (size_t pos = 0u; pos < len;) {
+        pos += petta_utf8_codepoint_len(bytes, pos, len);
+        count++;
+    }
+    if (!cetta_expr_len_fits_size((CettaExprLen)count) ||
+        count > (size_t)(SIZE_MAX / sizeof(Atom *)))
+        return NULL;
+    Atom **elems = arena_alloc(arena, sizeof(*elems) * count);
+    if (!elems)
+        return NULL;
+    size_t index = 0u;
+    for (size_t pos = 0u; pos < len;) {
+        size_t step = petta_utf8_codepoint_len(bytes, pos, len);
+        SymbolId id = symbol_intern_bytes(
+            g_symbols, (const uint8_t *)(bytes + pos), (uint32_t)step);
+        if (id == SYMBOL_ID_NONE)
+            return NULL;
+        Atom *ch = atom_symbol_id(arena, id);
+        if (!ch)
+            return NULL;
+        elems[index++] = ch;
+        pos += step;
+    }
+    return atom_expr(arena, elems, (CettaExprLen)count);
 }
 
 Atom *petta_semantics_materialize_closed_logical_list(

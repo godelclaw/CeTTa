@@ -1,0 +1,45 @@
+foobar
+Symbol
+abcd
+Symbol
+item_42
+true_flag
+false_flag
+n_100000000000000000000
+x_3.5
+&self_tag
+a—ř⋄
+
+ok
+ok
+(a b c)
+()
+()
+(x y)
+(1 2 3)
+Symbol
+false
+(- 4 2)
+(1 . 5)
+(t r u e)
+(f a l s e)
+(a — ř ⋄)
+4
+hello_world
+(a — b)
+(txn_ok)
+((h i))
+true
+99
+99
+pre_suf
+dyn_ok
+(x y)
+(Error instantiation_error (context (: system (/ atom_concat 3)) $V0))
+(Error instantiation_error (context (: system (/ atom_concat 3)) $V0))
+(Error (type_error atom ()) (context (: system (/ atom_concat 3)) $V0))
+(Error (type_error atomic (a b)) (context (: system (/ atom_concat 3)) $V0))
+(Error (type_error atomic (a b)) (context (: system (/ atom_concat 3)) $V0))
+(Error instantiation_error (context (: system (/ atom_chars 2)) $V0))
+(Error (type_error atom ()) (context (/ atom_chars 2) $V0))
+(Error (type_error atom (a b)) (context (/ atom_chars 2) $V0))

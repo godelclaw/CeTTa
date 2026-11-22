@@ -388,6 +388,19 @@ Atom *petta_semantics_sort_unique_value(Arena *arena, Atom *value,
                                         bool *type_error);
 /* Whether `head` is `sort`, whose one-argument call is SWI's sort/2. */
 bool petta_semantics_is_sort(SymbolId head);
+/* PeTTa's `atom_concat/2` (SWI atom_concat/3) and `atom_chars/1` (SWI
+ * atom_chars/2): atomic operands render to UTF-8 text, producing an interned
+ * symbol (including the empty symbol) or a list of single-codepoint symbols.
+ * On invalid or unbound operands, returns NULL and sets `*error_out` to the
+ * matching SWI Error term. */
+bool petta_semantics_is_atom_concat(SymbolId head);
+bool petta_semantics_is_atom_chars(SymbolId head);
+/* Whether `(head a1 ... a_arity)` is a PeTTa stdlib predicate owned natively
+ * at this exact arity (independent of libswipl). */
+bool petta_semantics_is_native_stdlib_call(SymbolId head, CettaExprLen arity);
+Atom *petta_semantics_atom_concat(Arena *arena, Atom *left, Atom *right,
+                                  Atom **error_out);
+Atom *petta_semantics_atom_chars(Arena *arena, Atom *value, Atom **error_out);
 /* The errors the reference raises, as its catch gives them: Prolog's
  * error(Formal, Context) reads (Error Formal Context), and an unbound
  * context is a fresh variable.

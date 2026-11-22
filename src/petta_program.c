@@ -1873,6 +1873,8 @@ bool petta_program_head_is_intrinsic(SymbolId head) {
          head == ids->transaction ||
          head == ids->with_mutex ||
          petta_semantics_is_sort(head) ||
+         petta_semantics_is_atom_concat(head) ||
+         petta_semantics_is_atom_chars(head) ||
          petta_semantics_is_mm2_exec(head));
     /* `data` is shared with historical extended PeTTa.  Live `make-list`
      * and `the` forms are owned only by typecheck-v2; extended erases `the`
@@ -8638,7 +8640,7 @@ static bool petta_table_safety_primitive(
     }
 
     const PettaIntrinsicNameIds *ids = petta_intrinsic_name_ids();
-    return (arity == 1u && petta_semantics_is_sort(head)) ||
+    return petta_semantics_is_native_stdlib_call(head, arity) ||
            (ids->table &&
             (head == ids->empty ||
              head == ids->member ||

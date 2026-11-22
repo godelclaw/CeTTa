@@ -15463,7 +15463,7 @@ static bool petta_machine_is_rigid_data(
             head == g_builtin_syms.petta_member ||
             head == g_builtin_syms.petta_last ||
             head == g_builtin_syms.reverse ||
-            (atom->expr.len == 2u && petta_semantics_is_sort(head)) ||
+            petta_semantics_is_native_stdlib_call(head, atom->expr.len - 1u) ||
             petta_semantics_numeric_extremum(head) ||
             head == g_builtin_syms.if_text ||
             form != PETTA_FORM_NONE ||
@@ -15569,7 +15569,7 @@ static bool petta_machine_contains_callable(
              head == g_builtin_syms.petta_member ||
              head == g_builtin_syms.petta_last ||
              head == g_builtin_syms.reverse ||
-             (atom->expr.len == 2u && petta_semantics_is_sort(head)) ||
+             petta_semantics_is_native_stdlib_call(head, atom->expr.len - 1u) ||
              petta_semantics_numeric_extremum(head) ||
              head == g_builtin_syms.if_text ||
              form != PETTA_FORM_NONE ||
@@ -42469,6 +42469,18 @@ static bool petta_machine_dispatch_goal(
             Atom *pair = tail ? atom_expr2(&machine->heap, head, tail) : NULL;
             return pair && petta_machine_unify(machine, pair, second);
         }
+        if (petta_semantics_is_atom_chars(operation)) {
+            Atom *value = petta_machine_apply_bindings(machine,
+                search_context_bindings(&machine->search),
+                &machine->heap, items);
+            Atom *error = NULL;
+            Atom *chars = value
+                ? petta_semantics_atom_chars(&machine->heap, value, &error)
+                : NULL;
+            if (error)
+                return petta_machine_raise_error(machine, error);
+            return chars && petta_machine_unify(machine, chars, second);
+        }
         if (operation == g_builtin_syms.petta_msort ||
             operation == g_builtin_syms.sort_atom ||
             petta_semantics_is_sort(operation)) {
@@ -42531,8 +42543,24 @@ static bool petta_machine_dispatch_goal(
             first->expr.elems[0]->kind != ATOM_SYMBOL) {
             return false;
         }
-        PeTTaForm operation = petta_semantics_form(
-            atom_symbol_current_id(first->expr.elems[0]));
+        SymbolId head_sym = atom_symbol_current_id(first->expr.elems[0]);
+        if (petta_semantics_is_atom_concat(head_sym) &&
+            first->expr.len == 3u) {
+            Atom *left = petta_machine_apply_bindings(machine,
+                search_context_bindings(&machine->search),
+                &machine->heap, first->expr.elems[1]);
+            Atom *right = petta_machine_apply_bindings(machine,
+                search_context_bindings(&machine->search),
+                &machine->heap, first->expr.elems[2]);
+            Atom *error = NULL;
+            Atom *joined = left && right
+                ? petta_semantics_atom_concat(&machine->heap, left, right, &error)
+                : NULL;
+            if (error)
+                return petta_machine_raise_error(machine, error);
+            return joined && petta_machine_unify(machine, joined, second);
+        }
+        PeTTaForm operation = petta_semantics_form(head_sym);
         Atom *list = NULL;
         Atom *result = NULL;
         bool list_input = false;

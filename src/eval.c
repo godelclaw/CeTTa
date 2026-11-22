@@ -7012,7 +7012,10 @@ static bool petta_atom_requires_control_eval(Atom *atom) {
         g_petta_source_plan->role == PETTA_PLAN_STATIC_CALL)
         return true;
     if (petta_semantics_form(atom_symbol_current_id(atom->expr.elems[0])) !=
-        PETTA_FORM_NONE) {
+            PETTA_FORM_NONE ||
+        petta_semantics_is_native_stdlib_call(
+            atom_symbol_current_id(atom->expr.elems[0]),
+            atom->expr.len - 1u)) {
         return true;
     }
     if (eval_transform_any_head(atom_symbol_current_id(atom->expr.elems[0]),
@@ -7132,7 +7135,9 @@ static EvalConstructorHead atom_constructor_head_kind(Space *s, Arena *a,
      * decides what an occurrence denotes.  `(cons 1 (2 3))` in an argument
      * is the list (1 2 3), not a three-field constructor. */
     if (eval_current_language_id() == CETTA_LANGUAGE_PETTA &&
-        petta_semantics_form(atom_symbol_current_id(head)) != PETTA_FORM_NONE)
+        (petta_semantics_form(atom_symbol_current_id(head)) != PETTA_FORM_NONE ||
+         petta_semantics_is_native_stdlib_call(
+             atom_symbol_current_id(head), atom->expr.len - 1u)))
         return EVAL_HEAD_NOT_CONSTRUCTOR;
     Atom **head_types = NULL;
     uint32_t ntypes = eval_get_atom_types_profiled(s, a, head, &head_types);
@@ -9367,7 +9372,8 @@ bool cetta_petta_source_head_has_runtime_meaning(
         return true;
     }
     if (petta_semantics_boolean_relation_arity(head, NULL) ||
-        petta_semantics_form(head) != PETTA_FORM_NONE) {
+        petta_semantics_form(head) != PETTA_FORM_NONE ||
+        petta_semantics_is_native_stdlib_call(head, nargs)) {
         return true;
     }
     const char *name = symbol_bytes(g_symbols, head);
@@ -44829,6 +44835,69 @@ static bool petta_try_msort(
     return true;
 }
 
+static bool petta_try_atom_text_ops(
+    Space *s, Arena *a, Atom *call, int fuel,
+    const Bindings *current_env, OutcomeSet *outcomes) {
+    if (eval_current_language_id() != CETTA_LANGUAGE_PETTA ||
+        !s || !a || !call || call->kind != ATOM_EXPR ||
+        call->expr.len < 2u || call->expr.elems[0]->kind != ATOM_SYMBOL) {
+        return false;
+    }
+    SymbolId head = atom_symbol_current_id(call->expr.elems[0]);
+    bool is_concat = call->expr.len == 3u && petta_semantics_is_atom_concat(head);
+    bool is_chars = call->expr.len == 2u && petta_semantics_is_atom_chars(head);
+    if (!is_concat && !is_chars)
+        return false;
+
+    CettaExprLen nargs = is_concat ? 2u : 1u;
+    Atom *evaluated[2] = {NULL, NULL};
+    Bindings base;
+    bindings_init(&base);
+    if (current_env && !bindings_copy(&base, current_env))
+        return true;
+    ResultBindSet tuples;
+    rb_set_init(&tuples);
+    interpret_tuple(
+        s, a, call->expr.elems + 1u, nargs, 0u, evaluated,
+        &base, NULL, fuel, &tuples, NULL, 0u, NULL, NULL);
+    bindings_free(&base);
+
+    for (CettaCount index = 0u; index < tuples.len; index++) {
+        Atom *tuple = outcome_atom_materialize(a, &tuples.items[index]);
+        if (!tuple)
+            continue;
+        if (atom_is_error(tuple)) {
+            outcome_set_add_existing(outcomes, &tuples.items[index]);
+            continue;
+        }
+        if (tuple->kind != ATOM_EXPR || tuple->expr.len != nargs)
+            continue;
+        Atom *error = NULL;
+        Atom *result = NULL;
+        if (is_concat) {
+            Atom *left = bindings_apply_if_vars(
+                &tuples.items[index].env, a, tuple->expr.elems[0]);
+            Atom *right = bindings_apply_if_vars(
+                &tuples.items[index].env, a, tuple->expr.elems[1]);
+            if (left && right)
+                result = petta_semantics_atom_concat(a, left, right, &error);
+        } else {
+            Atom *value = bindings_apply_if_vars(
+                &tuples.items[index].env, a, tuple->expr.elems[0]);
+            if (value)
+                result = petta_semantics_atom_chars(a, value, &error);
+        }
+        if (result) {
+            outcome_set_add(outcomes, result, &tuples.items[index].env);
+        } else if (error) {
+            petta_eval_raise(error);
+            break;
+        }
+    }
+    outcome_set_free(&tuples);
+    return true;
+}
+
 static bool petta_try_alpha_unique(
     Space *s, Arena *a, Atom *call, PeTTaForm form, int fuel,
     const Bindings *current_env, OutcomeSet *outcomes) {
@@ -77339,8 +77408,9 @@ static PettaMachineHostMode petta_eval_machine_classify_host(
         form == PETTA_FORM_STREAM_SUBTRACTION ||
         form == PETTA_FORM_LENGTH ||
         form == PETTA_FORM_MSORT ||
-        (expression->expr.len == 2u && head->kind == ATOM_SYMBOL &&
-         petta_semantics_is_sort(atom_symbol_current_id(head))) ||
+        (head->kind == ATOM_SYMBOL &&
+         petta_semantics_is_native_stdlib_call(
+             atom_symbol_current_id(head), expression->expr.len - 1u)) ||
         form == PETTA_FORM_SECOND_FROM_PAIR ||
         form == PETTA_FORM_IS_ALPHA_MEMBER ||
         form == PETTA_FORM_LAMBDA) {
@@ -84743,7 +84813,9 @@ static inline __attribute__((always_inline)) bool petta_eval_machine_admits_root
          petta_eval_symbol_name_is(head, "member")) ||
         (head != SYMBOL_ID_NONE &&
          (petta_eval_symbol_name_is(head, "last") ||
-          petta_eval_symbol_name_is(head, "reverse"))) ||
+          petta_eval_symbol_name_is(head, "reverse") ||
+          petta_semantics_is_native_stdlib_call(
+              head, expression->expr.len - 1u))) ||
         form == PETTA_FORM_IF ||
         form == PETTA_FORM_TEST ||
         (head != SYMBOL_ID_NONE &&
@@ -98030,9 +98102,9 @@ static bool petta_eval_open_may_delay(void *context, SymbolId head,
     if (form != PETTA_FORM_NONE || petta_program_head_is_intrinsic(head) ||
         is_grounded_op(head) || grounded_op_is_type_pure(head))
         return false;
-    /* SWI's sort/2 orders a list and drops duplicates: it answers with no
-     * goal delayed on a variable. */
-    if (arity == 1u && petta_semantics_is_sort(head))
+    /* Native PeTTa stdlib operations answer with no goal delayed on a
+     * variable. */
+    if (petta_semantics_is_native_stdlib_call(head, (CettaExprLen)arity))
         return false;
     return eval_context && eval_context->library_context &&
            eval_context->library_context->lib_prolog &&
@@ -100869,6 +100941,11 @@ static __attribute__((noinline)) MettaDispatchResult metta_petta_dispatch(
 
         if (petta_try_msort(
                 s, a, (*call), petta_form, fuel, CURRENT_ENV, os)) {
+            return METTA_DISPATCH_HANDLED;
+        }
+
+        if (petta_try_atom_text_ops(
+                s, a, (*call), fuel, CURRENT_ENV, os)) {
             return METTA_DISPATCH_HANDLED;
         }
 
@@ -107584,6 +107661,11 @@ prime_need_next_strict_argument: ;
 
         if (petta_try_msort(
                 s, a, atom, petta_form, fuel, CURRENT_ENV, os)) {
+            return;
+        }
+
+        if (petta_try_atom_text_ops(
+                s, a, atom, fuel, CURRENT_ENV, os)) {
             return;
         }
 
