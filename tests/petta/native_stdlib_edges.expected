@@ -1,0 +1,38 @@
+abcdef
+12
+1.5x
+st
+
+(Error instantiation_error (context (: system (/ atom_concat 3)) $V0))
+(Error instantiation_error (context (: system (/ atom_concat 3)) $V0))
+(Error (type_error atomic (f x)) (context (: system (/ atom_concat 3)) $V0))
+(a b c)
+(1 2 3)
+(1 . 5)
+()
+(s t r)
+(Error instantiation_error (context (: system (/ atom_chars 2)) $V0))
+(Error (type_error atom (f x)) (context (/ atom_chars 2) $V0))
+a
+true
+false
+true
+false
+false
+true
+true
+true
+true
+0
+$V0
+$V0
+Number
+(Error (domain_error not_less_than_one 1) (context (: system (/ term_hash 4)) $V0))
+(Error (representation_error int) (context (: system (/ term_hash 4)) $V0))
+(Error instantiation_error (context (: system (/ term_hash 4)) $V0))
+(Error instantiation_error (context (: system (/ term_hash 4)) $V0))
+(Error (domain_error not_less_than_zero -2) (context (: system (/ term_hash 4)) $V0))
+(Error (type_error integer a) (context (: system (/ term_hash 4)) $V0))
+true
+abcd
+(x y z)
