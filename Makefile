@@ -28925,6 +28925,18 @@ test-petta-native-sort: $(BIN) tests/petta/native_sort.metta tests/petta/native_
 	fi
 	@echo "PASS: sort/2 and sort/4 agree with SWI-PeTTa on every route, and functions that sort stay in the open-equation tier"
 
+.PHONY: test-petta-native-stdlib-edges
+test-petta-search-machine: test-petta-native-stdlib-edges
+test-petta-native-stdlib-edges: $(BIN) tests/petta/native_stdlib_edges.metta tests/petta/native_stdlib_edges.expected
+	@set -eu; \
+	fixture=tests/petta/native_stdlib_edges.metta; \
+	expected=tests/petta/native_stdlib_edges.expected; \
+	for route in X CETTA_OPEN_EQUATIONS_REFERENCE CETTA_PREPARED_PURE_REFERENCE; do \
+		env $$route=1 $(call cetta_exec,./$(BIN)) --lang petta $$fixture > runtime/test-native-stdlib-edges.out 2>&1; \
+		diff -u $$expected runtime/test-native-stdlib-edges.out; \
+	done
+	@echo "PASS: atom_concat, atom_chars, copy_term and term_hash edge cases agree with SWI on every route"
+
 .PHONY: test-petta-list-destructuring
 test-petta-search-machine: test-petta-list-destructuring
 test-petta-list-destructuring: $(BIN) tests/petta/list_destructuring.metta tests/petta/list_destructuring.expected
