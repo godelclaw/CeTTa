@@ -28909,7 +28909,7 @@ endif
 
 .PHONY: test-petta-native-sort
 test-petta-search-machine: test-petta-native-sort
-test-petta-native-sort: $(BIN) tests/petta/native_sort.metta tests/petta/native_sort.expected tests/petta/native_sort_prolog.metta tests/petta/native_sort_prolog.expected
+test-petta-native-sort: $(BIN) tests/petta/native_sort.metta tests/petta/native_sort.expected
 	@set -eu; \
 	fixture=tests/petta/native_sort.metta; \
 	expected=tests/petta/native_sort.expected; \
@@ -28917,21 +28917,13 @@ test-petta-native-sort: $(BIN) tests/petta/native_sort.metta tests/petta/native_
 		env $$route=1 $(call cetta_exec,./$(BIN)) --lang petta $$fixture > runtime/test-native-sort.out 2>&1; \
 		diff -u $$expected runtime/test-native-sort.out; \
 	done; \
-	if [ "$(LIB_PROLOG_ENABLED)" = "1" ]; then \
-		for route in X CETTA_OPEN_EQUATIONS_REFERENCE CETTA_PREPARED_PURE_REFERENCE; do \
-			env $$route=1 $(call cetta_exec,./$(BIN)) --lang petta tests/petta/native_sort_prolog.metta > runtime/test-native-sort-prolog.out 2>&1; \
-			diff -u tests/petta/native_sort_prolog.expected runtime/test-native-sort-prolog.out; \
-		done; \
-	else \
-		printf '%s\n' 'SKIP: tests/petta/native_sort_prolog.metta (arity-3 sort/4) requires libswipl (ENABLE_LIB_PROLOG=1)'; \
-	fi; \
 	declined=$$(CETTA_OPEN_EQUATIONS_DEBUG=1 $(call cetta_exec,./$(BIN)) --lang petta $$fixture 2>&1 >/dev/null | \
 		grep -c 'decline sorted-\|decline memo-sorted' || true); \
 	if [ "$$declined" != 0 ]; then \
 		echo "FAIL: a function that sorts left the open-equation tier"; \
 		exit 1; \
 	fi
-	@echo "PASS: sort of one list is SWI's sort/2 on every route, and functions that sort stay in the open-equation tier"
+	@echo "PASS: sort/2 and sort/4 agree with SWI-PeTTa on every route, and functions that sort stay in the open-equation tier"
 
 .PHONY: test-petta-list-destructuring
 test-petta-search-machine: test-petta-list-destructuring

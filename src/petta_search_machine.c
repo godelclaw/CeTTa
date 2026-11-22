@@ -42602,6 +42602,32 @@ static bool petta_machine_dispatch_goal(
                 return petta_machine_raise_error(machine, error);
             return hashed && petta_machine_unify(machine, hashed, second);
         }
+        if (petta_semantics_is_sort(head_sym) &&
+            first->expr.len == 4u) {
+            Atom *key_atom = petta_machine_apply_bindings(machine,
+                search_context_bindings(&machine->search),
+                &machine->heap, first->expr.elems[1]);
+            Atom *order_atom = petta_machine_apply_bindings(machine,
+                search_context_bindings(&machine->search),
+                &machine->heap, first->expr.elems[2]);
+            Atom *list_atom = petta_machine_apply_bindings(machine,
+                search_context_bindings(&machine->search),
+                &machine->heap, first->expr.elems[3]);
+            bool list_value = list_atom && atom_is_list(list_atom);
+            if (list_value)
+                list_atom = petta_machine_list_elements(machine, list_atom);
+            Atom *error = NULL;
+            Atom *sorted = key_atom && order_atom && list_atom
+                ? petta_semantics_sort_keyed_value(
+                      &machine->heap, key_atom, order_atom, list_atom, &error)
+                : NULL;
+            if (list_value && sorted && sorted->kind == ATOM_EXPR)
+                sorted = atom_list(&machine->heap, sorted->expr.elems,
+                                   sorted->expr.len);
+            if (error)
+                return petta_machine_raise_error(machine, error);
+            return sorted && petta_machine_unify(machine, sorted, second);
+        }
         PeTTaForm operation = petta_semantics_form(head_sym);
         Atom *list = NULL;
         Atom *result = NULL;

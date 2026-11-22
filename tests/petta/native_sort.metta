@@ -28,3 +28,53 @@
 ; a non-list raises SWI's sort/2 list type error
 !(catch (sort 42))
 
+; sort with a key and an order is SWI's sort/4: key 0 compares whole elements,
+; key 1 compares the head, key 2 compares the tail of cons-list compounds.
+; Strict orders (@<, <, @>, >) deduplicate equal keys keeping the first;
+; non-strict orders (@=<, =<, @>=, >=) keep duplicates stably.
+!(sort 0 @>= (3 1 2 1))
+!(sort 1 @< ((b 2) (a 1) (c 0)))
+!(sort 0 @< (b a b 2 1 1.0))
+!(sort 0 < (b a b 2 1 1.0))
+!(sort 0 @> (b a b 2 1 1.0))
+!(sort 0 > (b a b 2 1 1.0))
+!(sort 0 @=< (b a b 2 1 1.0))
+!(sort 0 =< (b a b 2 1 1.0))
+!(sort 0 >= (b a b 2 1 1.0))
+!(sort 1 @< ((b 2) (a 3) (a 1) (c 0)))
+!(sort 1 @> ((b 2) (a 3) (a 1) (c 0)))
+!(sort 1 @=< ((b 2) (a 3) (a 1) (c 0)))
+!(sort 1 @>= ((b 2) (a 3) (a 1) (c 0)))
+!(sort 2 @< ((a 2 9) (b 2 1) (c 1 5) (d 2 1)))
+!(sort 2 @=< ((a 2 9) (b 2 1) (c 1 5) (d 2 1)))
+!(sort 2 @> ((a 2 9) (b 2 1) (c 1 5) (d 2 1)))
+!(sort 2 @>= ((a 2 9) (b 2 1) (c 1 5) (d 2 1)))
+!(sort 2 @< ((b) (a)))
+!(sort 5 @< ())
+
+; sort/3 inside functions, transactions, partial applications, and dynamic heads
+(= (sort-by $k $o $xs) (sort $k $o $xs))
+!(sort-by 1 @>= ((b 2) (a 3) (a 1)))
+!(collapse (transaction (sort 1 @< ((b 2) (a 1)))))
+!(sort 1 @<)
+!((sort 1 @<) ((b 2) (a 1)))
+!(let $f sort ($f 1 @< ((b 2) (a 1))))
+
+; sort/3 error terms match SWI-PeTTa
+!(catch (sort $k @< (1)))
+!(catch (sort -1 @< (1)))
+!(catch (sort 1.5 @< (1)))
+!(catch (sort 0 $o (1)))
+!(catch (sort 0 123 (1)))
+!(catch (sort 0 <= (2 1)))
+!(catch (sort 0 foo ()))
+!(catch (sort 0 @< $xs))
+!(catch (sort 0 @< 42))
+!(catch (sort 0 @< (cons a $t)))
+!(catch (sort 0 @< (cons a b)))
+!(catch (sort 1 @< ($x)))
+!(catch (sort 1 @< (1)))
+!(catch (sort 2 @< (())))
+!(catch (sort 3 @< ((a b c))))
+!(catch (sort foo @< ((a 1))))
+

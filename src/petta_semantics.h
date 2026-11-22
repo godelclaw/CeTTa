@@ -386,8 +386,12 @@ Atom *petta_semantics_sort_value(Arena *arena, Atom *value, bool total,
  * Errors as petta_semantics_sort_value's. */
 Atom *petta_semantics_sort_unique_value(Arena *arena, Atom *value,
                                         bool *type_error);
-/* Whether `head` is `sort`, whose one-argument call is SWI's sort/2. */
+/* Whether `head` is `sort`, whose one-argument call is SWI's sort/2 and whose
+ * three-argument call `(sort Key Order List)` is SWI's sort/4. */
 bool petta_semantics_is_sort(SymbolId head);
+Atom *petta_semantics_sort_keyed_value(Arena *arena, Atom *key_atom,
+                                       Atom *order_atom, Atom *list_atom,
+                                       Atom **error_out);
 /* PeTTa's `atom_concat/2` (SWI atom_concat/3) and `atom_chars/1` (SWI
  * atom_chars/2): atomic operands render to UTF-8 text, producing an interned
  * symbol (including the empty symbol) or a list of single-codepoint symbols.

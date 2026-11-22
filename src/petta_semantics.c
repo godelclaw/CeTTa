@@ -71,6 +71,8 @@ CettaInvocationPlan petta_semantics_elaborate_invocation(
 #undef CETTA_PETTA_INVOCATION_FORM
     if (arity == 1u && petta_semantics_is_sort(head))
         return (CettaInvocationPlan){CETTA_INVOCATION_LIST_UNARY, 0u, 1u};
+    if (arity == 3u && petta_semantics_is_sort(head))
+        return (CettaInvocationPlan){CETTA_INVOCATION_LIST_SET, 0u, 3u};
     if (arity == 2u && petta_semantics_is_atom_concat(head))
         return (CettaInvocationPlan){CETTA_INVOCATION_LIST_SET, 0u, 2u};
     if (arity == 1u && petta_semantics_is_atom_chars(head))
@@ -1440,6 +1442,306 @@ Atom *petta_semantics_sort_unique_value(Arena *arena, Atom *value,
     return sorted ? petta_sorted_unique(arena, sorted) : NULL;
 }
 
+static Atom *petta_sort4_error(Arena *arena, Atom *formal) {
+    return petta_error_term(
+        arena, formal,
+        petta_error_predicate_context(arena, "system", "sort", 4));
+}
+
+Atom *petta_semantics_sort_keyed_value(Arena *arena, Atom *key_atom,
+                                       Atom *order_atom, Atom *list_atom,
+                                       Atom **error_out) {
+    if (error_out)
+        *error_out = NULL;
+    if (!arena || !key_atom || !order_atom || !list_atom)
+        return NULL;
+
+    /* 1. Validate Key (0 = whole element, 1..2 = cons-cell arg, >=3 = missing
+     * arg on non-empty list elements, symbol = dict key). */
+    bool dict_key = false;
+    int64_t key = 0;
+    if (key_atom->kind == ATOM_VAR) {
+        if (error_out)
+            *error_out = petta_sort4_error(
+                arena, atom_symbol(arena, "instantiation_error"));
+        return NULL;
+    }
+    if (key_atom->kind == ATOM_GROUNDED &&
+        key_atom->ground.gkind == GV_INT) {
+        if (key_atom->ground.ival < 0) {
+            if (error_out) {
+                Atom *formal = atom_expr3(
+                    arena, atom_symbol(arena, "domain_error"),
+                    atom_symbol(arena, "not_less_than_one"), key_atom);
+                *error_out = petta_sort4_error(arena, formal);
+            }
+            return NULL;
+        }
+        key = key_atom->ground.ival;
+    } else if (key_atom->kind == ATOM_GROUNDED &&
+               key_atom->ground.gkind == GV_BIGINT) {
+        const char *digits = atom_bigint_cstr(key_atom);
+        if (!digits)
+            return NULL;
+        if (digits[0] == '-') {
+            if (error_out) {
+                Atom *formal = atom_expr3(
+                    arena, atom_symbol(arena, "domain_error"),
+                    atom_symbol(arena, "not_less_than_one"), key_atom);
+                *error_out = petta_sort4_error(arena, formal);
+            }
+            return NULL;
+        }
+        key = 3;
+    } else if (key_atom->kind == ATOM_SYMBOL ||
+               (key_atom->kind == ATOM_EXPR && key_atom->expr.len > 0u)) {
+        dict_key = true;
+    } else {
+        if (error_out) {
+            Atom *formal = atom_expr3(
+                arena, atom_symbol(arena, "type_error"),
+                atom_symbol(arena, "sort_key"), key_atom);
+            *error_out = petta_sort4_error(arena, formal);
+        }
+        return NULL;
+    }
+
+    /* 2. Validate Order (@<, <, @>, >, @=<, =<, @>=, >=). */
+    if (order_atom->kind == ATOM_VAR) {
+        if (error_out)
+            *error_out = petta_sort4_error(
+                arena, atom_symbol(arena, "instantiation_error"));
+        return NULL;
+    }
+    if (order_atom->kind != ATOM_SYMBOL) {
+        if (error_out) {
+            Atom *formal = atom_expr3(
+                arena, atom_symbol(arena, "type_error"),
+                atom_symbol(arena, "atom"), order_atom);
+            *error_out = petta_sort4_error(arena, formal);
+        }
+        return NULL;
+    }
+    const char *ord_bytes = atom_symbol_bytes(order_atom);
+    size_t ord_len = atom_symbol_length(order_atom);
+    bool descending = false;
+    bool unique = false;
+    if ((ord_len == 2u && memcmp(ord_bytes, "@<", 2u) == 0) ||
+        (ord_len == 1u && ord_bytes[0] == '<')) {
+        descending = false;
+        unique = true;
+    } else if ((ord_len == 2u && memcmp(ord_bytes, "@>", 2u) == 0) ||
+               (ord_len == 1u && ord_bytes[0] == '>')) {
+        descending = true;
+        unique = true;
+    } else if ((ord_len == 3u && memcmp(ord_bytes, "@=<", 3u) == 0) ||
+               (ord_len == 2u && memcmp(ord_bytes, "=<", 2u) == 0)) {
+        descending = false;
+        unique = false;
+    } else if ((ord_len == 3u && memcmp(ord_bytes, "@>=", 3u) == 0) ||
+               (ord_len == 2u && memcmp(ord_bytes, ">=", 2u) == 0)) {
+        descending = true;
+        unique = false;
+    } else {
+        if (error_out) {
+            Atom *formal = atom_expr3(
+                arena, atom_symbol(arena, "domain_error"),
+                atom_symbol(arena, "order"), order_atom);
+            *error_out = petta_sort4_error(arena, formal);
+        }
+        return NULL;
+    }
+
+    /* 3. Validate List and obtain closed element sequence. */
+    Atom *closed = petta_semantics_closed_list(arena, list_atom);
+    if (!closed) {
+        if (error_out) {
+            Atom *tail = list_atom;
+            for (;;) {
+                if (petta_semantics_is_open_cons_value(tail))
+                    tail = tail->expr.elems[2];
+                else if (atom_is_list_rest(tail))
+                    tail = tail->expr.elems[tail->expr.len - 1u];
+                else
+                    break;
+            }
+            Atom *formal = tail && tail->kind == ATOM_VAR
+                ? atom_symbol(arena, "instantiation_error")
+                : atom_expr3(arena, atom_symbol(arena, "type_error"),
+                             atom_symbol(arena, "list"), list_atom);
+            *error_out = petta_sort4_error(arena, formal);
+        }
+        return NULL;
+    }
+
+    bool list_output = atom_is_list(closed);
+    Atom *const *elems = list_output ? atom_list_elems(closed)
+                                     : closed->expr.elems;
+    CettaExprLen length = list_output ? atom_list_len(closed)
+                                      : closed->expr.len;
+    if (length == 0u)
+        return list_output ? atom_list(arena, NULL, 0u) : atom_unit(arena);
+
+    if ((uint64_t)length > (uint64_t)(SIZE_MAX / sizeof(Atom *)) ||
+        (uint64_t)length > (uint64_t)(SIZE_MAX / sizeof(size_t)))
+        return NULL;
+
+    /* 4. Extract sort keys for every element (validating even for length 1). */
+    Atom **keys = arena_alloc(arena, sizeof(*keys) * (size_t)length);
+    if (!keys)
+        return NULL;
+    for (CettaExprLen i = 0u; i < length; i++) {
+        Atom *elem = elems[i];
+        if (!dict_key && key == 0) {
+            keys[i] = elem;
+            continue;
+        }
+        if (elem->kind == ATOM_VAR) {
+            if (error_out)
+                *error_out = petta_sort4_error(
+                    arena, atom_symbol(arena, "instantiation_error"));
+            return NULL;
+        }
+        Atom *head_part = NULL;
+        Atom *tail_part = NULL;
+        bool is_compound = false;
+        if (petta_semantics_is_open_cons_value(elem)) {
+            is_compound = true;
+            head_part = elem->expr.elems[1];
+            tail_part = elem->expr.elems[2];
+        } else if (atom_is_list_rest(elem)) {
+            is_compound = true;
+            head_part = elem->expr.elems[1];
+            if (elem->expr.len == 3u) {
+                tail_part = elem->expr.elems[2];
+            } else {
+                CettaExprLen rest_len = elem->expr.len - 1u;
+                Atom **rest_elems = arena_alloc(
+                    arena, sizeof(*rest_elems) * (size_t)rest_len);
+                if (!rest_elems)
+                    return NULL;
+                rest_elems[0] = elem->expr.elems[0];
+                memcpy(rest_elems + 1u, elem->expr.elems + 2u,
+                       sizeof(*rest_elems) * (size_t)(rest_len - 1u));
+                tail_part = atom_expr(arena, rest_elems, rest_len);
+                if (!tail_part)
+                    return NULL;
+            }
+        } else if (elem->kind == ATOM_EXPR &&
+                   !petta_semantics_is_nonlist_carrier(elem)) {
+            Atom *const *sub_elems = NULL;
+            CettaExprLen sub_len = 0u;
+            if (petta_semantics_sequence_view(elem, &sub_elems, &sub_len) &&
+                sub_len > 0u) {
+                is_compound = true;
+                head_part = sub_elems[0];
+                tail_part = sub_len == 1u
+                    ? atom_unit(arena)
+                    : atom_sequence_like(
+                          arena, elem, sub_elems + 1u, sub_len - 1u);
+                if (!tail_part)
+                    return NULL;
+            }
+        }
+        if (!is_compound) {
+            if (error_out) {
+                Atom *formal = atom_expr3(
+                    arena, atom_symbol(arena, "type_error"),
+                    atom_symbol(arena, "compound"), elem);
+                *error_out = petta_sort4_error(arena, formal);
+            }
+            return NULL;
+        }
+        if (dict_key) {
+            if (error_out) {
+                Atom *formal = atom_expr3(
+                    arena, atom_symbol(arena, "type_error"),
+                    atom_symbol(arena, "dict"), elem);
+                *error_out = petta_sort4_error(arena, formal);
+            }
+            return NULL;
+        }
+        if (key == 1) {
+            keys[i] = head_part;
+        } else if (key == 2) {
+            keys[i] = tail_part;
+        } else {
+            if (error_out) {
+                Atom *formal = atom_expr(
+                    arena, (Atom *[]){
+                        atom_symbol(arena, "existence_error"),
+                        atom_symbol(arena, "argument"),
+                        key_atom, elem}, 4u);
+                *error_out = petta_sort4_error(arena, formal);
+            }
+            return NULL;
+        }
+    }
+
+    /* 5. Bottom-up iterative stable merge sort on element indices. */
+    size_t n = (size_t)length;
+    size_t *indices = arena_alloc(arena, sizeof(*indices) * n);
+    size_t *scratch = arena_alloc(arena, sizeof(*scratch) * n);
+    if (!indices || !scratch)
+        return NULL;
+    for (size_t i = 0u; i < n; i++)
+        indices[i] = i;
+
+    size_t *src = indices;
+    size_t *dst = scratch;
+    for (size_t width = 1u; width < n;) {
+        size_t start = 0u;
+        while (start < n) {
+            size_t middle = n - start < width ? n : start + width;
+            size_t remaining = n - middle;
+            size_t right_width = remaining < width ? remaining : width;
+            size_t end = middle + right_width;
+            size_t l = start;
+            size_t r = middle;
+            size_t out = start;
+            while (l < middle && r < end) {
+                int ordering = 0;
+                if (!petta_semantics_term_compare(
+                        keys[src[l]], keys[src[r]], &ordering))
+                    return NULL;
+                int directed = descending ? -ordering : ordering;
+                dst[out++] = directed <= 0 ? src[l++] : src[r++];
+            }
+            while (l < middle)
+                dst[out++] = src[l++];
+            while (r < end)
+                dst[out++] = src[r++];
+            start = end;
+        }
+        size_t *swap = src;
+        src = dst;
+        dst = swap;
+        width = width > n / 2u ? n : width * 2u;
+    }
+
+    /* 6. Materialize output, stably deduplicating equal-key runs if strict. */
+    Atom **result_items = arena_alloc(arena, sizeof(*result_items) * n);
+    if (!result_items)
+        return NULL;
+    CettaExprLen kept = 0u;
+    size_t prev_idx = 0u;
+    for (size_t i = 0u; i < n; i++) {
+        size_t cur_idx = src[i];
+        if (unique && kept > 0u) {
+            int ordering = 0;
+            if (!petta_semantics_term_compare(
+                    keys[prev_idx], keys[cur_idx], &ordering))
+                return NULL;
+            if (ordering == 0)
+                continue;
+        }
+        result_items[kept++] = elems[cur_idx];
+        prev_idx = cur_idx;
+    }
+    return list_output ? atom_list(arena, result_items, kept)
+                       : atom_expr(arena, result_items, kept);
+}
+
 bool petta_semantics_is_atom_concat(SymbolId head) {
     return head != SYMBOL_ID_NONE && head == petta_symbol_ids()->atom_concat;
 }
@@ -1457,7 +1759,7 @@ bool petta_semantics_is_term_hash(SymbolId head) {
 }
 
 bool petta_semantics_is_native_stdlib_call(SymbolId head, CettaExprLen arity) {
-    return (arity == 1u && petta_semantics_is_sort(head)) ||
+    return ((arity == 1u || arity == 3u) && petta_semantics_is_sort(head)) ||
            (arity == 2u && petta_semantics_is_atom_concat(head)) ||
            (arity == 1u && petta_semantics_is_atom_chars(head)) ||
            (arity == 1u && petta_semantics_is_copy_term(head)) ||

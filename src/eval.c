@@ -44850,7 +44850,9 @@ static bool petta_try_native_stdlib_ops(
     bool is_copy = nargs == 1u && petta_semantics_is_copy_term(head);
     bool is_hash1 = nargs == 1u && petta_semantics_is_term_hash(head);
     bool is_hash3 = nargs == 3u && petta_semantics_is_term_hash(head);
-    if (!is_concat && !is_chars && !is_copy && !is_hash1 && !is_hash3)
+    bool is_sort3 = nargs == 3u && petta_semantics_is_sort(head);
+    if (!is_concat && !is_chars && !is_copy && !is_hash1 && !is_hash3 &&
+        !is_sort3)
         return false;
 
     Atom *evaluated[3] = {NULL, NULL, NULL};
@@ -44899,7 +44901,7 @@ static bool petta_try_native_stdlib_ops(
                 &tuples.items[index].env, a, tuple->expr.elems[0]);
             if (value)
                 result = petta_semantics_term_hash(a, value, NULL, NULL, &error);
-        } else {
+        } else if (is_hash3) {
             Atom *term = bindings_apply_if_vars(
                 &tuples.items[index].env, a, tuple->expr.elems[0]);
             Atom *depth = bindings_apply_if_vars(
@@ -44909,6 +44911,16 @@ static bool petta_try_native_stdlib_ops(
             if (term && depth && range)
                 result = petta_semantics_term_hash(
                     a, term, depth, range, &error);
+        } else {
+            Atom *key_atom = bindings_apply_if_vars(
+                &tuples.items[index].env, a, tuple->expr.elems[0]);
+            Atom *order_atom = bindings_apply_if_vars(
+                &tuples.items[index].env, a, tuple->expr.elems[1]);
+            Atom *list_atom = bindings_apply_if_vars(
+                &tuples.items[index].env, a, tuple->expr.elems[2]);
+            if (key_atom && order_atom && list_atom)
+                result = petta_semantics_sort_keyed_value(
+                    a, key_atom, order_atom, list_atom, &error);
         }
         if (result) {
             outcome_set_add(outcomes, result, &tuples.items[index].env);
