@@ -1,0 +1,38 @@
+true
+true
+true
+false
+false
+true
+true
+true
+0
+0
+true
+true
+true
+true
+false
+true
+true
+false
+true
+false
+true
+true
+true
+true
+true
+true
+(partial term_hash ())
+(partial term_hash ((a 1) 2))
+true
+true
+true
+(Error (domain_error not_less_than_zero -2) (context (: system (/ term_hash 4)) $V0))
+(Error (type_error integer foo) (context (: system (/ term_hash 4)) $V0))
+(Error instantiation_error (context (: system (/ term_hash 4)) $V0))
+(Error (domain_error not_less_than_one 0) (context (: system (/ term_hash 4)) $V0))
+(Error (domain_error not_less_than_one -5) (context (: system (/ term_hash 4)) $V0))
+(Error (type_error integer foo) (context (: system (/ term_hash 4)) $V0))
+(Error instantiation_error (context (: system (/ term_hash 4)) $V0))

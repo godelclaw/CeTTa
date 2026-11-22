@@ -47,7 +47,7 @@ SINGLE = [
     ("!(if (!= a a) yes no)", "no"),
 ]
 
-STARTER = "!(term_hash x)\n"
+STARTER = "!(translatePredicate (atom_length x $n))\n"
 
 
 def same(left, right):

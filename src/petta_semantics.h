@@ -396,6 +396,7 @@ bool petta_semantics_is_sort(SymbolId head);
 bool petta_semantics_is_atom_concat(SymbolId head);
 bool petta_semantics_is_atom_chars(SymbolId head);
 bool petta_semantics_is_copy_term(SymbolId head);
+bool petta_semantics_is_term_hash(SymbolId head);
 /* Whether `(head a1 ... a_arity)` is a PeTTa stdlib predicate owned natively
  * at this exact arity (independent of libswipl). */
 bool petta_semantics_is_native_stdlib_call(SymbolId head, CettaExprLen arity);
@@ -406,6 +407,14 @@ Atom *petta_semantics_atom_chars(Arena *arena, Atom *value, Atom **error_out);
  * distinct unbound variable with a fresh variable while preserving internal
  * sharing; ground terms return unchanged. */
 Atom *petta_semantics_copy_term(Arena *arena, Atom *value);
+/* PeTTa's `term_hash/1` (SWI term_hash/2) and `term_hash/3` (SWI term_hash/4):
+ * deterministic portable structural hash (independent of memory addresses and
+ * SymbolId numbering).  Returns an integer in [0, 2^32 - 1] (when depth_atom
+ * and range_atom are NULL) or [0, Range - 1], a fresh unbound variable when
+ * `term` contains a variable within the inspected depth, or NULL with
+ * `*error_out` set on invalid depth/range arguments. */
+Atom *petta_semantics_term_hash(Arena *arena, Atom *term, Atom *depth_atom,
+                                Atom *range_atom, Atom **error_out);
 /* The errors the reference raises, as its catch gives them: Prolog's
  * error(Formal, Context) reads (Error Formal Context), and an unbound
  * context is a fresh variable.

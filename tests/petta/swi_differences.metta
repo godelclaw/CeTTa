@@ -227,6 +227,21 @@
 (= (dt-i $x $y) (dt-p $y $x))
 !(collapse (dt-t c1 c0))
 
+; 20. term_hash/1 and term_hash/3 compute a portable deterministic structural
+;     hash natively (independent of libswipl, process memory layout, and
+;     internal symbol IDs), counting depth by MeTTa expression nesting rather
+;     than Prolog cons-cell spines, while preserving SWI's contract: a
+;     deterministic non-negative integer for ground terms (in [0, 2^32 - 1]
+;     for /1 and [0, Range - 1] for /3), a fresh unbound variable when a
+;     variable is reached within the inspected depth, and matching domain/type/
+;     instantiation errors for invalid depth or range.  Because SWI-PeTTa's
+;     term_hash/2 and term_hash/4 expose SWI's internal MurmurHash2 over Prolog
+;     terms, the exact integer digests differ from SWI-PeTTa.
+;     Decided: Oruzi, 2026-11-22 (native PeTTa stdlib parity without libswipl).
+; SWI-PeTTa: 2481857053, 598
+!(term_hash (a 1))
+!(term_hash (a (b 1)) 2 1000)
+
 ; Python boolean interchange (qualified separately by test-python-objects,
 ; since this fixture also runs without Python): true/false argument values
 ; become Python bool, including in legacy py-call. Janus's default atom

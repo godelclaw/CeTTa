@@ -11,6 +11,7 @@ int cetta_dense_tensor_v1_compare(const CettaDenseTensorV1 *, const CettaDenseTe
 #include "term_graph.h"
 #include "term_universe.h"
 
+#include <inttypes.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -76,6 +77,10 @@ CettaInvocationPlan petta_semantics_elaborate_invocation(
         return (CettaInvocationPlan){CETTA_INVOCATION_LIST_UNARY, 0u, 1u};
     if (arity == 1u && petta_semantics_is_copy_term(head))
         return (CettaInvocationPlan){CETTA_INVOCATION_LIST_UNARY, 0u, 1u};
+    if (arity == 1u && petta_semantics_is_term_hash(head))
+        return (CettaInvocationPlan){CETTA_INVOCATION_LIST_UNARY, 0u, 1u};
+    if (arity == 3u && petta_semantics_is_term_hash(head))
+        return (CettaInvocationPlan){CETTA_INVOCATION_LIST_SET, 0u, 3u};
     CettaInvocationPlan plan = {0};
     cetta_invocation_plan_decode(head, arity, &plan, &g_builtin_syms);
     return plan;
@@ -149,6 +154,7 @@ typedef struct {
     SymbolId atom_concat;
     SymbolId atom_chars;
     SymbolId copy_term;
+    SymbolId term_hash;
     SymbolId first_from_pair;
     SymbolId first;
     SymbolId second_from_pair;
@@ -479,6 +485,7 @@ static const PeTTaSymbolIds *petta_symbol_ids_refresh(void) {
         ids.atom_concat = symbol_intern_cstr(g_symbols, "atom_concat");
         ids.atom_chars = symbol_intern_cstr(g_symbols, "atom_chars");
         ids.copy_term = symbol_intern_cstr(g_symbols, "copy_term");
+        ids.term_hash = symbol_intern_cstr(g_symbols, "term_hash");
         ids.first_from_pair =
             symbol_intern_cstr(g_symbols, "first-from-pair");
         ids.first = symbol_intern_cstr(g_symbols, "first");
@@ -1445,11 +1452,17 @@ bool petta_semantics_is_copy_term(SymbolId head) {
     return head != SYMBOL_ID_NONE && head == petta_symbol_ids()->copy_term;
 }
 
+bool petta_semantics_is_term_hash(SymbolId head) {
+    return head != SYMBOL_ID_NONE && head == petta_symbol_ids()->term_hash;
+}
+
 bool petta_semantics_is_native_stdlib_call(SymbolId head, CettaExprLen arity) {
     return (arity == 1u && petta_semantics_is_sort(head)) ||
            (arity == 2u && petta_semantics_is_atom_concat(head)) ||
            (arity == 1u && petta_semantics_is_atom_chars(head)) ||
-           (arity == 1u && petta_semantics_is_copy_term(head));
+           (arity == 1u && petta_semantics_is_copy_term(head)) ||
+           ((arity == 1u || arity == 3u) &&
+            petta_semantics_is_term_hash(head));
 }
 
 static bool petta_atomic_text_span(Arena *arena, const Atom *value,
@@ -1626,6 +1639,357 @@ Atom *petta_semantics_copy_term(Arena *arena, Atom *value) {
         return value;
     Atom *unit = atom_unit(arena);
     return unit ? rename_vars_except(arena, value, unit) : NULL;
+}
+
+static inline uint64_t petta_th_mix_u8(uint64_t state, uint8_t byte) {
+    state ^= (uint64_t)byte;
+    state *= UINT64_C(1099511628211);
+    return state;
+}
+
+static inline uint64_t petta_th_mix_bytes(uint64_t state, const void *data,
+                                          size_t len) {
+    const uint8_t *bytes = (const uint8_t *)data;
+    for (size_t i = 0u; i < len; i++)
+        state = petta_th_mix_u8(state, bytes[i]);
+    return state;
+}
+
+static inline uint64_t petta_th_mix_u64(uint64_t state, uint64_t value) {
+    uint8_t buf[8];
+    for (int i = 0; i < 8; i++)
+        buf[i] = (uint8_t)((value >> (i * 8)) & UINT64_C(0xFF));
+    return petta_th_mix_bytes(state, buf, sizeof(buf));
+}
+
+static inline uint64_t petta_th_finalize(uint64_t state) {
+    state ^= state >> 30;
+    state *= UINT64_C(0xbf58476d1ce4e5b9);
+    state ^= state >> 27;
+    state *= UINT64_C(0x94d049bb133111eb);
+    state ^= state >> 31;
+    return state;
+}
+
+typedef struct {
+    const Atom *atom;
+    int64_t depth;
+} PeTTaTermHashFrame;
+
+static Atom *petta_term_hash_error(Arena *arena, Atom *formal) {
+    return petta_error_term(
+        arena, formal,
+        petta_error_predicate_context(arena, "system", "term_hash", 4));
+}
+
+Atom *petta_semantics_term_hash(Arena *arena, Atom *term, Atom *depth_atom,
+                                Atom *range_atom, Atom **error_out) {
+    if (error_out)
+        *error_out = NULL;
+    if (!arena || !term)
+        return NULL;
+
+    int64_t max_depth = -1;
+    bool has_range = (depth_atom != NULL || range_atom != NULL);
+    bool range_unbounded = false;
+    uint64_t range = UINT64_C(4294967296); /* 2^32 for term_hash/1 */
+
+    if (has_range) {
+        if (!depth_atom || !range_atom)
+            return NULL;
+        if (depth_atom->kind == ATOM_VAR) {
+            if (error_out)
+                *error_out = petta_term_hash_error(
+                    arena, atom_symbol(arena, "instantiation_error"));
+            return NULL;
+        }
+        if (depth_atom->kind == ATOM_GROUNDED &&
+            depth_atom->ground.gkind == GV_INT) {
+            if (depth_atom->ground.ival < -1) {
+                if (error_out) {
+                    Atom *formal = atom_expr3(
+                        arena, atom_symbol(arena, "domain_error"),
+                        atom_symbol(arena, "not_less_than_zero"), depth_atom);
+                    *error_out = petta_term_hash_error(arena, formal);
+                }
+                return NULL;
+            }
+            max_depth = depth_atom->ground.ival;
+        } else if (depth_atom->kind == ATOM_GROUNDED &&
+                   depth_atom->ground.gkind == GV_BIGINT) {
+            const char *digits = atom_bigint_cstr(depth_atom);
+            if (!digits)
+                return NULL;
+            if (digits[0] == '-') {
+                if (error_out) {
+                    Atom *formal = atom_expr3(
+                        arena, atom_symbol(arena, "domain_error"),
+                        atom_symbol(arena, "not_less_than_zero"), depth_atom);
+                    *error_out = petta_term_hash_error(arena, formal);
+                }
+                return NULL;
+            }
+            max_depth = -1;
+        } else {
+            if (error_out) {
+                Atom *formal = atom_expr3(
+                    arena, atom_symbol(arena, "type_error"),
+                    atom_symbol(arena, "integer"), depth_atom);
+                *error_out = petta_term_hash_error(arena, formal);
+            }
+            return NULL;
+        }
+
+        if (range_atom->kind == ATOM_VAR) {
+            if (error_out)
+                *error_out = petta_term_hash_error(
+                    arena, atom_symbol(arena, "instantiation_error"));
+            return NULL;
+        }
+        if (range_atom->kind == ATOM_GROUNDED &&
+            range_atom->ground.gkind == GV_INT) {
+            if (range_atom->ground.ival < 1) {
+                if (error_out) {
+                    Atom *formal = atom_expr3(
+                        arena, atom_symbol(arena, "domain_error"),
+                        atom_symbol(arena, "not_less_than_one"), range_atom);
+                    *error_out = petta_term_hash_error(arena, formal);
+                }
+                return NULL;
+            }
+            range = (uint64_t)range_atom->ground.ival;
+        } else if (range_atom->kind == ATOM_GROUNDED &&
+                   range_atom->ground.gkind == GV_BIGINT) {
+            const char *digits = atom_bigint_cstr(range_atom);
+            if (!digits)
+                return NULL;
+            if (digits[0] == '-' || strcmp(digits, "0") == 0) {
+                if (error_out) {
+                    Atom *formal = atom_expr3(
+                        arena, atom_symbol(arena, "domain_error"),
+                        atom_symbol(arena, "not_less_than_one"), range_atom);
+                    *error_out = petta_term_hash_error(arena, formal);
+                }
+                return NULL;
+            }
+            range_unbounded = true;
+        } else {
+            if (error_out) {
+                Atom *formal = atom_expr3(
+                    arena, atom_symbol(arena, "type_error"),
+                    atom_symbol(arena, "integer"), range_atom);
+                *error_out = petta_term_hash_error(arena, formal);
+            }
+            return NULL;
+        }
+    }
+
+    uint64_t state = UINT64_C(14695981039346656037);
+    PeTTaTermHashFrame inline_stack[64];
+    PeTTaTermHashFrame *stack = inline_stack;
+    size_t sp = 0u;
+    size_t cap = sizeof(inline_stack) / sizeof(inline_stack[0]);
+    stack[sp++] = (PeTTaTermHashFrame){.atom = term, .depth = max_depth};
+
+    bool nonground = false;
+    bool oom = false;
+
+#define PETTA_TH_PUSH(child_atom, child_depth) do {                            \
+    if (sp == cap) {                                                           \
+        if (cap > SIZE_MAX / 2u || cap * 2u > SIZE_MAX / sizeof(*stack)) {     \
+            oom = true;                                                        \
+            goto th_done;                                                      \
+        }                                                                      \
+        size_t next_cap = cap * 2u;                                            \
+        PeTTaTermHashFrame *grown = stack == inline_stack                      \
+            ? (PeTTaTermHashFrame *)malloc(sizeof(*stack) * next_cap)          \
+            : (PeTTaTermHashFrame *)realloc(stack, sizeof(*stack) * next_cap); \
+        if (!grown) {                                                          \
+            oom = true;                                                        \
+            goto th_done;                                                      \
+        }                                                                      \
+        if (stack == inline_stack)                                             \
+            memcpy(grown, inline_stack, sizeof(*stack) * sp);                  \
+        stack = grown;                                                         \
+        cap = next_cap;                                                        \
+    }                                                                          \
+    stack[sp++] = (PeTTaTermHashFrame){                                        \
+        .atom = (child_atom), .depth = (child_depth)};                         \
+} while (0)
+
+    while (sp > 0u) {
+        PeTTaTermHashFrame frame = stack[--sp];
+        const Atom *node = frame.atom;
+        int64_t depth = frame.depth;
+        if (!node) {
+            oom = true;
+            goto th_done;
+        }
+        if (depth == 0) {
+            state = petta_th_mix_u8(state, 0x00u);
+            continue;
+        }
+        switch (node->kind) {
+        case ATOM_VAR:
+            nonground = true;
+            goto th_done;
+        case ATOM_SYMBOL: {
+            const char *bytes = atom_symbol_bytes(node);
+            size_t len = atom_symbol_length(node);
+            state = petta_th_mix_u8(state, 0x01u);
+            state = petta_th_mix_u64(state, (uint64_t)len);
+            if (len > 0u && bytes)
+                state = petta_th_mix_bytes(state, bytes, len);
+            break;
+        }
+        case ATOM_GROUNDED:
+            switch (node->ground.gkind) {
+            case GV_BOOL: {
+                const char *text = node->ground.bval ? "true" : "false";
+                size_t len = node->ground.bval ? 4u : 5u;
+                state = petta_th_mix_u8(state, 0x01u);
+                state = petta_th_mix_u64(state, (uint64_t)len);
+                state = petta_th_mix_bytes(state, text, len);
+                break;
+            }
+            case GV_STRING: {
+                size_t len = node->ground.slen;
+                state = petta_th_mix_u8(state, 0x02u);
+                state = petta_th_mix_u64(state, (uint64_t)len);
+                if (len > 0u && node->ground.sval)
+                    state = petta_th_mix_bytes(state, node->ground.sval, len);
+                break;
+            }
+            case GV_INT: {
+                char buf[32];
+                int n = snprintf(buf, sizeof(buf), "%" PRId64,
+                                 node->ground.ival);
+                if (n < 0 || (size_t)n >= sizeof(buf)) {
+                    oom = true;
+                    goto th_done;
+                }
+                state = petta_th_mix_u8(state, 0x03u);
+                state = petta_th_mix_u64(state, (uint64_t)n);
+                state = petta_th_mix_bytes(state, buf, (size_t)n);
+                break;
+            }
+            case GV_BIGINT: {
+                const char *digits = atom_bigint_cstr(node);
+                if (!digits) {
+                    oom = true;
+                    goto th_done;
+                }
+                size_t len = strlen(digits);
+                state = petta_th_mix_u8(state, 0x03u);
+                state = petta_th_mix_u64(state, (uint64_t)len);
+                state = petta_th_mix_bytes(state, digits, len);
+                break;
+            }
+            case GV_FLOAT: {
+                double f = node->ground.fval;
+                uint64_t bits = 0u;
+                if (isnan(f))
+                    bits = UINT64_C(0x7FF8000000000000);
+                else
+                    memcpy(&bits, &f, sizeof(bits));
+                state = petta_th_mix_u8(state, 0x04u);
+                state = petta_th_mix_u64(state, bits);
+                break;
+            }
+            case GV_RATIONAL: {
+                const char *digits = atom_rational_cstr(node);
+                if (!digits) {
+                    oom = true;
+                    goto th_done;
+                }
+                size_t len = strlen(digits);
+                state = petta_th_mix_u8(state, 0x05u);
+                state = petta_th_mix_u64(state, (uint64_t)len);
+                state = petta_th_mix_bytes(state, digits, len);
+                break;
+            }
+            case GV_SEAL:
+                state = petta_th_mix_u8(state, 0x06u);
+                state = petta_th_mix_u64(state, atom_seal_identity(node));
+                break;
+            case GV_INTERNAL_TAG:
+                state = petta_th_mix_u8(state, 0x07u);
+                state = petta_th_mix_u64(state, (uint64_t)node->ground.ival);
+                break;
+            case GV_TERM_GRAPH:
+                if (atom_has_vars(node)) {
+                    nonground = true;
+                    goto th_done;
+                }
+                state = petta_th_mix_u8(state, 0x08u);
+                state = petta_th_mix_u64(state, (uint64_t)node->ground.gkind);
+                break;
+            default:
+                state = petta_th_mix_u8(state, 0x08u);
+                state = petta_th_mix_u64(state, (uint64_t)node->ground.gkind);
+                break;
+            }
+            break;
+        case ATOM_EXPR: {
+            if (petta_semantics_is_open_cons_value(node) ||
+                atom_is_list_rest(node)) {
+                Atom *closed = petta_semantics_closed_list(
+                    arena, (Atom *)node);
+                if (closed) {
+                    node = closed;
+                } else {
+                    state = petta_th_mix_u8(state, 0x0Bu);
+                    if (depth != 1) {
+                        int64_t next_depth = depth < 0 ? -1 : depth - 1;
+                        if (petta_semantics_is_open_cons_value(node)) {
+                            PETTA_TH_PUSH(node->expr.elems[2], next_depth);
+                            PETTA_TH_PUSH(node->expr.elems[1], next_depth);
+                        } else {
+                            for (CettaExprLen i = node->expr.len; i > 1u; i--)
+                                PETTA_TH_PUSH(node->expr.elems[i - 1u],
+                                              next_depth);
+                        }
+                    }
+                    break;
+                }
+            }
+            Atom *const *elems = NULL;
+            CettaExprLen len = 0u;
+            if (!petta_semantics_sequence_view(node, &elems, &len)) {
+                elems = node->expr.elems;
+                len = node->expr.len;
+            }
+            if (len == 0u) {
+                state = petta_th_mix_u8(state, 0x09u);
+            } else {
+                state = petta_th_mix_u8(state, 0x0Au);
+                state = petta_th_mix_u64(state, (uint64_t)len);
+                if (depth != 1) {
+                    int64_t next_depth = depth < 0 ? -1 : depth - 1;
+                    for (CettaExprLen i = len; i > 0u; i--)
+                        PETTA_TH_PUSH(elems[i - 1u], next_depth);
+                }
+            }
+            break;
+        }
+        }
+    }
+
+th_done:
+#undef PETTA_TH_PUSH
+    if (stack != inline_stack)
+        free(stack);
+    if (oom)
+        return NULL;
+    if (nonground)
+        return atom_var_with_id(arena, "_", fresh_var_id());
+
+    uint64_t digest = petta_th_finalize(state);
+    if (!has_range)
+        return atom_int(arena, (int64_t)(digest & UINT64_C(0xFFFFFFFF)));
+    if (range_unbounded)
+        return atom_int(arena, (int64_t)(digest & UINT64_C(0x7FFFFFFFFFFFFFFF)));
+    return atom_int(arena, (int64_t)(digest % range));
 }
 
 Atom *petta_semantics_materialize_closed_logical_list(

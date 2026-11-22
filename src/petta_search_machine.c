@@ -42490,6 +42490,19 @@ static bool petta_machine_dispatch_goal(
                 : NULL;
             return copied && petta_machine_unify(machine, copied, second);
         }
+        if (petta_semantics_is_term_hash(operation)) {
+            Atom *value = petta_machine_apply_bindings(machine,
+                search_context_bindings(&machine->search),
+                &machine->heap, items);
+            Atom *error = NULL;
+            Atom *hashed = value
+                ? petta_semantics_term_hash(
+                      &machine->heap, value, NULL, NULL, &error)
+                : NULL;
+            if (error)
+                return petta_machine_raise_error(machine, error);
+            return hashed && petta_machine_unify(machine, hashed, second);
+        }
         if (operation == g_builtin_syms.petta_msort ||
             operation == g_builtin_syms.sort_atom ||
             petta_semantics_is_sort(operation)) {
@@ -42568,6 +42581,26 @@ static bool petta_machine_dispatch_goal(
             if (error)
                 return petta_machine_raise_error(machine, error);
             return joined && petta_machine_unify(machine, joined, second);
+        }
+        if (petta_semantics_is_term_hash(head_sym) &&
+            first->expr.len == 4u) {
+            Atom *term = petta_machine_apply_bindings(machine,
+                search_context_bindings(&machine->search),
+                &machine->heap, first->expr.elems[1]);
+            Atom *depth = petta_machine_apply_bindings(machine,
+                search_context_bindings(&machine->search),
+                &machine->heap, first->expr.elems[2]);
+            Atom *range = petta_machine_apply_bindings(machine,
+                search_context_bindings(&machine->search),
+                &machine->heap, first->expr.elems[3]);
+            Atom *error = NULL;
+            Atom *hashed = term && depth && range
+                ? petta_semantics_term_hash(
+                      &machine->heap, term, depth, range, &error)
+                : NULL;
+            if (error)
+                return petta_machine_raise_error(machine, error);
+            return hashed && petta_machine_unify(machine, hashed, second);
         }
         PeTTaForm operation = petta_semantics_form(head_sym);
         Atom *list = NULL;
