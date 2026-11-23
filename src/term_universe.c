@@ -2321,7 +2321,8 @@ static bool term_universe_set_decoded_at(TermUniverse *universe, size_t index,
     }
     universe->decoded_pages[page][index & (TERM_DECODED_PAGE_ENTRIES - 1u)] =
         atom;
-    if (atom && universe->decode_epochs)
+    /* A tagged slot value (low bit set) is a view, never an epoch's atom. */
+    if (atom && !((uintptr_t)atom & 1u) && universe->decode_epochs)
         term_universe_decode_log_slot(universe, index, atom);
     return true;
 }
@@ -2632,11 +2633,10 @@ static void term_universe_decode_epoch_destroy(Arena *arena, bool poison,
         return;
     if (freed_bytes)
         *freed_bytes += arena->reserved_bytes;
-    if (poison) {
-        for (ArenaBlock *block = arena->head; block; block = block->next)
-            memset(block->data, 0xdb, block->used);
-    }
-    arena_free(arena);
+    if (poison)
+        arena_free_poisoned(arena, 0xdb);
+    else
+        arena_free(arena);
     free(arena);
 }
 

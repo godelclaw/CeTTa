@@ -2067,7 +2067,20 @@ static void arena_release_names(Arena *a) {
     }
 }
 
+static void arena_free_impl(Arena *a, int poison);
+
 void arena_free(Arena *a) {
+    arena_free_impl(a, -1);
+}
+
+void arena_free_poisoned(Arena *a, uint8_t byte) {
+    arena_free_impl(a, byte);
+}
+
+/* POISON, when not negative, overwrites every block's bytes after the
+ * finalizers ran (they may read the atoms they finalize) and before the
+ * blocks are released. */
+static void arena_free_impl(Arena *a, int poison) {
     if (!a)
         return;
 #if CETTA_MANAGED_SYMBOLS
@@ -2078,6 +2091,10 @@ void arena_free(Arena *a) {
     arena_invalidate_allocations(a, CETTA_GSLT_LIFETIME_ARENA_FREE);
     provenance_unregister_arena(a);
     arena_run_finalizers_until(a, NULL);
+    if (poison >= 0) {
+        for (ArenaBlock *block = a->head; block; block = block->next)
+            memset(block->data, poison, block->used);
+    }
     arena_free_block_list(a->head, a->recycle_blocks);
     arena_free_block_list(a->spare, a->recycle_blocks);
     arena_symbol_cache_free(a);
