@@ -86164,7 +86164,34 @@ static CettaMatchDecisionSemanticIdentity petta_eval_machine_match_semantics(
     };
 }
 
+static bool petta_eval_machine_run_held(
+    Space *space, Arena *arena, Atom *expression, Atom *etype,
+    int fuel, const Bindings *outer_environment,
+    bool preserve_bindings, OutcomeSet *outcomes,
+    PettaRelationSafety prime_safety,
+    CettaSearchControllerPolicy requested_controller,
+    bool controller_requested, bool pattern_query_ready);
+
+/* A run holds what it reads of the universe's decoded copies until it ends,
+ * and then its results may carry them (term_universe_decode_holder_push). */
 static __attribute__((noinline)) bool petta_eval_machine_run(
+    Space *space, Arena *arena, Atom *expression, Atom *etype,
+    int fuel, const Bindings *outer_environment,
+    bool preserve_bindings, OutcomeSet *outcomes,
+    PettaRelationSafety prime_safety,
+    CettaSearchControllerPolicy requested_controller,
+    bool controller_requested, bool pattern_query_ready) {
+    TermUniverseDecodeHolder holder = TERM_UNIVERSE_DECODE_HOLDER_INIT;
+    term_universe_decode_holder_push(&holder);
+    bool handled = petta_eval_machine_run_held(
+        space, arena, expression, etype, fuel, outer_environment,
+        preserve_bindings, outcomes, prime_safety, requested_controller,
+        controller_requested, pattern_query_ready);
+    term_universe_decode_holder_pop(&holder);
+    return handled;
+}
+
+static bool petta_eval_machine_run_held(
     Space *space, Arena *arena, Atom *expression, Atom *etype,
     int fuel, const Bindings *outer_environment,
     bool preserve_bindings, OutcomeSet *outcomes,

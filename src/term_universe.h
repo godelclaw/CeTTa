@@ -581,11 +581,13 @@ bool term_universe_collect(TermUniverse *universe,
  *   them, and an atom built in long-lived storage copies such a child
  *   instead of sharing it.  term_universe_store_atom, whose callers keep its
  *   atom, pins the entry's copy in the persistent arena.
- * - A thread that reads decoded copies is registered.  It declares, at a
- *   point where it holds no atom of a closed epoch (outside evaluation, or a
- *   collection that copied them out), that it is clean as of the clock's
- *   value.  A closed epoch is freed once every registered thread is clean
- *   after the epoch closed.
+ * - A holder of decoded copies (a machine running on the thread, or the
+ *   thread itself) records the epochs whose atoms it may keep.  A read adds
+ *   the current epoch to the innermost holder; a holder that ends adds its
+ *   set to the holder below it, since its results may carry what it read; a
+ *   holder's collection that copies out an epoch's atoms removes that
+ *   epoch, and a top-level form's start empties the thread's own set.  A
+ *   closed epoch is freed once no thread's holders keep it.
  *
  * MeTTapedia GSLT/Dynamics/EpochReclamation proves this protocol: a closed
  * epoch older than every live owner's last collection holds no reachable
@@ -593,19 +595,50 @@ bool term_universe_collect(TermUniverse *universe,
  * arena; CETTA_DECODE_EPOCH_KB sets an epoch's budget (16384 by default);
  * CETTA_DECODE_EPOCH_POISON=1 overwrites a freed epoch before releasing it. */
 bool term_universe_enable_decode_epochs(TermUniverse *universe);
-/* The clock: one more than the number of epochs closed so far. */
+/* The current epoch's number. */
 uint64_t term_universe_decode_clock(void);
-/* The identity of the storage of an epoch that is closed and not yet freed,
- * zero when there is none.  A collection that copies the atoms it holds of
- * this storage leaves its owner holding no atom of a closed epoch. */
-uint32_t term_universe_decode_pending_identity(void);
-/* The calling thread holds no atom of any epoch that closed before SEQ, a
- * value of term_universe_decode_clock() read before the copies were taken. */
-void term_universe_decode_thread_clean(uint64_t seq);
-/* Free every closed epoch that no registered thread may still hold. */
+/* Free every closed epoch that no thread's holders keep. */
 void term_universe_decode_epochs_release(void);
 /* Whether ATOM lies in an epoch's storage (current or closed). */
 bool term_universe_atom_in_decode_epoch(const Atom *atom);
+/* Whether IDENTITY names an unfreed epoch's storage; without a lock. */
+bool term_universe_identity_is_decoded(uint32_t identity);
+
+/* A holder of decoded copies.  Epoch e is bit (e mod 64) of its set: at most
+ * 64 epochs are unfreed at a time. */
+typedef struct TermUniverseDecodeHolder {
+    uint64_t held;
+    struct TermUniverseDecodeHolder *below;
+    /* At its last leave: what the holder below kept. */
+    uint64_t below_at_leave;
+} TermUniverseDecodeHolder;
+#define TERM_UNIVERSE_DECODE_HOLDER_INIT { 0u, NULL, 0u }
+void term_universe_decode_holder_push(TermUniverseDecodeHolder *holder);
+/* The holder ends and its results may carry what it read: the holder below
+ * keeps its epochs too. */
+void term_universe_decode_holder_pop(TermUniverseDecodeHolder *holder);
+/* A holder that lives on (a suspended machine) stops running.  What it hands
+ * out is copied, so the holder below takes nothing from it. */
+void term_universe_decode_holder_leave(TermUniverseDecodeHolder *holder);
+/* The running holder hands HOLDER (one that left it) values that may share
+ * its decoded copies: HOLDER keeps its epochs too.  RECLAIMED: the giver has
+ * since released everything it made after HOLDER left, so it keeps only
+ * what it kept then. */
+void term_universe_decode_holder_receive(TermUniverseDecodeHolder *holder,
+                                         bool reclaimed);
+/* The storage identity of the oldest closed epoch HOLDER keeps and no other
+ * holder does, zero when there is none; *EPOCH receives its number.  A
+ * collection of the holder that copies out the atoms of that storage
+ * (term_universe_decode_holder_cleaned) lets it be freed. */
+uint32_t term_universe_decode_detach_candidate(
+    const TermUniverseDecodeHolder *holder, uint64_t *epoch);
+/* HOLDER copied out every atom of EPOCH it kept. */
+void term_universe_decode_holder_cleaned(TermUniverseDecodeHolder *holder,
+                                         uint64_t epoch);
+/* HOLDER copied out every decoded copy it kept, of every epoch. */
+void term_universe_decode_holder_emptied(TermUniverseDecodeHolder *holder);
+/* A top-level form begins on this thread: its earlier results are dead. */
+void term_universe_decode_top_level_begin(void);
 
 /* A safe point: collect when the trigger asks for it.  The trigger keeps a
  * collection's work proportional to the entries made since the last one. */

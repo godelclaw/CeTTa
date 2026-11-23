@@ -4473,6 +4473,9 @@ petta_next_slice:
             continue;
         }
 
+        /* A form begins: the earlier forms' results are dead, so the thread
+         * keeps no decoded copy of theirs (term_universe_decode_top_level_begin). */
+        term_universe_decode_top_level_begin();
         /* ! prefix and (syn:exec form) are the same source directive. */
         AtomId payload_id = CETTA_ATOM_ID_NONE;
         int exec_width = 0;

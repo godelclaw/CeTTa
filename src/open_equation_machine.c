@@ -7764,6 +7764,10 @@ struct CettaOpenEquationCursor {
     /* Every match reads its snapshot, whose rows are decoded, none a large
      * space's rows by their ids (oem_stored_reference). */
     bool stored_reference;
+    /* The epochs of the universe's decoded copies the cursor may keep: a
+     * read while it runs adds one, and a major collection that copies out a
+     * closed epoch's atoms removes it (term_universe_decode_holder_cleaned). */
+    TermUniverseDecodeHolder decode_holder;
     /* Verdicts for the entry facts of trusted versions, made on demand. */
     PettaContractMemo *contract_memo;
     void *program_lifetime_hold;
@@ -9484,6 +9488,12 @@ static inline __attribute__((always_inline)) Atom *oem_resolve_in(
         } else if (oem_is_cell(cursor, atom, &index)) {
             result = operand ? atom
                 : oem_answer_cell(cursor, index, arena, collect);
+        } else if (!operand && !collect &&
+                   term_universe_identity_is_decoded(atom->arena_id) &&
+                   (atom->kind != ATOM_EXPR || !atom_has_vars(atom))) {
+            /* The universe's decoded copy is shared by no holder but the
+             * cursor: its caller gets a copy of its own. */
+            result = atom_deep_copy(ground ? ground : arena, atom);
         } else if (!collect &&
                    (operand || !oem_cursor_owns(cursor, atom)) &&
                    (atom->kind != ATOM_EXPR || !atom_has_vars(atom))) {
@@ -16148,6 +16158,9 @@ typedef struct {
     /* An arena about to release its atoms: a borrowed atom it owns is
      * copied, through `detach`, rather than shared (zero when none). */
     uint32_t detach_identity;
+    /* A decoded detach: every atom of the universe's decoded-copy epochs the
+     * cursor reaches is copied (term_universe_identity_is_decoded). */
+    bool detach_decoded;
     AtomDeepCopySession *detach;
     const void **keys;
     void **values;
@@ -16266,6 +16279,20 @@ static bool oem_collect_put(OemCollect *collect, const void *key,
 }
 
 /* Whether a collection copies `atom`: an atom of a generation it collects. */
+/* Whether the collection copies atoms of storage it does not own. */
+static inline bool oem_collect_detaching(const OemCollect *collect) {
+    return collect->detach_identity != 0u || collect->detach_decoded;
+}
+
+/* Whether the storage IDENTITY names is detached: the copies it holds are
+ * copied in rather than shared. */
+static inline bool oem_collect_detaches(const OemCollect *collect,
+                                        uint32_t identity) {
+    return (collect->detach_identity != 0u &&
+            identity == collect->detach_identity) ||
+        (collect->detach_decoded && term_universe_identity_is_decoded(identity));
+}
+
 static inline bool oem_collect_from(const OemCollect *collect,
                                     const Atom *atom) {
     return atom->arena_id == collect->from_identity ||
@@ -16375,7 +16402,7 @@ static inline bool oem_is_view(const Atom *atom) {
 
 static inline __attribute__((always_inline)) bool oem_view_over_kept_storage(
     OemCollect *collect, const Atom *atom) {
-    return oem_long_view(atom) && collect->detach_identity == 0u &&
+    return oem_long_view(atom) && !oem_collect_detaching(collect) &&
         !oem_collect_frees(collect, atom->expr.elems);
 }
 
@@ -16462,8 +16489,8 @@ static Atom oem_traced_mark;
  * like any other. */
 static inline bool oem_export_copy_outlives(const OemCollect *collect,
                                             const Atom *copy) {
-    return collect->detach_identity == 0u ||
-        copy->arena_id != collect->detach_identity;
+    return !oem_collect_detaching(collect) ||
+        !oem_collect_detaches(collect, copy->arena_id);
 }
 
 /* The copy a collection made of an expression, or NULL. */
@@ -16478,11 +16505,11 @@ static inline Atom *oem_collected_copy(const Atom *atom) {
  * forwarding address: the host will release it after this collection. */
 static inline bool oem_export_copy_is_detached(const OemCollect *collect,
                                                 const Atom *atom) {
-    if (collect->detach_identity == 0u ||
+    if (!oem_collect_detaching(collect) ||
         (atom->kind != ATOM_EXPR && !oem_immutable_string(atom)))
         return false;
     Atom *copy = oem_collected_copy(atom);
-    return copy && copy->arena_id == collect->detach_identity;
+    return copy && oem_collect_detaches(collect, copy->arena_id);
 }
 
 /* For a view without variables over storage the collection frees, the
@@ -16568,7 +16595,7 @@ static bool oem_trace_atom(CettaOpenEquationCursor *cursor,
         }
         atom->name_key = &oem_traced_mark;
         bool view = oem_long_view(atom);
-        bool header_only = view && collect->detach_identity == 0u &&
+        bool header_only = view && !oem_collect_detaching(collect) &&
             !oem_collect_frees(collect, atom->expr.elems);
         /* The children to push, `[first, stop)`.  A view over storage the
          * collection frees pushes only the elements no longer suffix of the
@@ -16725,8 +16752,8 @@ static Atom *oem_collect_atom(CettaOpenEquationCursor *cursor,
             result = oem_collect_kept(collect, cell)
                 ? cursor->cell_names[oem_collect_index(collect, cell)]
                 : NULL;
-        } else if (collect->detach_identity != 0u &&
-                   atom->arena_id == collect->detach_identity) {
+        } else if (oem_collect_detaching(collect) &&
+                   oem_collect_detaches(collect, atom->arena_id)) {
             result = atom_deep_copy_session_copy(collect->detach, atom);
             collect->detach_copied++;
         } else if (!oem_collect_from(collect, atom)) {
@@ -17062,8 +17089,8 @@ static void oem_collect_decline(OemCollect *collect, uint32_t *before,
 }
 
 static bool oem_collect_generation(CettaOpenEquationCursor *cursor,
-                                   uint32_t detach_identity, bool major,
-                                   bool resource_pressure) {
+                                   uint32_t detach_identity, bool detach_decoded,
+                                   bool major, bool resource_pressure) {
     /* Opaque callee roots cannot follow the parent's copying collector.
      * Transfer every live child before either generation or host storage
      * moves. Failed transfer keeps the actual child and its residual. */
@@ -17103,13 +17130,14 @@ static bool oem_collect_generation(CettaOpenEquationCursor *cursor,
         .from_old_identity =
             major && cursor->old_ready ? cursor->old.identity : 0u,
         .detach_identity = detach_identity,
+        .detach_decoded = detach_decoded,
         .cell_base = cell_base,
         .reached = calloc(cell_room, sizeof(uint8_t)),
         .pending = calloc(cell_room, sizeof(uint32_t)),
         .remap = calloc(cell_room, sizeof(uint32_t)),
         .revocable = calloc(cell_room, sizeof(uint8_t)),
         .minor = !major,
-        .record = detach_identity == 0u,
+        .record = detach_identity == 0u && !detach_decoded,
         .first_cap = oem_collect_table_size(
             cursor->forward_hints[major ? 1 : 0][0]),
     };
@@ -17224,7 +17252,7 @@ static bool oem_collect_generation(CettaOpenEquationCursor *cursor,
         cursor->major_declines++;
         cetta_runtime_stats_inc(
             CETTA_RUNTIME_COUNTER_OPEN_EQUATION_MAJOR_COLLECTIONS_DECLINED);
-        return oem_collect_generation(cursor, 0u, false, false);
+        return oem_collect_generation(cursor, 0u, false, false, false);
     }
     /* Likewise a minor collection that finds at least half of the region
      * reached would reclaim at most half of it at the cost of copying the
@@ -17287,7 +17315,7 @@ static bool oem_collect_generation(CettaOpenEquationCursor *cursor,
     }
     Arena *to_arena = major || !cursor->old_ready ? &fresh : &cursor->old;
     collect.to = to_arena;
-    if (ok && detach_identity != 0u) {
+    if (ok && (detach_identity != 0u || detach_decoded)) {
         collect.detach = atom_deep_copy_session_new(to_arena);
         ok = collect.detach != NULL;
     }
@@ -18592,11 +18620,29 @@ static void oem_sweep_versions(CettaOpenEquationCursor *cursor) {
 static bool oem_collect(CettaOpenEquationCursor *cursor) {
     bool resource_due = cursor->old_ready &&
         cursor->old.retained_resource_bytes >= cursor->major_resource_after;
-    return oem_collect_generation(
-        cursor, 0u,
-        cursor->old_ready &&
-            (arena_accounted_live_bytes(&cursor->old) >= cursor->major_after ||
-             resource_due), resource_due);
+    bool major = cursor->old_ready &&
+        (arena_accounted_live_bytes(&cursor->old) >= cursor->major_after ||
+         resource_due);
+    /* While a closed epoch of decoded copies waits that the cursor alone may
+     * keep, the collection is a major one that detaches it: the copies the
+     * cursor reaches become its own, its row cache is read again, and it
+     * keeps no atom of that epoch.  Epochs close at most once per budget of
+     * decoding, so this adds at most one major collection per close. */
+    uint64_t epoch = 0u;
+    if (term_universe_decode_detach_candidate(&cursor->decode_holder, &epoch)) {
+        if (!oem_collect_generation(cursor, 0u, true, true, resource_due))
+            return false;
+        cursor->rows_read = (SpaceReadToken){0};
+        term_universe_decode_holder_emptied(&cursor->decode_holder);
+        return true;
+    }
+    return oem_collect_generation(cursor, 0u, false, major, resource_due);
+}
+
+void cetta_open_equation_cursor_decode_receive(CettaOpenEquationCursor *cursor,
+                                               bool reclaimed) {
+    if (cursor)
+        term_universe_decode_holder_receive(&cursor->decode_holder, reclaimed);
 }
 
 bool cetta_open_equation_cursor_detach(CettaOpenEquationCursor *cursor,
@@ -18614,7 +18660,7 @@ bool cetta_open_equation_cursor_detach(CettaOpenEquationCursor *cursor,
         return true;
     }
     uint64_t copied = cursor->detach_copied;
-    if (!oem_collect_generation(cursor, arena->identity, true, false))
+    if (!oem_collect_generation(cursor, arena->identity, false, true, false))
         return false;
     if (unborrowed && cursor->detach_copied != copied) {
         fprintf(stderr, "fatal: an open-equation cursor held storage it did "
@@ -19460,6 +19506,8 @@ CettaOpenEquationCursor *cetta_open_equation_cursor_open(
     CettaOpenEquationCursor *cursor = calloc(1u, sizeof(*cursor));
     if (!cursor)
         return NULL;
+    cursor->decode_holder =
+        (TermUniverseDecodeHolder)TERM_UNIVERSE_DECODE_HOLDER_INIT;
     cursor->ledger_counted = cetta_runtime_stats_is_enabled();
     if (cursor->ledger_counted)
         cetta_runtime_stats_gauge_add(
@@ -19667,11 +19715,18 @@ CettaOpenEquationStep cetta_open_equation_cursor_next_above(
     CettaOpenEquationCursor *cursor, uint32_t base, Atom *const *query_vars,
     CettaCallOutcome *returned, Atom ***query_values_out) {
     Atom *value = NULL;
-    if (!returned ||
-        !oem_cursor_enter(cursor, query_vars, &value, query_values_out))
+    if (!returned)
         return CETTA_OPEN_EQUATION_HANDOFF;
+    /* What the cursor hands out is exported, a copy of every decoded copy it
+     * names (oem_resolve_in), so leaving gives its caller none of them. */
+    term_universe_decode_holder_push(&cursor->decode_holder);
+    if (!oem_cursor_enter(cursor, query_vars, &value, query_values_out)) {
+        term_universe_decode_holder_leave(&cursor->decode_holder);
+        return CETTA_OPEN_EQUATION_HANDOFF;
+    }
     CettaOpenEquationStep step = oem_cursor_run(cursor, base, &value,
                                                 query_values_out);
+    term_universe_decode_holder_leave(&cursor->decode_holder);
     cursor->query_vars = NULL;
     return oem_cursor_outcome(cursor, step, value, returned);
 }

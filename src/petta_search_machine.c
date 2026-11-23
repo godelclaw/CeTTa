@@ -35773,6 +35773,10 @@ static __attribute__((noinline)) bool petta_machine_open_resume(
             *failure = PETTA_MACHINE_STEP_CAPACITY;
             return false;
         }
+        /* The accepted values may share decoded copies this machine read for
+         * the goal: the cursor keeps their epochs, and this machine, having
+         * reclaimed the goal, keeps only its own. */
+        cetta_open_equation_cursor_decode_receive(open->cursor, last);
         step = cetta_open_equation_cursor_continue(
             open->cursor, open->vars, base, &returned, &values);
     } else if (cetta_open_equation_cursor_handoff(open->cursor) ==
