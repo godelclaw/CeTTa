@@ -2897,6 +2897,26 @@ static void term_universe_disable_decode_epochs(TermUniverse *universe) {
     universe->decode_epochs = NULL;
 }
 
+bool term_universe_decode_arena_epoch(uint32_t identity, uint64_t *reset_epoch) {
+    if (!reset_epoch || !term_universe_identity_is_decoded(identity))
+        return false;
+    bool found = false;
+    pthread_mutex_lock(&g_decode_epoch_mutex);
+    TermUniverseDecodeEpochs *epochs = g_decode_epochs;
+    if (epochs && epochs->current && epochs->current->identity == identity) {
+        *reset_epoch = epochs->current->reset_epoch;
+        found = true;
+    }
+    for (uint32_t index = 0u; epochs && !found && index < epochs->closed_len; index++) {
+        if (epochs->closed[index].arena->identity == identity) {
+            *reset_epoch = epochs->closed[index].arena->reset_epoch;
+            found = true;
+        }
+    }
+    pthread_mutex_unlock(&g_decode_epoch_mutex);
+    return found;
+}
+
 bool term_universe_atom_in_decode_epoch(const Atom *atom) {
     if (!atom || atom->arena_id == 0u)
         return false;

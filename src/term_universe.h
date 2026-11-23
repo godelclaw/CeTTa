@@ -603,6 +603,10 @@ void term_universe_decode_epochs_release(void);
 bool term_universe_atom_in_decode_epoch(const Atom *atom);
 /* Whether IDENTITY names an unfreed epoch's storage; without a lock. */
 bool term_universe_identity_is_decoded(uint32_t identity);
+/* For an unfreed epoch's storage named IDENTITY: its reset epoch, which with
+ * the identity names that storage for its life (an epoch's storage is never
+ * reset, and a later arena of the same identity has a higher one). */
+bool term_universe_decode_arena_epoch(uint32_t identity, uint64_t *reset_epoch);
 /* The entry's atom for a holder that keeps it for the universe's life (a
  * program's definitions): a persistent copy, pinned in the entry's slot, never
  * an epoch's. */

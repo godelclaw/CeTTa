@@ -19025,12 +19025,13 @@ static OemUnify oem_unify_stored(CettaOpenEquationCursor *cursor, Atom *term,
     }
     Atom *value = oem_deref(cursor, term);
     /* A value that is the part's own kept atom is the part.  Only an
-     * expression of the universe's arena can be one, so other values skip
-     * reading the part's slot. */
+     * expression of the universe's arena or of its decoded-copy epochs can
+     * be one, so other values skip reading the part's slot. */
     if (shape == OEM_STORED_GROUND && value->kind == ATOM_EXPR &&
         universe->persistent_arena &&
         (value->arena_id == 0u ||
-         value->arena_id == universe->persistent_arena->identity) &&
+         value->arena_id == universe->persistent_arena->identity ||
+         term_universe_identity_is_decoded(value->arena_id)) &&
         value == term_universe_decoded_atom_at(universe, row))
         return OEM_UNIFY_OK;
     uint32_t cell = 0u;
