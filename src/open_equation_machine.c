@@ -17339,19 +17339,36 @@ static bool oem_collect_generation(CettaOpenEquationCursor *cursor,
             hosts[young] = copy;
         }
         /* A match's rows are the space's atoms; only the block moves, and
-         * only out of a generation this collection collects.  Lazy rows
-         * stay where they are. */
+         * only out of a generation this collection collects.  A detach also
+         * copies the rows of the storage it detaches (decoded copies), into
+         * a new block: the old one stays whole if the collection fails.
+         * Lazy rows stay where they are. */
         if (ok && oem_frame_is_match(frame) && !frame->lazy_rows) {
             bool moves = frame->rows->arena == collect.from_identity ||
                 (collect.from_old_identity != 0u &&
                  frame->rows->arena == collect.from_old_identity);
+            bool detached = false;
+            for (uint32_t row = 0u; !detached && oem_collect_detaching(&collect) &&
+                 row < frame->rows->len; row++)
+                detached = frame->rows->rows[row] &&
+                    oem_collect_detaches(&collect, frame->rows->rows[row]->arena_id);
             size_t bytes = sizeof(OemRows) +
                 sizeof(Atom *) * (size_t)frame->rows->len;
-            rows[young] = moves ? arena_alloc(to_arena, bytes) : frame->rows;
+            rows[young] = moves || detached ? arena_alloc(to_arena, bytes)
+                                            : frame->rows;
             ok = rows[young] != NULL;
-            if (ok && moves) {
+            if (ok && (moves || detached)) {
                 memcpy(rows[young], frame->rows, bytes);
                 rows[young]->arena = to_arena->identity;
+            }
+            for (uint32_t row = 0u; ok && detached && row < rows[young]->len; row++) {
+                Atom *atom = rows[young]->rows[row];
+                if (!atom || !oem_collect_detaches(&collect, atom->arena_id))
+                    continue;
+                rows[young]->rows[row] =
+                    atom_deep_copy_session_copy(collect.detach, atom);
+                ok = rows[young]->rows[row] != NULL;
+                collect.detach_copied++;
             }
         }
     }

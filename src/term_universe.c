@@ -2441,23 +2441,44 @@ static _Atomic uint64_t g_decode_thread_numbers;
 static _Atomic uint64_t g_decode_identity_mask;
 static _Atomic uint32_t g_decode_identities[TERM_UNIVERSE_DECODE_WINDOW];
 
-/* Under the lock, after the epochs changed. */
+/* Under the lock, after the epochs changed.  Each unfreed epoch's identity
+ * keeps one slot for the epoch's life: a reader scanning the slots while they
+ * change sees every identity that was unfreed before its scan began and stays
+ * unfreed through it.  New identities are placed before freed ones are
+ * cleared, and the mask is recomputed last. */
 static void term_universe_decode_identities_publish(const TermUniverseDecodeEpochs *epochs) {
-    uint64_t mask = 0u;
-    uint32_t len = 0u;
+    uint32_t live[TERM_UNIVERSE_DECODE_WINDOW];
+    uint32_t live_len = 0u;
     if (epochs && epochs->current) {
-        atomic_store_explicit(&g_decode_identities[len++], epochs->current->identity,
-                              memory_order_relaxed);
-        mask |= (uint64_t)1u << (epochs->current->identity & 63u);
-        for (uint32_t index = 0u; index < epochs->closed_len; index++) {
-            uint32_t identity = epochs->closed[index].arena->identity;
-            atomic_store_explicit(&g_decode_identities[len++], identity,
-                                  memory_order_relaxed);
-            mask |= (uint64_t)1u << (identity & 63u);
+        live[live_len++] = epochs->current->identity;
+        for (uint32_t index = 0u; index < epochs->closed_len; index++)
+            live[live_len++] = epochs->closed[index].arena->identity;
+    }
+    for (uint32_t index = 0u; index < live_len; index++) {
+        bool placed = false;
+        for (uint32_t slot = 0u; !placed && slot < TERM_UNIVERSE_DECODE_WINDOW; slot++)
+            placed = atomic_load_explicit(&g_decode_identities[slot],
+                                          memory_order_relaxed) == live[index];
+        for (uint32_t slot = 0u; !placed && slot < TERM_UNIVERSE_DECODE_WINDOW; slot++) {
+            if (atomic_load_explicit(&g_decode_identities[slot], memory_order_relaxed) == 0u) {
+                atomic_store_explicit(&g_decode_identities[slot], live[index],
+                                      memory_order_release);
+                placed = true;
+            }
         }
     }
-    while (len < TERM_UNIVERSE_DECODE_WINDOW)
-        atomic_store_explicit(&g_decode_identities[len++], 0u, memory_order_relaxed);
+    uint64_t mask = 0u;
+    for (uint32_t slot = 0u; slot < TERM_UNIVERSE_DECODE_WINDOW; slot++) {
+        uint32_t seen = atomic_load_explicit(&g_decode_identities[slot],
+                                             memory_order_relaxed);
+        bool keep = false;
+        for (uint32_t index = 0u; !keep && seen && index < live_len; index++)
+            keep = live[index] == seen;
+        if (seen && !keep)
+            atomic_store_explicit(&g_decode_identities[slot], 0u, memory_order_release);
+        else if (seen)
+            mask |= (uint64_t)1u << (seen & 63u);
+    }
     atomic_store_explicit(&g_decode_identity_mask, mask, memory_order_release);
 }
 
@@ -2467,12 +2488,9 @@ bool term_universe_identity_is_decoded(uint32_t identity) {
           ((uint64_t)1u << (identity & 63u))))
         return false;
     for (uint32_t index = 0u; index < TERM_UNIVERSE_DECODE_WINDOW; index++) {
-        uint32_t seen = atomic_load_explicit(&g_decode_identities[index],
-                                             memory_order_relaxed);
-        if (seen == identity)
+        if (atomic_load_explicit(&g_decode_identities[index],
+                                 memory_order_acquire) == identity)
             return true;
-        if (seen == 0u)
-            return false;
     }
     return false;
 }
