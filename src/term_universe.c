@@ -8294,6 +8294,11 @@ static Atom *term_universe_decode_one(TermUniverse *universe, AtomId id,
     Atom *decoded = term_universe_decode_atom(universe, id, depth);
     if (epochs)
         epochs->decoding--;
+    /* A record carries its term's structural hash: a decode, which an
+     * epoch's close may repeat, starts with it, as a view does. */
+    const CettaTermHdr *decoded_hdr = decoded ? tu_hdr(universe, id) : NULL;
+    if (decoded_hdr)
+        atom_hash_cache_adopt(decoded, decoded_hdr->hash32);
     if (!decoded ||
         !term_universe_set_decoded_at(universe, physical_index, decoded))
         return NULL;

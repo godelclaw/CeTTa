@@ -8305,6 +8305,16 @@ static __attribute__((noinline)) bool atom_eq_walk(Atom *a, Atom *b, AtomCompare
          ATOM_STRUCTURAL_SYMBOLIC) != 0u) {
         uint32_t left_hash = atom_hash_cache_load(a);
         uint32_t right_hash = atom_hash_cache_load(b);
+        /* One side's hash is known (a decoded copy starts with its record's):
+         * the other's, computed once and kept, decides most unequal pairs
+         * without a walk, as interned terms' hashes did. */
+        if ((left_hash == 0u) != (right_hash == 0u) && atom_is_hash_stable(a) &&
+            atom_is_hash_stable(b)) {
+            if (left_hash == 0u)
+                left_hash = atom_hash(a);
+            else
+                right_hash = atom_hash(b);
+        }
         if (left_hash != 0u && right_hash != 0u && left_hash != right_hash)
             return false;
     }

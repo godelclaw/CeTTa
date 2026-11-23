@@ -220,7 +220,7 @@ static size_t test_collection_staging_refusal(size_t refuse) {
     cursor.destination=root;
     collection_allocation_index=0u;collection_refuse_at=refuse;
     collection_allocation_tracking=true;
-    bool complete=oem_collect_generation(&cursor,0u,true,true);
+    bool complete=oem_collect_generation(&cursor,0u,false,true,true);
     collection_allocation_tracking=false;
     size_t reached=collection_allocation_index;
     if(!refuse)assert(complete);
