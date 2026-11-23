@@ -603,6 +603,10 @@ void term_universe_decode_epochs_release(void);
 bool term_universe_atom_in_decode_epoch(const Atom *atom);
 /* Whether IDENTITY names an unfreed epoch's storage; without a lock. */
 bool term_universe_identity_is_decoded(uint32_t identity);
+/* The entry's atom for a holder that keeps it for the universe's life (a
+ * program's definitions): a persistent copy, pinned in the entry's slot, never
+ * an epoch's. */
+Atom *term_universe_get_pinned_atom(const TermUniverse *universe, AtomId id);
 
 /* A holder of decoded copies.  Epoch e is bit (e mod 64) of its set: at most
  * 64 epochs are unfreed at a time. */
@@ -611,8 +615,12 @@ typedef struct TermUniverseDecodeHolder {
     struct TermUniverseDecodeHolder *below;
     /* At its last leave: what the holder below kept. */
     uint64_t below_at_leave;
+    /* While it is suspended (it left and lives on): the thread that counts
+     * its set among the epochs it keeps.  Any thread may resume or forget
+     * it. */
+    void *suspended_on;
 } TermUniverseDecodeHolder;
-#define TERM_UNIVERSE_DECODE_HOLDER_INIT { 0u, NULL, 0u }
+#define TERM_UNIVERSE_DECODE_HOLDER_INIT { 0u, NULL, 0u, NULL }
 void term_universe_decode_holder_push(TermUniverseDecodeHolder *holder);
 /* The holder ends and its results may carry what it read: the holder below
  * keeps its epochs too. */
@@ -620,6 +628,8 @@ void term_universe_decode_holder_pop(TermUniverseDecodeHolder *holder);
 /* A holder that lives on (a suspended machine) stops running.  What it hands
  * out is copied, so the holder below takes nothing from it. */
 void term_universe_decode_holder_leave(TermUniverseDecodeHolder *holder);
+/* A holder that left ends (a closed cursor): what it kept goes with it. */
+void term_universe_decode_holder_forget(TermUniverseDecodeHolder *holder);
 /* The running holder hands HOLDER (one that left it) values that may share
  * its decoded copies: HOLDER keeps its epochs too.  RECLAIMED: the giver has
  * since released everything it made after HOLDER left, so it keeps only

@@ -1590,6 +1590,7 @@ bool term_universe_init_with_store_format(TermUniverse *universe,
     universe->instance_id = term_universe_fresh_instance_id();
     universe->storage_epoch = 1u;
     universe->persistent_arena = NULL;
+    universe->decode_epochs = NULL;
     universe->resource_scope = NULL;
     universe->fallbacks = NULL;
     universe->fallback_bytes = 0u;
@@ -2359,14 +2360,23 @@ typedef struct TermUniverseDecodeEpochs {
     uint64_t closes, frees, freed_bytes;
 } TermUniverseDecodeEpochs;
 
-/* A thread with holders, and the epochs it may keep atoms of: the union of
- * the sets on its holder stack, published for other threads' releases. */
+/* A thread with holders, and the epochs it may keep atoms of, published for
+ * other threads' releases: the union of the sets on its holder stack
+ * (running), and of the sets of the holders that left it and live on
+ * (suspended). */
 typedef struct TermUniverseDecodeThread {
     _Atomic uint64_t held;
+    _Atomic uint64_t suspended_held;
     /* The thread's own holder, below every machine's: what C code outside
      * the machines reads, and what ended machines passed down. */
     TermUniverseDecodeHolder base;
     TermUniverseDecodeHolder *innermost;
+    /* For each epoch bit, how many suspended holders keep it.  Under
+     * suspended_lock: a suspended holder may be resumed or forgotten on
+     * another thread. */
+    pthread_mutex_t suspended_lock;
+    uint32_t suspended_count[64];
+    uint64_t suspended_total;
     struct TermUniverseDecodeThread *prev, *next;
 } TermUniverseDecodeThread;
 
@@ -2445,6 +2455,14 @@ static void term_universe_decode_thread_exit(void *record) {
     TermUniverseDecodeThread *thread = record;
     if (!thread)
         return;
+    atomic_store_explicit(&thread->held, 0u, memory_order_release);
+    /* Holders that left this thread and live on still count here: the
+     * record stays listed for them. */
+    pthread_mutex_lock(&thread->suspended_lock);
+    bool suspended = thread->suspended_total != 0u;
+    pthread_mutex_unlock(&thread->suspended_lock);
+    if (suspended)
+        return;
     pthread_mutex_lock(&g_decode_epoch_mutex);
     if (thread->prev)
         thread->prev->next = thread->next;
@@ -2453,6 +2471,7 @@ static void term_universe_decode_thread_exit(void *record) {
     if (thread->next)
         thread->next->prev = thread->prev;
     pthread_mutex_unlock(&g_decode_epoch_mutex);
+    pthread_mutex_destroy(&thread->suspended_lock);
     free(thread);
 }
 
@@ -2472,6 +2491,12 @@ static inline void term_universe_decode_thread_enter(void) {
         return;
     }
     atomic_init(&thread->held, 0u);
+    atomic_init(&thread->suspended_held, 0u);
+    if (pthread_mutex_init(&thread->suspended_lock, NULL) != 0) {
+        free(thread);
+        atomic_store(&g_decode_thread_unlisted, true);
+        return;
+    }
     thread->base = (TermUniverseDecodeHolder)TERM_UNIVERSE_DECODE_HOLDER_INIT;
     thread->innermost = &thread->base;
     pthread_mutex_lock(&g_decode_epoch_mutex);
@@ -2496,6 +2521,54 @@ static void term_universe_decode_thread_publish(TermUniverseDecodeThread *thread
          holder = holder->below)
         held |= holder->held;
     atomic_store_explicit(&thread->held, held, memory_order_release);
+}
+
+/* Under the thread's suspended_lock: suspended holders keep BITS more, or
+ * (ADD false) no longer. */
+static void term_universe_decode_suspended_count(TermUniverseDecodeThread *thread,
+                                                 uint64_t bits, bool add) {
+    uint64_t mask = atomic_load_explicit(&thread->suspended_held,
+                                         memory_order_relaxed);
+    for (uint64_t rest = bits; rest; rest &= rest - 1u) {
+        unsigned index = (unsigned)__builtin_ctzll(rest);
+        uint64_t bit = UINT64_C(1) << index;
+        if (add) {
+            if (thread->suspended_count[index]++ == 0u)
+                mask |= bit;
+            thread->suspended_total++;
+        } else if (thread->suspended_count[index] != 0u) {
+            if (--thread->suspended_count[index] == 0u)
+                mask &= ~bit;
+            thread->suspended_total--;
+        }
+    }
+    atomic_store_explicit(&thread->suspended_held, mask, memory_order_release);
+}
+
+/* HOLDER, suspended, runs again or ends: its thread stops counting it. */
+static void term_universe_decode_unsuspend(TermUniverseDecodeHolder *holder) {
+    TermUniverseDecodeThread *thread = holder->suspended_on;
+    if (!thread)
+        return;
+    pthread_mutex_lock(&thread->suspended_lock);
+    term_universe_decode_suspended_count(thread, holder->held, false);
+    holder->suspended_on = NULL;
+    pthread_mutex_unlock(&thread->suspended_lock);
+}
+
+/* Change a holder's set; a suspended holder's thread counts the change. */
+static void term_universe_decode_holder_set(TermUniverseDecodeHolder *holder,
+                                            uint64_t held) {
+    TermUniverseDecodeThread *thread = holder->suspended_on;
+    if (!thread) {
+        holder->held = held;
+        return;
+    }
+    pthread_mutex_lock(&thread->suspended_lock);
+    term_universe_decode_suspended_count(thread, held & ~holder->held, true);
+    term_universe_decode_suspended_count(thread, holder->held & ~held, false);
+    holder->held = held;
+    pthread_mutex_unlock(&thread->suspended_lock);
 }
 
 /* A read hands out atoms of the current epoch: the innermost holder may
@@ -2543,7 +2616,8 @@ static void term_universe_decode_release_locked(void) {
     uint64_t held = 0u;
     for (TermUniverseDecodeThread *thread = g_decode_threads; thread;
          thread = thread->next)
-        held |= atomic_load_explicit(&thread->held, memory_order_acquire);
+        held |= atomic_load_explicit(&thread->held, memory_order_acquire) |
+                atomic_load_explicit(&thread->suspended_held, memory_order_acquire);
     if (atomic_load(&g_decode_thread_unlisted))
         held = UINT64_MAX;
     bool trace = term_universe_decode_trace();
@@ -2584,6 +2658,7 @@ void term_universe_decode_holder_push(TermUniverseDecodeHolder *holder) {
     TermUniverseDecodeThread *thread = t_decode_thread;
     if (!thread)
         return;
+    term_universe_decode_unsuspend(holder);
     holder->below = thread->innermost;
     thread->innermost = holder;
     if (term_universe_decode_trace())
@@ -2611,7 +2686,18 @@ void term_universe_decode_holder_leave(TermUniverseDecodeHolder *holder) {
     thread->innermost = below;
     holder->below = NULL;
     holder->below_at_leave = below->held;
+    pthread_mutex_lock(&thread->suspended_lock);
+    term_universe_decode_suspended_count(thread, holder->held, true);
+    holder->suspended_on = thread;
+    pthread_mutex_unlock(&thread->suspended_lock);
     term_universe_decode_thread_publish(thread);
+}
+
+void term_universe_decode_holder_forget(TermUniverseDecodeHolder *holder) {
+    if (!holder)
+        return;
+    term_universe_decode_unsuspend(holder);
+    holder->held = 0u;
 }
 
 void term_universe_decode_holder_receive(TermUniverseDecodeHolder *holder,
@@ -2620,7 +2706,9 @@ void term_universe_decode_holder_receive(TermUniverseDecodeHolder *holder,
     if (!holder || !thread)
         return;
     TermUniverseDecodeHolder *giver = thread->innermost;
-    holder->held |= giver->held;
+    if (giver == holder)
+        return;
+    term_universe_decode_holder_set(holder, holder->held | giver->held);
     if (reclaimed)
         giver->held &= holder->below_at_leave;
     term_universe_decode_thread_publish(thread);
@@ -2632,7 +2720,9 @@ uint32_t term_universe_decode_detach_candidate(
     if (!holder || !holder->held || !thread ||
         !atomic_load_explicit(&g_decode_waiting, memory_order_acquire))
         return 0u;
-    /* The epochs this thread's other holders keep. */
+    /* The epochs every other holder keeps: this thread's other running ones,
+     * every suspended one (HOLDER runs, so it is not among them), and other
+     * threads'. */
     uint64_t others = 0u;
     for (const TermUniverseDecodeHolder *below = thread->innermost; below;
          below = below->below)
@@ -2641,9 +2731,11 @@ uint32_t term_universe_decode_detach_candidate(
     uint32_t identity = 0u;
     pthread_mutex_lock(&g_decode_epoch_mutex);
     for (TermUniverseDecodeThread *other = g_decode_threads; other;
-         other = other->next)
+         other = other->next) {
+        others |= atomic_load_explicit(&other->suspended_held, memory_order_acquire);
         if (other != thread)
             others |= atomic_load_explicit(&other->held, memory_order_acquire);
+    }
     TermUniverseDecodeEpochs *epochs = g_decode_epochs;
     for (uint32_t index = 0u; epochs && index < epochs->closed_len; index++) {
         const TermUniverseClosedEpoch *closed = &epochs->closed[index];
@@ -2669,7 +2761,7 @@ void term_universe_decode_holder_cleaned(TermUniverseDecodeHolder *holder,
     uint64_t bit = term_universe_decode_bit(epoch);
     if (!holder || !(holder->held & bit))
         return;
-    holder->held &= ~bit;
+    term_universe_decode_holder_set(holder, holder->held & ~bit);
     if (thread) {
         term_universe_decode_thread_publish(thread);
         term_universe_decode_epochs_release();
@@ -2680,7 +2772,7 @@ void term_universe_decode_holder_emptied(TermUniverseDecodeHolder *holder) {
     TermUniverseDecodeThread *thread = t_decode_thread;
     if (!holder || !holder->held)
         return;
-    holder->held = 0u;
+    term_universe_decode_holder_set(holder, 0u);
     if (thread) {
         term_universe_decode_thread_publish(thread);
         term_universe_decode_epochs_release();
@@ -8164,6 +8256,14 @@ static Atom *term_universe_pin_decoded(TermUniverse *universe, AtomId id,
         return NULL;
     term_universe_track_ptr_id(universe, id);
     return pinned;
+}
+
+Atom *term_universe_get_pinned_atom(const TermUniverse *universe, AtomId id) {
+    Atom *atom = term_universe_get_atom(universe, id);
+    if (atom && universe->decode_epochs &&
+        atom->arena_id == universe->decode_epochs->current->identity)
+        atom = term_universe_pin_decoded((TermUniverse *)universe, id, atom);
+    return atom;
 }
 
 Atom *term_universe_store_atom(TermUniverse *universe, Arena *fallback,

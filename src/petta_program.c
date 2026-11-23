@@ -5830,6 +5830,14 @@ static bool petta_program_note_add_with_execution_plan(
     CETTA_SCOPED_SHARED_TRANSITION(program_catalog_add);
     if (!program || !space || !atom)
         return false;
+    /* The program keeps its definitions for its life: a definition read as
+     * one of the universe's decoded copies, which an epoch's release frees,
+     * is kept as the space's stored atom, a persistent copy. */
+    if (term_universe_identity_is_decoded(atom->arena_id)) {
+        atom = space_store_atom(space, &program->plans, atom);
+        if (!atom)
+            return false;
+    }
     Atom *subject = NULL;
     Atom *type = NULL;
     if (petta_program_type_declaration_view(

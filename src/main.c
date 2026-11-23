@@ -2400,7 +2400,7 @@ static bool main_petta_predeclare_forms(CettaLibraryContext *libraries,
             continue;
         }
         Atom *declaration =
-            term_universe_get_atom(cetta_library_context_universe(libraries), ids[index]);
+            term_universe_get_pinned_atom(cetta_library_context_universe(libraries), ids[index]);
         if (petta_program_admits_equation(libraries->petta_program,
                                           declaration) &&
             !petta_program_predeclare_equation(libraries->petta_program,
@@ -2559,7 +2559,7 @@ static MainPettaBlockLoadResult main_petta_check_forms(
     if (!forms)
         return MAIN_PETTA_BLOCK_LOAD_FAILED;
     for (int index = 0; index < atom_count; index++)
-        forms[index] = term_universe_get_atom(universe, atom_ids[index]);
+        forms[index] = term_universe_get_pinned_atom(universe, atom_ids[index]);
     bool use_v3 = libraries && libraries->session.profile &&
         libraries->session.profile->id == CETTA_PROFILE_PETTA_TYPECHECK_V3;
     PettaTypecheckBlockResult checked = {0};
@@ -2646,7 +2646,7 @@ static MainPettaBlockLoadResult main_petta_load_declaration_block(
             continue;
         }
         Atom *source =
-            term_universe_get_atom(universe, atom_ids[index]);
+            term_universe_get_pinned_atom(universe, atom_ids[index]);
         Atom *definition_error = eval_petta_builtin_definition_error(
             &diagnostic_arena, registry, space, source);
         if (definition_error) {
@@ -2704,7 +2704,7 @@ static bool main_load_planned_declaration_block(
         if (!petta_program_form_id_may_affect_metadata(universe,
                                                        atom_ids[index]))
             continue;
-        Atom *source = term_universe_get_atom(
+        Atom *source = term_universe_get_pinned_atom(
             universe, atom_ids[index]);
         const PettaPlanNode *plan =
             petta_program_declaration_block_plan_at(block, index);
@@ -4106,7 +4106,7 @@ static int cetta_main(int argc, char **argv) {
         Atom **forms = n > 0
             ? cetta_malloc(sizeof(*forms) * (size_t)n) : NULL;
         for (int index = 0; index < n; index++)
-            forms[index] = term_universe_get_atom(
+            forms[index] = term_universe_get_pinned_atom(
                 cetta_library_context_universe(&runtime.libraries), atom_ids[index]);
         CettaGsltLanguageResult observed = {0};
         CettaGsltHornLimits limits = {
@@ -4511,7 +4511,7 @@ petta_next_slice:
             }
             const PettaPlanNode *source_plan = NULL;
             if (lang->id == CETTA_LANGUAGE_PETTA) {
-                Atom *source = term_universe_get_atom(
+                Atom *source = term_universe_get_pinned_atom(
                     cetta_library_context_universe(&runtime.libraries), payload_id);
                 source_plan = source
                     ? petta_program_plan_current(
@@ -4864,7 +4864,7 @@ petta_next_slice:
             for (int k = i; k < block_end && !refused; k++) {
                 refused = cetta_prime_reserved_definition_error(
                     &eval_arena,
-                    term_universe_get_atom(cetta_library_context_universe((CettaLibraryContext *)(&runtime.libraries)),
+                    term_universe_get_pinned_atom(cetta_library_context_universe((CettaLibraryContext *)(&runtime.libraries)),
                                            atom_ids[k]));
                 if (refused) block_end = k;
             }

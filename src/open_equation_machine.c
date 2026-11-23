@@ -21243,6 +21243,7 @@ void cetta_open_equation_cursor_suspend(CettaOpenEquationCursor *cursor) {
 void cetta_open_equation_cursor_close(CettaOpenEquationCursor *cursor) {
     if (!cursor)
         return;
+    term_universe_decode_holder_forget(&cursor->decode_holder);
     if (cursor->ledger_counted) {
         cetta_runtime_stats_gauge_add(
             CETTA_RUNTIME_COUNTER_OPEN_EQUATION_CURSOR_LIVE,

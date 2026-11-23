@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdatomic.h>
+#include <execinfo.h>
 #include <string.h>
 #if defined(__APPLE__)
 #include <xlocale.h>
@@ -6639,9 +6640,37 @@ static bool atom_list_rest_parts_splice(Atom *const *elems, CettaExprLen len,
 }
 
 /* An expression in an arena that interns nothing, with its summary. */
+#if CETTA_BUILD_WITH_DECODE_EPOCH_CHECKS
+/* Report a long-lived arena that receives a decoded copy as a child
+ * (term_universe.h: static storage copies such a child instead). */
+extern bool term_universe_identity_is_decoded(uint32_t identity)
+    __attribute__((weak));
+static void atom_decode_epoch_check(const Arena *a, Atom *const *elems,
+                                    CettaExprLen len) {
+    if (!a || a->runtime_kind != CETTA_ARENA_RUNTIME_KIND_PERSISTENT ||
+        !term_universe_identity_is_decoded || !elems)
+        return;
+    for (CettaExprLen i = 0u; i < len; i++) {
+        if (elems[i] && term_universe_identity_is_decoded(elems[i]->arena_id)) {
+            static _Atomic unsigned reported;
+            if (atomic_fetch_add(&reported, 1u) < 8u) {
+                fprintf(stderr, "[decode-epoch-check] persistent atom shares a decoded copy\n");
+                void *frames[24];
+                int count = backtrace(frames, 24);
+                backtrace_symbols_fd(frames, count, 2);
+            }
+            return;
+        }
+    }
+}
+#else
+#define atom_decode_epoch_check(a, elems, len) ((void)0)
+#endif
+
 static inline __attribute__((always_inline)) Atom *atom_expr_build(
     Arena *a, Atom **elems, CettaExprLen len, uint32_t flags,
     uint32_t structural_facts, VarId var_id) {
+    atom_decode_epoch_check(a, elems, len);
     size_t elems_bytes = (size_t)len * sizeof(Atom *);
     if (elems_bytes > SIZE_MAX - sizeof(Atom))
         cetta_oom(SIZE_MAX);
@@ -6853,6 +6882,7 @@ Atom *atom_expr(Arena *a, Atom **elems, CettaExprLen len) {
     temp.expr.elems = elems;
     Atom *shared = atom_maybe_hashcons(a, &temp);
     if (shared) return shared;
+    atom_decode_epoch_check(a, elems, len);
     if (elems_bytes > SIZE_MAX - sizeof(Atom))
         cetta_oom(SIZE_MAX);
     /* The expression header and its immutable child vector have exactly the
