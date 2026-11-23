@@ -465,6 +465,8 @@ static Atom *term_universe_entry_decoded(const TermUniverse *universe,
                                          const TermEntry *entry);
 static bool term_universe_set_decoded_at(TermUniverse *universe, size_t index,
                                          Atom *atom);
+static void term_universe_decode_log_slot(TermUniverse *universe, size_t index,
+                                          const Atom *atom);
 static void term_universe_free_decoded(TermUniverse *universe);
 static void term_universe_disable_decode_epochs(TermUniverse *universe);
 static bool term_universe_entry_has_blob(const TermEntry *entry);
@@ -2319,6 +2321,8 @@ static bool term_universe_set_decoded_at(TermUniverse *universe, size_t index,
     }
     universe->decoded_pages[page][index & (TERM_DECODED_PAGE_ENTRIES - 1u)] =
         atom;
+    if (atom && universe->decode_epochs)
+        term_universe_decode_log_slot(universe, index, atom);
     return true;
 }
 
@@ -2355,10 +2359,35 @@ typedef struct TermUniverseDecodeEpochs {
     /* Closed epochs not yet freed, oldest first. */
     TermUniverseClosedEpoch closed[TERM_UNIVERSE_DECODE_WINDOW - 1u];
     uint32_t closed_len;
-    size_t budget_bytes;
+    /* The current epoch closes at budget_bytes, never below least_budget. */
+    size_t budget_bytes, least_budget;
+    /* The slots (physical indexes) given the current epoch's atoms, so a
+     * close visits those alone; when one could not be noted, every slot. */
+    size_t *slot_log;
+    size_t slot_log_len, slot_log_cap;
+    bool slot_log_lost;
     bool poison;
     uint64_t closes, frees, freed_bytes;
 } TermUniverseDecodeEpochs;
+
+static void term_universe_decode_log_slot(TermUniverse *universe, size_t index,
+                                          const Atom *atom) {
+    TermUniverseDecodeEpochs *epochs = universe->decode_epochs;
+    if (atom->arena_id != epochs->current->identity || epochs->slot_log_lost)
+        return;
+    if (epochs->slot_log_len == epochs->slot_log_cap) {
+        size_t cap = epochs->slot_log_cap ? epochs->slot_log_cap * 2u : 256u;
+        size_t *log = cap <= SIZE_MAX / sizeof(*log)
+            ? realloc(epochs->slot_log, cap * sizeof(*log)) : NULL;
+        if (!log) {
+            epochs->slot_log_lost = true;
+            return;
+        }
+        epochs->slot_log = log;
+        epochs->slot_log_cap = cap;
+    }
+    epochs->slot_log[epochs->slot_log_len++] = index;
+}
 
 /* A thread with holders, and the epochs it may keep atoms of, published for
  * other threads' releases: the union of the sets on its holder stack
@@ -2377,6 +2406,8 @@ typedef struct TermUniverseDecodeThread {
     pthread_mutex_t suspended_lock;
     uint32_t suspended_count[64];
     uint64_t suspended_total;
+    /* This thread's number among all threads', and its pushes so far. */
+    uint64_t number, pushes;
     struct TermUniverseDecodeThread *prev, *next;
 } TermUniverseDecodeThread;
 
@@ -2393,6 +2424,8 @@ static pthread_key_t g_decode_thread_key;
 static pthread_once_t g_decode_thread_key_once = PTHREAD_ONCE_INIT;
 /* A thread that could not list itself: nothing is freed from then on. */
 static _Atomic bool g_decode_thread_unlisted;
+/* The threads listed so far. */
+static _Atomic uint64_t g_decode_thread_numbers;
 /* The identities of every unfreed epoch's storage, read without the lock:
  * a mask of (identity mod 64) answers most questions at once. */
 static _Atomic uint64_t g_decode_identity_mask;
@@ -2497,7 +2530,9 @@ static inline void term_universe_decode_thread_enter(void) {
         atomic_store(&g_decode_thread_unlisted, true);
         return;
     }
+    thread->number = atomic_fetch_add(&g_decode_thread_numbers, 1u) + 1u;
     thread->base = (TermUniverseDecodeHolder)TERM_UNIVERSE_DECODE_HOLDER_INIT;
+    thread->base.thread_number = thread->number;
     thread->innermost = &thread->base;
     pthread_mutex_lock(&g_decode_epoch_mutex);
     thread->next = g_decode_threads;
@@ -2659,6 +2694,8 @@ void term_universe_decode_holder_push(TermUniverseDecodeHolder *holder) {
     if (!thread)
         return;
     term_universe_decode_unsuspend(holder);
+    holder->thread_number = thread->number;
+    holder->push_number = ++thread->pushes;
     holder->below = thread->innermost;
     thread->innermost = holder;
     if (term_universe_decode_trace())
@@ -2685,7 +2722,7 @@ void term_universe_decode_holder_leave(TermUniverseDecodeHolder *holder) {
     TermUniverseDecodeHolder *below = holder->below;
     thread->innermost = below;
     holder->below = NULL;
-    holder->below_at_leave = below->held;
+    below->held |= holder->held;
     pthread_mutex_lock(&thread->suspended_lock);
     term_universe_decode_suspended_count(thread, holder->held, true);
     holder->suspended_on = thread;
@@ -2700,8 +2737,19 @@ void term_universe_decode_holder_forget(TermUniverseDecodeHolder *holder) {
     holder->held = 0u;
 }
 
+TermUniverseDecodeMark term_universe_decode_mark_now(void) {
+    term_universe_decode_thread_enter();
+    TermUniverseDecodeThread *thread = t_decode_thread;
+    if (!thread)
+        return (TermUniverseDecodeMark){0u, 0u, UINT64_MAX};
+    const TermUniverseDecodeHolder *running = thread->innermost;
+    return (TermUniverseDecodeMark){
+        running->thread_number, running->push_number, running->held};
+}
+
 void term_universe_decode_holder_receive(TermUniverseDecodeHolder *holder,
-                                         bool reclaimed) {
+                                         bool reclaimed,
+                                         TermUniverseDecodeMark mark) {
     TermUniverseDecodeThread *thread = t_decode_thread;
     if (!holder || !thread)
         return;
@@ -2709,17 +2757,20 @@ void term_universe_decode_holder_receive(TermUniverseDecodeHolder *holder,
     if (giver == holder)
         return;
     term_universe_decode_holder_set(holder, holder->held | giver->held);
-    if (reclaimed)
-        giver->held &= holder->below_at_leave;
+    /* Lean (EpochReclamation): an owner's collection may shrink its set to
+     * the epochs it still points into. */
+    if (reclaimed && mark.thread_number == giver->thread_number &&
+        mark.push_number == giver->push_number)
+        giver->held &= mark.held;
     term_universe_decode_thread_publish(thread);
 }
 
-uint32_t term_universe_decode_detach_candidate(
-    const TermUniverseDecodeHolder *holder, uint64_t *epoch_out) {
+bool term_universe_decode_detach_due(const TermUniverseDecodeHolder *holder,
+                                     size_t collect_bytes) {
     TermUniverseDecodeThread *thread = t_decode_thread;
     if (!holder || !holder->held || !thread ||
         !atomic_load_explicit(&g_decode_waiting, memory_order_acquire))
-        return 0u;
+        return false;
     /* The epochs every other holder keeps: this thread's other running ones,
      * every suspended one (HOLDER runs, so it is not among them), and other
      * threads'. */
@@ -2728,7 +2779,8 @@ uint32_t term_universe_decode_detach_candidate(
          below = below->below)
         if (below != holder)
             others |= below->held;
-    uint32_t identity = 0u;
+    size_t alone = 0u;
+    size_t least = 0u;
     pthread_mutex_lock(&g_decode_epoch_mutex);
     for (TermUniverseDecodeThread *other = g_decode_threads; other;
          other = other->next) {
@@ -2740,32 +2792,18 @@ uint32_t term_universe_decode_detach_candidate(
     for (uint32_t index = 0u; epochs && index < epochs->closed_len; index++) {
         const TermUniverseClosedEpoch *closed = &epochs->closed[index];
         uint64_t bit = term_universe_decode_bit(closed->epoch);
-        if (!closed->shared && (holder->held & bit) && !(others & bit)) {
-            identity = closed->arena->identity;
-            if (epoch_out)
-                *epoch_out = closed->epoch;
-            break;
-        }
+        if (!closed->shared && (holder->held & bit) && !(others & bit))
+            alone += arena_accounted_live_bytes(closed->arena);
     }
-    if (term_universe_decode_trace())
-        fprintf(stderr, "[decode-epoch] candidate: holder %#" PRIx64 " others %#" PRIx64
-                " closed %u -> %u\n", holder->held, others,
-                epochs ? epochs->closed_len : 0u, identity);
+    if (epochs)
+        least = epochs->least_budget;
     pthread_mutex_unlock(&g_decode_epoch_mutex);
-    return identity;
-}
-
-void term_universe_decode_holder_cleaned(TermUniverseDecodeHolder *holder,
-                                         uint64_t epoch) {
-    TermUniverseDecodeThread *thread = t_decode_thread;
-    uint64_t bit = term_universe_decode_bit(epoch);
-    if (!holder || !(holder->held & bit))
-        return;
-    term_universe_decode_holder_set(holder, holder->held & ~bit);
-    if (thread) {
-        term_universe_decode_thread_publish(thread);
-        term_universe_decode_epochs_release();
-    }
+    bool due = alone != 0u && alone >= least && alone >= collect_bytes / 2u;
+    if (term_universe_decode_trace())
+        fprintf(stderr, "[decode-epoch] detach: holder %#" PRIx64 " others %#" PRIx64
+                " alone %zu collect %zu -> %s\n", holder->held, others, alone,
+                collect_bytes, due ? "due" : "not yet");
+    return due;
 }
 
 void term_universe_decode_holder_emptied(TermUniverseDecodeHolder *holder) {
@@ -2815,7 +2853,9 @@ bool term_universe_enable_decode_epochs(TermUniverse *universe) {
     }
     const char *kb = getenv("CETTA_DECODE_EPOCH_KB");
     unsigned long long budget = kb && kb[0] ? strtoull(kb, NULL, 10) : 0u;
-    epochs->budget_bytes = (size_t)(budget ? budget : 16384u) * 1024u;
+    if (budget == 0u || budget > SIZE_MAX / 2048u)
+        budget = 1024u;
+    epochs->least_budget = epochs->budget_bytes = (size_t)budget * 1024u;
     const char *poison = getenv("CETTA_DECODE_EPOCH_POISON");
     epochs->poison = poison && strcmp(poison, "1") == 0;
     epochs->universe = universe;
@@ -2852,6 +2892,7 @@ static void term_universe_disable_decode_epochs(TermUniverse *universe) {
     term_universe_decode_epoch_destroy(epochs->current, epochs->poison, NULL);
     atomic_store(&g_decode_waiting, false);
     pthread_mutex_unlock(&g_decode_epoch_mutex);
+    free(epochs->slot_log);
     free(epochs);
     universe->decode_epochs = NULL;
 }
@@ -2897,6 +2938,25 @@ static inline bool term_universe_decoded_identity(const TermUniverse *universe,
 static void term_universe_ptr_remove(TermUniverse *universe, Atom *atom,
                                      AtomId id);
 
+/* At a close: clear the slot at INDEX when it holds an atom of the closing
+ * storage CLOSING and its entry has a record (the slot is then a cache; an
+ * entry without a record keeps its atom). */
+static void term_universe_decode_clear_slot(TermUniverse *universe,
+                                            size_t index, uint32_t closing) {
+    size_t page = index >> TERM_DECODED_PAGE_BITS;
+    if (page >= universe->decoded_page_cap || !universe->decoded_pages[page] ||
+        index >= universe->len ||
+        !term_universe_entry_has_blob(&universe->entries[index]))
+        return;
+    Atom **slot = &universe->decoded_pages[page][index & (TERM_DECODED_PAGE_ENTRIES - 1u)];
+    Atom *atom = *slot;
+    if (!atom || ((uintptr_t)atom & 1u) || atom->arena_id != closing)
+        return;
+    term_universe_ptr_remove(
+        universe, atom, term_universe_physical_index_to_atom_id(universe, index));
+    *slot = NULL;
+}
+
 /* Close the current epoch when it has outgrown its budget: clear every slot
  * holding one of its atoms (a record's cache; an entry without a record keeps
  * its atom), then start the next epoch.  Called at the top of a read, never
@@ -2927,30 +2987,35 @@ static void term_universe_decode_maybe_close(TermUniverse *universe) {
     if (!next)
         return;
     uint32_t closing = epochs->current->identity;
-    for (size_t page = 0u; page < universe->decoded_page_cap; page++) {
-        Atom **slots = universe->decoded_pages[page];
-        if (!slots)
-            continue;
-        for (size_t at = 0u; at < TERM_DECODED_PAGE_ENTRIES; at++) {
-            Atom *atom = slots[at];
-            if (!atom || ((uintptr_t)atom & 1u) || atom->arena_id != closing)
+    if (!epochs->slot_log_lost) {
+        for (size_t logged = 0u; logged < epochs->slot_log_len; logged++)
+            term_universe_decode_clear_slot(universe, epochs->slot_log[logged],
+                                            closing);
+    } else {
+        for (size_t page = 0u; page < universe->decoded_page_cap; page++) {
+            if (!universe->decoded_pages[page])
                 continue;
-            size_t index = (page << TERM_DECODED_PAGE_BITS) | at;
-            if (index >= universe->len ||
-                !term_universe_entry_has_blob(&universe->entries[index]))
-                continue;
-            term_universe_ptr_remove(
-                universe, atom,
-                term_universe_physical_index_to_atom_id(universe, index));
-            slots[at] = NULL;
+            for (size_t at = 0u; at < TERM_DECODED_PAGE_ENTRIES; at++)
+                term_universe_decode_clear_slot(
+                    universe, (page << TERM_DECODED_PAGE_BITS) | at, closing);
         }
     }
+    epochs->slot_log_len = 0u;
+    epochs->slot_log_lost = false;
     pthread_mutex_lock(&g_decode_epoch_mutex);
     epochs->closed[epochs->closed_len++] = (TermUniverseClosedEpoch){
         .arena = epochs->current, .epoch = now, .shared = epochs->current_shared};
     epochs->current_shared = false;
     epochs->current = next;
     epochs->closes++;
+    /* The next budget: a quarter of what closed epochs still hold, at least
+     * the least budget.  An epoch kept long makes the following ones larger,
+     * so the window of 64 is not used up. */
+    size_t unfreed = 0u;
+    for (uint32_t index = 0u; index < epochs->closed_len; index++)
+        unfreed += arena_accounted_live_bytes(epochs->closed[index].arena);
+    epochs->budget_bytes = unfreed / 4u > epochs->least_budget
+        ? unfreed / 4u : epochs->least_budget;
     term_universe_decode_identities_publish(epochs);
     atomic_store_explicit(&g_decode_clock, following, memory_order_release);
     atomic_store_explicit(&g_decode_waiting, true, memory_order_release);

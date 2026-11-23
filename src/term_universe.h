@@ -592,7 +592,7 @@ bool term_universe_collect(TermUniverse *universe,
  * MeTTapedia GSLT/Dynamics/EpochReclamation proves this protocol: a closed
  * epoch older than every live owner's last collection holds no reachable
  * atom (freeable_unreachable).  CETTA_DECODE_EPOCHS=0 keeps the persistent
- * arena; CETTA_DECODE_EPOCH_KB sets an epoch's budget (16384 by default);
+ * arena; CETTA_DECODE_EPOCH_KB sets an epoch's least budget (1024 by default);
  * CETTA_DECODE_EPOCH_POISON=1 overwrites a freed epoch before releasing it. */
 bool term_universe_enable_decode_epochs(TermUniverse *universe);
 /* The current epoch's number. */
@@ -609,42 +609,53 @@ bool term_universe_identity_is_decoded(uint32_t identity);
 Atom *term_universe_get_pinned_atom(const TermUniverse *universe, AtomId id);
 
 /* A holder of decoded copies.  Epoch e is bit (e mod 64) of its set: at most
- * 64 epochs are unfreed at a time. */
+ * 64 epochs are unfreed at a time.  An epoch closes when its storage reaches
+ * the budget: CETTA_DECODE_EPOCH_KB (1024 by default), or a quarter of the
+ * closed epochs still unfreed when that is more, so long-kept epochs do not
+ * exhaust the 64. */
 typedef struct TermUniverseDecodeHolder {
     uint64_t held;
+    /* Names this holder's current run among every holder's (its thread's
+     * number and the push's), for marks (term_universe_decode_mark_now). */
+    uint64_t thread_number, push_number;
     struct TermUniverseDecodeHolder *below;
-    /* At its last leave: what the holder below kept. */
-    uint64_t below_at_leave;
     /* While it is suspended (it left and lives on): the thread that counts
      * its set among the epochs it keeps.  Any thread may resume or forget
      * it. */
     void *suspended_on;
 } TermUniverseDecodeHolder;
-#define TERM_UNIVERSE_DECODE_HOLDER_INIT { 0u, NULL, 0u, NULL }
+#define TERM_UNIVERSE_DECODE_HOLDER_INIT { 0u, 0u, 0u, NULL, NULL }
 void term_universe_decode_holder_push(TermUniverseDecodeHolder *holder);
 /* The holder ends and its results may carry what it read: the holder below
  * keeps its epochs too. */
 void term_universe_decode_holder_pop(TermUniverseDecodeHolder *holder);
-/* A holder that lives on (a suspended machine) stops running.  What it hands
- * out is copied, so the holder below takes nothing from it. */
+/* A holder that lives on (a suspended cursor) stops running.  What it hands
+ * out (a host goal, an answer) may share its decoded copies, so the holder
+ * below keeps its epochs too, until a reclaim restores that holder's set
+ * (term_universe_decode_holder_receive). */
 void term_universe_decode_holder_leave(TermUniverseDecodeHolder *holder);
 /* A holder that left ends (a closed cursor): what it kept goes with it. */
 void term_universe_decode_holder_forget(TermUniverseDecodeHolder *holder);
+/* The running holder and its set now.  A host records the mark with a
+ * storage mark that a later reclaim returns to. */
+typedef struct TermUniverseDecodeMark {
+    uint64_t thread_number, push_number, held;
+} TermUniverseDecodeMark;
+TermUniverseDecodeMark term_universe_decode_mark_now(void);
 /* The running holder hands HOLDER (one that left it) values that may share
  * its decoded copies: HOLDER keeps its epochs too.  RECLAIMED: the giver has
- * since released everything it made after HOLDER left, so it keeps only
- * what it kept then. */
+ * since released everything it made after MARK, so, when MARK names it, it
+ * keeps only what it kept then. */
 void term_universe_decode_holder_receive(TermUniverseDecodeHolder *holder,
-                                         bool reclaimed);
-/* The storage identity of the oldest closed epoch HOLDER keeps and no other
- * holder does, zero when there is none; *EPOCH receives its number.  A
- * collection of the holder that copies out the atoms of that storage
- * (term_universe_decode_holder_cleaned) lets it be freed. */
-uint32_t term_universe_decode_detach_candidate(
-    const TermUniverseDecodeHolder *holder, uint64_t *epoch);
-/* HOLDER copied out every atom of EPOCH it kept. */
-void term_universe_decode_holder_cleaned(TermUniverseDecodeHolder *holder,
-                                         uint64_t epoch);
+                                         bool reclaimed,
+                                         TermUniverseDecodeMark mark);
+/* Whether a collection of HOLDER that copies out every decoded copy it
+ * keeps (term_universe_decode_holder_emptied) is due: the closed epochs it
+ * alone keeps, which that collection lets be freed, amount to the epoch
+ * budget and to half of COLLECT_BYTES, the storage the collection reaches.
+ * Its cost is then repaid by the decoding that filled those epochs. */
+bool term_universe_decode_detach_due(const TermUniverseDecodeHolder *holder,
+                                     size_t collect_bytes);
 /* HOLDER copied out every decoded copy it kept, of every epoch. */
 void term_universe_decode_holder_emptied(TermUniverseDecodeHolder *holder);
 /* A top-level form begins on this thread: its earlier results are dead. */

@@ -949,6 +949,9 @@ typedef struct {
             PettaOpenAnswers *open;
             uint32_t open_base;
             bool open_borrowed;
+            /* This machine's decoded-copy epochs at `heap_mark`: a reclaim
+             * of the open call's goal returns to that mark, and to these. */
+            TermUniverseDecodeMark decode_mark;
             /* During a nursery evacuation: the open call's variables in
              * tenured storage, installed only when the evacuation commits. */
             Atom **open_moved_vars;
@@ -34757,6 +34760,7 @@ static bool petta_machine_push_open_segment(PettaMachineImpl *machine,
             .open = owner->as.answers.open,
             .open_base = base,
             .open_borrowed = true,
+            .decode_mark = term_universe_decode_mark_now(),
         },
     };
     return petta_choice_push(machine, segment);
@@ -35165,7 +35169,8 @@ static bool petta_machine_start_open_term_answers(
         .heap_mark_captured = true,
         .goal_height = machine->goal_len,
         .barrier = (uint32_t)machine->choice_len,
-        .as.answers = {.expected = expected, .open = open},
+        .as.answers = {.expected = expected, .open = open,
+                       .decode_mark = term_universe_decode_mark_now()},
     };
     /* The call's answers are this machine's own when nothing follows it and
      * its destination is the answer variable; a count-only observation of
@@ -35598,8 +35603,9 @@ static __attribute__((noinline)) bool petta_machine_resume_open_answer_choice(
  * leaves nothing behind.  A goal that raised type obligations or left
  * goals keeps its state for them. */
 static bool petta_machine_reclaim_host_goal(PettaMachineImpl *machine,
-                                            size_t holder) {
+                                            size_t holder, bool *reclaimed) {
     PettaChoice *choice = &machine->choices[holder];
+    *reclaimed = false;
     if (machine->goal_len != choice->goal_height ||
         machine->type_obligation_len != choice->type_obligation_mark ||
         choice->goal_trail_mark > machine->goal_trail_len ||
@@ -35617,6 +35623,7 @@ static bool petta_machine_reclaim_host_goal(PettaMachineImpl *machine,
     size_t after = arena_accounted_live_bytes(&machine->heap);
     if (before > after)
         machine->stats.choice_heap_bytes_reclaimed += before - after;
+    *reclaimed = true;
     return true;
 }
 
@@ -35769,14 +35776,19 @@ static __attribute__((noinline)) bool petta_machine_open_resume(
     if (cetta_open_equation_cursor_accept(
             open->cursor, open->vars, tuple->expr.elems, host_values, count,
             last, machine->choices[holder].as.answers.open_base, &base)) {
-        if (last && !petta_machine_reclaim_host_goal(machine, holder)) {
+        bool reclaimed = false;
+        if (last && !petta_machine_reclaim_host_goal(machine, holder,
+                                                     &reclaimed)) {
             *failure = PETTA_MACHINE_STEP_CAPACITY;
             return false;
         }
         /* The accepted values may share decoded copies this machine read for
-         * the goal: the cursor keeps their epochs, and this machine, having
-         * reclaimed the goal, keeps only its own. */
-        cetta_open_equation_cursor_decode_receive(open->cursor, last);
+         * the goal: the cursor keeps their epochs.  This machine, having
+         * returned to the choice's heap mark, keeps only what it kept there;
+         * the goal it held, and the epochs the cursor lent with it, are
+         * gone. */
+        cetta_open_equation_cursor_decode_receive(
+            open->cursor, reclaimed, machine->choices[holder].as.answers.decode_mark);
         step = cetta_open_equation_cursor_continue(
             open->cursor, open->vars, base, &returned, &values);
     } else if (cetta_open_equation_cursor_handoff(open->cursor) ==

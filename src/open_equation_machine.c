@@ -7765,8 +7765,8 @@ struct CettaOpenEquationCursor {
      * space's rows by their ids (oem_stored_reference). */
     bool stored_reference;
     /* The epochs of the universe's decoded copies the cursor may keep: a
-     * read while it runs adds one, and a major collection that copies out a
-     * closed epoch's atoms removes it (term_universe_decode_holder_cleaned). */
+     * read while it runs adds one, and a major collection that copies out
+     * every decoded copy removes them all (term_universe_decode_holder_emptied). */
     TermUniverseDecodeHolder decode_holder;
     /* Verdicts for the entry facts of trusted versions, made on demand. */
     PettaContractMemo *contract_memo;
@@ -9488,12 +9488,6 @@ static inline __attribute__((always_inline)) Atom *oem_resolve_in(
         } else if (oem_is_cell(cursor, atom, &index)) {
             result = operand ? atom
                 : oem_answer_cell(cursor, index, arena, collect);
-        } else if (!operand && !collect &&
-                   term_universe_identity_is_decoded(atom->arena_id) &&
-                   (atom->kind != ATOM_EXPR || !atom_has_vars(atom))) {
-            /* The universe's decoded copy is shared by no holder but the
-             * cursor: its caller gets a copy of its own. */
-            result = atom_deep_copy(ground ? ground : arena, atom);
         } else if (!collect &&
                    (operand || !oem_cursor_owns(cursor, atom)) &&
                    (atom->kind != ATOM_EXPR || !atom_has_vars(atom))) {
@@ -9568,13 +9562,15 @@ static inline __attribute__((always_inline)) Atom *oem_resolve_in(
                 break;
             }
             /* A promoted expression goes to `ground` unless a child is the
-             * host's answer arena's, which the stable storage outlives: it
-             * stays in the answer arena, sharing that child, as before. */
+             * host's answer arena's or one of the universe's decoded copies,
+             * both of which the stable storage outlives: it stays in the
+             * answer arena, sharing that child, as before. */
             bool forwarded = item->promote;
             for (uint32_t child = item->base;
                  forwarded && child < results; child++) {
-                forwarded = cursor->resolve_results[child]->arena_id !=
-                    cursor->answer_arena->identity;
+                uint32_t identity = cursor->resolve_results[child]->arena_id;
+                forwarded = identity != cursor->answer_arena->identity &&
+                    !term_universe_identity_is_decoded(identity);
             }
             /* An operand whose every child resolved to itself -- each cell
              * in it unbound -- is its own resolution, as an operand that
@@ -18623,13 +18619,14 @@ static bool oem_collect(CettaOpenEquationCursor *cursor) {
     bool major = cursor->old_ready &&
         (arena_accounted_live_bytes(&cursor->old) >= cursor->major_after ||
          resource_due);
-    /* While a closed epoch of decoded copies waits that the cursor alone may
-     * keep, the collection is a major one that detaches it: the copies the
-     * cursor reaches become its own, its row cache is read again, and it
-     * keeps no atom of that epoch.  Epochs close at most once per budget of
-     * decoding, so this adds at most one major collection per close. */
-    uint64_t epoch = 0u;
-    if (term_universe_decode_detach_candidate(&cursor->decode_holder, &epoch)) {
+    /* When the closed epochs of decoded copies that the cursor alone may keep
+     * outweigh half of what a major collection reaches, the collection is a
+     * major one that detaches them: the copies the cursor reaches become its
+     * own, its row cache is read again, and it keeps no atom of any epoch.
+     * The decoding that filled those epochs repays the collection. */
+    size_t reached = arena_accounted_live_bytes(&cursor->region) +
+        (cursor->old_ready ? arena_accounted_live_bytes(&cursor->old) : 0u);
+    if (term_universe_decode_detach_due(&cursor->decode_holder, reached)) {
         if (!oem_collect_generation(cursor, 0u, true, true, resource_due))
             return false;
         cursor->rows_read = (SpaceReadToken){0};
@@ -18640,9 +18637,11 @@ static bool oem_collect(CettaOpenEquationCursor *cursor) {
 }
 
 void cetta_open_equation_cursor_decode_receive(CettaOpenEquationCursor *cursor,
-                                               bool reclaimed) {
+                                               bool reclaimed,
+                                               TermUniverseDecodeMark mark) {
     if (cursor)
-        term_universe_decode_holder_receive(&cursor->decode_holder, reclaimed);
+        term_universe_decode_holder_receive(&cursor->decode_holder, reclaimed,
+                                            mark);
 }
 
 bool cetta_open_equation_cursor_detach(CettaOpenEquationCursor *cursor,
@@ -19717,8 +19716,8 @@ CettaOpenEquationStep cetta_open_equation_cursor_next_above(
     Atom *value = NULL;
     if (!returned)
         return CETTA_OPEN_EQUATION_HANDOFF;
-    /* What the cursor hands out is exported, a copy of every decoded copy it
-     * names (oem_resolve_in), so leaving gives its caller none of them. */
+    /* What the cursor hands out shares the decoded copies it names, so
+     * leaving lends its epochs to its host until the host reclaims. */
     term_universe_decode_holder_push(&cursor->decode_holder);
     if (!oem_cursor_enter(cursor, query_vars, &value, query_values_out)) {
         term_universe_decode_holder_leave(&cursor->decode_holder);
