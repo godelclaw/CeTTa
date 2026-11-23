@@ -466,6 +466,7 @@ static Atom *term_universe_entry_decoded(const TermUniverse *universe,
 static bool term_universe_set_decoded_at(TermUniverse *universe, size_t index,
                                          Atom *atom);
 static void term_universe_free_decoded(TermUniverse *universe);
+static void term_universe_disable_decode_epochs(TermUniverse *universe);
 static bool term_universe_entry_has_blob(const TermEntry *entry);
 static uint64_t term_universe_logical_atom_id_base(
     const TermUniverse *universe);
@@ -1676,6 +1677,7 @@ void term_universe_free(TermUniverse *universe) {
     if (!universe)
         return;
     term_universe_clear_storage(universe);
+    term_universe_disable_decode_epochs(universe);
     universe->counting = false;
     free(universe->observers);
     universe->observers = NULL;
@@ -2325,6 +2327,314 @@ static void term_universe_free_decoded(TermUniverse *universe) {
     free(universe->decoded_pages);
     universe->decoded_pages = NULL;
     universe->decoded_page_cap = 0u;
+}
+
+/* ── Decoded-copy epochs (term_universe.h) ──────────────────────────────── */
+
+typedef struct TermUniverseDecodeEpochs {
+    TermUniverse *universe;
+    /* Decodes go here. */
+    Arena *current;
+    /* The epoch closed and not yet freed; NULL when none.  At most one waits
+     * at a time: the current epoch grows past its budget until it is freed. */
+    Arena *closed;
+    /* The clock's value while `closed` was current. */
+    uint64_t closed_seq;
+    size_t budget_bytes;
+    bool poison;
+    uint64_t closes, frees, freed_bytes;
+    struct TermUniverseDecodeEpochs *next;
+} TermUniverseDecodeEpochs;
+
+/* A thread that has read decoded copies, and the clock value before which it
+ * holds no atom of a closed epoch (zero: it may hold any). */
+typedef struct TermUniverseDecodeThread {
+    _Atomic uint64_t clean_seq;
+    struct TermUniverseDecodeThread *prev, *next;
+} TermUniverseDecodeThread;
+
+static pthread_mutex_t g_decode_epoch_mutex = PTHREAD_MUTEX_INITIALIZER;
+static _Atomic uint64_t g_decode_clock = 1u;
+static _Atomic uint32_t g_decode_pending_identity;
+static TermUniverseDecodeEpochs *g_decode_epochs;
+static TermUniverseDecodeThread *g_decode_threads;
+static _Thread_local TermUniverseDecodeThread *t_decode_thread;
+static pthread_key_t g_decode_thread_key;
+static pthread_once_t g_decode_thread_key_once = PTHREAD_ONCE_INIT;
+/* Threads inside a parallel shared scope, when that module is linked. */
+extern _Atomic unsigned cetta_shared_transition_active_scopes
+    __attribute__((weak));
+
+static void term_universe_decode_thread_exit(void *record) {
+    TermUniverseDecodeThread *thread = record;
+    if (!thread)
+        return;
+    pthread_mutex_lock(&g_decode_epoch_mutex);
+    if (thread->prev)
+        thread->prev->next = thread->next;
+    else
+        g_decode_threads = thread->next;
+    if (thread->next)
+        thread->next->prev = thread->prev;
+    pthread_mutex_unlock(&g_decode_epoch_mutex);
+    free(thread);
+}
+
+static void term_universe_decode_thread_key_make(void) {
+    (void)pthread_key_create(&g_decode_thread_key,
+                             term_universe_decode_thread_exit);
+}
+
+/* Register the calling thread before it takes a decoded copy.  A thread that
+ * cannot register stops epochs from being freed: it is listed as holding
+ * everything, through a failed flag the release reads. */
+static _Atomic bool g_decode_thread_unlisted;
+static inline void term_universe_decode_thread_enter(void) {
+    if (__builtin_expect(t_decode_thread != NULL, 1))
+        return;
+    pthread_once(&g_decode_thread_key_once, term_universe_decode_thread_key_make);
+    TermUniverseDecodeThread *thread = calloc(1u, sizeof(*thread));
+    if (!thread) {
+        atomic_store(&g_decode_thread_unlisted, true);
+        return;
+    }
+    atomic_init(&thread->clean_seq, 0u);
+    pthread_mutex_lock(&g_decode_epoch_mutex);
+    thread->next = g_decode_threads;
+    if (g_decode_threads)
+        g_decode_threads->prev = thread;
+    g_decode_threads = thread;
+    pthread_mutex_unlock(&g_decode_epoch_mutex);
+    t_decode_thread = thread;
+    (void)pthread_setspecific(g_decode_thread_key, thread);
+}
+
+uint64_t term_universe_decode_clock(void) {
+    return atomic_load_explicit(&g_decode_clock, memory_order_acquire);
+}
+
+uint32_t term_universe_decode_pending_identity(void) {
+    return atomic_load_explicit(&g_decode_pending_identity,
+                                memory_order_acquire);
+}
+
+void term_universe_decode_thread_clean(uint64_t seq) {
+    TermUniverseDecodeThread *thread = t_decode_thread;
+    if (!thread)
+        return;
+    uint64_t now = atomic_load_explicit(&thread->clean_seq,
+                                        memory_order_relaxed);
+    if (seq > now)
+        atomic_store_explicit(&thread->clean_seq, seq, memory_order_release);
+}
+
+static Arena *term_universe_decode_epoch_new(void) {
+    Arena *arena = malloc(sizeof(*arena));
+    if (!arena)
+        return NULL;
+    arena_init(arena);
+    arena_set_hashcons(arena, NULL);
+    return arena;
+}
+
+static void term_universe_decode_epoch_destroy(Arena *arena, bool poison,
+                                               uint64_t *freed_bytes) {
+    if (!arena)
+        return;
+    if (freed_bytes)
+        *freed_bytes += arena->reserved_bytes;
+    if (poison) {
+        for (ArenaBlock *block = arena->head; block; block = block->next)
+            memset(block->data, 0xdb, block->used);
+    }
+    arena_free(arena);
+    free(arena);
+}
+
+/* Free a closed epoch once every registered thread is clean after it.
+ * Lean: Freeable e := e < current ∧ ∀ o live, e < clean o. */
+static void term_universe_decode_release_locked(void) {
+    uint64_t least = UINT64_MAX;
+    for (TermUniverseDecodeThread *thread = g_decode_threads; thread;
+         thread = thread->next) {
+        uint64_t clean = atomic_load_explicit(&thread->clean_seq,
+                                              memory_order_acquire);
+        if (clean < least)
+            least = clean;
+    }
+    if (atomic_load(&g_decode_thread_unlisted))
+        least = 0u;
+    uint32_t pending = 0u;
+    for (TermUniverseDecodeEpochs *epochs = g_decode_epochs; epochs;
+         epochs = epochs->next) {
+        if (!epochs->closed)
+            continue;
+        if (epochs->closed_seq < least) {
+            term_universe_decode_epoch_destroy(epochs->closed, epochs->poison,
+                                               &epochs->freed_bytes);
+            epochs->closed = NULL;
+            epochs->frees++;
+            cetta_runtime_stats_inc(
+                CETTA_RUNTIME_COUNTER_TERM_UNIVERSE_DECODE_EPOCH_FREE);
+        } else if (!pending) {
+            pending = epochs->closed->identity;
+        }
+    }
+    atomic_store_explicit(&g_decode_pending_identity, pending,
+                          memory_order_release);
+}
+
+void term_universe_decode_epochs_release(void) {
+    if (!atomic_load_explicit(&g_decode_pending_identity, memory_order_acquire))
+        return;
+    pthread_mutex_lock(&g_decode_epoch_mutex);
+    term_universe_decode_release_locked();
+    pthread_mutex_unlock(&g_decode_epoch_mutex);
+}
+
+bool term_universe_enable_decode_epochs(TermUniverse *universe) {
+    if (!universe)
+        return false;
+    if (universe->decode_epochs)
+        return true;
+    /* One universe keeps epochs: a holder's collection copies the atoms of
+     * the one closed epoch that waits (term_universe_decode_pending_identity). */
+    pthread_mutex_lock(&g_decode_epoch_mutex);
+    bool taken = g_decode_epochs != NULL;
+    pthread_mutex_unlock(&g_decode_epoch_mutex);
+    if (taken)
+        return false;
+    const char *enabled = getenv("CETTA_DECODE_EPOCHS");
+    if (enabled && strcmp(enabled, "0") == 0)
+        return false;
+    TermUniverseDecodeEpochs *epochs = calloc(1u, sizeof(*epochs));
+    if (!epochs)
+        return false;
+    epochs->current = term_universe_decode_epoch_new();
+    if (!epochs->current) {
+        free(epochs);
+        return false;
+    }
+    const char *kb = getenv("CETTA_DECODE_EPOCH_KB");
+    unsigned long long budget = kb && kb[0] ? strtoull(kb, NULL, 10) : 0u;
+    epochs->budget_bytes = (size_t)(budget ? budget : 16384u) * 1024u;
+    const char *poison = getenv("CETTA_DECODE_EPOCH_POISON");
+    epochs->poison = poison && strcmp(poison, "1") == 0;
+    epochs->universe = universe;
+    pthread_mutex_lock(&g_decode_epoch_mutex);
+    epochs->next = g_decode_epochs;
+    g_decode_epochs = epochs;
+    pthread_mutex_unlock(&g_decode_epoch_mutex);
+    universe->decode_epochs = epochs;
+    return true;
+}
+
+static void term_universe_disable_decode_epochs(TermUniverse *universe) {
+    TermUniverseDecodeEpochs *epochs = universe ? universe->decode_epochs : NULL;
+    if (!epochs)
+        return;
+    pthread_mutex_lock(&g_decode_epoch_mutex);
+    for (TermUniverseDecodeEpochs **link = &g_decode_epochs; *link;
+         link = &(*link)->next) {
+        if (*link == epochs) {
+            *link = epochs->next;
+            break;
+        }
+    }
+    /* The universe's storage goes with it: nothing may hold its copies. */
+    term_universe_decode_epoch_destroy(epochs->closed, epochs->poison, NULL);
+    term_universe_decode_epoch_destroy(epochs->current, epochs->poison, NULL);
+    term_universe_decode_release_locked();
+    pthread_mutex_unlock(&g_decode_epoch_mutex);
+    free(epochs);
+    universe->decode_epochs = NULL;
+}
+
+bool term_universe_atom_in_decode_epoch(const Atom *atom) {
+    if (!atom || atom->arena_id == 0u)
+        return false;
+    bool found = false;
+    pthread_mutex_lock(&g_decode_epoch_mutex);
+    for (TermUniverseDecodeEpochs *epochs = g_decode_epochs; epochs && !found;
+         epochs = epochs->next)
+        found = (epochs->current && atom->arena_id == epochs->current->identity) ||
+            (epochs->closed && atom->arena_id == epochs->closed->identity);
+    pthread_mutex_unlock(&g_decode_epoch_mutex);
+    return found;
+}
+
+/* Where a record's decoded atom goes. */
+static Arena *term_universe_decode_destination(const TermUniverse *universe) {
+    if (!universe)
+        return NULL;
+    return universe->decode_epochs ? universe->decode_epochs->current
+                                   : universe->persistent_arena;
+}
+
+/* Whether ARENA_ID names storage the universe decodes into now: its slots
+ * and pointer table hold atoms of these arenas only. */
+static inline bool term_universe_decoded_identity(const TermUniverse *universe,
+                                                  uint32_t arena_id) {
+    const Arena *persistent = universe->persistent_arena;
+    if (arena_id == 0u)
+        return true;
+    if (persistent && (arena_id == persistent->identity ||
+                       (persistent->older_identity != 0u &&
+                        arena_id == persistent->older_identity)))
+        return true;
+    return universe->decode_epochs &&
+        arena_id == universe->decode_epochs->current->identity;
+}
+
+static void term_universe_ptr_remove(TermUniverse *universe, Atom *atom,
+                                     AtomId id);
+
+/* Close the current epoch when it has outgrown its budget and none waits:
+ * clear every slot holding one of its atoms (a record's cache; an entry
+ * without a record keeps its atom), then start the next epoch.  Called at
+ * the top of a read, never inside a decode, and never while a parallel
+ * shared scope may read the slots. */
+static void term_universe_decode_maybe_close(TermUniverse *universe) {
+    TermUniverseDecodeEpochs *epochs = universe->decode_epochs;
+    if (!epochs || epochs->closed ||
+        arena_accounted_live_bytes(epochs->current) < epochs->budget_bytes)
+        return;
+    if (&cetta_shared_transition_active_scopes &&
+        atomic_load(&cetta_shared_transition_active_scopes) != 0u)
+        return;
+    Arena *next = term_universe_decode_epoch_new();
+    if (!next)
+        return;
+    uint32_t closing = epochs->current->identity;
+    for (size_t page = 0u; page < universe->decoded_page_cap; page++) {
+        Atom **slots = universe->decoded_pages[page];
+        if (!slots)
+            continue;
+        for (size_t at = 0u; at < TERM_DECODED_PAGE_ENTRIES; at++) {
+            Atom *atom = slots[at];
+            if (!atom || ((uintptr_t)atom & 1u) || atom->arena_id != closing)
+                continue;
+            size_t index = (page << TERM_DECODED_PAGE_BITS) | at;
+            if (index >= universe->len ||
+                !term_universe_entry_has_blob(&universe->entries[index]))
+                continue;
+            term_universe_ptr_remove(
+                universe, atom,
+                term_universe_physical_index_to_atom_id(universe, index));
+            slots[at] = NULL;
+        }
+    }
+    pthread_mutex_lock(&g_decode_epoch_mutex);
+    epochs->closed = epochs->current;
+    epochs->closed_seq = atomic_fetch_add_explicit(&g_decode_clock, 1u,
+                                                   memory_order_acq_rel);
+    epochs->current = next;
+    epochs->closes++;
+    if (!atomic_load_explicit(&g_decode_pending_identity, memory_order_relaxed))
+        atomic_store_explicit(&g_decode_pending_identity,
+                              epochs->closed->identity, memory_order_release);
+    pthread_mutex_unlock(&g_decode_epoch_mutex);
+    cetta_runtime_stats_inc(CETTA_RUNTIME_COUNTER_TERM_UNIVERSE_DECODE_EPOCH_CLOSE);
 }
 
 static bool term_universe_entry_has_blob(const TermEntry *entry) {
@@ -5100,9 +5410,8 @@ static AtomId term_universe_decoded_subterm_id(const TermUniverse *universe,
     AtomId origin = term_universe_view_origin(universe, atom);
     if (origin != CETTA_ATOM_ID_NONE)
         return origin;
-    const Arena *persistent = universe->persistent_arena;
-    if (!persistent || !atom || atom->kind != ATOM_EXPR ||
-        (atom->arena_id != persistent->identity && atom->arena_id != 0u))
+    if (!universe->persistent_arena || !atom || atom->kind != ATOM_EXPR ||
+        !term_universe_decoded_identity(universe, atom->arena_id))
         return CETTA_ATOM_ID_NONE;
     return term_universe_lookup_ptr_id(universe, atom);
 }
@@ -6173,11 +6482,9 @@ static AtomId term_universe_lookup_ptr_id_probing(
     /* The table holds decoded atoms only: atoms of the persistent arena, the
      * universe clearing its storage when that arena changes, or shared atoms
      * no arena owns.  An atom of any other arena is not in it. */
-    const Arena *persistent = universe->persistent_arena;
     if (!universe->fallbacks && src->arena_id != 0u &&
-        (!persistent ||
-         (src->arena_id != persistent->identity &&
-          src->arena_id != persistent->older_identity)))
+        (!universe->persistent_arena ||
+         !term_universe_decoded_identity(universe, src->arena_id)))
         return CETTA_ATOM_ID_NONE;
     uint32_t h = term_universe_ptr_hash(src);
     for (size_t probe = 0; probe <= universe->ptr_mask; probe++) {
@@ -6930,7 +7237,7 @@ static Atom *term_universe_get_atom_at(TermUniverse *universe, AtomId id,
  * children one level further down. */
 static Atom *term_universe_decode_atom(TermUniverse *universe, AtomId id,
                                        uint32_t depth) {
-    Arena *dst = universe ? universe->persistent_arena : NULL;
+    Arena *dst = term_universe_decode_destination(universe);
     const CettaTermHdr *hdr = tu_hdr(universe, id);
     const uint8_t *payload = term_universe_payload(universe, id);
     if (!hdr || !payload || !dst)
@@ -7442,6 +7749,8 @@ Atom *term_universe_view_atom(const TermUniverse *universe, Arena *dst,
 }
 
 Atom *term_universe_decoded_atom_at(const TermUniverse *universe, AtomId id) {
+    if (universe && universe->decode_epochs)
+        term_universe_decode_thread_enter();
     size_t physical_index = 0;
     return term_universe_atom_id_to_physical_index(universe, id,
                                                    &physical_index)
@@ -7545,6 +7854,10 @@ enum { TERM_UNIVERSE_DECODE_RECURSION = 256u };
 
 static Atom *term_universe_get_atom_at(TermUniverse *universe, AtomId id,
                                        uint32_t depth) {
+    if (universe->decode_epochs && depth == 0u) {
+        term_universe_decode_thread_enter();
+        term_universe_decode_maybe_close(universe);
+    }
     size_t physical_index = 0;
     if (!term_universe_atom_id_to_physical_index(universe, id, &physical_index))
         return NULL;
@@ -7603,6 +7916,25 @@ Atom *term_universe_peek_atom(const TermUniverse *universe, AtomId id) {
     return term_universe_get_atom(universe, id);
 }
 
+/* The caller keeps the atom term_universe_store_atom returns, so an entry
+ * whose copy lies in an epoch gets a persistent copy instead: a whole copy,
+ * whose children are persistent too, kept in the entry's slot from now on. */
+static Atom *term_universe_pin_decoded(TermUniverse *universe, AtomId id,
+                                       Atom *decoded) {
+    size_t index = 0u;
+    if (!universe->persistent_arena ||
+        !term_universe_atom_id_to_physical_index(universe, id, &index))
+        return NULL;
+    Atom *pinned = atom_deep_copy(universe->persistent_arena, decoded);
+    if (!pinned)
+        return NULL;
+    term_universe_ptr_remove(universe, decoded, id);
+    if (!term_universe_set_decoded_at(universe, index, pinned))
+        return NULL;
+    term_universe_track_ptr_id(universe, id);
+    return pinned;
+}
+
 Atom *term_universe_store_atom(TermUniverse *universe, Arena *fallback,
                                Atom *src) {
     Arena *persistent = universe ? universe->persistent_arena : NULL;
@@ -7616,6 +7948,9 @@ Atom *term_universe_store_atom(TermUniverse *universe, Arena *fallback,
         return NULL;
     }
     Atom *stored = term_universe_get_atom(universe, id);
+    if (stored && universe->decode_epochs &&
+        stored->arena_id == universe->decode_epochs->current->identity)
+        stored = term_universe_pin_decoded(universe, id, stored);
     if (!stored)
         stored = term_universe_store_persistent_atom(universe, src);
     cetta_provenance_assert_not_transient(stored, "term_universe.store_atom");

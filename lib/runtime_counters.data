@@ -1306,4 +1306,6 @@
   (1187 TRANSFORM_CURSOR_ACCOUNTED_BYTES_PEAK "transform-cursor-accounted-bytes-peak")
   (1188 TRANSFORM_CURSOR_OWNED_BYTES_PEAK "transform-cursor-owned-bytes-peak")
   (1189 PRIME_EVAL_STACK_FRAME_FUNCTION "prime-eval-stack-frame-function")
-  (1190 PRIME_EVAL_STACK_FRAME_COLLAPSE "prime-eval-stack-frame-collapse")))
+  (1190 PRIME_EVAL_STACK_FRAME_COLLAPSE "prime-eval-stack-frame-collapse")
+  (1191 TERM_UNIVERSE_DECODE_EPOCH_CLOSE "term-universe-decode-epoch-close")
+  (1192 TERM_UNIVERSE_DECODE_EPOCH_FREE "term-universe-decode-epoch-free")))

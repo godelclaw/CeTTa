@@ -271,6 +271,10 @@ struct TermUniverse {
     /* Lazily allocated ownership slots for entries without a record. A
      * scoped reader can keep an image after its entry is reclaimed. */
     struct TermUniverseFallbackSlots *fallbacks;
+    /* Where the decoded copies of record-backed entries live when the
+     * universe keeps them in epochs (term_universe_enable_decode_epochs);
+     * NULL keeps them in the persistent arena for the universe's life. */
+    struct TermUniverseDecodeEpochs *decode_epochs;
     uint64_t fallback_bytes;
     /* Called only at an exclusive universe collection boundary. */
     void (*resource_collector)(TermUniverse *);
@@ -563,6 +567,46 @@ void term_universe_collection_inhibit_leave(TermUniverse *universe);
  * using the universe: a safe point lies outside concurrent evaluation. */
 bool term_universe_collect(TermUniverse *universe,
                            TermUniverseCollectionReport *out);
+/* ── Decoded-copy epochs ────────────────────────────────────────────────
+ *
+ * A record's decoded atom is a cache: the record can be decoded again.  A
+ * universe that keeps decoded copies in epochs allocates each one in its
+ * current epoch's own storage instead of the persistent arena, so the copies
+ * of collected entries can be freed although a reader may still hold one.
+ *
+ * - Closing the current epoch clears every slot that holds one of its
+ *   atoms, so later reads decode afresh into the next epoch and an epoch's
+ *   atoms point only into the same epoch or into the persistent arena.
+ * - An epoch's atoms are settled for no other arena: every copy copies
+ *   them, and an atom built in long-lived storage copies such a child
+ *   instead of sharing it.  term_universe_store_atom, whose callers keep its
+ *   atom, pins the entry's copy in the persistent arena.
+ * - A thread that reads decoded copies is registered.  It declares, at a
+ *   point where it holds no atom of a closed epoch (outside evaluation, or a
+ *   collection that copied them out), that it is clean as of the clock's
+ *   value.  A closed epoch is freed once every registered thread is clean
+ *   after the epoch closed.
+ *
+ * MeTTapedia GSLT/Dynamics/EpochReclamation proves this protocol: a closed
+ * epoch older than every live owner's last collection holds no reachable
+ * atom (freeable_unreachable).  CETTA_DECODE_EPOCHS=0 keeps the persistent
+ * arena; CETTA_DECODE_EPOCH_KB sets an epoch's budget (16384 by default);
+ * CETTA_DECODE_EPOCH_POISON=1 overwrites a freed epoch before releasing it. */
+bool term_universe_enable_decode_epochs(TermUniverse *universe);
+/* The clock: one more than the number of epochs closed so far. */
+uint64_t term_universe_decode_clock(void);
+/* The identity of the storage of an epoch that is closed and not yet freed,
+ * zero when there is none.  A collection that copies the atoms it holds of
+ * this storage leaves its owner holding no atom of a closed epoch. */
+uint32_t term_universe_decode_pending_identity(void);
+/* The calling thread holds no atom of any epoch that closed before SEQ, a
+ * value of term_universe_decode_clock() read before the copies were taken. */
+void term_universe_decode_thread_clean(uint64_t seq);
+/* Free every closed epoch that no registered thread may still hold. */
+void term_universe_decode_epochs_release(void);
+/* Whether ATOM lies in an epoch's storage (current or closed). */
+bool term_universe_atom_in_decode_epoch(const Atom *atom);
+
 /* A safe point: collect when the trigger asks for it.  The trigger keeps a
  * collection's work proportional to the entries made since the last one. */
 bool term_universe_collect_at_safe_point(TermUniverse *universe,
