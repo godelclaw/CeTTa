@@ -2367,6 +2367,9 @@ typedef struct TermUniverseDecodeEpochs {
     size_t *slot_log;
     size_t slot_log_len, slot_log_cap;
     bool slot_log_lost;
+    /* Decodes in progress: a close waits until none is, so a decode's atoms
+     * all lie in the epoch it began in. */
+    uint32_t decoding;
     bool poison;
     uint64_t closes, frees, freed_bytes;
 } TermUniverseDecodeEpochs;
@@ -2391,22 +2394,28 @@ static void term_universe_decode_log_slot(TermUniverse *universe, size_t index,
 }
 
 /* A thread with holders, and the epochs it may keep atoms of, published for
- * other threads' releases: the union of the sets on its holder stack
- * (running), and of the sets of the holders that left it and live on
- * (suspended). */
+ * other threads' releases as one word: the union of the sets on its holder
+ * stack (running) and of the sets of the holders that left it and live on
+ * (suspended).  The word changes under the thread's lock, one transition at a
+ * time, so a release never sees a holder between the two; a holder handed
+ * between threads moves under the release lock. */
 typedef struct TermUniverseDecodeThread {
     _Atomic uint64_t held;
-    _Atomic uint64_t suspended_held;
+    pthread_mutex_t lock;
+    /* Under lock: the running union (the owner computes it) and the
+     * suspended union, with, for each epoch bit, how many suspended holders
+     * keep it. */
+    uint64_t running_held, suspended_mask;
+    uint32_t suspended_count[64];
+    /* Under lock: the holders whose suspended_on names this record.  The
+     * record outlives its thread while any does. */
+    uint64_t suspended_holders;
+    bool exited;
     /* The thread's own holder, below every machine's: what C code outside
-     * the machines reads, and what ended machines passed down. */
+     * the machines reads, and what ended machines passed down.  The stack
+     * is the owner's alone. */
     TermUniverseDecodeHolder base;
     TermUniverseDecodeHolder *innermost;
-    /* For each epoch bit, how many suspended holders keep it.  Under
-     * suspended_lock: a suspended holder may be resumed or forgotten on
-     * another thread. */
-    pthread_mutex_t suspended_lock;
-    uint32_t suspended_count[64];
-    uint64_t suspended_total;
     /* This thread's number among all threads', and its pushes so far. */
     uint64_t number, pushes;
     struct TermUniverseDecodeThread *prev, *next;
@@ -2485,28 +2494,35 @@ static bool term_universe_decode_trace(void) {
     return trace != 0;
 }
 
-static void term_universe_decode_thread_exit(void *record) {
-    TermUniverseDecodeThread *thread = record;
-    if (!thread)
-        return;
-    atomic_store_explicit(&thread->held, 0u, memory_order_release);
-    /* Holders that left this thread and live on still count here: the
-     * record stays listed for them. */
-    pthread_mutex_lock(&thread->suspended_lock);
-    bool suspended = thread->suspended_total != 0u;
-    pthread_mutex_unlock(&thread->suspended_lock);
-    if (suspended)
-        return;
-    pthread_mutex_lock(&g_decode_epoch_mutex);
+/* Under the release lock: unlist and free a record no holder names. */
+static void term_universe_decode_thread_free_locked(TermUniverseDecodeThread *thread) {
     if (thread->prev)
         thread->prev->next = thread->next;
     else
         g_decode_threads = thread->next;
     if (thread->next)
         thread->next->prev = thread->prev;
-    pthread_mutex_unlock(&g_decode_epoch_mutex);
-    pthread_mutex_destroy(&thread->suspended_lock);
+    pthread_mutex_destroy(&thread->lock);
     free(thread);
+}
+
+static void term_universe_decode_thread_exit(void *record) {
+    TermUniverseDecodeThread *thread = record;
+    if (!thread)
+        return;
+    pthread_mutex_lock(&g_decode_epoch_mutex);
+    pthread_mutex_lock(&thread->lock);
+    thread->base.held = 0u;
+    thread->innermost = &thread->base;
+    thread->running_held = 0u;
+    thread->exited = true;
+    atomic_store_explicit(&thread->held, thread->suspended_mask, memory_order_release);
+    /* Holders that left this thread and live on still name the record. */
+    bool named = thread->suspended_holders != 0u;
+    pthread_mutex_unlock(&thread->lock);
+    if (!named)
+        term_universe_decode_thread_free_locked(thread);
+    pthread_mutex_unlock(&g_decode_epoch_mutex);
 }
 
 static void term_universe_decode_thread_key_make(void) {
@@ -2525,8 +2541,7 @@ static inline void term_universe_decode_thread_enter(void) {
         return;
     }
     atomic_init(&thread->held, 0u);
-    atomic_init(&thread->suspended_held, 0u);
-    if (pthread_mutex_init(&thread->suspended_lock, NULL) != 0) {
+    if (pthread_mutex_init(&thread->lock, NULL) != 0) {
         free(thread);
         atomic_store(&g_decode_thread_unlisted, true);
         return;
@@ -2549,62 +2564,66 @@ uint64_t term_universe_decode_clock(void) {
     return atomic_load_explicit(&g_decode_clock, memory_order_acquire);
 }
 
-/* The union of the sets on the thread's stack.  A holder that ended passed
- * its set down, so the stack covers it. */
-static void term_universe_decode_thread_publish(TermUniverseDecodeThread *thread) {
+/* The union of the sets on the thread's stack; the owner's alone.  A holder
+ * that ended passed its set down, so the stack covers it. */
+static uint64_t term_universe_decode_stack_union(const TermUniverseDecodeThread *thread) {
     uint64_t held = 0u;
     for (const TermUniverseDecodeHolder *holder = thread->innermost; holder;
          holder = holder->below)
         held |= holder->held;
-    atomic_store_explicit(&thread->held, held, memory_order_release);
+    return held;
 }
 
-/* Under the thread's suspended_lock: suspended holders keep BITS more, or
- * (ADD false) no longer. */
+/* Under the thread's lock: publish its word. */
+static void term_universe_decode_word_store(TermUniverseDecodeThread *thread) {
+    atomic_store_explicit(&thread->held,
+                          thread->running_held | thread->suspended_mask,
+                          memory_order_release);
+}
+
+/* The owner, under its lock, after changing its stack: publish. */
+static void term_universe_decode_running_store(TermUniverseDecodeThread *thread) {
+    thread->running_held = term_universe_decode_stack_union(thread);
+    term_universe_decode_word_store(thread);
+}
+
+/* Under the thread's lock: suspended holders keep BITS more, or (ADD false)
+ * no longer. */
 static void term_universe_decode_suspended_count(TermUniverseDecodeThread *thread,
                                                  uint64_t bits, bool add) {
-    uint64_t mask = atomic_load_explicit(&thread->suspended_held,
-                                         memory_order_relaxed);
     for (uint64_t rest = bits; rest; rest &= rest - 1u) {
         unsigned index = (unsigned)__builtin_ctzll(rest);
         uint64_t bit = UINT64_C(1) << index;
         if (add) {
             if (thread->suspended_count[index]++ == 0u)
-                mask |= bit;
-            thread->suspended_total++;
-        } else if (thread->suspended_count[index] != 0u) {
-            if (--thread->suspended_count[index] == 0u)
-                mask &= ~bit;
-            thread->suspended_total--;
+                thread->suspended_mask |= bit;
+        } else if (thread->suspended_count[index] != 0u &&
+                   --thread->suspended_count[index] == 0u) {
+            thread->suspended_mask &= ~bit;
         }
     }
-    atomic_store_explicit(&thread->suspended_held, mask, memory_order_release);
 }
 
-/* HOLDER, suspended, runs again or ends: its thread stops counting it. */
-static void term_universe_decode_unsuspend(TermUniverseDecodeHolder *holder) {
-    TermUniverseDecodeThread *thread = holder->suspended_on;
-    if (!thread)
-        return;
-    pthread_mutex_lock(&thread->suspended_lock);
+/* Under the thread's lock: HOLDER, suspended on THREAD, is no longer.  True
+ * when the record is now free to go (its thread exited, nothing names it). */
+static bool term_universe_decode_unsuspend_locked(TermUniverseDecodeThread *thread,
+                                                  TermUniverseDecodeHolder *holder) {
     term_universe_decode_suspended_count(thread, holder->held, false);
     holder->suspended_on = NULL;
-    pthread_mutex_unlock(&thread->suspended_lock);
+    thread->suspended_holders--;
+    term_universe_decode_word_store(thread);
+    return thread->exited && thread->suspended_holders == 0u;
 }
 
-/* Change a holder's set; a suspended holder's thread counts the change. */
-static void term_universe_decode_holder_set(TermUniverseDecodeHolder *holder,
-                                            uint64_t held) {
-    TermUniverseDecodeThread *thread = holder->suspended_on;
-    if (!thread) {
-        holder->held = held;
-        return;
-    }
-    pthread_mutex_lock(&thread->suspended_lock);
-    term_universe_decode_suspended_count(thread, held & ~holder->held, true);
-    term_universe_decode_suspended_count(thread, holder->held & ~held, false);
-    holder->held = held;
-    pthread_mutex_unlock(&thread->suspended_lock);
+/* HOLDER, suspended on another thread's record, is no longer: under the
+ * release lock, so no release sees it neither running nor suspended. */
+static void term_universe_decode_unsuspend_foreign_locked(TermUniverseDecodeHolder *holder) {
+    TermUniverseDecodeThread *owner = holder->suspended_on;
+    pthread_mutex_lock(&owner->lock);
+    bool free_owner = term_universe_decode_unsuspend_locked(owner, holder);
+    pthread_mutex_unlock(&owner->lock);
+    if (free_owner)
+        term_universe_decode_thread_free_locked(owner);
 }
 
 /* A read hands out atoms of the current epoch: the innermost holder may
@@ -2622,8 +2641,11 @@ static inline void term_universe_decode_note_read(TermUniverseDecodeEpochs *epoc
         if (term_universe_decode_trace())
             fprintf(stderr, "[decode-epoch] read taints %p%s bit %#" PRIx64 "\n",
                     (void *)thread->innermost, thread->innermost == &thread->base ? " (base)" : "", bit);
+        pthread_mutex_lock(&thread->lock);
         thread->innermost->held |= bit;
-        term_universe_decode_thread_publish(thread);
+        thread->running_held |= bit;
+        term_universe_decode_word_store(thread);
+        pthread_mutex_unlock(&thread->lock);
     }
 }
 
@@ -2651,8 +2673,7 @@ static void term_universe_decode_release_locked(void) {
     uint64_t held = 0u;
     for (TermUniverseDecodeThread *thread = g_decode_threads; thread;
          thread = thread->next)
-        held |= atomic_load_explicit(&thread->held, memory_order_acquire) |
-                atomic_load_explicit(&thread->suspended_held, memory_order_acquire);
+        held |= atomic_load_explicit(&thread->held, memory_order_acquire);
     if (atomic_load(&g_decode_thread_unlisted))
         held = UINT64_MAX;
     bool trace = term_universe_decode_trace();
@@ -2686,6 +2707,16 @@ void term_universe_decode_epochs_release(void) {
     pthread_mutex_unlock(&g_decode_epoch_mutex);
 }
 
+/* Under the owner's lock: HOLDER runs innermost on THREAD. */
+static void term_universe_decode_link(TermUniverseDecodeThread *thread,
+                                      TermUniverseDecodeHolder *holder) {
+    holder->thread_number = thread->number;
+    holder->push_number = ++thread->pushes;
+    holder->below = thread->innermost;
+    thread->innermost = holder;
+    term_universe_decode_running_store(thread);
+}
+
 void term_universe_decode_holder_push(TermUniverseDecodeHolder *holder) {
     if (!holder)
         return;
@@ -2693,47 +2724,70 @@ void term_universe_decode_holder_push(TermUniverseDecodeHolder *holder) {
     TermUniverseDecodeThread *thread = t_decode_thread;
     if (!thread)
         return;
-    term_universe_decode_unsuspend(holder);
-    holder->thread_number = thread->number;
-    holder->push_number = ++thread->pushes;
-    holder->below = thread->innermost;
-    thread->innermost = holder;
+    TermUniverseDecodeThread *owner = holder->suspended_on;
+    if (owner && owner != thread) {
+        /* Running here first, then not suspended there, under the release
+         * lock: no release sees the holder in neither. */
+        pthread_mutex_lock(&g_decode_epoch_mutex);
+        pthread_mutex_lock(&thread->lock);
+        term_universe_decode_link(thread, holder);
+        pthread_mutex_unlock(&thread->lock);
+        term_universe_decode_unsuspend_foreign_locked(holder);
+        pthread_mutex_unlock(&g_decode_epoch_mutex);
+    } else {
+        pthread_mutex_lock(&thread->lock);
+        if (owner)
+            (void)term_universe_decode_unsuspend_locked(thread, holder);
+        term_universe_decode_link(thread, holder);
+        pthread_mutex_unlock(&thread->lock);
+    }
     if (term_universe_decode_trace())
         fprintf(stderr, "[decode-epoch] push %p held %#" PRIx64 "\n", (void *)holder, holder->held);
-    if (holder->held)
-        term_universe_decode_thread_publish(thread);
 }
 
 void term_universe_decode_holder_pop(TermUniverseDecodeHolder *holder) {
     TermUniverseDecodeThread *thread = t_decode_thread;
     if (!holder || !thread || thread->innermost != holder || !holder->below)
         return;
+    pthread_mutex_lock(&thread->lock);
     TermUniverseDecodeHolder *below = holder->below;
     thread->innermost = below;
     holder->below = NULL;
     below->held |= holder->held;
-    term_universe_decode_thread_publish(thread);
+    term_universe_decode_running_store(thread);
+    pthread_mutex_unlock(&thread->lock);
 }
 
 void term_universe_decode_holder_leave(TermUniverseDecodeHolder *holder) {
     TermUniverseDecodeThread *thread = t_decode_thread;
     if (!holder || !thread || thread->innermost != holder || !holder->below)
         return;
+    /* One transition: running below (which it lends to) and suspended. */
+    pthread_mutex_lock(&thread->lock);
     TermUniverseDecodeHolder *below = holder->below;
     thread->innermost = below;
     holder->below = NULL;
     below->held |= holder->held;
-    pthread_mutex_lock(&thread->suspended_lock);
     term_universe_decode_suspended_count(thread, holder->held, true);
     holder->suspended_on = thread;
-    pthread_mutex_unlock(&thread->suspended_lock);
-    term_universe_decode_thread_publish(thread);
+    thread->suspended_holders++;
+    term_universe_decode_running_store(thread);
+    pthread_mutex_unlock(&thread->lock);
 }
 
 void term_universe_decode_holder_forget(TermUniverseDecodeHolder *holder) {
     if (!holder)
         return;
-    term_universe_decode_unsuspend(holder);
+    TermUniverseDecodeThread *owner = holder->suspended_on;
+    if (owner && owner == t_decode_thread) {
+        pthread_mutex_lock(&owner->lock);
+        (void)term_universe_decode_unsuspend_locked(owner, holder);
+        pthread_mutex_unlock(&owner->lock);
+    } else if (owner) {
+        pthread_mutex_lock(&g_decode_epoch_mutex);
+        term_universe_decode_unsuspend_foreign_locked(holder);
+        pthread_mutex_unlock(&g_decode_epoch_mutex);
+    }
     holder->held = 0u;
 }
 
@@ -2747,6 +2801,18 @@ TermUniverseDecodeMark term_universe_decode_mark_now(void) {
         running->thread_number, running->push_number, running->held};
 }
 
+/* Under OWNER's lock (OWNER is HOLDER's suspended record, or NULL): HOLDER
+ * keeps HELD from now on. */
+static void term_universe_decode_holder_set_locked(TermUniverseDecodeThread *owner,
+                                                   TermUniverseDecodeHolder *holder,
+                                                   uint64_t held) {
+    if (owner) {
+        term_universe_decode_suspended_count(owner, held & ~holder->held, true);
+        term_universe_decode_suspended_count(owner, holder->held & ~held, false);
+    }
+    holder->held = held;
+}
+
 void term_universe_decode_holder_receive(TermUniverseDecodeHolder *holder,
                                          bool reclaimed,
                                          TermUniverseDecodeMark mark) {
@@ -2756,13 +2822,33 @@ void term_universe_decode_holder_receive(TermUniverseDecodeHolder *holder,
     TermUniverseDecodeHolder *giver = thread->innermost;
     if (giver == holder)
         return;
-    term_universe_decode_holder_set(holder, holder->held | giver->held);
     /* Lean (EpochReclamation): an owner's collection may shrink its set to
      * the epochs it still points into. */
-    if (reclaimed && mark.thread_number == giver->thread_number &&
-        mark.push_number == giver->push_number)
+    bool restore = reclaimed && mark.thread_number == giver->thread_number &&
+        mark.push_number == giver->push_number;
+    TermUniverseDecodeThread *owner = holder->suspended_on;
+    if (!owner || owner == thread) {
+        /* One transition: the receiver gains, then the giver may drop. */
+        pthread_mutex_lock(&thread->lock);
+        term_universe_decode_holder_set_locked(owner, holder,
+                                               holder->held | giver->held);
+        if (restore)
+            giver->held &= mark.held;
+        term_universe_decode_running_store(thread);
+        pthread_mutex_unlock(&thread->lock);
+        return;
+    }
+    pthread_mutex_lock(&g_decode_epoch_mutex);
+    pthread_mutex_lock(&owner->lock);
+    term_universe_decode_holder_set_locked(owner, holder, holder->held | giver->held);
+    term_universe_decode_word_store(owner);
+    pthread_mutex_unlock(&owner->lock);
+    pthread_mutex_lock(&thread->lock);
+    if (restore)
         giver->held &= mark.held;
-    term_universe_decode_thread_publish(thread);
+    term_universe_decode_running_store(thread);
+    pthread_mutex_unlock(&thread->lock);
+    pthread_mutex_unlock(&g_decode_epoch_mutex);
 }
 
 bool term_universe_decode_detach_due(const TermUniverseDecodeHolder *holder,
@@ -2772,8 +2858,8 @@ bool term_universe_decode_detach_due(const TermUniverseDecodeHolder *holder,
         !atomic_load_explicit(&g_decode_waiting, memory_order_acquire))
         return false;
     /* The epochs every other holder keeps: this thread's other running ones,
-     * every suspended one (HOLDER runs, so it is not among them), and other
-     * threads'. */
+     * its suspended ones (HOLDER runs, so it is not among them), and every
+     * other thread's. */
     uint64_t others = 0u;
     for (const TermUniverseDecodeHolder *below = thread->innermost; below;
          below = below->below)
@@ -2782,12 +2868,13 @@ bool term_universe_decode_detach_due(const TermUniverseDecodeHolder *holder,
     size_t alone = 0u;
     size_t least = 0u;
     pthread_mutex_lock(&g_decode_epoch_mutex);
+    pthread_mutex_lock(&thread->lock);
+    others |= thread->suspended_mask;
+    pthread_mutex_unlock(&thread->lock);
     for (TermUniverseDecodeThread *other = g_decode_threads; other;
-         other = other->next) {
-        others |= atomic_load_explicit(&other->suspended_held, memory_order_acquire);
+         other = other->next)
         if (other != thread)
             others |= atomic_load_explicit(&other->held, memory_order_acquire);
-    }
     TermUniverseDecodeEpochs *epochs = g_decode_epochs;
     for (uint32_t index = 0u; epochs && index < epochs->closed_len; index++) {
         const TermUniverseClosedEpoch *closed = &epochs->closed[index];
@@ -2808,21 +2895,31 @@ bool term_universe_decode_detach_due(const TermUniverseDecodeHolder *holder,
 
 void term_universe_decode_holder_emptied(TermUniverseDecodeHolder *holder) {
     TermUniverseDecodeThread *thread = t_decode_thread;
-    if (!holder || !holder->held)
+    if (!holder || !holder->held || !thread)
         return;
-    term_universe_decode_holder_set(holder, 0u);
-    if (thread) {
-        term_universe_decode_thread_publish(thread);
-        term_universe_decode_epochs_release();
+    TermUniverseDecodeThread *owner = holder->suspended_on;
+    if (owner && owner != thread) {
+        pthread_mutex_lock(&owner->lock);
+        term_universe_decode_holder_set_locked(owner, holder, 0u);
+        term_universe_decode_word_store(owner);
+        pthread_mutex_unlock(&owner->lock);
+    } else {
+        pthread_mutex_lock(&thread->lock);
+        term_universe_decode_holder_set_locked(owner, holder, 0u);
+        term_universe_decode_running_store(thread);
+        pthread_mutex_unlock(&thread->lock);
     }
+    term_universe_decode_epochs_release();
 }
 
 void term_universe_decode_top_level_begin(void) {
     TermUniverseDecodeThread *thread = t_decode_thread;
     if (!thread || thread->innermost != &thread->base || !thread->base.held)
         return;
+    pthread_mutex_lock(&thread->lock);
     thread->base.held = 0u;
-    term_universe_decode_thread_publish(thread);
+    term_universe_decode_running_store(thread);
+    pthread_mutex_unlock(&thread->lock);
     term_universe_decode_epochs_release();
 }
 
@@ -2984,7 +3081,7 @@ static void term_universe_decode_clear_slot(TermUniverse *universe,
  * slots.  The next epoch's bit must name no unfreed epoch. */
 static void term_universe_decode_maybe_close(TermUniverse *universe) {
     TermUniverseDecodeEpochs *epochs = universe->decode_epochs;
-    if (!epochs ||
+    if (!epochs || epochs->decoding != 0u ||
         arena_accounted_live_bytes(epochs->current) < epochs->budget_bytes ||
         term_universe_decode_shared_scope_active())
         return;
@@ -7656,8 +7753,9 @@ static Atom *term_universe_decode_atom(TermUniverse *universe, AtomId id,
         return atom_symbol_id(dst, hdr->sym_or_head);
     case ATOM_VAR:
         if (hdr->subtag == CETTA_VAR_SPELLING_NAME_KEY) {
-            Atom *key = term_universe_get_atom(
-                universe, tu_var_name_key_id(universe, id));
+            /* Within this decode, which a close never interrupts. */
+            Atom *key = term_universe_get_atom_at(
+                universe, tu_var_name_key_id(universe, id), depth + 1u);
             return key ? atom_var_with_name_key(
                              dst, key,
                              term_universe_load_var_id(payload))
@@ -8121,6 +8219,10 @@ Atom *term_universe_view_atom(const TermUniverse *universe, Arena *dst,
         return NULL;
     if (!term_universe_borrow_scope(universe, dst))
         return NULL;
+    /* A kept atom, or a view sharing kept children, is a read: the running
+     * holder keeps the current epoch from now on. */
+    if (universe->decode_epochs)
+        term_universe_decode_note_read(universe->decode_epochs);
     size_t physical = 0u;
     if (universe->fallbacks &&
         term_universe_atom_id_to_physical_index(universe, id, &physical)) {
@@ -8168,7 +8270,12 @@ Atom *term_universe_decoded_atom_at(const TermUniverse *universe, AtomId id) {
 /* Decode one entry and keep its atom. */
 static Atom *term_universe_decode_one(TermUniverse *universe, AtomId id,
                                       size_t physical_index, uint32_t depth) {
+    TermUniverseDecodeEpochs *epochs = universe->decode_epochs;
+    if (epochs)
+        epochs->decoding++;
     Atom *decoded = term_universe_decode_atom(universe, id, depth);
+    if (epochs)
+        epochs->decoding--;
     if (!decoded ||
         !term_universe_set_decoded_at(universe, physical_index, decoded))
         return NULL;
