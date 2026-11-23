@@ -467,6 +467,8 @@ static bool term_universe_set_decoded_at(TermUniverse *universe, size_t index,
                                          Atom *atom);
 static void term_universe_decode_log_slot(TermUniverse *universe, size_t index,
                                           const Atom *atom);
+static Atom *term_universe_decode_for_reader(TermUniverse *universe, AtomId id,
+                                             Atom *atom);
 static void term_universe_free_decoded(TermUniverse *universe);
 static void term_universe_disable_decode_epochs(TermUniverse *universe);
 static bool term_universe_entry_has_blob(const TermEntry *entry);
@@ -8260,7 +8262,7 @@ Atom *term_universe_view_atom(const TermUniverse *universe, Arena *dst,
     if (term_universe_atom_id_to_physical_index(universe, id, &index)) {
         Atom *slot = term_universe_decoded_slot(universe, index);
         if (slot && !term_universe_slot_counts_views(slot))
-            return slot;
+            return term_universe_decode_for_reader((TermUniverse *)universe, id, slot);
         uintptr_t views = (uintptr_t)slot >> 1u;
         if (views + 1u >= TERM_UNIVERSE_VIEW_READS)
             return term_universe_get_atom(universe, id);
@@ -8282,7 +8284,10 @@ Atom *term_universe_decoded_atom_at(const TermUniverse *universe, AtomId id) {
     size_t physical_index = 0;
     return term_universe_atom_id_to_physical_index(universe, id,
                                                    &physical_index)
-        ? term_universe_decoded_at(universe, physical_index) : NULL;
+        ? term_universe_decode_for_reader(
+              (TermUniverse *)universe, id,
+              term_universe_decoded_at(universe, physical_index))
+        : NULL;
 }
 
 /* Decode one entry and keep its atom. */
@@ -8424,7 +8429,9 @@ static Atom *term_universe_get_atom_at(TermUniverse *universe, AtomId id,
 }
 
 Atom *term_universe_get_atom(const TermUniverse *universe, AtomId id) {
-    return term_universe_get_atom_at((TermUniverse *)universe, id, 0u);
+    return term_universe_decode_for_reader(
+        (TermUniverse *)universe, id,
+        term_universe_get_atom_at((TermUniverse *)universe, id, 0u));
 }
 
 Atom *term_universe_scoped_atom(const TermUniverse *universe, Arena *dst,
@@ -8471,6 +8478,26 @@ static Atom *term_universe_pin_decoded(TermUniverse *universe, AtomId id,
         return NULL;
     term_universe_track_ptr_id(universe, id);
     return pinned;
+}
+
+/* What a reader outside every machine gets for an atom of the current
+ * epoch.  Code outside the machines keeps what it reads for as long as it
+ * likes (a program's candidate snapshots, a judgment environment's rules
+ * and definitions), as every decoded atom allowed before epochs, so it gets
+ * the entry's persistent copy, pinned in its slot.  A machine's reads are
+ * its holder's and stay in the epoch: the loops whose rows change are the
+ * machines'. */
+static Atom *term_universe_decode_for_reader(TermUniverse *universe, AtomId id,
+                                             Atom *atom) {
+    TermUniverseDecodeEpochs *epochs = universe ? universe->decode_epochs : NULL;
+    if (!epochs || !atom || ((uintptr_t)atom & 1u) ||
+        atom->arena_id != epochs->current->identity)
+        return atom;
+    TermUniverseDecodeThread *thread = t_decode_thread;
+    if (thread && thread->innermost != &thread->base)
+        return atom;
+    Atom *pinned = term_universe_pin_decoded(universe, id, atom);
+    return pinned ? pinned : atom;
 }
 
 Atom *term_universe_get_pinned_atom(const TermUniverse *universe, AtomId id) {
