@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <poll.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -38,11 +39,29 @@ int cetta_ipc_listen(const char *path,mode_t mode,gid_t group,int backlog) {
         if (!result || (saved!=ECONNREFUSED && saved!=ENOENT)) return -1;
         if (unlink(path)) return -1;
     } else if (errno!=ENOENT) return -1;
+    /* The name is published only once the socket accepts, with its final
+     * group and mode: it is bound under a staged name beside its own, made
+     * ready, and renamed into place, so a client that finds the name can
+     * connect at once. A path too long for the suffix is bound directly. */
+    static const char suffix[]=".bind";
+    struct sockaddr_un staged={.sun_family=AF_UNIX};
+    bool via_stage=n+sizeof(suffix)<=sizeof(staged.sun_path);
+    if (via_stage) {
+        memcpy(staged.sun_path,path,n);memcpy(staged.sun_path+n,suffix,sizeof(suffix));
+        /* A stage left by an interrupted start is ours to replace. */
+        if (!lstat(staged.sun_path,&st)) {
+            if (!S_ISSOCK(st.st_mode) || st.st_uid!=geteuid() || unlink(staged.sun_path)) return -1;
+        } else if (errno!=ENOENT) return -1;
+    }
+    const struct sockaddr_un *bound=via_stage ? &staged : &address;
     int fd=socket(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC|SOCK_NONBLOCK,0);
     if (fd<0) return -1;
-    if (bind(fd,(struct sockaddr *)&address,sizeof(address)) ||
-        (group!=(gid_t)-1 && chown(path,(uid_t)-1,group)) || chmod(path,mode) || listen(fd,backlog)) {
-        close(fd);return -1;
+    if (bind(fd,(const struct sockaddr *)bound,sizeof(*bound)) ||
+        (group!=(gid_t)-1 && chown(bound->sun_path,(uid_t)-1,group)) || chmod(bound->sun_path,mode) ||
+        listen(fd,backlog) || (via_stage && rename(staged.sun_path,path))) {
+        int saved=errno;
+        if (via_stage) unlink(staged.sun_path);
+        close(fd);errno=saved;return -1;
     }
     return fd;
 }

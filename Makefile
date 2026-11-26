@@ -53182,6 +53182,14 @@ runtime/test-ipc-session: tests/test_ipc_session.c src/ipc_session.c src/ipc_ses
 test-ipc-session: runtime/test-ipc-session
 	@./runtime/test-ipc-session
 
+.PHONY: test-ipc-listen-publish
+runtime/test-ipc-listen-publish: tests/test_ipc_listen_publish.c src/ipc_client.c src/ipc_client.h
+	@mkdir -p runtime
+	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc tests/test_ipc_listen_publish.c src/ipc_client.c -o $@
+test-ipc-listen-publish: runtime/test-ipc-listen-publish
+	@./runtime/test-ipc-listen-publish
+SUITE_CORRECTNESS_GATES += test-ipc-client-stream test-ipc-session test-ipc-listen-publish
+
 .PHONY: test-native-db-server
 test-native-db-server: value-worker $(ACT_SPACE_TEST_BIN)
 	$(PYTHON) tests/support/check_native_db_server.py $(VALUE_WORKER_BIN) --act-fixture $(ACT_SPACE_TEST_BIN)
