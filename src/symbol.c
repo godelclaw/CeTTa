@@ -1065,7 +1065,8 @@ bool symbol_table_try_init_builtins(SymbolTable *st, BuiltinSyms *builtins) {
 #undef CETTA_MARK_LIBRARY_GROUNDED
     /* Pure numerical ABI extensions need no legacy BuiltinSyms slot. Their
      * implementations still require the math library to be active. */
-    const char *math_heads[]={"__cetta_lib_math_binary64_parts","__cetta_lib_math_integer_divmod"};
+    const char *math_heads[]={"__cetta_lib_math_binary64_parts","__cetta_lib_math_binary64_from_parts",
+        "__cetta_lib_math_integer_divmod"};
     for (size_t i=0;i<sizeof(math_heads)/sizeof(*math_heads);++i) {
         uint32_t length=(uint32_t)strlen(math_heads[i]);
         SymbolId id=symbol_intern_span_hashed_unlocked(st,(const uint8_t *)math_heads[i],

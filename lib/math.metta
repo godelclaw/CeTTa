@@ -25,6 +25,8 @@
 (: math:isinf (-> Number Bool))
 (: __cetta_lib_math_binary64_parts (-> Number Atom))
 (: math:binary64-parts (-> Number Atom))
+(: __cetta_lib_math_binary64_from_parts (-> %Undefined% Atom))
+(: math:binary64-from-parts (-> %Undefined% Atom))
 (: __cetta_lib_math_integer_divmod (-> Number Number Atom))
 (: math:integer-divmod (-> Number Number Atom))
 
@@ -36,6 +38,15 @@
 (= (math:binary64-parts $value)
    (function
      (chain (eval (__cetta_lib_math_binary64_parts $value)) $result (return $result))))
+
+; The inverse, exact both ways: the binary64 value that binary64-parts
+; observes as $parts. A finite value binary64 cannot hold exactly (too many
+; significant bits, or out of range) is Binary64RefusedV1 not-representable,
+; never rounded; a mantissa of zero gives a zero of that sign. Anything that
+; is not one of the three forms is Binary64RefusedV1 expected-parts.
+(= (math:binary64-from-parts $parts)
+   (function
+     (chain (eval (__cetta_lib_math_binary64_from_parts $parts)) $result (return $result))))
 
 ; Exact integer quotient/remainder: a=q*b+r, q=floor(a/b). The nonzero
 ; remainder has the divisor's sign. Non-integer inputs and zero divisors

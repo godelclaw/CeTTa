@@ -1,0 +1,5 @@
+(EDGES (True True True True True True True True True True True True))
+(ZEROS (Binary64PartsV1 -1 0 -1074) (Binary64PartsV1 1 0 -1074))
+(VALUES 1.5 -0.5 1.0 True True)
+(REFUSED (Binary64RefusedV1 not-representable) (Binary64RefusedV1 not-representable) (Binary64RefusedV1 not-representable) (Binary64RefusedV1 not-representable) (Binary64RefusedV1 not-representable) (Binary64RefusedV1 expected-parts) (Binary64RefusedV1 expected-parts) (Binary64RefusedV1 expected-parts) (Binary64RefusedV1 expected-parts) (Binary64RefusedV1 expected-parts) (Binary64RefusedV1 expected-parts) (Binary64RefusedV1 expected-parts))
+(RANDOM 4096)

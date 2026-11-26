@@ -27174,6 +27174,24 @@ test-lib-dict-profiles: $(BIN)
 	echo "PASS: dictionaries keep their semantics in every PeTTa profile"
 SUITE_CORRECTNESS_GATES += test-lib-dict-profiles
 
+.PHONY: test-lib-math-binary64-roundtrip
+test-lib-math-binary64-roundtrip: $(BIN)
+	@set -e; \
+	fixture=tests/lib_math_binary64_roundtrip.metta; \
+	for args in "--lang petta" "--lang petta --profile extended" "--lang he" "--lang prime"; do \
+		case "$$args" in \
+			*petta*) expected=$$(cat tests/lib_math_binary64_roundtrip.petta.expected); unit=true;; \
+			*) expected=$$(cat tests/lib_math_binary64_roundtrip.he-prime.expected); unit=True;; \
+		esac; \
+		actual=$$(timeout 60 ./$(BIN) $$args --quiet "$$fixture" 2>&1 | grep -vx "$$unit" || true); \
+		if [ "$$actual" != "$$expected" ]; then \
+			echo "FAIL: binary64 parts do not round-trip under $$args"; \
+			printf '%s\n' "$$actual"; exit 1; \
+		fi; \
+	done; \
+	echo "PASS: binary64 values and their parts round-trip exactly in every dialect"
+SUITE_CORRECTNESS_GATES += test-lib-math-binary64-roundtrip
+
 .PHONY: test-lib-memory-collection-upsert
 test-lib-memory-collection-upsert: $(BIN)
 	@set -e; \

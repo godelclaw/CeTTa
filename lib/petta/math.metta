@@ -21,6 +21,7 @@
 (: math:isnan (-> Number Bool))
 (: math:isinf (-> Number Bool))
 (= (math:binary64-parts $value) (__cetta_lib_math_binary64_parts $value))
+(= (math:binary64-from-parts $parts) (__cetta_lib_math_binary64_from_parts $parts))
 (= (math:integer-divmod $left $right) (__cetta_lib_math_integer_divmod $left $right))
 (@doc math:min (@desc "Binary numeric minimum in the math: namespace. This is a library-level helper rather than a new core builtin.") (@params ((@param "First number") (@param "Second number"))) (@return "Smaller of the two numbers"))
 (@doc math:max (@desc "Binary numeric maximum in the math: namespace. This is a library-level helper rather than a new core builtin.") (@params ((@param "First number") (@param "Second number"))) (@return "Larger of the two numbers"))
