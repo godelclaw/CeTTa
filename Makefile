@@ -50924,6 +50924,19 @@ test-space-service-scopes: $(SPACE_SERVICE_SCOPES_TEST_BIN)
 test-space-service: test-space-service-commit test-space-service-scopes $(SPACE_SERVICE_BIN) $(BIN) $(VALUE_WORKER_BIN) $(if $(and $(filter 0,$(MORK_BUILD_HAS_BRIDGE)),$(filter 1,$(MORK_BRIDGE_DEPS_READY)),$(wildcard $(MORK_BRIDGE_MANIFEST))),$(MORK_BRIDGE_LOADABLE_LIB))
 	python3 tests/test_space_service.py $(SPACE_SERVICE_BIN) $(BIN) $(VALUE_WORKER_BIN)
 
+# A store's journal replays in time proportional to its records, with the
+# agents' managed symbols (decoded symbols stay spelled), where a replay that
+# rebuilt the match index on every removal was quadratic.
+.PHONY: test-space-service-replay
+ifeq ($(ENABLE_MANAGED_SYMBOLS),1)
+test-space-service-replay: $(SPACE_SERVICE_BIN) tests/support/check_space_service_replay.py
+	@python3 tests/support/check_space_service_replay.py $(SPACE_SERVICE_BIN)
+else
+test-space-service-replay:
+	@$(MAKE) -s BUILD=$(BUILD_CANON) ENABLE_MANAGED_SYMBOLS=1 test-space-service-replay
+endif
+SUITE_ASYMPTOTIC_GATES += test-space-service-replay
+
 .PHONY: test-native-kb-service
 test-native-kb-service: value-worker
 	python3 tests/support/check_native_kb_service.py $(VALUE_WORKER_BIN)

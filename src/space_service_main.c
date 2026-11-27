@@ -992,6 +992,25 @@ static bool find_equal(Store *st, Atom *atom, Atom **found) {
             bool present=space_contains_exact(st->space,atom);
             if (space_match_backend_last_error_code()!=SPACE_MATCH_BACKEND_ERROR_NONE) return false;
             if (!present) return true;
+            /* A present exact atom's rows come from the exact index: equality
+             * needs no match candidates. The candidate search below reads the
+             * match trie, which every removal leaves to be rebuilt, so a
+             * journal of removals rebuilt it once per record on replay. That
+             * is the path whenever symbols decoded from the wire stay spelled
+             * (managed symbols): then no head index or certified frontier
+             * answers before the trie. */
+            CettaIndex *rows=NULL;
+            CettaIndex count=space_exact_match_indices64(st->space,atom,&rows);
+            bool ok=space_match_backend_last_error_code()==SPACE_MATCH_BACKEND_ERROR_NONE && (!count || rows);
+            for (CettaIndex i=0; ok && i<count && !*found; ++i) {
+                Atom *candidate=space_get_at64(st->space,rows[i]);
+                bool equal=false;
+                ok=candidate && atom_same(candidate,atom,&equal);
+                if (ok && equal) *found=candidate;
+            }
+            free(rows);
+            if (!ok) return false;
+            if (*found) return true;
         }
         CettaIndex *indices = NULL;
         CettaIndex n = space_match_candidates64(st->space, atom, &indices);
