@@ -119,8 +119,8 @@ int main(void) {
     if (!mkdtemp(directory)) return 2;
     Service *s = calloc(1, sizeof(*s));
     *s = (Service){.journal = -1, .directory = -1, .lock = -1, .max_facts = 1000000,
-        .max_live_bytes = 64 * 1024 * 1024, .max_query_bytes = QUERY_BYTES,
-        .max_snapshot_bytes = SNAPSHOT_BYTES, .query_ms = 5000, .next_cursor = 1,
+        .max_live_bytes = 64 * 1024 * 1024, .max_query_bytes = DEFAULT_QUERY_BYTES,
+        .max_snapshot_bytes = DEFAULT_SNAPSHOT_BYTES, .query_ms = 5000, .next_cursor = 1,
         .max_watchers = CLIENTS / 2, .process_uid = (uint32_t)geteuid(), .owner_uid = (uint32_t)geteuid()};
     if (!directory_open(s, directory) || !recover(s) || !random_id(s->boot)) return 2;
     static Client clients[CLIENTS];
@@ -367,8 +367,8 @@ int main(void) {
     free(s->decisions); free(s->decision_slots); free(s->principals); free(s->principal_slots);
     close(s->journal); close(s->lock); close(s->directory);
     *s = (Service){.journal = -1, .directory = -1, .lock = -1, .max_facts = 1000000,
-        .max_live_bytes = 64 * 1024 * 1024, .max_query_bytes = QUERY_BYTES,
-        .max_snapshot_bytes = SNAPSHOT_BYTES, .query_ms = 5000, .next_cursor = 1,
+        .max_live_bytes = 64 * 1024 * 1024, .max_query_bytes = DEFAULT_QUERY_BYTES,
+        .max_snapshot_bytes = DEFAULT_SNAPSHOT_BYTES, .query_ms = 5000, .next_cursor = 1,
         .max_watchers = CLIENTS / 2, .process_uid = (uint32_t)geteuid(), .owner_uid = (uint32_t)geteuid()};
     expect(directory_open(s, directory) && recover(s) && random_id(s->boot), "T8 recovery");
     s->clients = clients;

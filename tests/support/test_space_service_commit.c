@@ -70,8 +70,8 @@ int __wrap_fsync(int fd) {
     if (fd==observed_journal && fail_sync) { errno=EIO; return -1; }
     return __real_fsync(fd);
 }
-CettaAtomWireStatus __real_cetta_atom_wire_encode(const Atom *,unsigned char **,size_t *);
-CettaAtomWireStatus __wrap_cetta_atom_wire_encode(const Atom *atom,unsigned char **data,size_t *size) {
+CettaAtomWireStatus __real_cetta_atom_wire_encode_bounded(const Atom *,size_t,unsigned char **,size_t *);
+CettaAtomWireStatus __wrap_cetta_atom_wire_encode_bounded(const Atom *atom,size_t maximum,unsigned char **data,size_t *size) {
     if (shape((Atom *)atom,"ScopeProbe",3)) ++scope_row_encodings;
     if (write_started && fail_key &&
         (atom_is_symbol((Atom *)atom,"saved") || shape((Atom *)atom,"saved-open",2))) {
@@ -86,7 +86,7 @@ CettaAtomWireStatus __wrap_cetta_atom_wire_encode(const Atom *atom,unsigned char
         ++event_encodings;
         if (fail_event) { *data=NULL; *size=0; return ATOM_WIRE_NOMEM; }
     }
-    return __real_cetta_atom_wire_encode(atom,data,size);
+    return __real_cetta_atom_wire_encode_bounded(atom,maximum,data,size);
 }
 bool __real_space_admit_atom(Space *,Arena *,Atom *);
 bool __wrap_space_admit_atom(Space *space,Arena *arena,Atom *atom) {
@@ -122,7 +122,7 @@ static void release(Service *s) {
 static void initialize(Service *s,const char *directory) {
     *s=(Service){.journal=-1,.directory=-1,.lock=-1,
         .max_facts=1000000,.max_live_bytes=64*1024*1024,
-        .max_query_bytes=QUERY_BYTES,.max_snapshot_bytes=SNAPSHOT_BYTES,
+        .max_query_bytes=DEFAULT_QUERY_BYTES,.max_snapshot_bytes=DEFAULT_SNAPSHOT_BYTES,
         .query_ms=5000,.max_watchers=CLIENTS/2,.next_cursor=1,
         .process_uid=(uint32_t)geteuid(),.owner_uid=(uint32_t)geteuid()};
     check(directory_open(s,directory)); check(recover(s));

@@ -114,6 +114,15 @@ class ServiceTests(unittest.TestCase):
     def space(self, backend="native"):
         return self.client.open("test-" + backend, backend)
 
+    def restart_with(self, **options):
+        """This case's own service, started with options."""
+        self.client.close()
+        self.fixture.close()
+        self.fixture = Fixture(**options)
+        self.addCleanup(self.fixture.close)
+        self.client = Client(self.fixture.socket)
+        self.addCleanup(self.client.close)
+
     def test_f32_capability_and_durable_bits(self):
         from array import array
         self.assertIn(S("tensor-f32-native"), self.client.hello()[5])
@@ -501,6 +510,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(space.match_count(S("prefix")), 0)
 
     def test_transport_valid_batch_too_large_for_journal_has_no_effect(self):
+        self.restart_with(max_frame_bytes=csp.MAX_BYTES)
         space = self.space()
         request_id = "large-preflight"
         empty = E("ops", E("add", E("chunk", b"")), E("add", E("chunk", b"")))
@@ -838,6 +848,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(answer[1], "fragment")
 
     def test_malformed_and_oversize_frames_do_not_break_service(self):
+        self.restart_with(max_frame_bytes=csp.MAX_BYTES)
         packets = [b"NOPE"+struct.pack(">I",4)+b"CAV1",
                    b"CSP1"+struct.pack(">I",csp.MAX_BYTES+1),
                    b"CSP1"+struct.pack(">I",9)+b"CAV1V"+struct.pack("<I",99)]
@@ -1967,6 +1978,34 @@ class PrincipalTests(unittest.TestCase):
 
 
 class QuotaTests(unittest.TestCase):
+    def test_fact_size_rows_and_query_time_are_options_not_ceilings(self):
+        # By default a fact may be far past the old 512 KiB and a query may ask
+        # for more rows than the old 65,536; each stays an explicit option.
+        fixture = Fixture(query_ms=120000)
+        try:
+            with Client(fixture.socket, maximum_bytes=8 * 1024 * 1024) as client:
+                space = client.open("large-default")
+                large = "x" * (1024 * 1024)
+                space.add(E("Large", large))
+                self.assertEqual(space.match(E("Large", Var(0)), Var(0)), [large])
+                space.batch(E("add", E("p", 1)), E("add", E("p", 2)))
+                self.assertEqual(sorted(space.match(E("p", Var(0)), Var(0), 100000)), [1, 2])
+        finally:
+            fixture.close()
+        fixture = Fixture(max_fact_bytes=1024, max_query_rows=2)
+        try:
+            with Client(fixture.socket) as client:
+                space = client.open("small-options")
+                with self.assertRaises(csp.ServiceError) as caught:
+                    space.add(E("Large", "x" * 2048))
+                self.assertEqual(caught.exception.reason, S("fact-limit"))
+                space.batch(E("add", E("p", 1)), E("add", E("p", 2)))
+                with self.assertRaises(csp.ServiceError) as caught:
+                    space.query(E("p", Var(0)), Var(0), 3)
+                self.assertEqual(caught.exception.reason, S("limit"))
+        finally:
+            fixture.close()
+
     def test_optional_principal_limit_refuses_new_accounts_not_rotation(self):
         fixture = Fixture(max_principals=1)
         try:

@@ -32,10 +32,28 @@
 /* Storage runs on one owner. Transport is nonblocking and bounded. There is
  * no evaluator entry point in this protocol: terms are stored and matched. */
 enum { WAITER_NAME_MAX = 128 };
-enum { CLIENTS = 32, STORES = 32, SNAPSHOTS = 64, RECEIPTS = 256,
-       RECEIPT_BYTES = 16 * 1024 * 1024, QUERY_BYTES = 8 * 1024 * 1024,
-       SNAPSHOT_BYTES = 32 * 1024 * 1024, PAGE_ROWS = 1024,
-       QUERY_ROWS = 65536, FACT_BYTES = 512 * 1024 };
+/* Slots and default budgets. Every data budget is an option (--help); a
+ * query's rows default to the store's fact budget and a fact may be as large
+ * as a receipt can retain. */
+enum { CLIENTS = 256, STORES = 256, SNAPSHOTS = 64, RECEIPTS = 256,
+       RECEIPT_BYTES = 256 * 1024 * 1024, PAGE_ROWS = 1024 };
+#define DEFAULT_MAX_FACTS (16u * 1024u * 1024u)
+#define DEFAULT_LIVE_BYTES (1024ull * 1024u * 1024u)
+#define DEFAULT_QUERY_BYTES (256ull * 1024u * 1024u)
+#define DEFAULT_SNAPSHOT_BYTES (1024ull * 1024u * 1024u)
+#define DEFAULT_FACT_BYTES (64ull * 1024u * 1024u)
+/* A CSP1 frame and a CAV1 packet may be this large (--max-frame-bytes). The
+ * journal replays records up to the larger of it and the default, so a lower
+ * option never strands records written under a higher one. */
+#define DEFAULT_FRAME_BYTES (256ull * 1024u * 1024u)
+static uint64_t frame_bytes = DEFAULT_FRAME_BYTES;
+/* A page of several rows stays within a reader's default allowance, so a
+ * client that has not raised its own reads every page; a single row may fill
+ * the frame. A reader shortens its page when it meets page-byte-limit. */
+static uint64_t page_byte_budget(uint64_t rows) {
+    uint64_t shared = frame_bytes < CETTA_ATOM_WIRE_BYTES ? frame_bytes : CETTA_ATOM_WIRE_BYTES;
+    return (rows == 1 ? frame_bytes : shared) - 1024;
+}
 /* Rights another account may hold on one store. Reading implies observing;
  * writing implies reading and unconstrained appends. The service owner holds
  * every right on every store, which is the trusted single-account profile. */
@@ -144,7 +162,7 @@ typedef struct {
     bool principal_clock_restored;
     uint64_t next_store, next_cursor, catalog_revision;
     uint64_t max_facts, max_live_bytes, max_journal_bytes, journal_bytes, checkpoint_bytes;
-    uint64_t max_query_bytes, max_snapshot_bytes;
+    uint64_t max_query_bytes, max_snapshot_bytes, max_query_rows, max_fact_bytes;
     uint64_t max_account_view_bytes;
     uint64_t max_decisions, max_tickets, max_grants, max_principals;
     unsigned query_ms;
@@ -263,10 +281,10 @@ static Atom *error(Arena *a, Atom *request, const char *reason) {
     return reply(a, request, false, atom_symbol(a, reason));
 }
 static bool wire(Atom *atom, Bytes *out) {
-    return cetta_atom_wire_encode(atom, &out->data, &out->size) == ATOM_WIRE_OK;
+    return cetta_atom_wire_encode_bounded(atom, (size_t)frame_bytes, &out->data, &out->size) == ATOM_WIRE_OK;
 }
 static bool decode(Arena *arena, Bytes bytes, Atom **out) {
-    return cetta_atom_wire_decode(arena, bytes.data, bytes.size, out) == ATOM_WIRE_OK;
+    return cetta_atom_wire_decode_bounded(arena, bytes.data, bytes.size, (size_t)frame_bytes, out) == ATOM_WIRE_OK;
 }
 static Store *find_store(Service *s, uint64_t id) {
     for (size_t i = 0; i < STORES; ++i) if (s->stores[i] && s->stores[i]->id == id) return s->stores[i];
@@ -533,6 +551,10 @@ static AuthorityView grant_authority(Service *s,Store *st,Grant *leaf,Principal 
     }
     return (AuthorityView){0};
 }
+/* A budget left at zero is its default: rows up to the fact budget, facts up
+ * to DEFAULT_FACT_BYTES. */
+static uint64_t query_row_limit(const Service *s) { return s->max_query_rows ? s->max_query_rows : s->max_facts; }
+static uint64_t fact_byte_limit(const Service *s) { return s->max_fact_bytes ? s->max_fact_bytes : DEFAULT_FACT_BYTES; }
 static AuthorityView authority_of(Service *s,Client *c, Store *st) {
     if (c->owner) return (AuthorityView){.rights=~0u,.delegable=true};
     return grant_authority(s,st,find_grant(st,c->principal),c->principal);
@@ -1687,7 +1709,7 @@ static Atom *query(Service *s, Arena *a, Atom *request, Store *st, bool counting
                             atom_is_symbol(part(request,2),"query-first-profile"));
     uint64_t limit = 0, lease = 0;
     if (!counting && (!integer(part(request,7),&limit) || !integer(part(request,8),&lease) ||
-        !limit || limit > QUERY_ROWS || lease < 1 || lease > 300000)) return error(a,request,"limit");
+        !limit || limit > query_row_limit(s) || lease < 1 || lease > 300000)) return error(a,request,"limit");
     expire(s);
     if (now_ms()>=deadline) return error(a,request,"query-time-limit");
     size_t slot = SNAPSHOTS;
@@ -1807,7 +1829,7 @@ static Atom *observe_scopes(Service *s, Client *client, Arena *a, Atom *request,
     uint64_t limit,lease;
     if (!reads || !writes || reads->kind!=ATOM_EXPR || writes->kind!=ATOM_EXPR ||
         !atom_is_symbol(part(reads,0),"reads") || !atom_is_symbol(part(writes,0),"writes") ||
-        !integer(part(request,7),&limit) || !limit || limit>QUERY_ROWS ||
+        !integer(part(request,7),&limit) || !limit || limit>query_row_limit(s) ||
         !integer(part(request,8),&lease) || !lease || lease>300000)
         return error(a,request,"invalid-observation");
     expire(s);
@@ -1936,7 +1958,7 @@ static const char *batch_admit(Service *s, Store *st, Atom *ops) {
         if (!(shape(op,"add",2) || shape(op,"remove",2))) return "invalid-batch";
         if (!wire(part(op,1),&b)) return "unsupported-value";
         size_t size=b.size; bytes_free(&b);
-        if (size>FACT_BYTES) return "fact-limit";
+        if (size>fact_byte_limit(s)) return "fact-limit";
         if (shape(op,"add",2)) { ++added; added_bytes+=size; }
     }
     return space_length64(st->space)+added>s->max_facts ||
@@ -2055,7 +2077,7 @@ static Atom *append_admit(Service *s,Arena *a,Client *client,Store *st,Atom *req
         if (atom_has_vars(value)) return error(a,request,"open-value");
         if (!wire(value,&b)) return error(a,request,"unsupported-value");
         size_t size = b.size; bytes_free(&b);
-        if (size > FACT_BYTES) return error(a,request,"fact-limit");
+        if (size > fact_byte_limit(s)) return error(a,request,"fact-limit");
         added_bytes += size;
     }
     if (space_length64(st->space) + (bundle->expr.len - 1) > s->max_facts ||
@@ -2168,7 +2190,7 @@ static Atom *dispatch(Service *s, Client *client, Arena *a, Atom *request, Bytes
         Atom **rows=arena_alloc(a,count*sizeof(*rows)); size_t bytes=0;
         for (size_t i=0;i<count;++i) {
             bytes+=view->rows[offset+i].size;
-            if (bytes>CETTA_ATOM_WIRE_BYTES-1024) return error(a,request,"page-byte-limit");
+            if (bytes>page_byte_budget(count)) return error(a,request,"page-byte-limit");
             if (!decode(a,view->rows[offset+i],&rows[i])) return error(a,request,"corrupt");
         }
         Atom *args[]={atom_int(a,o->revision),atom_int(a,offset),form(a,"rows",rows,count),
@@ -2202,7 +2224,7 @@ static Atom *dispatch(Service *s, Client *client, Arena *a, Atom *request, Bytes
         size_t total = 0;
         for (size_t i = 0; i < count; ++i) {
             total += q->rows[offset+i].size;
-            if (total > CETTA_ATOM_WIRE_BYTES - 1024) return error(a,request,"page-byte-limit");
+            if (total > page_byte_budget(count)) return error(a,request,"page-byte-limit");
             if (!decode(a,q->rows[offset+i],&rows[i])) return error(a,request,"corrupt");
         }
         Atom *args[] = {atom_int(a,q->revision),atom_int(a,offset),form(a,"rows",rows,count),
@@ -2464,7 +2486,7 @@ static Atom *dispatch(Service *s, Client *client, Arena *a, Atom *request, Bytes
     }
     if (atom_is_symbol(part(request,2),"verify") && observation_request_shape(request)) {
         if (!(rights & RIGHT_READ)) return error(a,request,"forbidden");
-        if (space_length64(st->space)>QUERY_ROWS || st->live_bytes>QUERY_BYTES)
+        if (space_length64(st->space)>query_row_limit(s) || st->live_bytes>s->max_query_bytes)
             return error(a,request,"verification-limit");
         if (!store_consistent(st) || !verify_backend(st))
             return error(a,request,"backend-divergence");
@@ -3429,7 +3451,7 @@ static bool recover(Service *s) {
     while (position<(uint64_t)st.st_size) {
         CettaJournalRecord frame={0};
         CettaJournalStatus status=cetta_journal_read(s->journal,position,
-            (uint64_t)st.st_size,CETTA_ATOM_WIRE_BYTES,&frame);
+            (uint64_t)st.st_size,frame_bytes>DEFAULT_FRAME_BYTES ? frame_bytes : DEFAULT_FRAME_BYTES,&frame);
         if (status==CETTA_JOURNAL_TORN) break;
         if (status!=CETTA_JOURNAL_OK || frame.size<4u) {
             cetta_journal_record_free(&frame); s->replaying=false; return false;
@@ -3696,7 +3718,7 @@ static bool client_read(Service *s,Client *c) {
     if (!c->input.data) {
         if (memcmp(c->header,"CSP1",4)) return false;
         size_t size=0; for (size_t i=4;i<8;++i) size=(size<<8)|c->header[i];
-        if (size<4 || size>CETTA_ATOM_WIRE_BYTES) return false;
+        if (size<4 || size>frame_bytes) return false;
         c->input=(Bytes){malloc(size),size}; if (!c->input.data) return false;
     }
     while (c->input_read<c->input.size) {
@@ -3766,8 +3788,9 @@ int main(int argc,char **argv) {
     s->journal=s->directory=s->lock=-1;
     s->next_cursor=1;
     s->process_uid=s->owner_uid=(uint32_t)geteuid();
-    s->max_facts=1000000; s->max_live_bytes=64*1024*1024;
-    s->max_query_bytes=QUERY_BYTES; s->max_snapshot_bytes=SNAPSHOT_BYTES;
+    s->max_facts=DEFAULT_MAX_FACTS; s->max_live_bytes=DEFAULT_LIVE_BYTES;
+    s->max_query_bytes=DEFAULT_QUERY_BYTES; s->max_snapshot_bytes=DEFAULT_SNAPSHOT_BYTES;
+    s->max_query_rows=0; s->max_fact_bytes=DEFAULT_FACT_BYTES;
     s->max_journal_bytes=32*1024*1024; s->query_ms=5000;
     s->max_watchers=CLIENTS/2;
     for (int i=1;i<argc;++i) {
@@ -3776,6 +3799,8 @@ int main(int argc,char **argv) {
                  "  [--shared-socket ABSOLUTE_PATH --shared-group GROUP] [--owner-uid N]\n"
                  "  [--max-facts N] [--max-live-bytes N] [--max-journal-bytes N] [--query-ms N]\n"
                  "  [--max-query-bytes N] [--max-snapshot-bytes N] [--max-watchers N]\n"
+                 "  [--max-query-rows N] (default: the fact budget) [--max-fact-bytes N]\n"
+                 "  [--max-frame-bytes N] (default: 256 MiB)\n"
                  "  [--max-account-view-bytes N] [--max-account-views N] [--max-account-watchers N]\n"
                  "  [--max-decisions N] (default: unlimited, refusal instead of eviction)\n"
                  "  [--max-tickets N] (default: unlimited, refusal instead of reuse)\n"
@@ -3799,6 +3824,9 @@ int main(int argc,char **argv) {
             else if (!strcmp(option,"--max-journal-bytes")) s->max_journal_bytes=n;
             else if (!strcmp(option,"--max-query-bytes")) s->max_query_bytes=n;
             else if (!strcmp(option,"--max-snapshot-bytes")) s->max_snapshot_bytes=n;
+            else if (!strcmp(option,"--max-query-rows") && n) s->max_query_rows=n;
+            else if (!strcmp(option,"--max-frame-bytes") && n>=65536 && n<=UINT32_MAX) frame_bytes=n;
+            else if (!strcmp(option,"--max-fact-bytes") && n && n<=RECEIPT_BYTES/2) s->max_fact_bytes=n;
             else if (!strcmp(option,"--max-account-view-bytes")) s->max_account_view_bytes=n;
             else if (!strcmp(option,"--max-account-views") && n<=SNAPSHOTS*2+CLIENTS) s->max_account_views=(size_t)n;
             else if (!strcmp(option,"--max-account-watchers") && n<CLIENTS) s->max_account_watchers=(size_t)n;
@@ -3806,7 +3834,7 @@ int main(int argc,char **argv) {
             else if (!strcmp(option,"--max-tickets")) s->max_tickets=n;
             else if (!strcmp(option,"--max-grants")) s->max_grants=n;
             else if (!strcmp(option,"--max-principals")) s->max_principals=n;
-            else if (!strcmp(option,"--query-ms") && n<=60000) s->query_ms=(unsigned)n;
+            else if (!strcmp(option,"--query-ms") && n && n<=UINT_MAX) s->query_ms=(unsigned)n;
             else if (!strcmp(option,"--max-watchers") && n<CLIENTS) s->max_watchers=(size_t)n;
             else goto invalid;
         }

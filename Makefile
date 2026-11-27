@@ -50907,7 +50907,7 @@ $(SPACE_SERVICE_COMMIT_TEST_OBJ): tests/support/test_space_service_commit.c $(BU
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -MF $(@:.o=.d) -c $< -o $@
 $(SPACE_SERVICE_COMMIT_TEST_BIN): $(SPACE_SERVICE_COMMIT_TEST_OBJ) $(FALLBACK_EVAL_TEST_LINK_OBJ) $(BRIDGE_DEPS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=write,--wrap=fsync,--wrap=cetta_atom_wire_encode,--wrap=space_admit_atom
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=write,--wrap=fsync,--wrap=cetta_atom_wire_encode_bounded,--wrap=space_admit_atom
 test-space-service-commit: $(SPACE_SERVICE_COMMIT_TEST_BIN)
 	$(SPACE_SERVICE_COMMIT_TEST_BIN)
 SPACE_SERVICE_SCOPES_TEST_BIN = runtime/test_space_service_scopes-$(BUILD_OBJ_TAG)
