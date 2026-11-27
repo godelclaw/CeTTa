@@ -32,6 +32,7 @@
 (= (re:store $pattern) (let $prepared (re-internal:prepared $pattern) (__cetta_lib_re store ($prepared))))
 (= (re:restore $bytes) (__cetta_lib_re restore ($bytes)))
 (= (re:close $pattern) (__cetta_lib_re close ($pattern)))
+(= (re:unicode-version) (__cetta_lib_re unicode-version ()))
 (= (re:symbol-query $pattern) (re:symbol-query-with $pattern Search))
 (= (re:symbol-query-with $pattern $mode) (let $prepared (re-internal:prepared $pattern) (__cetta_lib_re symbol-query ($prepared $mode))))
 (= (re:relation-open $pattern $text) (let $prepared (re-internal:prepared $pattern) (__cetta_lib_re relation-open ($prepared $text))))

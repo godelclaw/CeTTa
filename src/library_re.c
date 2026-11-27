@@ -849,6 +849,10 @@ bool cetta_re_call(CettaLibraryContext *ctx, Arena *a, Atom *head, Atom **args,
         if (interrupted) { *out = cetta_call_interrupted(); return true; }
         goto completed;
     }
+    if (!strcmp(operation, "unicode-version") && count == 0) {
+        value = atom_string(a, unicode_v1_version());
+        goto completed;
+    }
     if (!strcmp(operation, "prepare-source") && count == 1) {
         value = cetta_re_v1_prepare_text(a, operands[0]);
         goto completed;

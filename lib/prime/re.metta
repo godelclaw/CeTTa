@@ -32,6 +32,7 @@
 (= (re:store $pattern) (let $prepared (re-internal:prepared $pattern) (function (case (__cetta_lib_re store ($prepared)) (($result (return $result)))))))
 (= (re:restore $bytes) (function (case (__cetta_lib_re restore ($bytes)) (($result (return $result))))))
 (= (re:close $pattern) (function (case (__cetta_lib_re close ($pattern)) (($result (return $result))))))
+(= (re:unicode-version) (function (case (__cetta_lib_re unicode-version ()) (($result (return $result))))))
 (= (re:symbol-query $pattern) (re:symbol-query-with $pattern Search))
 (= (re:symbol-query-with $pattern $mode) (let $prepared (re-internal:prepared $pattern) (function (case (__cetta_lib_re symbol-query ($prepared $mode)) (($result (return $result)))))))
 (= (re:relation-open $pattern $text) (let $prepared (re-internal:prepared $pattern) (function (case (__cetta_lib_re relation-open ($prepared $text)) (($result (return $result)))))))

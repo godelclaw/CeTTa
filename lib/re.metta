@@ -90,6 +90,10 @@
    (function (chain (eval (__cetta_lib_re restore ($bytes))) $value (return $value))))
 (= (re:close $pattern)
    (function (chain (eval (__cetta_lib_re close ($pattern))) $value (return $value))))
+; The Unicode version of the property classes patterns match with, such as
+; \p{L} and \p{Nd}.
+(= (re:unicode-version)
+   (function (chain (eval (__cetta_lib_re unicode-version ())) $value (return $value))))
 
 ; Query the interner's finite text-name snapshot, not an Atomspace's facts.
 ; Results retain interning order. The metadata counts the captured table and

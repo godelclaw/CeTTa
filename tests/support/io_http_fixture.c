@@ -375,6 +375,70 @@ static void fixture_get(int fd, const char *root, const char *path) {
     }
 }
 
+/* The HTTP observation contract (tests/test_http_observation_contract.c):
+ * each case's reply behaves as named, and every request is counted, so the
+ * contract can require exactly one per case and the body it sent. */
+static const char *const observe_cases[] = {"progress", "truncated", "silent", "hard", "ready", "idle"};
+static atomic_uint observe_counts[6];
+static atomic_uint observe_bad_bodies;
+
+static void fixture_pause_ms_once(long milliseconds) {
+    struct timespec pause = {.tv_sec = milliseconds / 1000, .tv_nsec = (milliseconds % 1000) * 1000000L};
+    while (nanosleep(&pause, &pause) != 0 && errno == EINTR) {}
+}
+
+static void fixture_observe(int fd, const char *name, const unsigned char *body, size_t body_len) {
+    size_t which = sizeof(observe_cases) / sizeof(*observe_cases);
+    for (size_t index = 0u; index < sizeof(observe_cases) / sizeof(*observe_cases); index++)
+        if (strcmp(name, observe_cases[index]) == 0) which = index;
+    if (which == sizeof(observe_cases) / sizeof(*observe_cases)) {
+        fixture_response(fd, 404, "Not Found", "text/plain", "not found", 9u, NULL);
+        return;
+    }
+    (void)atomic_fetch_add(&observe_counts[which], 1);
+    if (body_len != 3u || memcmp(body, "one", 3u) != 0) (void)atomic_fetch_add(&observe_bad_bodies, 1);
+    size_t length = which == 0u ? 3u : which == 4u ? 2u : 100u;
+    if (!fixture_header(fd, 200, "OK", "text/plain", length, NULL)) return;
+    switch (which) {
+    case 0: /* progress: three bytes, apart */
+        for (const char *byte = "abc"; *byte; byte++) {
+            if (!fixture_write_all(fd, byte, 1u)) return;
+            fixture_pause_ms_once(80);
+        }
+        break;
+    case 1: /* truncated: a prefix, then the connection ends */
+        (void)fixture_write_all(fd, "part", 4u);
+        (void)shutdown(fd, SHUT_RDWR);
+        break;
+    case 2: /* silent: no body byte for half a second */
+        fixture_pause_ms_once(500);
+        (void)fixture_write_all(fd, "late", 4u);
+        break;
+    case 3: /* hard: a byte every 50 ms, a second in all */
+        for (int count = 0; count < 20; count++) {
+            if (!fixture_write_all(fd, "x", 1u)) return;
+            fixture_pause_ms_once(50);
+        }
+        break;
+    case 4: /* ready: complete at once */
+        (void)fixture_write_all(fd, "ok", 2u);
+        break;
+    default: /* idle: one byte, then nothing */
+        (void)fixture_write_all(fd, "x", 1u);
+        fixture_pause_ms_once(500);
+        break;
+    }
+}
+
+static void fixture_observe_counts(int fd) {
+    char body[256];
+    int size = snprintf(body, sizeof(body), "progress=%u truncated=%u silent=%u hard=%u ready=%u idle=%u bad-bodies=%u",
+                        atomic_load(&observe_counts[0]), atomic_load(&observe_counts[1]), atomic_load(&observe_counts[2]),
+                        atomic_load(&observe_counts[3]), atomic_load(&observe_counts[4]), atomic_load(&observe_counts[5]),
+                        atomic_load(&observe_bad_bodies));
+    fixture_response(fd, 200, "OK", "text/plain", body, size > 0 ? (size_t)size : 0u, NULL);
+}
+
 static void *fixture_client_main(void *opaque) {
     IoFixtureClient *client = opaque;
     int fd = client->fd;
@@ -384,8 +448,12 @@ static void *fixture_client_main(void *opaque) {
     if (!fixture_read_request(fd, &request)) {
         fixture_response(fd, 400, "Bad Request", "text/plain", "bad request",
                          11u, NULL);
+    } else if (strcmp(request.method, "GET") == 0 && strcmp(request.path, "/observe-counts") == 0) {
+        fixture_observe_counts(fd);
     } else if (strcmp(request.method, "GET") == 0) {
         fixture_get(fd, root, request.path);
+    } else if (strcmp(request.method, "POST") == 0 && strncmp(request.path, "/observe/", 9u) == 0) {
+        fixture_observe(fd, request.path + 9, request.body, request.body_len);
     } else if (strcmp(request.method, "POST") == 0 &&
                strcmp(request.path, "/redirect-counted") == 0) {
         fixture_response(fd, 307, "Temporary Redirect", "text/plain", "", 0u,

@@ -27192,6 +27192,24 @@ test-lib-math-binary64-roundtrip: $(BIN)
 	echo "PASS: binary64 values and their parts round-trip exactly in every dialect"
 SUITE_CORRECTNESS_GATES += test-lib-math-binary64-roundtrip
 
+.PHONY: test-lib-re-unicode-version
+test-lib-re-unicode-version: $(BIN)
+	@set -e; \
+	fixture=tests/lib_re_unicode_version.metta; \
+	for args in "--lang petta" "--lang petta --profile extended" "--lang he" "--lang prime"; do \
+		case "$$args" in \
+			*petta*) expected=$$(cat tests/lib_re_unicode_version.petta.expected); unit=true;; \
+			*) expected=$$(cat tests/lib_re_unicode_version.he-prime.expected); unit=True;; \
+		esac; \
+		actual=$$(timeout 60 ./$(BIN) $$args --quiet "$$fixture" 2>&1 | grep -vx "$$unit" || true); \
+		if [ "$$actual" != "$$expected" ]; then \
+			echo "FAIL: the regex Unicode version or its classes differ under $$args"; \
+			printf '%s\n' "$$actual"; exit 1; \
+		fi; \
+	done; \
+	echo "PASS: the regex library names the Unicode version its classes are"
+SUITE_CORRECTNESS_GATES += test-lib-re-unicode-version
+
 .PHONY: test-lib-memory-collection-upsert
 test-lib-memory-collection-upsert: $(BIN)
 	@set -e; \
@@ -50460,6 +50478,7 @@ $(HTTP_WORKER_TEST_BIN): tests/test_http_worker.c src/http_worker.c src/http_wor
 
 test-http-worker: $(HTTP_WORKER_TEST_BIN) $(IO_HTTP_FIXTURE_BIN)
 	python3 tests/test_http_worker.py $(IO_HTTP_FIXTURE_BIN) $(HTTP_WORKER_TEST_BIN)
+SUITE_CORRECTNESS_GATES += test-http-worker
 else
 test-http-worker:
 	@echo "test-http-worker requires the native HTTP provider" >&2
@@ -50505,10 +50524,23 @@ test-speculative-eval: $(SPECULATIVE_EVAL_TEST_BIN) $(IO_HTTP_FIXTURE_BIN)
 .PHONY: test-telegram-transport
 ifeq ($(HTTP_PROVIDER_CURL),1)
 TELEGRAM_TRANSPORT_TEST_BIN = runtime/test-telegram-transport-$(BUILD_OBJ_TAG)
+HTTP_OBSERVATION_TEST_BIN = runtime/test-http-observation-contract-$(BUILD_OBJ_TAG)
+$(HTTP_OBSERVATION_TEST_BIN): tests/test_http_observation_contract.c src/http_worker.c src/http_worker.h src/byte_fragment.h
+	@mkdir -p runtime
+	$(CC) -O2 -Wall -Wextra -Werror -std=c11 -pthread -Isrc $(HTTP_CFLAGS) -DCETTA_BUILD_HTTP_PROVIDER_CURL=$(HTTP_PROVIDER_CURL) tests/test_http_observation_contract.c src/http_worker.c $(HTTP_LDFLAGS) -o $@
+.PHONY: test-http-observation-contract
+test-http-observation-contract: $(HTTP_OBSERVATION_TEST_BIN) $(IO_HTTP_FIXTURE_BIN)
+	@set -eu; port=$$(mktemp); ./$(IO_HTTP_FIXTURE_BIN) > "$$port" & fixture=$$!; \
+	trap 'kill $$fixture 2>/dev/null || :; rm -f "$$port"' EXIT; \
+	for wait in $$(seq 1 500); do [ -s "$$port" ] && break; sleep 0.01; done; \
+	./$(HTTP_OBSERVATION_TEST_BIN) "http://127.0.0.1:$$(head -n 1 "$$port")/observe"
+SUITE_CORRECTNESS_GATES += test-http-observation-contract
+
 $(TELEGRAM_TRANSPORT_TEST_BIN): tests/test_telegram_transport.c src/telegram_transport.c src/telegram_transport.h src/http_worker.c src/http_worker.h src/byte_fragment.h
 	$(CC) -O2 -Wall -Wextra -Werror -std=c11 -pthread -Isrc $(HTTP_CFLAGS) -DCETTA_BUILD_HTTP_PROVIDER_CURL=$(HTTP_PROVIDER_CURL) tests/test_telegram_transport.c src/telegram_transport.c src/http_worker.c $(HTTP_LDFLAGS) -o $@
 test-telegram-transport: $(TELEGRAM_TRANSPORT_TEST_BIN)
 	python3 tests/test_telegram_transport.py $(TELEGRAM_TRANSPORT_TEST_BIN)
+SUITE_CORRECTNESS_GATES += test-telegram-transport
 else
 test-telegram-transport:
 	@echo "test-telegram-transport requires the native HTTP provider" >&2
