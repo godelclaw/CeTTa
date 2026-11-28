@@ -338,17 +338,28 @@ def interval(deltas):
             "samples": len(deltas)}
 
 
-def instruction_verdict(deltas):
-    """Instruction counts decide, and exactly.
+# Instruction counts of one binary still move with where memory lands
+# (tables keyed by address): comparing an executable with itself, the 95%
+# interval of the median paired delta reaches three thousandths of the count
+# (a PeTTa join). A change within this share of the baseline's own median is
+# no change; a rise beyond it is a regression.
+INSTRUCTION_RESOLUTION_SHARE = 0.005
 
-    The interval of the median paired delta at or below zero passes; wholly
-    above zero fails; anything else is undecided, never a pass.
+
+def instruction_verdict(deltas, baseline=()):
+    """Instruction counts decide.
+
+    The interval of the median paired delta at or below the resolution (a
+    share of the baseline's median count) passes; wholly above it fails;
+    anything else is undecided, never a pass.
     """
     if not deltas:
         return "unavailable", None
     detail = interval(deltas)
-    verdict = ("pass" if detail["upper_95"] <= 0 else
-               "fail" if detail["lower_95"] > 0 else "inconclusive")
+    detail["resolution"] = (INSTRUCTION_RESOLUTION_SHARE * statistics.median(baseline)
+                            if baseline else 0.0)
+    verdict = ("pass" if detail["upper_95"] <= detail["resolution"] else
+               "fail" if detail["lower_95"] > detail["resolution"] else "inconclusive")
     return verdict, detail
 
 
@@ -373,7 +384,7 @@ def time_verdict(deltas, baseline, floor=0.0):
 
 def qualify_pairs(case, pairs):
     deltas = {"instructions:u": [], "cycles:u": [], "seconds": []}
-    before = {"cycles:u": [], "seconds": []}
+    before = {"instructions:u": [], "cycles:u": [], "seconds": []}
     pair_verdicts = []
     for baseline, candidate in pairs:
         verdict, reason = compare_samples(case, baseline, candidate)
@@ -382,6 +393,7 @@ def qualify_pairs(case, pairs):
             deltas["seconds"].append(candidate["seconds"] - baseline["seconds"])
             before["seconds"].append(baseline["seconds"])
             before["cycles:u"].append(baseline["counters"]["cycles:u"])
+            before["instructions:u"].append(baseline["counters"]["instructions:u"])
             for event in ("instructions:u", "cycles:u"):
                 deltas[event].append(candidate["counters"][event] -
                                      baseline["counters"][event])
@@ -389,7 +401,8 @@ def qualify_pairs(case, pairs):
         return "fail", {"pair_validation": pair_verdicts}
     if any(verdict == "unavailable" for verdict, _ in pair_verdicts):
         return "unavailable", {"pair_validation": pair_verdicts}
-    instructions, instruction_detail = instruction_verdict(deltas["instructions:u"])
+    instructions, instruction_detail = instruction_verdict(deltas["instructions:u"],
+                                                           before["instructions:u"])
     cycles, cycle_detail = time_verdict(deltas["cycles:u"], before["cycles:u"])
     seconds, seconds_detail = time_verdict(deltas["seconds"], before["seconds"],
                                            WALL_RESOLUTION_SECONDS)
@@ -429,6 +442,21 @@ def self_test():
             print(f"FAIL: performance-gate self-test {name}: {actual}, expected {expected}")
             return 1
         print(f"PASS: performance-gate self-test {name}: {actual}")
+    # At realistic counts, layout noise within the resolution is no change,
+    # and a rise beyond it still fails.
+    for name, candidates, expected in (
+            ("instruction noise within the resolution",
+             [(1000040, 1000000, 1.0), (999970, 1000000, 1.0), (1000010, 1000000, 1.0)], "pass"),
+            ("instruction rise beyond the resolution",
+             [(1010000, 1000000, 1.0), (1009000, 1000000, 1.0), (1011000, 1000000, 1.0)], "fail")):
+        actual = qualify_pairs(case, [
+            (sample(instructions=1000000, cycles=1000000),
+             sample(instructions=count, cycles=cycles, seconds=seconds))
+            for count, cycles, seconds in candidates])[0]
+        if actual != expected:
+            print(f"FAIL: performance-gate self-test {name}: {actual}, expected {expected}")
+            return 1
+        print(f"PASS: performance-gate self-test {name}: {actual}")
     controls = [
         ("output mismatch", sample(), sample(output="wrong\n", instructions=99), "fail"),
         ("unavailable counters", sample(), sample(instructions=None), "unavailable"),
@@ -440,6 +468,18 @@ def self_test():
             return 1
         print(f"PASS: performance-gate self-test {name}: {actual}")
     return 0
+
+
+def caller_make_overrides():
+    """The calling make's command-line variables (BUILD, ENABLE_..., and so
+    on), so the baseline is built in the candidate's configuration: a
+    baseline of another configuration measures the configuration, not the
+    change. The performance gate's own variables are left out."""
+    overrides = os.environ.get("MAKEFLAGS", "").partition(" -- ")[2]
+    words = [word.replace("\\ ", " ") for word in re.split(r"(?<!\\) ", overrides) if word]
+    return [word for word in words
+            if re.match(r"[A-Za-z_][A-Za-z0-9_]*=", word)
+            and not word.startswith(("ORDINARY_PERFORMANCE_", "BIN="))]
 
 
 def own_make_environment():
@@ -457,14 +497,55 @@ def own_make_environment():
     return env
 
 
+def stage_candidate(root, candidate, work):
+    """The candidate run as the baseline is: from a clean archive of its own
+    commit. Each executable finds its library beside itself, so a candidate
+    run from the working tree would load that tree's library, build products
+    and all, and the comparison would measure the trees rather than the
+    change. The archive is HEAD: uncommitted library edits are not part of
+    the measured candidate."""
+    full = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root,
+                          capture_output=True, text=True, check=True).stdout.strip()
+    tag = full + "-" + hashlib.sha256(candidate.read_bytes()).hexdigest()[:16]
+    directory = work / f"candidate-{tag}"
+    binary = directory / "cetta"
+    stamp = directory / ".ordinary-candidate-staged"
+    # The configuration is recorded too: a later run whose baseline is this
+    # commit, in this configuration, reuses this staging instead of building.
+    key = tag + "\n" + "\n".join(caller_make_overrides()) + "\n"
+    if binary.is_file() and stamp.is_file() and stamp.read_text() == key:
+        return binary
+    if directory.exists():
+        shutil.rmtree(directory)
+    directory.mkdir(parents=True)
+    archive = work / f"candidate-{tag}.tar"
+    subprocess.run(["git", "archive", "--format=tar", f"--output={archive}", full],
+                   cwd=root, check=True)
+    subprocess.run(["tar", "-xf", archive, "-C", directory], check=True)
+    archive.unlink()
+    shutil.copy2(candidate, binary)
+    stamp.write_text(key)
+    return binary
+
+
 def build_baseline(root, revision, work):
     full = subprocess.run(["git", "rev-parse", revision], cwd=root,
                           capture_output=True, text=True, check=True).stdout.strip()
+    configuration = caller_make_overrides()
     directory = work / f"source-{full}"
     binary = directory / "cetta"
     stamp = directory / ".ordinary-baseline-built"
-    if binary.is_file() and stamp.is_file() and stamp.read_text() == full + "\n":
+    key = full + "\n" + "\n".join(configuration) + "\n"
+    if binary.is_file() and stamp.is_file() and stamp.read_text() == key:
         return binary
+    # A candidate staged from this commit in this configuration, as the last
+    # qualification of the deployed engine left it, is the same executable.
+    for staged in sorted(work.glob(f"candidate-{full}-*"), key=lambda path: path.stat().st_mtime,
+                         reverse=True):
+        mark = staged / ".ordinary-candidate-staged"
+        if ((staged / "cetta").is_file() and mark.is_file() and
+                mark.read_text().partition("\n")[2] == "\n".join(configuration) + "\n"):
+            return staged / "cetta"
     if directory.exists():
         shutil.rmtree(directory)
     directory.mkdir(parents=True)
@@ -473,10 +554,10 @@ def build_baseline(root, revision, work):
                    cwd=root, check=True)
     subprocess.run(["tar", "-xf", archive, "-C", directory], check=True)
     archive.unlink()
-    subprocess.run(["make", "-s", "BUILD=python", "ENABLE_RUNTIME_STATS=0",
+    subprocess.run(["make", "-s", *(configuration or ["BUILD=python"]), "ENABLE_RUNTIME_STATS=0",
                     "BIN=cetta", "-j3"], cwd=directory, check=True,
                    env=own_make_environment())
-    stamp.write_text(full + "\n")
+    stamp.write_text(key)
     return binary
 
 
@@ -535,7 +616,7 @@ def main():
     root = args.root.resolve()
     work = args.work.resolve()
     work.mkdir(parents=True, exist_ok=True)
-    candidate = args.candidate.resolve()
+    candidate = stage_candidate(root, args.candidate.resolve(), work)
     try:
         baseline = args.baseline.resolve() if args.baseline else \
             build_baseline(root, args.baseline_rev, work)

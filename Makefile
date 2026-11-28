@@ -31798,7 +31798,11 @@ SUITE_CORRECTNESS_GATES += test-ordinary-performance-rule
 # Ordinary programs (stores, matches, joins, folds, allocation) cost no more
 # instructions than at the baseline revision, in HE and PeTTa, and show no
 # measured loss in processor cycles.  The baseline is built once from this
-# repository's history; ORDINARY_PERFORMANCE_BASELINE names a baseline binary
+# repository's history, in the candidate's own configuration (the variables
+# given to this make), and both executables run from clean archives of their
+# commits, so the comparison measures the change and nothing else.  The
+# default baseline is the commit before HEAD; a qualification names the
+# revision it replaces.  ORDINARY_PERFORMANCE_BASELINE names a baseline binary
 # to compare against instead.  A source tree without that history has no
 # qualification and fails as unavailable rather than silently passing.  Some
 # workloads' counts depend on where memory lands (tables keyed by address), so
@@ -31806,7 +31810,7 @@ SUITE_CORRECTNESS_GATES += test-ordinary-performance-rule
 # measures one placement exactly and says nothing of the others.  Batches pair
 # equal numbers of baseline-first and candidate-first runs; predetermined
 # extra samples for address-sensitive cases are recorded in the JSON report.
-ORDINARY_PERFORMANCE_BASELINE_REV ?= d938ce41
+ORDINARY_PERFORMANCE_BASELINE_REV ?= HEAD~1
 ORDINARY_PERFORMANCE_BASELINE ?=
 test-ordinary-performance: $(BIN) test-ordinary-performance-rule
 	@if [ -n "$(strip $(ORDINARY_PERFORMANCE_BASELINE))" ] || \
