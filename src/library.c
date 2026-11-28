@@ -71,6 +71,10 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <linux/perf_event.h>
+#include <sys/syscall.h>
+#endif
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
 #endif
@@ -5513,6 +5517,44 @@ static char *library_executable_path(void) {
 #endif
 }
 
+/* The calling thread's counter of retired user-space instructions, opened at
+ * its first reading: a count of work that load on the machine, the clock
+ * frequency and a busy sibling hardware thread leave unchanged. Pinned, so a
+ * reading is exact or refused, never scaled from a sampled share. */
+static _Thread_local int library_instruction_counter = -1;
+
+static Atom *library_os_error(Arena *a, int code) {
+    return atom_expr3(a, atom_symbol(a, "system:os-error"), atom_int(a, code),
+                      atom_string(a, strerror(code)));
+}
+
+static Atom *library_instructions(Arena *a) {
+#ifdef __linux__
+    if (library_instruction_counter < 0) {
+        struct perf_event_attr attr;
+        memset(&attr, 0, sizeof attr);
+        attr.size = sizeof attr;
+        attr.type = PERF_TYPE_HARDWARE;
+        attr.config = PERF_COUNT_HW_INSTRUCTIONS;
+        attr.exclude_kernel = 1;
+        attr.exclude_hv = 1;
+        attr.pinned = 1;
+        long fd = syscall(SYS_perf_event_open, &attr, 0, -1, -1, PERF_FLAG_FD_CLOEXEC);
+        if (fd < 0) return library_os_error(a, errno);
+        library_instruction_counter = (int)fd;
+    }
+    uint64_t count = 0;
+    ssize_t got = read(library_instruction_counter, &count, sizeof count);
+    if (got < 0) return library_os_error(a, errno);
+    /* A pinned counter that lost its place on the processor reads as end of
+     * file: the count is incomplete. */
+    if (got != (ssize_t)sizeof count || count > INT64_MAX) return library_os_error(a, EIO);
+    return atom_int(a, (int64_t)count);
+#else
+    return library_os_error(a, ENOSYS);
+#endif
+}
+
 static Atom *cetta_library_dispatch_system(CettaLibraryContext *ctx,
                                            Arena *a, Atom *head,
                                            Atom **args, uint32_t nargs) {
@@ -5550,6 +5592,19 @@ static Atom *cetta_library_dispatch_system(CettaLibraryContext *ctx,
             return atom_expr3(a, atom_symbol(a, "system:os-error"), atom_int(a, code),
                               atom_string(a, strerror(code)));
         }
+        /* time.process_time_ns(): the processor time this process has used,
+         * all its threads, in nanoseconds. It does not advance while the
+         * process waits, so a measured cost does not grow with the load
+         * other processes put on the machine. */
+        if (!strcmp(operation, "cpu-time-ns") && nargs == 1) {
+            int64_t ns;
+            if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now) ||
+                __builtin_mul_overflow((int64_t)now.tv_sec, INT64_C(1000000000), &ns) ||
+                __builtin_add_overflow(ns, (int64_t)now.tv_nsec, &ns))
+                return library_signature_error(a, head, args, nargs, "cannot read the process clock");
+            return atom_int(a, ns);
+        }
+        if (!strcmp(operation, "instructions") && nargs == 1) return library_instructions(a);
         if (!strcmp(operation, "pid") && nargs == 1) return atom_int(a, getpid());
         /* The running executable, for a program that starts another process
          * of the same runtime, or the errno and message when it cannot be

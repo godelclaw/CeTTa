@@ -13,9 +13,13 @@ pair one Anthropic turn), sent with conversation caching to Anthropic.
 Sizes run to 6,400 messages: a copy per message that is small next to the
 encoding's own work shows only past 1,600. The negative control appends
 each message's items to the end of the items so far, as the Responses
-encoder once did; the check must reject it. Times are the fastest of three
-in-process encodes, so process start, library import and page faults do
-not count."""
+encoder once did; the check must reject it. Each cost is the cheapest of
+three in-process encodes, so process start and library import do not
+count. Costs are user-space instructions where the platform counts them:
+load on the machine, clock frequency and a busy sibling hardware thread
+move processor time by more than the margin between linear and quadratic,
+and leave instruction counts unchanged. Elsewhere they are processor
+time."""
 import json
 import os
 import re
@@ -99,7 +103,16 @@ CONTROL = """
 """
 
 
-def program(library, protocol, text, control):
+def clock(binary):
+    """system:instructions where it counts, otherwise system:cpu-time-ns."""
+    proc = subprocess.run([binary, "--lang", "petta", "-e", "!(import! &self (library system))",
+                           "-e", "!(system:instructions)"], capture_output=True, text=True, timeout=60)
+    lines = proc.stdout.split()
+    return ("system:instructions" if proc.returncode == 0 and lines and lines[-1].isdigit()
+            else "system:cpu-time-ns")
+
+
+def program(library, protocol, text, control, cost):
     key = "messages" if protocol == "anthropic" else "input"
     timed = "(control:run $t)" if control else f'(llm:v1:encode "{protocol}" $t)'
     shown = ("$o" if control else
@@ -108,19 +121,19 @@ def program(library, protocol, text, control):
              " ((llm:v1:error $c) $c)))")
     body = (f'!(import! &self "{library}")\n!(import! &self (library system))\n'
             + (CONTROL if control else "") +
-            f"(= (growth:time $t) (let* (($s (system:monotonic-ns)) ($o {timed}) ($e (system:monotonic-ns))"
+            f"(= (growth:time $t) (let* (($s ({cost})) ($o {timed}) ($e ({cost}))"
             f" ($d (- $e $s)) ($r {shown})) (growth:sample $d $r)))\n")
     return body + "".join(f"!(let $t {json.dumps(text)} (growth:time $t))\n" for _ in range(REPEATS))
 
 
-def measure(binary, library, directory, protocol, shape, n, control=False):
+def measure(binary, library, directory, cost, protocol, shape, n, control=False):
     request = {"model": "m", "max_tokens": 64, "messages": SHAPES[shape](n),
                "role_policy": "merge-system-developer"}
     if protocol == "anthropic" and shape in CACHED:
         request["cache_messages"] = True
     path = os.path.join(directory, f"{protocol}-{shape}-{n}.metta")
     with open(path, "w") as handle:
-        handle.write(program(library, protocol, json.dumps(request), control))
+        handle.write(program(library, protocol, json.dumps(request), control, cost))
     proc = subprocess.run([binary, "--lang", "petta", path], capture_output=True, text=True, timeout=900)
     samples = re.findall(r"\(growth:sample (\d+) ([^()\s]+)\)", proc.stdout)
     if proc.returncode != 0 or len(samples) != REPEATS:
@@ -140,27 +153,30 @@ def main():
     binary = os.path.abspath(sys.argv[1])
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     library = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, "lib", "petta", "llm.metta")
+    cost = clock(binary)
+    unit = "M" if cost == "system:instructions" else "ms"
+    print(f"costs: {cost}")
     worst = 0.0
     with tempfile.TemporaryDirectory(prefix="llm-growth-") as directory:
         for protocol in ("responses", "anthropic"):
             for shape in SHAPES:
                 times = []
                 for n in SIZES:
-                    elapsed, shown = measure(binary, library, directory, protocol, shape, n)
+                    elapsed, shown = measure(binary, library, directory, cost, protocol, shape, n)
                     count = turns(shown)
                     if count != expected(protocol, shape, n):
                         sys.exit(f"FAIL: {protocol} {shape} at {n} encoded {count} turns ({shown[:120]})")
                     times.append(elapsed)
                 ratios = steps(times)
                 worst = max(worst, *ratios)
-                print(f"{protocol} {shape}: " + " ".join(f"{t / 1e6:.1f}ms" for t in times)
+                print(f"{protocol} {shape}: " + " ".join(f"{t / 1e6:.1f}{unit}" for t in times)
                       + "  steps " + " ".join(f"{r:.2f}" for r in ratios))
                 if max(ratios) > LINEAR_STEP:
                     sys.exit(f"FAIL: {protocol} {shape} grows faster than linear")
-        control = [measure(binary, library, directory, "responses", "agent", n, control=True)[0]
+        control = [measure(binary, library, directory, cost, "responses", "agent", n, control=True)[0]
                    for n in CONTROL_SIZES]
         ratio = steps(control)[0]
-        print(f"control (append per message): " + " ".join(f"{t / 1e6:.1f}ms" for t in control)
+        print(f"control (append per message): " + " ".join(f"{t / 1e6:.1f}{unit}" for t in control)
               + f"  step {ratio:.2f}")
         if ratio <= LINEAR_STEP:
             sys.exit("FAIL: the check accepted the quadratic control")

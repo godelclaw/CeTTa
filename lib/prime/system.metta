@@ -14,6 +14,21 @@
 (= (system:wall-time-ns)
    (function (case (__cetta_lib_system_host wall-time-ns)
      (($result (return $result)))){$result}))
+; time.process_time_ns(): the processor time this process has used, all its
+; threads, as an integer count of nanoseconds. It stands still while the
+; process waits, so a cost measured with it does not grow with the load on
+; the machine.
+(= (system:cpu-time-ns)
+   (function (case (__cetta_lib_system_host cpu-time-ns)
+     (($result (return $result)))){$result}))
+; The user-space instructions the calling thread has retired since its first
+; reading, from the processor's own counter: a cost that load on the machine,
+; clock frequency and a busy sibling hardware thread leave unchanged. Where
+; the platform has no such counter, or forbids it, (system:os-error errno
+; message).
+(= (system:instructions)
+   (function (case (__cetta_lib_system_host instructions)
+     (($result (return $result)))){$result}))
 ; sd_notify: TEXT, such as "READY=1", "WATCHDOG=1" or "STATUS=...", or several
 ; of these on lines of their own, as one datagram to the service manager's
 ; $NOTIFY_SOCKET (a socket path, or @ and an abstract name). True when sent;

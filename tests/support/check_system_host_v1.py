@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
-"""system:wall-time-ns and system:notify in HE, PeTTa and Prime.
+"""system:wall-time-ns, system:cpu-time-ns and system:notify in HE, PeTTa
+and Prime.
 
 system:wall-time-ns must be an integer within a second of time.time_ns().
+system:cpu-time-ns is the processor time the process has used: positive
+(starting the runtime costs some), not decreasing, and no more than the
+process's whole run on every processor; a wall clock would exceed that by
+decades. system:instructions counts from its first reading, so that reading
+is small (far below the millions starting the runtime costs) and the next
+is larger; where the platform has no counter, both readings are the same
+(system:os-error errno message).
 system:notify sends its text as one datagram to $NOTIFY_SOCKET, the systemd
 notify protocol: the text must arrive byte for byte at a path socket and at
 an abstract one (@name). Unset or empty, the variable gives False and nothing
@@ -72,6 +80,19 @@ def check(binary, dialect, work, failures):
             not before - 10 ** 9 <= int(got[0]) <= after + 10 ** 9:
         failures.append((dialect, "wall-time-ns", got, (before, after)))
 
+    got, elapsed = answers(binary, dialect, ["(system:cpu-time-ns)", "(system:cpu-time-ns)"], {})
+    bound = elapsed * 10 ** 9 * (os.cpu_count() or 1)
+    if len(got) != 2 or not all(value.isdigit() for value in got) or \
+            not 0 < int(got[0]) <= int(got[1]) <= bound:
+        failures.append((dialect, "cpu-time-ns", got, bound))
+
+    got, _ = answers(binary, dialect, ["(system:instructions)", "(system:instructions)"], {})
+    counted = len(got) == 2 and all(value.isdigit() for value in got) and \
+        int(got[0]) < 10 ** 6 and int(got[0]) < int(got[1])
+    refused = len(got) == 2 and got[0] == got[1] and got[0].startswith("(system:os-error ")
+    if not (counted or refused):
+        failures.append((dialect, "instructions", got, "a fresh count, then a larger one"))
+
     expect("unset", ['(system:notify "READY=1")'], {}, ["false"])
     expect("empty", ['(system:notify "READY=1")'], {"NOTIFY_SOCKET": ""}, ["false"])
 
@@ -129,7 +150,7 @@ def check(binary, dialect, work, failures):
         got, _ = answers(binary, dialect, [f"(system:notify {argument})"], {})
         if len(got) != 1 or "expected a nonempty notification text" not in got[0]:
             failures.append((dialect, what, got, "an argument error"))
-    return 12
+    return 14
 
 
 def main():

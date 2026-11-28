@@ -61,9 +61,14 @@ requests the whole file. `fs:entries path` lists names without a page limit.
 `fs:update-text` operation `replace` atomically updates a state file without
 a backup, creating its parent directories. The existing `write` operation
 continues to preserve a backup. `system:wall-time`, `system:wall-time-ns`,
-`system:format-time`, `system:pid`, `system:pid-alive?` and `system:read-line`
-expose native host utilities; `format-time` takes a format, epoch seconds and
-`local` or `utc`, and `wall-time-ns` is the wall clock as integer nanoseconds.
+`system:cpu-time-ns`, `system:format-time`, `system:pid`, `system:pid-alive?`
+and `system:read-line` expose native host utilities; `format-time` takes a
+format, epoch seconds and `local` or `utc`, `wall-time-ns` is the wall clock
+as integer nanoseconds, and `cpu-time-ns` is the processor time the process
+has used, which stands still while it waits. `system:instructions` counts the
+user-space instructions the calling thread has retired since its first
+reading, a cost unchanged by load or clock frequency, or gives
+`(system:os-error errno message)` where the platform has no counter.
 `system:notify text` sends one datagram to `$NOTIFY_SOCKET` (systemd's notify
 protocol, for example `READY=1` or `WATCHDOG=1`): `True` when sent, `False`
 when the variable is unset or empty, or `(system:os-error errno message)`. It
