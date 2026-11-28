@@ -50921,8 +50921,13 @@ $(SPACE_SERVICE_SCOPES_TEST_BIN): $(SPACE_SERVICE_SCOPES_TEST_OBJ) $(FALLBACK_EV
 .PHONY: test-space-service-scopes
 test-space-service-scopes: $(SPACE_SERVICE_SCOPES_TEST_BIN)
 	$(SPACE_SERVICE_SCOPES_TEST_BIN)
-test-space-service: test-space-service-commit test-space-service-scopes $(SPACE_SERVICE_BIN) $(BIN) $(VALUE_WORKER_BIN) $(if $(and $(filter 0,$(MORK_BUILD_HAS_BRIDGE)),$(filter 1,$(MORK_BRIDGE_DEPS_READY)),$(wildcard $(MORK_BRIDGE_MANIFEST))),$(MORK_BRIDGE_LOADABLE_LIB))
-	python3 tests/test_space_service.py $(SPACE_SERVICE_BIN) $(BIN) $(VALUE_WORKER_BIN)
+# The native backends always; PathMap and MORK where this build has the bridge.
+SPACE_SERVICE_TEST_BRIDGE := $(and $(filter 0,$(MORK_BUILD_HAS_BRIDGE)),$(filter 1,$(MORK_BRIDGE_DEPS_READY)),$(wildcard $(MORK_BRIDGE_MANIFEST)))
+SPACE_SERVICE_TEST_BACKENDS ?= native native-ordered $(if $(SPACE_SERVICE_TEST_BRIDGE),pathmap mork)
+test-space-service: test-space-service-commit test-space-service-scopes $(SPACE_SERVICE_BIN) $(BIN) $(VALUE_WORKER_BIN) $(if $(SPACE_SERVICE_TEST_BRIDGE),$(MORK_BRIDGE_LOADABLE_LIB))
+	CETTA_SPACE_TEST_BACKENDS="$(subst $(space),$(comma),$(strip $(SPACE_SERVICE_TEST_BACKENDS)))" \
+		python3 tests/test_space_service.py $(SPACE_SERVICE_BIN) $(BIN) $(VALUE_WORKER_BIN)
+SUITE_CORRECTNESS_GATES += test-space-service
 
 # A store's journal replays in time proportional to its records, with the
 # agents' managed symbols (decoded symbols stay spelled), where a replay that
